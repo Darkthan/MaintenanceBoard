@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Commandes – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <aside class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-30">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
+      </div>
+      <div><p class="text-white font-bold text-sm">MaintenanceBoard</p><p class="text-slate-400 text-xs">Parc informatique</p></div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold"><span id="user-avatar">?</span></div>
+        <div class="flex-1 min-w-0"><p id="user-name" class="text-white text-sm font-medium truncate">...</p><p id="user-role" class="text-slate-400 text-xs"></p></div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <h1 class="text-xl font-semibold text-slate-800">Commandes</h1>
+      <button id="add-order-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Nouvelle commande
+      </button>
+    </header>
+
+    <div class="flex-1 p-6 space-y-4">
+      <!-- Filtres -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4 flex gap-3 flex-wrap">
+        <input id="search-input" type="search" placeholder="Rechercher..."
+          class="flex-1 min-w-48 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <select id="status-filter" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Tous les statuts</option>
+          <option value="PENDING">En attente</option>
+          <option value="ORDERED">Commandé</option>
+          <option value="PARTIAL">Partiel</option>
+          <option value="RECEIVED">Reçu</option>
+          <option value="CANCELLED">Annulé</option>
+        </select>
+      </div>
+
+      <!-- Liste -->
+      <div id="orders-container" class="space-y-3">
+        <p class="text-slate-400 text-center py-8">Chargement...</p>
+      </div>
+      <div id="pagination" class="flex items-center justify-between text-sm text-slate-500"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal Commande -->
+<div id="order-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
+      <h3 id="modal-title" class="font-semibold text-slate-800">Nouvelle commande</h3>
+      <button id="close-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="order-form" class="p-6 space-y-5">
+      <input type="hidden" id="order-id" />
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Titre *</label>
+        <input id="order-title" type="text" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Fournisseur</label>
+          <input id="order-supplier" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div id="status-field" class="hidden">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Statut</label>
+          <select id="order-status" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="PENDING">En attente</option>
+            <option value="ORDERED">Commandé</option>
+            <option value="PARTIAL">Partiel</option>
+            <option value="RECEIVED">Reçu</option>
+            <option value="CANCELLED">Annulé</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+        <textarea id="order-description" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+
+      <!-- Lignes de commande -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-sm font-medium text-slate-700">Articles *</label>
+          <button type="button" id="add-item-btn" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Ajouter une ligne
+          </button>
+        </div>
+        <div id="items-container" class="space-y-2"></div>
+      </div>
+
+      <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="cancel-modal" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" id="submit-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+const user = requireLogin();
+if (!user) throw new Error('Not logged in');
+renderNav('orders');
+if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
+
+let currentPage = 1, currentSearch = '', currentStatus = '';
+
+async function loadOrders() {
+  const container = document.getElementById('orders-container');
+  container.innerHTML = '<p class="text-slate-400 text-center py-8">Chargement...</p>';
+  try {
+    const params = { page: currentPage, limit: 20 };
+    if (currentSearch) params.search = currentSearch;
+    if (currentStatus) params.status = currentStatus;
+
+    const data = await api.get('/orders', params);
+
+    if (data.data.length === 0) {
+      container.innerHTML = `<div class="text-center py-12 text-slate-400">
+        <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        <p>Aucune commande</p>
+      </div>`;
+      document.getElementById('pagination').innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = data.data.map(o => `
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <div class="flex items-start justify-between">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="font-semibold text-slate-800">${o.title}</h3>
+              ${statusBadge(o.status)}
+            </div>
+            <div class="flex items-center gap-4 text-xs text-slate-500">
+              ${o.supplier ? `<span>🏢 ${o.supplier}</span>` : ''}
+              <span>👤 ${o.requester?.name}</span>
+              <span>📦 ${o._count?.items || 0} article(s)</span>
+              <span>📅 ${formatDate(o.createdAt)}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="viewOrder('${o.id}')"
+              class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs hover:bg-slate-50 transition">
+              Détails
+            </button>
+            <button onclick="editOrder(${JSON.stringify(o).replace(/"/g, '&quot;')})"
+              class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </button>
+            ${user.role === 'ADMIN' ? `
+            <button onclick="deleteOrder('${o.id}')"
+              class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-red-600 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>` : ''}
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    const { page, totalPages, total } = data.pagination;
+    document.getElementById('pagination').innerHTML = `
+      <span>${total} commande(s)</span>
+      <div class="flex gap-2">
+        <button onclick="changePage(${page-1})" ${page<=1?'disabled':''} class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs disabled:opacity-40">Précédent</button>
+        <span class="px-3 py-1.5 text-xs">${page} / ${totalPages}</span>
+        <button onclick="changePage(${page+1})" ${page>=totalPages?'disabled':''} class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs disabled:opacity-40">Suivant</button>
+      </div>`;
+  } catch (err) {
+    container.innerHTML = `<p class="text-red-500 text-center py-8">Erreur : ${err.message}</p>`;
+  }
+}
+
+function changePage(p) { currentPage = p; loadOrders(); }
+
+let searchTimeout;
+document.getElementById('search-input').addEventListener('input', e => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { currentSearch = e.target.value; currentPage = 1; loadOrders(); }, 400); });
+document.getElementById('status-filter').addEventListener('change', e => { currentStatus = e.target.value; currentPage = 1; loadOrders(); });
+
+// Lignes de commande
+let itemCount = 0;
+function addItemRow(name = '', qty = 1, price = '', ref = '') {
+  itemCount++;
+  const id = `item-${itemCount}`;
+  const div = document.createElement('div');
+  div.id = id;
+  div.className = 'grid grid-cols-12 gap-2 items-center';
+  div.innerHTML = `
+    <input type="text" placeholder="Désignation *" required value="${name}"
+      class="col-span-5 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" name="item-name-${itemCount}" />
+    <input type="number" placeholder="Qté *" required min="1" value="${qty}"
+      class="col-span-2 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" name="item-qty-${itemCount}" />
+    <input type="number" placeholder="Prix unit." step="0.01" value="${price}"
+      class="col-span-2 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" name="item-price-${itemCount}" />
+    <input type="text" placeholder="Réf." value="${ref}"
+      class="col-span-2 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" name="item-ref-${itemCount}" />
+    <button type="button" onclick="document.getElementById('${id}').remove()"
+      class="col-span-1 text-slate-400 hover:text-red-500 transition flex justify-center">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>`;
+  document.getElementById('items-container').appendChild(div);
+}
+
+document.getElementById('add-item-btn').addEventListener('click', () => addItemRow());
+
+const modal = document.getElementById('order-modal');
+document.getElementById('add-order-btn').addEventListener('click', () => {
+  document.getElementById('modal-title').textContent = 'Nouvelle commande';
+  document.getElementById('order-id').value = '';
+  document.getElementById('order-form').reset();
+  document.getElementById('items-container').innerHTML = '';
+  document.getElementById('status-field').classList.add('hidden');
+  document.getElementById('form-error').classList.add('hidden');
+  addItemRow();
+  modal.classList.remove('hidden');
+});
+document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
+document.getElementById('cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
+
+function editOrder(o) {
+  document.getElementById('modal-title').textContent = 'Modifier la commande';
+  document.getElementById('order-id').value = o.id;
+  document.getElementById('order-title').value = o.title;
+  document.getElementById('order-supplier').value = o.supplier || '';
+  document.getElementById('order-description').value = o.description || '';
+  document.getElementById('order-status').value = o.status;
+  document.getElementById('status-field').classList.remove('hidden');
+  document.getElementById('items-container').innerHTML = '';
+  document.getElementById('form-error').classList.add('hidden');
+  modal.classList.remove('hidden');
+}
+
+async function viewOrder(id) {
+  try {
+    const o = await api.get(`/orders/${id}`);
+    alert(`Commande : ${o.title}\n\nArticles :\n${o.items.map(i => `- ${i.name} × ${i.quantity}${i.unitPrice ? ` @ ${i.unitPrice}€` : ''}${i.received ? ` (reçu: ${i.received})` : ''}`).join('\n')}`);
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+document.getElementById('order-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('order-id').value;
+  const data = {
+    title: document.getElementById('order-title').value,
+    supplier: document.getElementById('order-supplier').value || null,
+    description: document.getElementById('order-description').value || null
+  };
+
+  if (id) {
+    data.status = document.getElementById('order-status').value;
+  } else {
+    // Collecter les items
+    const rows = document.getElementById('items-container').querySelectorAll('div[id^="item-"]');
+    const items = [];
+    for (const row of rows) {
+      const inputs = row.querySelectorAll('input');
+      const name = inputs[0].value.trim();
+      const qty = parseInt(inputs[1].value);
+      const price = inputs[2].value;
+      const ref = inputs[3].value.trim();
+      if (name && qty > 0) {
+        items.push({ name, quantity: qty, unitPrice: price || null, reference: ref || null });
+      }
+    }
+    if (items.length === 0) {
+      const errEl = document.getElementById('form-error');
+      errEl.textContent = 'Ajoutez au moins un article';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    data.items = items;
+  }
+
+  const submitBtn = document.getElementById('submit-btn');
+  submitBtn.disabled = true;
+  document.getElementById('form-error').classList.add('hidden');
+  try {
+    if (id) {
+      await api.patch(`/orders/${id}`, data);
+      showToast('Commande mise à jour');
+    } else {
+      await api.post('/orders', data);
+      showToast('Commande créée');
+    }
+    modal.classList.add('hidden');
+    loadOrders();
+  } catch (err) {
+    const errEl = document.getElementById('form-error');
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally { submitBtn.disabled = false; }
+});
+
+async function deleteOrder(id) {
+  if (!confirm('Supprimer cette commande ?')) return;
+  try {
+    await api.delete(`/orders/${id}`);
+    showToast('Commande supprimée');
+    loadOrders();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+loadOrders();
+</script>
+</body>
+</html>

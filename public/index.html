@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tableau de bord – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <!-- Sidebar -->
+  <aside class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-30">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+        </svg>
+      </div>
+      <div>
+        <p class="text-white font-bold text-sm">MaintenanceBoard</p>
+        <p class="text-slate-400 text-xs">Parc informatique</p>
+      </div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2 rounded-lg">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <span id="user-avatar">?</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" title="Déconnexion" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <h1 class="text-xl font-semibold text-slate-800">Tableau de bord</h1>
+      <span id="current-date" class="text-xs text-slate-400"></span>
+    </header>
+
+    <div class="flex-1 p-6 space-y-6">
+      <!-- Statistiques -->
+      <div id="stats-grid" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 animate-pulse">
+          <div class="h-4 bg-slate-200 rounded w-2/3 mb-3"></div>
+          <div class="h-8 bg-slate-100 rounded w-1/2"></div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 animate-pulse">
+          <div class="h-4 bg-slate-200 rounded w-2/3 mb-3"></div>
+          <div class="h-8 bg-slate-100 rounded w-1/2"></div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 animate-pulse">
+          <div class="h-4 bg-slate-200 rounded w-2/3 mb-3"></div>
+          <div class="h-8 bg-slate-100 rounded w-1/2"></div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 animate-pulse">
+          <div class="h-4 bg-slate-200 rounded w-2/3 mb-3"></div>
+          <div class="h-8 bg-slate-100 rounded w-1/2"></div>
+        </div>
+      </div>
+
+      <!-- Interventions récentes & équipements en panne -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Interventions ouvertes -->
+        <div class="bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-slate-800">Interventions ouvertes</h2>
+            <a href="/interventions.html" class="text-sm text-blue-600 hover:underline">Voir tout</a>
+          </div>
+          <div id="open-interventions" class="space-y-3">
+            <p class="text-slate-400 text-sm">Chargement...</p>
+          </div>
+        </div>
+
+        <!-- Équipements en panne -->
+        <div class="bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-slate-800">Équipements en réparation</h2>
+            <a href="/equipment.html?status=REPAIR" class="text-sm text-blue-600 hover:underline">Voir tout</a>
+          </div>
+          <div id="repair-equipment" class="space-y-3">
+            <p class="text-slate-400 text-sm">Chargement...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actifs en attente de validation (agents) -->
+      <div id="pending-widget" class="hidden bg-orange-50 border border-orange-200 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">&#x1F916;</span>
+            <h2 class="font-semibold text-orange-800">Actifs en attente de validation</h2>
+          </div>
+          <a href="/equipment.html?discoveryStatus=PENDING" class="text-sm text-orange-700 hover:underline font-medium">Voir tout</a>
+        </div>
+        <p class="text-orange-700 text-sm">
+          <span id="pending-count" class="font-bold text-xl">0</span> équipement(s) découvert(s) par agent nécessitent une validation d'emplacement.
+        </p>
+      </div>
+
+      <!-- Commandes en attente -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold text-slate-800">Commandes récentes</h2>
+          <a href="/orders.html" class="text-sm text-blue-600 hover:underline">Voir tout</a>
+        </div>
+        <div id="recent-orders" class="space-y-2">
+          <p class="text-slate-400 text-sm">Chargement...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+const user = requireLogin();
+if (user) {
+  renderNav('dashboard');
+
+  const avatarEl = document.getElementById('user-avatar');
+  if (avatarEl && user.name) avatarEl.textContent = user.name[0].toUpperCase();
+
+  document.getElementById('current-date').textContent = new Date().toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+
+  // Charger les statistiques
+  async function loadDashboard() {
+    try {
+      const [rooms, equipment, interventions, orders, pendingAgents] = await Promise.all([
+        api.get('/rooms', { limit: 1 }),
+        api.get('/equipment', { limit: 1 }),
+        api.get('/interventions', { limit: 5, status: 'OPEN' }),
+        api.get('/orders', { limit: 3 }),
+        api.get('/equipment', { limit: 1, discoveryStatus: 'PENDING' })
+      ]);
+
+      // Widget agents en attente
+      if (pendingAgents.pagination.total > 0) {
+        document.getElementById('pending-widget').classList.remove('hidden');
+        document.getElementById('pending-count').textContent = pendingAgents.pagination.total;
+      }
+
+      const equipRepair = await api.get('/equipment', { status: 'REPAIR', limit: 5 });
+
+      // Stats
+      document.getElementById('stats-grid').innerHTML = `
+        <div class="bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500">Salles</p>
+              <p class="text-3xl font-bold text-slate-800 mt-1">${rooms.pagination.total}</p>
+            </div>
+            <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+          </div>
+          <a href="/rooms.html" class="text-xs text-blue-600 hover:underline mt-2 block">Gérer les salles →</a>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500">Équipements</p>
+              <p class="text-3xl font-bold text-slate-800 mt-1">${equipment.pagination.total}</p>
+            </div>
+            <div class="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+              </svg>
+            </div>
+          </div>
+          <a href="/equipment.html" class="text-xs text-purple-600 hover:underline mt-2 block">Voir l'inventaire →</a>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500">Interventions ouvertes</p>
+              <p class="text-3xl font-bold ${interventions.pagination.total > 0 ? 'text-orange-600' : 'text-green-600'} mt-1">${interventions.pagination.total}</p>
+            </div>
+            <div class="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+          </div>
+          <a href="/interventions.html" class="text-xs text-orange-600 hover:underline mt-2 block">Voir les interventions →</a>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500">En réparation</p>
+              <p class="text-3xl font-bold ${equipRepair.pagination.total > 0 ? 'text-red-600' : 'text-green-600'} mt-1">${equipRepair.pagination.total}</p>
+            </div>
+            <div class="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+          </div>
+          <a href="/equipment.html?status=REPAIR" class="text-xs text-red-600 hover:underline mt-2 block">Voir les pannes →</a>
+        </div>
+      `;
+
+      // Interventions ouvertes
+      const openEl = document.getElementById('open-interventions');
+      if (interventions.data.length === 0) {
+        openEl.innerHTML = '<p class="text-slate-400 text-sm text-center py-4">Aucune intervention ouverte 🎉</p>';
+      } else {
+        openEl.innerHTML = interventions.data.map(i => `
+          <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+               onclick="window.location='/interventions.html'">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-slate-800 truncate">${i.title}</p>
+              <p class="text-xs text-slate-500 mt-0.5">
+                ${i.room?.name || i.equipment?.name || 'Non assigné'} · ${formatDate(i.createdAt)}
+              </p>
+            </div>
+            ${statusBadge(i.priority === 'HIGH' || i.priority === 'CRITICAL' ? i.priority : i.status)}
+          </div>
+        `).join('');
+      }
+
+      // Équipements en réparation
+      const repairEl = document.getElementById('repair-equipment');
+      if (equipRepair.data.length === 0) {
+        repairEl.innerHTML = '<p class="text-slate-400 text-sm text-center py-4">Aucun équipement en panne 🎉</p>';
+      } else {
+        repairEl.innerHTML = equipRepair.data.map(e => `
+          <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-slate-800">${e.name}</p>
+              <p class="text-xs text-slate-500">${e.type} · ${e.room?.name || 'Non assigné'}</p>
+            </div>
+            ${statusBadge(e.status)}
+          </div>
+        `).join('');
+      }
+
+      // Commandes récentes
+      const ordersEl = document.getElementById('recent-orders');
+      if (orders.data.length === 0) {
+        ordersEl.innerHTML = '<p class="text-slate-400 text-sm">Aucune commande</p>';
+      } else {
+        ordersEl.innerHTML = `
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs text-slate-500 border-b border-slate-100">
+                  <th class="pb-2 font-medium">Titre</th>
+                  <th class="pb-2 font-medium">Fournisseur</th>
+                  <th class="pb-2 font-medium">Statut</th>
+                  <th class="pb-2 font-medium">Date</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-50">
+                ${orders.data.map(o => `
+                  <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='/orders.html'">
+                    <td class="py-2.5 font-medium text-slate-800">${o.title}</td>
+                    <td class="py-2.5 text-slate-600">${o.supplier || '-'}</td>
+                    <td class="py-2.5">${statusBadge(o.status)}</td>
+                    <td class="py-2.5 text-slate-500">${formatDate(o.createdAt)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+    } catch (err) {
+      console.error('Erreur dashboard:', err);
+      showToast('Erreur lors du chargement du tableau de bord', 'error');
+    }
+  }
+
+  loadDashboard();
+}
+</script>
+</body>
+</html>

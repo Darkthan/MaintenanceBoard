@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Salles – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <!-- Sidebar -->
+  <aside class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-30">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+        </svg>
+      </div>
+      <div><p class="text-white font-bold text-sm">MaintenanceBoard</p><p class="text-slate-400 text-xs">Parc informatique</p></div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <span id="user-avatar">?</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <h1 class="text-xl font-semibold text-slate-800">Gestion des salles</h1>
+      <div class="flex gap-2" id="admin-actions">
+        <button id="import-btn" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+          Importer CSV
+        </button>
+        <button id="add-room-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Nouvelle salle
+        </button>
+      </div>
+    </header>
+
+    <div class="flex-1 p-6 space-y-4">
+      <!-- Filtres -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4 flex gap-4 flex-wrap">
+        <div class="flex-1 min-w-48">
+          <input id="search-input" type="search" placeholder="Rechercher (nom, numéro...)"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <input id="building-filter" type="text" placeholder="Bâtiment"
+            class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div id="rooms-loading" class="p-8 text-center text-slate-400">Chargement...</div>
+        <table id="rooms-table" class="hidden w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Nom</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Bâtiment</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">N° / Étage</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Équipements</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Interventions</th>
+              <th class="text-right px-5 py-3 font-medium text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rooms-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+        <div id="rooms-empty" class="hidden p-8 text-center text-slate-400">
+          <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
+          </svg>
+          <p>Aucune salle trouvée</p>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div id="pagination" class="flex items-center justify-between text-sm text-slate-500"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal Nouvelle Salle / Modifier -->
+<div id="room-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 id="modal-title" class="font-semibold text-slate-800">Nouvelle salle</h3>
+      <button id="close-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="room-form" class="p-6 space-y-4">
+      <input type="hidden" id="room-id" />
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Nom *</label>
+        <input id="room-name" type="text" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Bâtiment</label>
+          <input id="room-building" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Numéro</label>
+          <input id="room-number" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Étage</label>
+        <input id="room-floor" type="number" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+        <textarea id="room-description" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="cancel-modal" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" id="submit-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Import CSV -->
+<div id="import-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800">Importer des salles</h3>
+      <button id="close-import-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div class="bg-slate-50 rounded-lg p-3 text-xs font-mono text-slate-600">
+        <p class="font-semibold mb-1 text-slate-700">Format CSV attendu :</p>
+        <p>name,building,floor,number,description</p>
+        <p>Salle 101,Bâtiment A,1,101,Laboratoire</p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Fichier CSV ou Excel</label>
+        <input id="import-file" type="file" accept=".csv,.xlsx,.xls"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <label class="flex items-center gap-2 text-sm text-slate-600">
+        <input id="skip-errors" type="checkbox" class="rounded" />
+        Ignorer les lignes avec erreurs
+      </label>
+      <div id="import-result" class="hidden"></div>
+      <div class="flex justify-end gap-3">
+        <button id="preview-btn" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Prévisualiser</button>
+        <button id="do-import-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Importer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+const user = requireLogin();
+if (!user) throw new Error('Not logged in');
+renderNav('rooms');
+if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
+
+let currentPage = 1;
+let currentSearch = '';
+let currentBuilding = '';
+
+// Cacher actions admin pour TECH
+if (user.role !== 'ADMIN') {
+  document.getElementById('admin-actions').style.display = 'none';
+}
+
+async function loadRooms() {
+  document.getElementById('rooms-loading').classList.remove('hidden');
+  document.getElementById('rooms-table').classList.add('hidden');
+  document.getElementById('rooms-empty').classList.add('hidden');
+
+  try {
+    const params = { page: currentPage, limit: 20 };
+    if (currentSearch) params.search = currentSearch;
+    if (currentBuilding) params.building = currentBuilding;
+
+    const data = await api.get('/rooms', params);
+
+    document.getElementById('rooms-loading').classList.add('hidden');
+
+    if (data.data.length === 0) {
+      document.getElementById('rooms-empty').classList.remove('hidden');
+      document.getElementById('pagination').innerHTML = '';
+      return;
+    }
+
+    document.getElementById('rooms-table').classList.remove('hidden');
+    document.getElementById('rooms-tbody').innerHTML = data.data.map(room => `
+      <tr class="hover:bg-slate-50 transition">
+        <td class="px-5 py-3.5">
+          <p class="font-medium text-slate-800">${room.name}</p>
+          ${room.description ? `<p class="text-xs text-slate-500 mt-0.5 truncate max-w-xs">${room.description}</p>` : ''}
+        </td>
+        <td class="px-5 py-3.5 text-slate-600">${room.building || '-'}</td>
+        <td class="px-5 py-3.5 text-slate-600">${room.number || '-'}${room.floor != null ? ` / Étage ${room.floor}` : ''}</td>
+        <td class="px-5 py-3.5">
+          <span class="inline-flex items-center gap-1 text-slate-600">
+            <span class="font-medium text-slate-800">${room._count.equipment}</span> équip.
+          </span>
+        </td>
+        <td class="px-5 py-3.5">
+          <span class="${room._count.interventions > 0 ? 'text-orange-600 font-medium' : 'text-slate-600'}">
+            ${room._count.interventions}
+          </span>
+        </td>
+        <td class="px-5 py-3.5">
+          <div class="flex items-center justify-end gap-2">
+            <a href="/api/rooms/${room.id}/qrcode" target="_blank"
+               title="QR Code" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5V16M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6z"/>
+              </svg>
+            </a>
+            ${user.role === 'ADMIN' ? `
+            <button onclick="editRoom('${room.id}', '${escapeHtml(room.name)}', '${escapeHtml(room.building || '')}', ${room.floor ?? ''}, '${escapeHtml(room.number || '')}', '${escapeHtml(room.description || '')}')"
+              class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </button>
+            <button onclick="deleteRoom('${room.id}', '${escapeHtml(room.name)}')"
+              class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-red-600 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `).join('');
+
+    // Pagination
+    const { page, totalPages, total } = data.pagination;
+    document.getElementById('pagination').innerHTML = `
+      <span>Affichage de ${Math.min((page-1)*20+1, total)} à ${Math.min(page*20, total)} sur ${total} salles</span>
+      <div class="flex gap-2">
+        <button onclick="changePage(${page-1})" ${page <= 1 ? 'disabled' : ''}
+          class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs disabled:opacity-40 hover:bg-slate-50 transition">
+          Précédent
+        </button>
+        <span class="px-3 py-1.5 text-xs">${page} / ${totalPages}</span>
+        <button onclick="changePage(${page+1})" ${page >= totalPages ? 'disabled' : ''}
+          class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs disabled:opacity-40 hover:bg-slate-50 transition">
+          Suivant
+        </button>
+      </div>
+    `;
+  } catch (err) {
+    document.getElementById('rooms-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+function changePage(page) { currentPage = page; loadRooms(); }
+
+function escapeHtml(str) {
+  return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+// Recherche avec debounce
+let searchTimeout;
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => { currentSearch = e.target.value; currentPage = 1; loadRooms(); }, 400);
+});
+document.getElementById('building-filter').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => { currentBuilding = e.target.value; currentPage = 1; loadRooms(); }, 400);
+});
+
+// Modal
+const modal = document.getElementById('room-modal');
+document.getElementById('add-room-btn')?.addEventListener('click', () => {
+  document.getElementById('modal-title').textContent = 'Nouvelle salle';
+  document.getElementById('room-id').value = '';
+  document.getElementById('room-form').reset();
+  document.getElementById('form-error').classList.add('hidden');
+  modal.classList.remove('hidden');
+});
+document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
+document.getElementById('cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
+modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+
+function editRoom(id, name, building, floor, number, description) {
+  document.getElementById('modal-title').textContent = 'Modifier la salle';
+  document.getElementById('room-id').value = id;
+  document.getElementById('room-name').value = name;
+  document.getElementById('room-building').value = building;
+  document.getElementById('room-floor').value = floor || '';
+  document.getElementById('room-number').value = number;
+  document.getElementById('room-description').value = description;
+  document.getElementById('form-error').classList.add('hidden');
+  modal.classList.remove('hidden');
+}
+
+document.getElementById('room-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('room-id').value;
+  const data = {
+    name: document.getElementById('room-name').value,
+    building: document.getElementById('room-building').value || null,
+    floor: document.getElementById('room-floor').value !== '' ? parseInt(document.getElementById('room-floor').value) : null,
+    number: document.getElementById('room-number').value || null,
+    description: document.getElementById('room-description').value || null
+  };
+
+  const submitBtn = document.getElementById('submit-btn');
+  submitBtn.disabled = true;
+  document.getElementById('form-error').classList.add('hidden');
+
+  try {
+    if (id) {
+      await api.patch(`/rooms/${id}`, data);
+      showToast('Salle modifiée avec succès');
+    } else {
+      await api.post('/rooms', data);
+      showToast('Salle créée avec succès');
+    }
+    modal.classList.add('hidden');
+    loadRooms();
+  } catch (err) {
+    const errEl = document.getElementById('form-error');
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+async function deleteRoom(id, name) {
+  if (!confirm(`Supprimer la salle "${name}" ? Cette action est irréversible.`)) return;
+  try {
+    await api.delete(`/rooms/${id}`);
+    showToast('Salle supprimée');
+    loadRooms();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// Import modal
+const importModal = document.getElementById('import-modal');
+document.getElementById('import-btn')?.addEventListener('click', () => {
+  document.getElementById('import-result').classList.add('hidden');
+  document.getElementById('import-file').value = '';
+  importModal.classList.remove('hidden');
+});
+document.getElementById('close-import-modal').addEventListener('click', () => importModal.classList.add('hidden'));
+
+async function doImport(preview) {
+  const file = document.getElementById('import-file').files[0];
+  if (!file) return showToast('Sélectionnez un fichier', 'warning');
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('skipErrors', document.getElementById('skip-errors').checked ? 'true' : 'false');
+  if (preview) fd.append('preview', 'true');
+
+  try {
+    const result = await api.upload('/rooms/import', fd);
+    const el = document.getElementById('import-result');
+    el.classList.remove('hidden');
+
+    if (preview) {
+      el.innerHTML = `
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+          <p class="font-semibold text-blue-800">Prévisualisation : ${result.validCount} ligne(s) valide(s), ${result.errorCount} erreur(s)</p>
+          ${result.errors?.length ? `<ul class="mt-2 text-red-700 text-xs list-disc pl-4">${result.errors.slice(0,5).map(e => `<li>${e}</li>`).join('')}</ul>` : ''}
+          ${result.preview?.map(r => `<p class="text-xs mt-1 font-mono text-slate-600">${r.name} – ${r.building || ''} ${r.number || ''}</p>`).join('')}
+        </div>`;
+    } else {
+      showToast(result.message, 'success');
+      importModal.classList.add('hidden');
+      loadRooms();
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+document.getElementById('preview-btn').addEventListener('click', () => doImport(true));
+document.getElementById('do-import-btn').addEventListener('click', () => doImport(false));
+
+loadRooms();
+</script>
+</body>
+</html>

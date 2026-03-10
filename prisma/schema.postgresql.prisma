@@ -1,0 +1,209 @@
+// Schéma PostgreSQL pour la production / Docker
+// Usage : npx prisma migrate deploy --schema=prisma/schema.postgresql.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TECH
+}
+
+enum EquipStatus {
+  ACTIVE
+  INACTIVE
+  REPAIR
+  DECOMMISSIONED
+}
+
+enum IntStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum OrderStatus {
+  PENDING
+  ORDERED
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  name          String
+  passwordHash  String?
+  role          Role           @default(TECH)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  passkeys      Passkey[]
+  interventions Intervention[]
+  orders        Order[]
+  refreshTokens RefreshToken[]
+  agentTokens   AgentToken[]
+
+  @@map("users")
+}
+
+model AgentToken {
+  id          String    @id @default(uuid())
+  token       String    @unique @default(uuid())
+  label       String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  createdById String
+  ipWhitelist String?   // JSON array d'IP/CIDR. null = tout autoriser
+  ipBlacklist String?   // JSON array d'IP/CIDR. null = rien bloquer
+
+  createdBy   User      @relation(fields: [createdById], references: [id])
+
+  @@map("agent_tokens")
+}
+
+model Passkey {
+  id             String    @id @default(uuid())
+  userId         String
+  credentialId   String    @unique
+  publicKey      Bytes
+  counter        BigInt    @default(0)
+  deviceType     String?
+  backedUp       Boolean   @default(false)
+  transports     String[]
+  name           String?
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("passkeys")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Room {
+  id          String   @id @default(uuid())
+  name        String
+  building    String?
+  floor       Int?
+  number      String?
+  description String?
+  qrToken     String   @unique @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  equipment     Equipment[]
+  interventions Intervention[]
+
+  @@map("rooms")
+}
+
+model Equipment {
+  id              String      @id @default(uuid())
+  name            String
+  type            String
+  brand           String?
+  model           String?
+  serialNumber    String?     @unique
+  status          EquipStatus @default(ACTIVE)
+  description     String?
+  purchaseDate    DateTime?
+  warrantyEnd     DateTime?
+  qrToken         String      @unique @default(uuid())
+  roomId          String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Champs agent
+  discoverySource  String      @default("MANUAL")
+  discoveryStatus  String      @default("CONFIRMED")
+  suggestedRoomId  String?
+  lastSeenAt       DateTime?
+  agentInfo        String?
+  agentHostname    String?
+  agentToken       String?     @unique
+  agentRevoked     Boolean     @default(false)     // Si true, re-enrollment requis
+
+  room          Room?          @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  interventions Intervention[]
+
+  @@map("equipment")
+}
+
+model Intervention {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  status      IntStatus @default(OPEN)
+  priority    String    @default("NORMAL")
+  photos      String[]
+  resolution  String?
+  roomId      String?
+  equipmentId String?
+  techId      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  closedAt    DateTime?
+
+  room      Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  equipment Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  tech      User       @relation(fields: [techId], references: [id])
+
+  @@map("interventions")
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  title       String
+  description String?
+  status      OrderStatus @default(PENDING)
+  supplier    String?
+  totalAmount Decimal?    @db.Decimal(10, 2)
+  requestedBy String
+  orderedAt   DateTime?
+  receivedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  requester User        @relation(fields: [requestedBy], references: [id])
+  items     OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  name        String
+  quantity    Int
+  unitPrice   Decimal? @db.Decimal(10, 2)
+  reference   String?
+  received    Int      @default(0)
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}

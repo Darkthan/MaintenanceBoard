@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agents – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <!-- Sidebar -->
+  <aside class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-30">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+        </svg>
+      </div>
+      <div>
+        <p class="text-white font-bold text-sm">MaintenanceBoard</p>
+        <p class="text-slate-400 text-xs">Parc informatique</p>
+      </div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold"><span id="user-avatar">?</span></div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <h1 class="text-xl font-semibold text-slate-800">Gestion des agents</h1>
+      <button id="add-token-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Créer un token
+      </button>
+    </header>
+
+    <div class="flex-1 p-6 space-y-6">
+
+      <!-- Tokens d'enrollment -->
+      <div class="bg-white rounded-xl border border-slate-200">
+        <div class="px-5 py-4 border-b border-slate-100">
+          <h2 class="font-semibold text-slate-800">Tokens d'enrollment</h2>
+          <p class="text-xs text-slate-500 mt-1">Utilisés pour le premier enregistrement des agents sur les machines.</p>
+        </div>
+        <div id="tokens-loading" class="p-6 text-center text-slate-400 text-sm">Chargement...</div>
+        <table id="tokens-table" class="hidden w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Libellé</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Token</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Filtres IP</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Créé le</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Dernière utilisation</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Statut</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Téléchargements</th>
+              <th class="text-right px-5 py-3 font-medium text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tokens-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+        <div id="tokens-empty" class="hidden p-6 text-center text-slate-400 text-sm">Aucun token créé</div>
+      </div>
+
+      <!-- Machines enregistrées -->
+      <div class="bg-white rounded-xl border border-slate-200">
+        <div class="px-5 py-4 border-b border-slate-100">
+          <h2 class="font-semibold text-slate-800">Machines enregistrées</h2>
+          <p class="text-xs text-slate-500 mt-1">PCs ayant obtenu un token machine. Révoquer force un re-enrollment.</p>
+        </div>
+        <div id="machines-loading" class="p-6 text-center text-slate-400 text-sm">Chargement...</div>
+        <table id="machines-table" class="hidden w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Hostname</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Salle</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">IP</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Dernière remontée</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">État</th>
+              <th class="text-right px-5 py-3 font-medium text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="machines-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+        <div id="machines-empty" class="hidden p-6 text-center text-slate-400 text-sm">Aucune machine enregistrée</div>
+      </div>
+
+      <!-- Équipements récemment découverts -->
+      <div class="bg-white rounded-xl border border-slate-200">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 class="font-semibold text-slate-800">Équipements récemment découverts</h2>
+            <p class="text-xs text-slate-500 mt-1">10 derniers équipements remontés par des agents.</p>
+          </div>
+          <a href="/equipment.html?discoverySource=AGENT" class="text-sm text-blue-600 hover:underline">Voir tout</a>
+        </div>
+        <div id="recent-agents-loading" class="p-6 text-center text-slate-400 text-sm">Chargement...</div>
+        <table id="recent-agents-table" class="hidden w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Hostname</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Salle</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Système</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Dernière remontée</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Statut</th>
+            </tr>
+          </thead>
+          <tbody id="recent-agents-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+        <div id="recent-agents-empty" class="hidden p-6 text-center text-slate-400 text-sm">Aucun équipement découvert par agent</div>
+      </div>
+
+      <!-- One-liner installation -->
+      <div class="bg-slate-800 rounded-xl p-5">
+        <h2 class="font-semibold text-white mb-3">Installation rapide (PowerShell)</h2>
+        <p class="text-slate-400 text-xs mb-3">Sélectionnez un token puis copiez la commande dans PowerShell (admin) sur le PC cible :</p>
+        <div class="flex items-center gap-2 mb-3">
+          <label class="text-slate-300 text-sm">Token :</label>
+          <select id="oneliner-token" class="border border-slate-600 bg-slate-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">-- sélectionner --</option>
+          </select>
+        </div>
+        <div id="oneliner-block" class="hidden">
+          <div class="flex items-start gap-2">
+            <code id="oneliner-cmd" class="flex-1 bg-slate-900 text-green-400 rounded-lg p-3 text-xs font-mono break-all"></code>
+            <button onclick="copyOneliner()" class="flex-shrink-0 px-3 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition">Copier</button>
+          </div>
+        </div>
+        <p id="oneliner-hint" class="text-slate-400 text-xs mt-2 hidden">Pour Linux : <code class="text-green-400">curl -s "<span class="oneliner-linux-url"></span>" | sudo bash</code></p>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Modal Créer Token -->
+<div id="token-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800">Créer un token d'enrollment</h3>
+      <button id="close-token-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Libellé *</label>
+        <input id="token-label" type="text" placeholder="Ex: Salle informatique A, Déploiement 2026..."
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div id="token-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3">
+        <button id="cancel-token-modal" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        <button id="submit-token-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Créer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Éditer Token -->
+<div id="edit-token-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800">Modifier le token d'enrollment</h3>
+      <button id="close-edit-token-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+      <input type="hidden" id="edit-token-id" />
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Libellé *</label>
+        <input id="edit-token-label" type="text"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          Whitelist IP
+          <span class="text-slate-400 font-normal ml-1">(une IP ou CIDR par ligne — vide = tout autoriser)</span>
+        </label>
+        <textarea id="edit-token-whitelist" rows="3" placeholder="192.168.1.0/24&#10;10.0.0.5"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          Blacklist IP
+          <span class="text-slate-400 font-normal ml-1">(une IP ou CIDR par ligne — vide = rien bloquer)</span>
+        </label>
+        <textarea id="edit-token-blacklist" rows="3" placeholder="10.0.0.99"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div id="edit-token-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3">
+        <button id="cancel-edit-token-modal" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        <button id="submit-edit-token-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+const user = requireLogin();
+if (!user || user.role !== 'ADMIN') {
+  window.location = '/index.html';
+  throw new Error('Admin only');
+}
+renderNav('agents');
+if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
+
+const serverUrl = window.location.origin;
+let allTokens = [];
+
+// ── Charger les tokens ──────────────────────────────────────────────────────
+async function loadTokens() {
+  try {
+    allTokens = await api.get('/agents/tokens');
+    document.getElementById('tokens-loading').classList.add('hidden');
+
+    if (allTokens.length === 0) {
+      document.getElementById('tokens-empty').classList.remove('hidden');
+    } else {
+      document.getElementById('tokens-table').classList.remove('hidden');
+      document.getElementById('tokens-tbody').innerHTML = allTokens.map(t => {
+        const wl = t.ipWhitelist ? (() => { try { return JSON.parse(t.ipWhitelist); } catch { return []; } })() : null;
+        const bl = t.ipBlacklist ? (() => { try { return JSON.parse(t.ipBlacklist); } catch { return []; } })() : null;
+        const hasWl = wl && wl.length > 0;
+        const hasBl = bl && bl.length > 0;
+        const ipBadges = [
+          hasWl ? `<span class="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-xs" title="${wl.join(', ')}">WL:${wl.length}</span>` : '',
+          hasBl ? `<span class="px-1.5 py-0.5 bg-red-50 text-red-700 rounded text-xs" title="${bl.join(', ')}">BL:${bl.length}</span>` : ''
+        ].filter(Boolean).join(' ');
+        return `
+        <tr class="hover:bg-slate-50 transition ${!t.isActive ? 'opacity-50' : ''}">
+          <td class="px-5 py-3.5 font-medium text-slate-800">${t.label}</td>
+          <td class="px-5 py-3.5">
+            <code class="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded select-all">${t.token}</code>
+          </td>
+          <td class="px-5 py-3.5">
+            ${ipBadges || '<span class="text-slate-300 text-xs">Aucun</span>'}
+          </td>
+          <td class="px-5 py-3.5 text-slate-500 text-xs">${formatDate(t.createdAt)}</td>
+          <td class="px-5 py-3.5 text-slate-500 text-xs">${t.lastUsedAt ? formatDate(t.lastUsedAt, true) : '<span class="text-slate-300">Jamais</span>'}</td>
+          <td class="px-5 py-3.5">
+            ${t.isActive
+              ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Actif</span>'
+              : '<span class="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-xs font-medium">Désactivé</span>'}
+          </td>
+          <td class="px-5 py-3.5">
+            ${t.isActive ? `
+            <div class="flex gap-1">
+              <a href="/downloads/windows?enrollmentToken=${t.token}" class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 transition" title="Package Chocolatey (.nupkg)">
+                &#x1F4E6; .nupkg
+              </a>
+              <a href="/downloads/install.ps1?enrollmentToken=${t.token}" class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs hover:bg-indigo-100 transition" title="Script PowerShell standalone">
+                &#x1F4DC; .ps1
+              </a>
+              <a href="/downloads/linux?enrollmentToken=${t.token}" class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs hover:bg-green-100 transition" title="Script Linux (.sh)">
+                &#x1F427; .sh
+              </a>
+            </div>` : '-'}
+          </td>
+          <td class="px-5 py-3.5 text-right">
+            <div class="flex justify-end gap-2">
+              ${t.isActive ? `
+              <button onclick="openEditTokenModal('${t.id}')"
+                class="px-3 py-1 border border-slate-200 text-slate-600 rounded-lg text-xs hover:bg-slate-50 transition">
+                Modifier
+              </button>
+              <button onclick="deactivateToken('${t.id}', '${t.label.replace(/'/g, "\\'")}')"
+                class="px-3 py-1 border border-red-200 text-red-600 rounded-lg text-xs hover:bg-red-50 transition">
+                Désactiver
+              </button>` : ''}
+            </div>
+          </td>
+        </tr>
+      `;
+      }).join('');
+    }
+
+    // One-liner token select
+    const sel = document.getElementById('oneliner-token');
+    const activeTokens = allTokens.filter(t => t.isActive);
+    sel.innerHTML = '<option value="">-- sélectionner --</option>' +
+      activeTokens.map(t => `<option value="${t.token}">${t.label}</option>`).join('');
+  } catch (err) {
+    document.getElementById('tokens-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+// ── Charger les machines enregistrées ──────────────────────────────────────
+async function loadMachines() {
+  try {
+    const machines = await api.get('/agents/machines');
+    document.getElementById('machines-loading').classList.add('hidden');
+
+    if (machines.length === 0) {
+      document.getElementById('machines-empty').classList.remove('hidden');
+      return;
+    }
+
+    document.getElementById('machines-table').classList.remove('hidden');
+    document.getElementById('machines-tbody').innerHTML = machines.map(m => {
+      const ips = m.agentInfo?.ips;
+      const ipStr = Array.isArray(ips) && ips.length > 0 ? ips[0] : (typeof ips === 'string' ? ips : '-');
+      return `
+        <tr class="hover:bg-slate-50 transition ${m.agentRevoked ? 'opacity-60' : ''}">
+          <td class="px-5 py-3.5">
+            <p class="font-medium text-slate-800 font-mono text-sm">${m.agentHostname || m.name}</p>
+          </td>
+          <td class="px-5 py-3.5 text-slate-600 text-sm">
+            ${m.room ? `${m.room.name}${m.room.number ? ` (${m.room.number})` : ''}` : '<span class="text-slate-400">Non assigné</span>'}
+          </td>
+          <td class="px-5 py-3.5 text-slate-500 text-xs font-mono">${ipStr}</td>
+          <td class="px-5 py-3.5 text-slate-500 text-xs">${m.lastSeenAt ? formatDate(m.lastSeenAt, true) : '-'}</td>
+          <td class="px-5 py-3.5">
+            ${m.agentRevoked
+              ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">Révoqué</span>'
+              : '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Actif</span>'}
+          </td>
+          <td class="px-5 py-3.5 text-right">
+            ${!m.agentRevoked ? `
+            <button onclick="revokeMachine('${m.id}', '${(m.agentHostname || m.name).replace(/'/g, "\\'")}')"
+              class="px-3 py-1 border border-red-200 text-red-600 rounded-lg text-xs hover:bg-red-50 transition">
+              Révoquer
+            </button>` : '-'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    document.getElementById('machines-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+async function revokeMachine(id, name) {
+  if (!confirm(`Révoquer le token machine de "${name}" ? La machine devra se re-enroller.`)) return;
+  try {
+    await api.post(`/agents/machines/${id}/revoke`, {});
+    showToast('Token machine révoqué');
+    loadMachines();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+// ── Charger les équipements agents récents ─────────────────────────────────
+async function loadRecentAgents() {
+  try {
+    const data = await api.get('/equipment', { discoverySource: 'AGENT', limit: 10 });
+    document.getElementById('recent-agents-loading').classList.add('hidden');
+
+    if (data.data.length === 0) {
+      document.getElementById('recent-agents-empty').classList.remove('hidden');
+      return;
+    }
+
+    document.getElementById('recent-agents-table').classList.remove('hidden');
+    document.getElementById('recent-agents-tbody').innerHTML = data.data.map(e => {
+      const info = e.agentInfo ? (typeof e.agentInfo === 'string' ? JSON.parse(e.agentInfo) : e.agentInfo) : {};
+      return `
+        <tr class="hover:bg-slate-50 transition">
+          <td class="px-5 py-3.5">
+            <p class="font-medium text-slate-800 font-mono text-sm">${e.agentHostname || e.name}</p>
+            ${e.serialNumber ? `<p class="text-xs text-slate-400">S/N: ${e.serialNumber}</p>` : ''}
+          </td>
+          <td class="px-5 py-3.5 text-slate-600 text-sm">
+            ${e.room ? `${e.room.name}${e.room.number ? ` (${e.room.number})` : ''}` : '<span class="text-slate-400">Non assigné</span>'}
+          </td>
+          <td class="px-5 py-3.5 text-slate-500 text-xs">
+            ${[info.os, info.cpu ? info.cpu.split('@')[0].trim() : null].filter(Boolean).join(' · ') || '-'}
+          </td>
+          <td class="px-5 py-3.5 text-slate-500 text-xs">${e.lastSeenAt ? formatDate(e.lastSeenAt, true) : '-'}</td>
+          <td class="px-5 py-3.5">
+            ${e.discoveryStatus === 'PENDING'
+              ? '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">En attente</span>'
+              : '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Confirmé</span>'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    document.getElementById('recent-agents-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+// ── One-liner ───────────────────────────────────────────────────────────────
+document.getElementById('oneliner-token').addEventListener('change', e => {
+  const token = e.target.value;
+  const block = document.getElementById('oneliner-block');
+  const hint = document.getElementById('oneliner-hint');
+  if (!token) { block.classList.add('hidden'); hint.classList.add('hidden'); return; }
+
+  const psUrl = `${serverUrl}/downloads/install.ps1?enrollmentToken=${token}`;
+  document.getElementById('oneliner-cmd').textContent =
+    `irm "${psUrl}" | iex`;
+  document.querySelector('.oneliner-linux-url').textContent =
+    `${serverUrl}/downloads/linux?enrollmentToken=${token}`;
+  block.classList.remove('hidden');
+  hint.classList.remove('hidden');
+});
+
+function copyOneliner() {
+  navigator.clipboard?.writeText(document.getElementById('oneliner-cmd').textContent)
+    .then(() => showToast('Commande copiée'))
+    .catch(() => showToast('Impossible de copier', 'error'));
+}
+
+// ── Modal créer token ───────────────────────────────────────────────────────
+const tokenModal = document.getElementById('token-modal');
+document.getElementById('add-token-btn').addEventListener('click', () => {
+  document.getElementById('token-label').value = '';
+  document.getElementById('token-error').classList.add('hidden');
+  tokenModal.classList.remove('hidden');
+  setTimeout(() => document.getElementById('token-label').focus(), 100);
+});
+document.getElementById('close-token-modal').addEventListener('click', () => tokenModal.classList.add('hidden'));
+document.getElementById('cancel-token-modal').addEventListener('click', () => tokenModal.classList.add('hidden'));
+
+document.getElementById('submit-token-btn').addEventListener('click', async () => {
+  const label = document.getElementById('token-label').value.trim();
+  if (!label) {
+    const el = document.getElementById('token-error');
+    el.textContent = 'Le libellé est requis';
+    el.classList.remove('hidden');
+    return;
+  }
+  const btn = document.getElementById('submit-token-btn');
+  btn.disabled = true;
+  try {
+    await api.post('/agents/tokens', { label });
+    showToast('Token créé');
+    tokenModal.classList.add('hidden');
+    document.getElementById('tokens-table').classList.add('hidden');
+    document.getElementById('tokens-empty').classList.add('hidden');
+    document.getElementById('tokens-loading').classList.remove('hidden');
+    document.getElementById('tokens-loading').textContent = 'Chargement...';
+    loadTokens();
+  } catch (err) {
+    const el = document.getElementById('token-error');
+    el.textContent = err.message;
+    el.classList.remove('hidden');
+  } finally { btn.disabled = false; }
+});
+
+async function deactivateToken(id, label) {
+  if (!confirm(`Désactiver le token "${label}" ? Les agents utilisant ce token ne pourront plus s'enroller.`)) return;
+  try {
+    await api.delete(`/agents/tokens/${id}`);
+    showToast('Token désactivé');
+    loadTokens();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+// ── Modal éditer token ───────────────────────────────────────────────────────
+const editTokenModal = document.getElementById('edit-token-modal');
+document.getElementById('close-edit-token-modal').addEventListener('click', () => editTokenModal.classList.add('hidden'));
+document.getElementById('cancel-edit-token-modal').addEventListener('click', () => editTokenModal.classList.add('hidden'));
+
+function openEditTokenModal(tokenId) {
+  const token = allTokens.find(t => t.id === tokenId);
+  if (!token) return;
+
+  document.getElementById('edit-token-id').value = token.id;
+  document.getElementById('edit-token-label').value = token.label;
+  document.getElementById('edit-token-error').classList.add('hidden');
+
+  let wl = [], bl = [];
+  try { wl = token.ipWhitelist ? JSON.parse(token.ipWhitelist) : []; } catch {}
+  try { bl = token.ipBlacklist ? JSON.parse(token.ipBlacklist) : []; } catch {}
+  document.getElementById('edit-token-whitelist').value = wl.join('\n');
+  document.getElementById('edit-token-blacklist').value = bl.join('\n');
+
+  editTokenModal.classList.remove('hidden');
+  setTimeout(() => document.getElementById('edit-token-label').focus(), 100);
+}
+
+document.getElementById('submit-edit-token-btn').addEventListener('click', async () => {
+  const id = document.getElementById('edit-token-id').value;
+  const label = document.getElementById('edit-token-label').value.trim();
+  if (!label) {
+    const el = document.getElementById('edit-token-error');
+    el.textContent = 'Le libellé est requis';
+    el.classList.remove('hidden');
+    return;
+  }
+
+  const parseLines = (text) => text.split('\n').map(l => l.trim()).filter(Boolean);
+  const whitelistLines = parseLines(document.getElementById('edit-token-whitelist').value);
+  const blacklistLines = parseLines(document.getElementById('edit-token-blacklist').value);
+
+  const btn = document.getElementById('submit-edit-token-btn');
+  btn.disabled = true;
+  try {
+    await api.patch(`/agents/tokens/${id}`, {
+      label,
+      ipWhitelist: whitelistLines.length > 0 ? whitelistLines : null,
+      ipBlacklist: blacklistLines.length > 0 ? blacklistLines : null
+    });
+    showToast('Token mis à jour');
+    editTokenModal.classList.add('hidden');
+    document.getElementById('tokens-table').classList.add('hidden');
+    document.getElementById('tokens-empty').classList.add('hidden');
+    document.getElementById('tokens-loading').classList.remove('hidden');
+    document.getElementById('tokens-loading').textContent = 'Chargement...';
+    loadTokens();
+  } catch (err) {
+    const el = document.getElementById('edit-token-error');
+    el.textContent = err.message;
+    el.classList.remove('hidden');
+  } finally { btn.disabled = false; }
+});
+
+loadTokens();
+loadMachines();
+loadRecentAgents();
+</script>
+</body>
+</html>

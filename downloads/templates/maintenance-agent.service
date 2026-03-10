@@ -1,0 +1,16 @@
+[Unit]
+Description=MaintenanceBoard Inventory Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /etc/maintenance-agent/agent.sh
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=maintenance-agent
+
+[Install]
+WantedBy=multi-user.target

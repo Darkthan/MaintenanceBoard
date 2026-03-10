@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scan QR – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-100">
+
+<div id="app" class="max-w-lg mx-auto p-4 pb-8">
+  <!-- Header -->
+  <div class="flex items-center gap-3 mb-6 pt-4">
+    <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
+      </svg>
+    </div>
+    <div>
+      <p class="font-bold text-slate-800">MaintenanceBoard</p>
+      <p class="text-xs text-slate-500">Scanner QR Code</p>
+    </div>
+    <a href="/index.html" class="ml-auto text-sm text-blue-600 hover:underline">Dashboard</a>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading-state" class="text-center py-12">
+    <div class="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+    <p class="text-slate-600">Résolution du QR code...</p>
+  </div>
+
+  <!-- Erreur -->
+  <div id="error-state" class="hidden text-center py-12">
+    <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+    </div>
+    <p id="error-message" class="text-slate-700 font-medium mb-2">QR code invalide</p>
+    <p class="text-slate-500 text-sm">Ce QR code n'est pas reconnu ou a expiré.</p>
+  </div>
+
+  <!-- Contenu salle/équipement -->
+  <div id="content-state" class="hidden space-y-4">
+    <!-- Carte info -->
+    <div id="resource-card" class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"></div>
+
+    <!-- Historique interventions -->
+    <div id="history-section" class="bg-white rounded-2xl border border-slate-200 p-5">
+      <h3 class="font-semibold text-slate-800 mb-3">Dernières interventions</h3>
+      <div id="history-list" class="space-y-2"></div>
+    </div>
+
+    <!-- Formulaire nouvelle intervention -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-5">
+      <h3 class="font-semibold text-slate-800 mb-4">Signaler un problème</h3>
+
+      <div id="auth-check" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-800">
+        <a href="/login.html" class="underline font-medium">Connectez-vous</a> pour soumettre une intervention.
+      </div>
+
+      <form id="intervention-form" class="space-y-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Titre *</label>
+          <input id="int-title" type="text" required
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Décrivez brièvement le problème..." />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Priorité</label>
+          <select id="int-priority" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="LOW">Basse – signalement</option>
+            <option value="NORMAL" selected>Normale – à traiter</option>
+            <option value="HIGH">Haute – urgent</option>
+            <option value="CRITICAL">Critique – bloquant</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+          <textarea id="int-description" rows="3"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            placeholder="Détails supplémentaires (optionnel)..."></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Photo</label>
+          <input id="int-photo" type="file" accept="image/*" capture="environment"
+            class="w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+        </div>
+        <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+        <div id="form-success" class="hidden bg-green-50 border border-green-200 text-green-700 rounded-lg p-3 text-sm"></div>
+        <button type="submit" id="submit-btn"
+          class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-700 transition
+                 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+                 disabled:opacity-50 disabled:cursor-not-allowed">
+          Soumettre l'intervention
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+// Récupérer le token depuis l'URL
+const params = new URLSearchParams(window.location.search);
+const token = params.get('token');
+
+let resourceData = null;
+let resourceType = null;
+
+async function resolveToken() {
+  if (!token) {
+    showError('Aucun token dans l\'URL. Scannez un QR code valide.');
+    return;
+  }
+
+  try {
+    const result = await fetch(`/api/qrcode/resolve/${token}`, { credentials: 'include' });
+    if (!result.ok) {
+      showError('QR code introuvable ou expiré.');
+      return;
+    }
+
+    const data = await result.json();
+    resourceData = data.data;
+    resourceType = data.type;
+    renderContent(data);
+  } catch (err) {
+    showError('Erreur réseau : ' + err.message);
+  }
+}
+
+function showError(msg) {
+  document.getElementById('loading-state').classList.add('hidden');
+  document.getElementById('error-state').classList.remove('hidden');
+  document.getElementById('error-message').textContent = msg;
+}
+
+function renderContent(data) {
+  document.getElementById('loading-state').classList.add('hidden');
+  document.getElementById('content-state').classList.remove('hidden');
+
+  const res = data.data;
+  const isRoom = data.type === 'room';
+
+  // Carte ressource
+  const card = document.getElementById('resource-card');
+  if (isRoom) {
+    card.innerHTML = `
+      <div class="flex items-start gap-4">
+        <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <div class="inline-block bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full mb-1">Salle</div>
+          <h2 class="text-xl font-bold text-slate-800">${res.name}</h2>
+          ${res.building ? `<p class="text-slate-600 text-sm">${res.building}${res.number ? ` · Salle ${res.number}` : ''}${res.floor != null ? ` · Étage ${res.floor}` : ''}</p>` : ''}
+          ${res.description ? `<p class="text-slate-500 text-sm mt-1">${res.description}</p>` : ''}
+          ${res.equipment?.length ? `<p class="text-xs text-slate-400 mt-2">${res.equipment.length} équipement(s)</p>` : ''}
+        </div>
+      </div>`;
+  } else {
+    const statusColors = { ACTIVE: 'bg-green-100 text-green-700', REPAIR: 'bg-yellow-100 text-yellow-700', INACTIVE: 'bg-slate-100 text-slate-600', DECOMMISSIONED: 'bg-red-100 text-red-700' };
+    const statusLabels = { ACTIVE: 'Actif', REPAIR: 'En réparation', INACTIVE: 'Inactif', DECOMMISSIONED: 'Déclassé' };
+    card.innerHTML = `
+      <div class="flex items-start gap-4">
+        <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <div class="inline-block bg-purple-100 text-purple-700 text-xs font-medium px-2 py-0.5 rounded-full">Équipement</div>
+            <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[res.status] || ''}">${statusLabels[res.status] || res.status}</span>
+          </div>
+          <h2 class="text-xl font-bold text-slate-800">${res.name}</h2>
+          <p class="text-slate-600 text-sm">${res.type}${res.brand ? ` · ${res.brand}` : ''}${res.model ? ` ${res.model}` : ''}</p>
+          ${res.serialNumber ? `<p class="text-xs text-slate-400 font-mono mt-1">S/N : ${res.serialNumber}</p>` : ''}
+          ${res.room ? `<p class="text-xs text-slate-500 mt-1">📍 ${res.room.name}${res.room.number ? ` (${res.room.number})` : ''}</p>` : ''}
+        </div>
+      </div>`;
+  }
+
+  // Historique
+  const history = res.interventions || [];
+  const histList = document.getElementById('history-list');
+  if (history.length === 0) {
+    histList.innerHTML = '<p class="text-slate-400 text-sm">Aucune intervention récente</p>';
+  } else {
+    const statusColors2 = { OPEN: 'bg-blue-100 text-blue-700', IN_PROGRESS: 'bg-orange-100 text-orange-700', RESOLVED: 'bg-green-100 text-green-700', CLOSED: 'bg-slate-100 text-slate-600' };
+    const statusLabels2 = { OPEN: 'Ouvert', IN_PROGRESS: 'En cours', RESOLVED: 'Résolu', CLOSED: 'Fermé' };
+    histList.innerHTML = history.map(i => `
+      <div class="flex items-center gap-3 p-2.5 bg-slate-50 rounded-lg">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-slate-800 truncate">${i.title}</p>
+          <p class="text-xs text-slate-500">${i.tech?.name || ''} · ${new Date(i.createdAt).toLocaleDateString('fr-FR')}</p>
+        </div>
+        <span class="text-xs font-medium px-2 py-0.5 rounded-full ${statusColors2[i.status] || ''}">${statusLabels2[i.status] || i.status}</span>
+      </div>`).join('');
+  }
+
+  // Vérifier auth
+  const loggedUser = JSON.parse(localStorage.getItem('user') || 'null');
+  if (!loggedUser) {
+    document.getElementById('auth-check').classList.remove('hidden');
+    document.getElementById('submit-btn').disabled = true;
+  }
+}
+
+// Soumission intervention
+document.getElementById('intervention-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const loggedUser = JSON.parse(localStorage.getItem('user') || 'null');
+  if (!loggedUser) {
+    window.location.href = `/login.html?redirect=/scan.html?token=${token}`;
+    return;
+  }
+
+  const title = document.getElementById('int-title').value;
+  const priority = document.getElementById('int-priority').value;
+  const description = document.getElementById('int-description').value;
+  const photoFile = document.getElementById('int-photo').files[0];
+
+  const submitBtn = document.getElementById('submit-btn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Envoi...';
+  document.getElementById('form-error').classList.add('hidden');
+  document.getElementById('form-success').classList.add('hidden');
+
+  try {
+    const token2 = localStorage.getItem('accessToken');
+    const body = {
+      title,
+      priority,
+      description: description || null,
+      roomId: resourceType === 'room' ? resourceData.id : (resourceData.room?.id || null),
+      equipmentId: resourceType === 'equipment' ? resourceData.id : null
+    };
+
+    const res = await fetch('/api/interventions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token2 ? { 'Authorization': `Bearer ${token2}` } : {})
+      },
+      credentials: 'include',
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Erreur lors de la création');
+    }
+
+    const intervention = await res.json();
+
+    // Upload photo si fournie
+    if (photoFile) {
+      const fd = new FormData();
+      fd.append('photos', photoFile);
+      await fetch(`/api/interventions/${intervention.id}/photos`, {
+        method: 'POST',
+        headers: token2 ? { 'Authorization': `Bearer ${token2}` } : {},
+        credentials: 'include',
+        body: fd
+      });
+    }
+
+    document.getElementById('form-success').textContent = 'Intervention créée avec succès ! Numéro : ' + intervention.id.slice(0,8).toUpperCase();
+    document.getElementById('form-success').classList.remove('hidden');
+    document.getElementById('intervention-form').reset();
+
+    // Recharger l'historique
+    setTimeout(() => resolveToken(), 1500);
+  } catch (err) {
+    document.getElementById('form-error').textContent = err.message;
+    document.getElementById('form-error').classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Soumettre l\'intervention';
+  }
+});
+
+resolveToken();
+</script>
+</body>
+</html>

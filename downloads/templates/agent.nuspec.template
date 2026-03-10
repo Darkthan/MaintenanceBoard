@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>maintenance-agent</id>
+    <version>{{VERSION}}</version>
+    <title>MaintenanceBoard Agent</title>
+    <authors>MaintenanceBoard</authors>
+    <description>Agent de remontée d'inventaire pour MaintenanceBoard. Serveur : {{SERVER_URL}}</description>
+    <tags>maintenance inventory agent</tags>
+    <projectUrl>{{SERVER_URL}}</projectUrl>
+  </metadata>
+</package>

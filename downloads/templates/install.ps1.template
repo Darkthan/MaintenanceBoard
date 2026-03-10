@@ -1,0 +1,45 @@
+# MaintenanceBoard Agent - Installateur PowerShell standalone
+# Généré automatiquement - ne pas modifier manuellement
+
+$ErrorActionPreference = 'Stop'
+$ServerUrl      = '{{SERVER_URL}}'
+$EnrollToken    = '{{ENROLLMENT_TOKEN}}'
+$InstallDir     = "$env:ProgramData\MaintenanceBoardAgent"
+$ServiceName    = 'MaintenanceBoardAgent'
+
+Write-Host "=== Installation de MaintenanceBoard Agent ===" -ForegroundColor Cyan
+Write-Host "  Serveur : $ServerUrl"
+Write-Host "  Dossier : $InstallDir"
+
+# Créer le dossier d'installation
+if (-not (Test-Path $InstallDir)) { New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null }
+
+# Écrire config.json
+@{ serverUrl = $ServerUrl; enrollmentToken = $EnrollToken } | ConvertTo-Json |
+  Set-Content -Path "$InstallDir\config.json" -Encoding UTF8
+
+# Télécharger agent.ps1
+$agentScript = "$InstallDir\agent.ps1"
+try {
+  Invoke-WebRequest -Uri "$ServerUrl/downloads/agent.ps1" -OutFile $agentScript -UseBasicParsing
+} catch {
+  Write-Warning "Impossible de télécharger agent.ps1 : $_"
+  exit 1
+}
+
+# Installer via tâche planifiée (ne nécessite pas NSSM)
+$action    = New-ScheduledTaskAction -Execute 'powershell.exe' `
+               -Argument "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$agentScript`""
+$trigger   = New-ScheduledTaskTrigger -AtStartup
+$settings  = New-ScheduledTaskSettingsSet -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 2) `
+               -ExecutionTimeLimit ([System.TimeSpan]::Zero)
+$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+
+Unregister-ScheduledTask -TaskName $ServiceName -Confirm:$false -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName $ServiceName -Action $action -Trigger $trigger `
+  -Settings $settings -Principal $principal -Force | Out-Null
+Start-ScheduledTask -TaskName $ServiceName
+
+Write-Host "`n=== Installation terminée ===" -ForegroundColor Green
+Write-Host "  Tâche planifiée '$ServiceName' active."
+Write-Host "  Dossier agent : $InstallDir"

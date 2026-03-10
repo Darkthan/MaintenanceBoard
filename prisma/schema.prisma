@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Dev local SQLite : DATABASE_URL=file:./prisma/dev.db
+  // Production PostgreSQL : utiliser schema.postgresql.prisma
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite ne supporte ni enum, ni Json, ni tableaux natifs.
+// Les enums sont stockés en String (validation côté routes).
+// Les tableaux (photos, transports) sont stockés en String (JSON sérialisé).
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  name          String
+  passwordHash  String?
+  role          String   @default("TECH")   // ADMIN | TECH
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  passkeys      Passkey[]
+  interventions Intervention[]
+  orders        Order[]
+  refreshTokens RefreshToken[]
+  agentTokens   AgentToken[]
+
+  @@map("users")
+}
+
+model AgentToken {
+  id          String    @id @default(uuid())
+  token       String    @unique @default(uuid())
+  label       String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  createdById String
+  ipWhitelist String?   // JSON array d'IP/CIDR. null = tout autoriser
+  ipBlacklist String?   // JSON array d'IP/CIDR. null = rien bloquer
+
+  createdBy   User      @relation(fields: [createdById], references: [id])
+
+  @@map("agent_tokens")
+}
+
+model Passkey {
+  id           String    @id @default(uuid())
+  userId       String
+  credentialId String    @unique
+  publicKey    Bytes
+  counter      BigInt    @default(0)
+  deviceType   String?
+  backedUp     Boolean   @default(false)
+  transports   String    @default("[]")   // JSON array sérialisé
+  name         String?
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("passkeys")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Room {
+  id          String   @id @default(uuid())
+  name        String
+  building    String?
+  floor       Int?
+  number      String?
+  description String?
+  qrToken     String   @unique @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  equipment     Equipment[]
+  interventions Intervention[]
+
+  @@map("rooms")
+}
+
+model Equipment {
+  id              String    @id @default(uuid())
+  name            String
+  type            String
+  brand           String?
+  model           String?
+  serialNumber    String?   @unique
+  status          String    @default("ACTIVE")     // ACTIVE | INACTIVE | REPAIR | DECOMMISSIONED
+  description     String?
+  purchaseDate    DateTime?
+  warrantyEnd     DateTime?
+  qrToken         String    @unique @default(uuid())
+  roomId          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Champs agent
+  discoverySource  String    @default("MANUAL")    // MANUAL | AGENT
+  discoveryStatus  String    @default("CONFIRMED") // CONFIRMED | PENDING
+  suggestedRoomId  String?
+  lastSeenAt       DateTime?
+  agentInfo        String?   // JSON: { cpu, ram, os, ips, macs, user, peripherals }
+  agentHostname    String?
+  agentToken       String?   @unique               // Token machine unique (UUID)
+  agentRevoked     Boolean   @default(false)       // Si true, re-enrollment requis
+
+  room          Room?          @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  interventions Intervention[]
+
+  @@map("equipment")
+}
+
+model Intervention {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  status      String   @default("OPEN")    // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  priority    String   @default("NORMAL")  // LOW | NORMAL | HIGH | CRITICAL
+  photos      String   @default("[]")      // JSON array sérialisé
+  resolution  String?
+  roomId      String?
+  equipmentId String?
+  techId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  closedAt    DateTime?
+
+  room      Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  equipment Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  tech      User       @relation(fields: [techId], references: [id])
+
+  @@map("interventions")
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  status      String   @default("PENDING")  // PENDING | ORDERED | PARTIAL | RECEIVED | CANCELLED
+  supplier    String?
+  totalAmount Float?
+  requestedBy String
+  orderedAt   DateTime?
+  receivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requester User        @relation(fields: [requestedBy], references: [id])
+  items     OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  name      String
+  quantity  Int
+  unitPrice Float?
+  reference String?
+  received  Int      @default(0)
+  notes     String?
+  createdAt DateTime @default(now())
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}

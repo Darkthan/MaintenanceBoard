@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: maintenance_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-maintenance_db}
+      POSTGRES_USER: ${POSTGRES_USER:-maintenance_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-maintenance_pass}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-maintenance_user} -d ${POSTGRES_DB:-maintenance_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: maintenance_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./public:/app/public
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-maintenance_user}:${POSTGRES_PASSWORD:-maintenance_pass}@db:5432/${POSTGRES_DB:-maintenance_db}
+    command: sh -c "npx prisma migrate deploy && node prisma/seed.js && node src/server.js"
+
+volumes:
+  pgdata:
+    driver: local
