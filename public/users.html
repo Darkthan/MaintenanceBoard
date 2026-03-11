@@ -123,16 +123,16 @@
   <div class="absolute inset-0 bg-black/50" onclick="closeDetail()"></div>
   <div class="absolute right-0 top-0 bottom-0 w-full max-w-full sm:max-w-2xl bg-white shadow-2xl flex flex-col overflow-hidden">
     <!-- Header -->
-    <div class="flex items-start justify-between p-6 border-b border-slate-200 bg-slate-50">
-      <div class="flex items-center gap-4">
+    <div class="flex flex-col gap-4 p-6 border-b border-slate-200 bg-slate-50 sm:flex-row sm:items-start sm:justify-between">
+      <div class="flex items-center gap-4 min-w-0">
         <div class="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-bold" id="det-avatar">?</div>
-        <div>
+        <div class="min-w-0">
           <h2 id="det-name" class="text-xl font-bold text-slate-800">—</h2>
-          <p id="det-email" class="text-sm text-slate-500">—</p>
+          <p id="det-email" class="text-sm text-slate-500 break-all">—</p>
           <div class="flex items-center gap-2 mt-1" id="det-badges"></div>
         </div>
       </div>
-      <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600">
+      <button onclick="closeDetail()" class="self-end text-slate-400 hover:text-slate-600 sm:self-auto">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -140,7 +140,7 @@
     </div>
 
     <!-- Tabs -->
-    <div class="flex border-b border-slate-200 px-6 bg-white">
+    <div data-mobile-tabbar="true" class="flex border-b border-slate-200 px-6 bg-white">
       <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600" data-tab="logs" onclick="switchTab('logs')">Connexions</button>
       <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="info" onclick="switchTab('info')">Informations</button>
     </div>
@@ -178,7 +178,7 @@
 
       <!-- Tab: Info -->
       <div id="tab-info" class="hidden space-y-5">
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <p class="text-xs text-slate-400 mb-1">Nom</p>
             <p id="info-name" class="text-sm font-medium text-slate-800">—</p>

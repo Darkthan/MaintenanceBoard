@@ -59,7 +59,7 @@
     </header>
 
     <!-- Onglets -->
-    <div class="bg-white border-b border-slate-200 px-6 flex gap-0 overflow-x-auto">
+    <div data-mobile-tabbar="true" class="bg-white border-b border-slate-200 px-6 flex gap-0 overflow-x-auto">
       <button data-tab="users" onclick="showTab('users')"
         class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600 whitespace-nowrap">
         Utilisateurs
@@ -214,7 +214,7 @@
             <h2 class="font-semibold text-slate-800">État de la base</h2>
             <button onclick="loadDbStats()" class="text-xs text-blue-600 hover:underline">Rafraîchir</button>
           </div>
-          <div class="grid grid-cols-3 divide-x divide-slate-100">
+          <div class="grid grid-cols-2 sm:grid-cols-3 divide-x divide-slate-100">
             <div class="py-5 text-center"><p id="db-users" class="text-2xl font-bold text-slate-800">—</p><p class="text-xs text-slate-400 mt-1">Utilisateurs</p></div>
             <div class="py-5 text-center"><p id="db-rooms" class="text-2xl font-bold text-slate-800">—</p><p class="text-xs text-slate-400 mt-1">Salles</p></div>
             <div class="py-5 text-center"><p id="db-equipment" class="text-2xl font-bold text-slate-800">—</p><p class="text-xs text-slate-400 mt-1">Équipements</p></div>
