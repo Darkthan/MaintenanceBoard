@@ -96,4 +96,49 @@ function findBestRoom(hostname, rooms) {
   return null;
 }
 
-module.exports = { findBestRoom };
+/**
+ * Retourne les N meilleures salles candidates pour un hostname (score > 0).
+ *
+ * @param {string} hostname
+ * @param {Array<{id, name, number, building}>} rooms
+ * @param {number} topN  Nombre max de résultats (défaut 5)
+ * @returns {Array<{roomId, roomName, roomNumber, building, score}>}
+ */
+function findTopRooms(hostname, rooms, topN = 5) {
+  if (!hostname || !rooms || rooms.length === 0) return [];
+
+  const normHost = normalize(hostname);
+  const hostTokens = extractTokens(normHost);
+
+  const scored = [];
+  for (const room of rooms) {
+    let score = 0;
+
+    if (room.number) {
+      const normNumber = normalize(room.number);
+      if (hostTokens.has(normNumber)) score += SCORE_NUMBER_EXACT;
+    }
+
+    const normRoomName = normalize(room.name);
+    const roomTokens = extractTokens(normRoomName);
+    const commonTokens = [...hostTokens].filter(t => roomTokens.has(t) && t.length > 1);
+    score += commonTokens.length * SCORE_TOKEN_COMMON;
+
+    const jaccardScore = jaccard(hostTokens, roomTokens);
+    if (jaccardScore > 0.5) score += Math.round(jaccardScore * 10);
+
+    if (score > 0) {
+      scored.push({
+        roomId: room.id,
+        roomName: room.name,
+        roomNumber: room.number || null,
+        building: room.building || null,
+        score
+      });
+    }
+  }
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, topN);
+}
+
+module.exports = { findBestRoom, findTopRooms };

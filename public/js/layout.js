@@ -1,6 +1,15 @@
 /**
- * Layout commun : navigation, déconnexion, breadcrumb
+ * Layout commun : navigation, déconnexion, sidebar mobile
  */
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('nav-overlay');
+  if (!sidebar) return;
+  const isOpen = !sidebar.classList.contains('-translate-x-full');
+  sidebar.classList.toggle('-translate-x-full', isOpen);
+  if (overlay) overlay.classList.toggle('hidden', isOpen);
+}
 
 function renderNav(activePage) {
   const user = JSON.parse(localStorage.getItem('user') || 'null');
@@ -12,7 +21,10 @@ function renderNav(activePage) {
     { href: '/equipment.html', label: 'Équipements', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2', id: 'equipment' },
     { href: '/interventions.html', label: 'Interventions', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', id: 'interventions' },
     { href: '/orders.html', label: 'Commandes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', id: 'orders' },
-    ...(user.role === 'ADMIN' ? [{ href: '/agents.html', label: 'Agents', icon: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', id: 'agents' }] : []),
+    ...(user.role === 'ADMIN' ? [
+      { href: '/agents.html', label: 'Agents', icon: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', id: 'agents' },
+      { href: '/settings.html', label: 'Paramètres', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z', id: 'settings' }
+    ] : []),
   ];
 
   const navEl = document.getElementById('main-nav');
@@ -31,14 +43,36 @@ function renderNav(activePage) {
     </a>
   `).join('');
 
-  // Afficher nom et rôle
-  const nameEl = document.getElementById('user-name');
-  const roleEl = document.getElementById('user-role');
-  if (nameEl) nameEl.textContent = user.name;
-  if (roleEl) roleEl.textContent = user.role;
+  // Afficher nom, rôle et avatar
+  const nameEl   = document.getElementById('user-name');
+  const roleEl   = document.getElementById('user-role');
+  const avatarEl = document.getElementById('user-avatar');
+  if (nameEl)   nameEl.textContent   = user.name;
+  if (roleEl)   roleEl.textContent   = user.role;
+  if (avatarEl) avatarEl.textContent = user.name ? user.name[0].toUpperCase() : '?';
 
   // Bouton déconnexion
   document.getElementById('logout-btn')?.addEventListener('click', logout);
+
+  // Overlay mobile (injecté une seule fois)
+  if (!document.getElementById('nav-overlay')) {
+    const overlay = document.createElement('div');
+    overlay.id = 'nav-overlay';
+    overlay.className = 'hidden fixed inset-0 z-30 bg-black/50 lg:hidden';
+    overlay.addEventListener('click', toggleSidebar);
+    document.body.appendChild(overlay);
+  }
+
+  // Fermer sidebar au clic sur un lien (mobile)
+  navEl.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => {
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar && window.innerWidth < 1024) {
+        sidebar.classList.add('-translate-x-full');
+        document.getElementById('nav-overlay')?.classList.add('hidden');
+      }
+    });
+  });
 }
 
 /**
@@ -53,7 +87,7 @@ function showToast(message, type = 'success') {
   };
 
   const toast = document.createElement('div');
-  toast.className = `fixed bottom-4 right-4 z-50 px-5 py-3 rounded-xl text-white shadow-lg text-sm font-medium
+  toast.className = `fixed bottom-4 right-4 z-[100] px-5 py-3 rounded-xl text-white shadow-lg text-sm font-medium
                      transform translate-y-2 opacity-0 transition-all duration-300 ${colors[type] || colors.info}`;
   toast.textContent = message;
   document.body.appendChild(toast);
@@ -74,17 +108,14 @@ function showToast(message, type = 'success') {
  */
 function statusBadge(status, type = 'intervention') {
   const badges = {
-    // Équipements
     ACTIVE: 'bg-green-100 text-green-800',
     INACTIVE: 'bg-slate-100 text-slate-600',
     REPAIR: 'bg-yellow-100 text-yellow-800',
     DECOMMISSIONED: 'bg-red-100 text-red-700',
-    // Interventions
     OPEN: 'bg-blue-100 text-blue-800',
     IN_PROGRESS: 'bg-orange-100 text-orange-800',
     RESOLVED: 'bg-green-100 text-green-800',
     CLOSED: 'bg-slate-100 text-slate-600',
-    // Commandes
     PENDING: 'bg-yellow-100 text-yellow-800',
     ORDERED: 'bg-blue-100 text-blue-800',
     PARTIAL: 'bg-orange-100 text-orange-800',
@@ -123,7 +154,7 @@ function getLayoutTemplate(title, activePage) {
   return `
   <div class="min-h-screen bg-slate-50 flex">
     <!-- Sidebar -->
-    <aside class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-30">
+    <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
       <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
         <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,11 +189,18 @@ function getLayoutTemplate(title, activePage) {
     </aside>
 
     <!-- Main content -->
-    <main class="flex-1 ml-64 flex flex-col min-h-screen">
+    <main class="flex-1 lg:ml-64 flex flex-col min-h-screen">
       <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-        <h1 class="text-xl font-semibold text-slate-800">${title}</h1>
+        <div class="flex items-center gap-3">
+          <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+          <h1 class="text-xl font-semibold text-slate-800">${title}</h1>
+        </div>
         <div class="flex items-center gap-2">
-          <span class="text-xs text-slate-400">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+          <span class="text-xs text-slate-400 hidden sm:block">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
         </div>
       </header>
       <div class="flex-1 p-6" id="page-content">

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Utilisateurs – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+        </svg>
+      </div>
+      <div><p class="text-white font-bold text-sm">MaintenanceBoard</p><p class="text-slate-400 text-xs">Parc informatique</p></div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <span id="user-avatar">?</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" title="Déconnexion" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 lg:ml-64 flex flex-col min-h-screen">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <h1 class="text-xl font-semibold text-slate-800">Utilisateurs</h1>
+      </div>
+      <button id="btn-add-user" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Nouvel utilisateur
+      </button>
+    </header>
+
+    <div class="flex-1 p-6">
+      <!-- Stats -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" id="stats-bar">
+        <div class="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+          <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-slate-800" id="stat-total">—</p>
+            <p class="text-xs text-slate-500">Utilisateurs</p>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+          <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-slate-800" id="stat-active">—</p>
+            <p class="text-xs text-slate-500">Actifs</p>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+          <div class="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-slate-800" id="stat-admins">—</p>
+            <p class="text-xs text-slate-500">Administrateurs</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Utilisateur</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Rôle</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Statut</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Dernière connexion</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Connexions</th>
+              <th class="text-left px-4 py-3 font-semibold text-slate-600">Interventions</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody id="users-table" class="divide-y divide-slate-100">
+            <tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal détail utilisateur -->
+<div id="modal-detail" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/50" onclick="closeDetail()"></div>
+  <div class="absolute right-0 top-0 bottom-0 w-full max-w-full sm:max-w-2xl bg-white shadow-2xl flex flex-col overflow-hidden">
+    <!-- Header -->
+    <div class="flex items-start justify-between p-6 border-b border-slate-200 bg-slate-50">
+      <div class="flex items-center gap-4">
+        <div class="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-bold" id="det-avatar">?</div>
+        <div>
+          <h2 id="det-name" class="text-xl font-bold text-slate-800">—</h2>
+          <p id="det-email" class="text-sm text-slate-500">—</p>
+          <div class="flex items-center gap-2 mt-1" id="det-badges"></div>
+        </div>
+      </div>
+      <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b border-slate-200 px-6 bg-white">
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600" data-tab="logs" onclick="switchTab('logs')">Connexions</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="info" onclick="switchTab('info')">Informations</button>
+    </div>
+
+    <!-- Body scrollable -->
+    <div class="flex-1 overflow-y-auto p-6">
+
+      <!-- Tab: Logs -->
+      <div id="tab-logs">
+        <!-- Period selector -->
+        <div class="flex items-center gap-2 mb-5">
+          <span class="text-sm text-slate-500">Période :</span>
+          <button class="period-btn px-3 py-1 text-xs rounded-full bg-blue-600 text-white font-medium" data-days="7" onclick="loadLogs(7)">7j</button>
+          <button class="period-btn px-3 py-1 text-xs rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200" data-days="30" onclick="loadLogs(30)">30j</button>
+          <button class="period-btn px-3 py-1 text-xs rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200" data-days="90" onclick="loadLogs(90)">90j</button>
+          <span class="ml-auto text-xs text-slate-400" id="logs-total"></span>
+        </div>
+
+        <!-- Histogramme 24h -->
+        <div class="bg-slate-50 rounded-xl p-4 mb-5">
+          <p class="text-xs font-medium text-slate-500 mb-3">Activité par heure (0h–23h)</p>
+          <div class="flex items-end gap-0.5 h-24" id="histogram">
+            <!-- généré par JS -->
+          </div>
+          <div class="flex justify-between text-xs text-slate-400 mt-1">
+            <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+          </div>
+        </div>
+
+        <!-- Liste logs -->
+        <div id="logs-list" class="space-y-1">
+          <p class="text-sm text-slate-400 text-center py-4">Chargement...</p>
+        </div>
+      </div>
+
+      <!-- Tab: Info -->
+      <div id="tab-info" class="hidden space-y-5">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-xs text-slate-400 mb-1">Nom</p>
+            <p id="info-name" class="text-sm font-medium text-slate-800">—</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 mb-1">Email</p>
+            <p id="info-email" class="text-sm font-medium text-slate-800">—</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 mb-1">Rôle</p>
+            <p id="info-role" class="text-sm font-medium text-slate-800">—</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 mb-1">Compte créé le</p>
+            <p id="info-created" class="text-sm font-medium text-slate-800">—</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 mb-1">Passkeys enregistrées</p>
+            <p id="info-passkeys" class="text-sm font-medium text-slate-800">—</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 mb-1">Interventions créées</p>
+            <p id="info-interventions" class="text-sm font-medium text-slate-800">—</p>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="border-t border-slate-200 pt-5">
+          <p class="text-sm font-semibold text-slate-700 mb-3">Actions</p>
+          <div class="flex gap-3 flex-wrap">
+            <button id="btn-toggle-active" onclick="toggleActive()" class="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition">
+              Désactiver
+            </button>
+            <button id="btn-change-role" onclick="changeRole()" class="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition">
+              Changer le rôle
+            </button>
+            <button id="btn-reset-pwd" onclick="resetPassword()" class="px-4 py-2 text-sm rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 transition">
+              Réinitialiser le mot de passe
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Modal créer utilisateur -->
+<div id="modal-create" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/50" onclick="closeCreate()"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-bold text-slate-800">Nouvel utilisateur</h2>
+        <button onclick="closeCreate()" class="text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form id="form-create" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
+          <input type="text" name="name" required minlength="2" placeholder="Jean Dupont"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+          <input type="email" name="email" required placeholder="jean@ecole.fr"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label>
+          <input type="password" name="password" required minlength="8" placeholder="Min. 8 car., maj., chiffre"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Rôle</label>
+          <select name="role" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="TECH">Technicien</option>
+            <option value="ADMIN">Administrateur</option>
+          </select>
+        </div>
+        <div id="create-error" class="hidden text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg"></div>
+        <div class="flex gap-3 pt-2">
+          <button type="button" onclick="closeCreate()" class="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Annuler</button>
+          <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Créer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal réinitialisation mot de passe -->
+<div id="modal-reset-pwd" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/50" onclick="document.getElementById('modal-reset-pwd').classList.add('hidden')"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+      <h2 class="text-lg font-bold text-slate-800 mb-4">Nouveau mot de passe</h2>
+      <form id="form-reset-pwd" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label>
+          <input type="password" name="password" required minlength="8"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div id="reset-error" class="hidden text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg"></div>
+        <div class="flex gap-3">
+          <button type="button" onclick="document.getElementById('modal-reset-pwd').classList.add('hidden')" class="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700">Annuler</button>
+          <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+  requireAuth();
+  renderNav('users');
+
+  const API = '/api';
+  let users = [];
+  let currentUser = null;
+  let currentPeriod = 7;
+
+  // ── Chargement liste ──────────────────────────────────────────────────────────
+  async function loadUsers() {
+    const res = await fetch(`${API}/users`, { credentials: 'include' });
+    if (!res.ok) { showToast('Erreur de chargement', 'error'); return; }
+    users = await res.json();
+    renderTable();
+    renderStats();
+  }
+
+  function renderStats() {
+    document.getElementById('stat-total').textContent = users.length;
+    document.getElementById('stat-active').textContent = users.filter(u => u.isActive).length;
+    document.getElementById('stat-admins').textContent = users.filter(u => u.role === 'ADMIN').length;
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('users-table');
+    if (!users.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Aucun utilisateur</td></tr>';
+      return;
+    }
+    tbody.innerHTML = users.map(u => {
+      const lastLog = u.loginLogs?.[0];
+      const initials = u.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      return `
+        <tr class="hover:bg-slate-50 cursor-pointer" onclick="openDetail('${u.id}')">
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${initials}</div>
+              <div>
+                <p class="font-medium text-slate-800">${u.name}</p>
+                <p class="text-xs text-slate-400">${u.email}</p>
+              </div>
+            </div>
+          </td>
+          <td class="px-4 py-3">
+            ${u.role === 'ADMIN'
+              ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Admin</span>'
+              : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Tech</span>'}
+          </td>
+          <td class="px-4 py-3">
+            ${u.isActive
+              ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Actif</span>'
+              : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Inactif</span>'}
+          </td>
+          <td class="px-4 py-3 text-sm text-slate-600">
+            ${lastLog ? `<div>${formatDate(lastLog.createdAt, true)}</div><div class="text-xs text-slate-400">${lastLog.method === 'PASSKEY' ? '🔑 Passkey' : '🔒 Mot de passe'}</div>` : '<span class="text-slate-400">Jamais</span>'}
+          </td>
+          <td class="px-4 py-3 text-sm text-slate-600">${u._count?.loginLogs ?? 0}</td>
+          <td class="px-4 py-3 text-sm text-slate-600">${u._count?.interventions ?? 0}</td>
+          <td class="px-4 py-3 text-right">
+            <svg class="w-4 h-4 text-slate-400 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ── Détail utilisateur ────────────────────────────────────────────────────────
+  function openDetail(userId) {
+    currentUser = users.find(u => u.id === userId);
+    if (!currentUser) return;
+
+    const initials = currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    document.getElementById('det-avatar').textContent = initials;
+    document.getElementById('det-name').textContent = currentUser.name;
+    document.getElementById('det-email').textContent = currentUser.email;
+
+    const badges = document.getElementById('det-badges');
+    badges.innerHTML =
+      (currentUser.role === 'ADMIN'
+        ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Admin</span>'
+        : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Tech</span>') +
+      (currentUser.isActive
+        ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Actif</span>'
+        : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Inactif</span>');
+
+    // Tab Info
+    document.getElementById('info-name').textContent = currentUser.name;
+    document.getElementById('info-email').textContent = currentUser.email;
+    document.getElementById('info-role').textContent = currentUser.role === 'ADMIN' ? 'Administrateur' : 'Technicien';
+    document.getElementById('info-created').textContent = formatDate(currentUser.createdAt);
+    document.getElementById('info-passkeys').textContent = currentUser._count?.passkeys ?? 0;
+    document.getElementById('info-interventions').textContent = currentUser._count?.interventions ?? 0;
+
+    const btnToggle = document.getElementById('btn-toggle-active');
+    btnToggle.textContent = currentUser.isActive ? 'Désactiver' : 'Réactiver';
+    btnToggle.className = currentUser.isActive
+      ? 'px-4 py-2 text-sm rounded-lg border border-red-300 text-red-700 hover:bg-red-50 transition'
+      : 'px-4 py-2 text-sm rounded-lg border border-green-300 text-green-700 hover:bg-green-50 transition';
+
+    const loggedUserId = JSON.parse(localStorage.getItem('user') || '{}').id;
+    document.getElementById('btn-toggle-active').disabled = currentUser.id === loggedUserId;
+    if (currentUser.id === loggedUserId) {
+      btnToggle.classList.add('opacity-40', 'cursor-not-allowed');
+    }
+
+    switchTab('logs');
+    document.getElementById('modal-detail').classList.remove('hidden');
+    loadLogs(currentPeriod);
+  }
+
+  function closeDetail() {
+    document.getElementById('modal-detail').classList.add('hidden');
+    currentUser = null;
+  }
+
+  function switchTab(tab) {
+    document.getElementById('tab-logs').classList.toggle('hidden', tab !== 'logs');
+    document.getElementById('tab-info').classList.toggle('hidden', tab !== 'info');
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      const active = btn.dataset.tab === tab;
+      btn.className = `tab-btn px-4 py-3 text-sm font-medium border-b-2 ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`;
+    });
+  }
+
+  // ── Logs de connexion ─────────────────────────────────────────────────────────
+  async function loadLogs(days) {
+    if (!currentUser) return;
+    currentPeriod = days;
+
+    // MAJ boutons période
+    document.querySelectorAll('.period-btn').forEach(btn => {
+      const active = parseInt(btn.dataset.days) === days;
+      btn.className = `period-btn px-3 py-1 text-xs rounded-full font-medium ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
+    });
+
+    document.getElementById('histogram').innerHTML = '<div class="w-full text-center text-xs text-slate-400 self-center">Chargement...</div>';
+    document.getElementById('logs-list').innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Chargement...</p>';
+
+    const res = await fetch(`${API}/users/${currentUser.id}/login-logs?days=${days}`, { credentials: 'include' });
+    if (!res.ok) { showToast('Erreur', 'error'); return; }
+    const data = await res.json();
+
+    document.getElementById('logs-total').textContent = `${data.total} connexion${data.total > 1 ? 's' : ''}`;
+    renderHistogram(data.byHour);
+    renderLogsList(data.logs);
+  }
+
+  function renderHistogram(byHour) {
+    const max = Math.max(...byHour, 1);
+    const container = document.getElementById('histogram');
+    container.innerHTML = byHour.map((count, h) => {
+      const heightPct = Math.round((count / max) * 100);
+      const hasData = count > 0;
+      return `
+        <div class="flex-1 flex flex-col items-center justify-end gap-0.5 group relative" title="${h}h : ${count} connexion${count > 1 ? 's' : ''}">
+          <div class="w-full rounded-t transition-all ${hasData ? 'bg-blue-500 group-hover:bg-blue-400' : 'bg-slate-200'}"
+               style="height:${Math.max(heightPct, hasData ? 4 : 0)}%"></div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderLogsList(logs) {
+    const container = document.getElementById('logs-list');
+    if (!logs.length) {
+      container.innerHTML = '<p class="text-sm text-slate-400 text-center py-6">Aucune connexion sur cette période</p>';
+      return;
+    }
+
+    // Grouper par jour
+    const byDay = {};
+    logs.forEach(log => {
+      const day = new Date(log.createdAt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      if (!byDay[day]) byDay[day] = [];
+      byDay[day].push(log);
+    });
+
+    container.innerHTML = Object.entries(byDay).map(([day, dayLogs]) => `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">${day}</p>
+        <div class="space-y-1">
+          ${dayLogs.map(log => `
+            <div class="flex items-center gap-3 px-3 py-2 bg-slate-50 rounded-lg">
+              <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${log.method === 'PASSKEY' ? 'bg-purple-100' : 'bg-blue-100'}">
+                ${log.method === 'PASSKEY'
+                  ? '<svg class="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>'
+                  : '<svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>'}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-medium text-slate-700">${new Date(log.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span class="text-xs px-1.5 py-0.5 rounded ${log.method === 'PASSKEY' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${log.method === 'PASSKEY' ? 'Passkey' : 'Mot de passe'}</span>
+                </div>
+                ${log.ip ? `<p class="text-xs text-slate-400 truncate">${log.ip}${log.userAgent ? ' · ' + log.userAgent.split(' ')[0] : ''}</p>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────────
+  async function toggleActive() {
+    if (!currentUser) return;
+    const newState = !currentUser.isActive;
+    const confirmMsg = newState ? `Réactiver le compte de ${currentUser.name} ?` : `Désactiver le compte de ${currentUser.name} ?`;
+    if (!confirm(confirmMsg)) return;
+
+    const res = await fetch(`${API}/users/${currentUser.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ isActive: newState })
+    });
+    if (!res.ok) { showToast('Erreur', 'error'); return; }
+
+    showToast(newState ? 'Compte réactivé' : 'Compte désactivé');
+    closeDetail();
+    loadUsers();
+  }
+
+  async function changeRole() {
+    if (!currentUser) return;
+    const newRole = currentUser.role === 'ADMIN' ? 'TECH' : 'ADMIN';
+    if (!confirm(`Changer le rôle de ${currentUser.name} en ${newRole === 'ADMIN' ? 'Administrateur' : 'Technicien'} ?`)) return;
+
+    const res = await fetch(`${API}/users/${currentUser.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ role: newRole })
+    });
+    if (!res.ok) { showToast('Erreur', 'error'); return; }
+
+    showToast('Rôle mis à jour');
+    closeDetail();
+    loadUsers();
+  }
+
+  function resetPassword() {
+    document.getElementById('modal-reset-pwd').classList.remove('hidden');
+    document.getElementById('reset-error').classList.add('hidden');
+    document.getElementById('form-reset-pwd').reset();
+  }
+
+  document.getElementById('form-reset-pwd').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const pwd = e.target.password.value;
+    const errEl = document.getElementById('reset-error');
+    errEl.classList.add('hidden');
+
+    const res = await fetch(`${API}/users/${currentUser.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ password: pwd })
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      errEl.textContent = d.error || 'Erreur';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    document.getElementById('modal-reset-pwd').classList.add('hidden');
+    showToast('Mot de passe mis à jour');
+  });
+
+  // ── Créer utilisateur ─────────────────────────────────────────────────────────
+  document.getElementById('btn-add-user').addEventListener('click', () => {
+    document.getElementById('modal-create').classList.remove('hidden');
+    document.getElementById('create-error').classList.add('hidden');
+    document.getElementById('form-create').reset();
+  });
+
+  function closeCreate() {
+    document.getElementById('modal-create').classList.add('hidden');
+  }
+
+  document.getElementById('form-create').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    const errEl = document.getElementById('create-error');
+    errEl.classList.add('hidden');
+
+    const res = await fetch(`${API}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data)
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      errEl.textContent = json.error || (json.errors?.[0]?.msg) || 'Erreur de création';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    closeCreate();
+    showToast(`Utilisateur ${json.user.name} créé`);
+    loadUsers();
+  });
+
+  // Fermer modal avec Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeDetail();
+      closeCreate();
+      document.getElementById('modal-reset-pwd').classList.add('hidden');
+    }
+  });
+
+  loadUsers();
+</script>
+</body>
+</html>

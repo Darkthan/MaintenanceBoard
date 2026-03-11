@@ -9,7 +9,7 @@
 <body class="bg-slate-50">
 
 <div class="min-h-screen flex">
-  <aside class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-30">
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
     <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
       <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
@@ -28,9 +28,16 @@
     </div>
   </aside>
 
-  <main class="flex-1 ml-64 flex flex-col">
+  <main class="flex-1 lg:ml-64 flex flex-col">
     <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-      <h1 class="text-xl font-semibold text-slate-800">Interventions</h1>
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <h1 class="text-xl font-semibold text-slate-800">Interventions</h1>
+      </div>
       <button id="add-intervention-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
         Nouvelle intervention
@@ -82,7 +89,7 @@
         <label class="block text-sm font-medium text-slate-700 mb-1">Titre *</label>
         <input id="int-title" type="text" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Statut</label>
           <select id="int-status" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">

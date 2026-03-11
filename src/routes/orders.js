@@ -17,6 +17,7 @@ const validate = (req, res) => {
 };
 
 const VALID_STATUSES = ['PENDING', 'ORDERED', 'PARTIAL', 'RECEIVED', 'CANCELLED'];
+const VALID_PRICE_TYPES = ['TTC', 'HT'];
 
 const orderInclude = {
   requester: { select: { id: true, name: true, email: true } },
@@ -80,7 +81,9 @@ router.post('/',
     body('title').trim().isLength({ min: 3, max: 300 }),
     body('items').isArray({ min: 1 }),
     body('items.*.name').trim().isLength({ min: 1 }),
-    body('items.*.quantity').isInt({ min: 1 })
+    body('items.*.quantity').isInt({ min: 1 }),
+    body('items.*.priceType').optional().isIn(VALID_PRICE_TYPES),
+    body('items.*.productUrl').optional({ values: 'falsy' }).isURL({ require_protocol: true })
   ],
   async (req, res, next) => {
     try {
@@ -98,7 +101,9 @@ router.post('/',
               name: item.name,
               quantity: parseInt(item.quantity),
               unitPrice: item.unitPrice ? parseFloat(item.unitPrice) : null,
+              priceType: VALID_PRICE_TYPES.includes(item.priceType) ? item.priceType : 'TTC',
               reference: item.reference || null,
+              productUrl: item.productUrl || null,
               notes: item.notes || null
             }))
           }
@@ -115,13 +120,18 @@ router.post('/',
 router.patch('/:id',
   requireAuth,
   [
-    body('status').optional().isIn(VALID_STATUSES)
+    body('status').optional().isIn(VALID_STATUSES),
+    body('items').optional().isArray({ min: 1 }),
+    body('items.*.name').optional().trim().isLength({ min: 1 }),
+    body('items.*.quantity').optional().isInt({ min: 1 }),
+    body('items.*.priceType').optional().isIn(VALID_PRICE_TYPES),
+    body('items.*.productUrl').optional({ values: 'falsy' }).isURL({ require_protocol: true })
   ],
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
 
-      const { title, description, supplier, status } = req.body;
+      const { title, description, supplier, status, items } = req.body;
       const data = {};
       if (title !== undefined) data.title = title;
       if (description !== undefined) data.description = description;
@@ -130,6 +140,20 @@ router.patch('/:id',
         data.status = status;
         if (status === 'ORDERED') data.orderedAt = new Date();
         if (status === 'RECEIVED') data.receivedAt = new Date();
+      }
+      if (items !== undefined) {
+        data.items = {
+          deleteMany: {},
+          create: items.map(item => ({
+            name: item.name,
+            quantity: parseInt(item.quantity),
+            unitPrice: item.unitPrice ? parseFloat(item.unitPrice) : null,
+            priceType: VALID_PRICE_TYPES.includes(item.priceType) ? item.priceType : 'TTC',
+            reference: item.reference || null,
+            productUrl: item.productUrl || null,
+            notes: item.notes || null
+          }))
+        };
       }
 
       const order = await prisma.order.update({
@@ -161,7 +185,9 @@ router.post('/:id/items',
   requireAuth,
   [
     body('name').trim().isLength({ min: 1 }),
-    body('quantity').isInt({ min: 1 })
+    body('quantity').isInt({ min: 1 }),
+    body('priceType').optional().isIn(VALID_PRICE_TYPES),
+    body('productUrl').optional({ values: 'falsy' }).isURL({ require_protocol: true })
   ],
   async (req, res, next) => {
     try {
@@ -174,7 +200,9 @@ router.post('/:id/items',
           name,
           quantity: parseInt(quantity),
           unitPrice: unitPrice ? parseFloat(unitPrice) : null,
+          priceType: VALID_PRICE_TYPES.includes(req.body.priceType) ? req.body.priceType : 'TTC',
           reference: reference || null,
+          productUrl: req.body.productUrl || null,
           notes: notes || null
         }
       });
@@ -189,12 +217,15 @@ router.post('/:id/items',
 // PATCH /api/orders/:orderId/items/:itemId - Modifier une ligne (réception partielle)
 router.patch('/:orderId/items/:itemId', requireAuth, async (req, res, next) => {
   try {
-    const { received, quantity, unitPrice, notes } = req.body;
+    const { received, quantity, unitPrice, notes, priceType, productUrl, reference } = req.body;
     const data = {};
     if (received !== undefined) data.received = parseInt(received);
     if (quantity !== undefined) data.quantity = parseInt(quantity);
     if (unitPrice !== undefined) data.unitPrice = unitPrice ? parseFloat(unitPrice) : null;
     if (notes !== undefined) data.notes = notes;
+    if (priceType !== undefined) data.priceType = VALID_PRICE_TYPES.includes(priceType) ? priceType : 'TTC';
+    if (productUrl !== undefined) data.productUrl = productUrl || null;
+    if (reference !== undefined) data.reference = reference || null;
 
     const item = await prisma.orderItem.update({
       where: { id: req.params.itemId },

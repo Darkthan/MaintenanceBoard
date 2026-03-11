@@ -10,7 +10,7 @@
 
 <div class="min-h-screen flex">
   <!-- Sidebar -->
-  <aside class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-30">
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
     <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
       <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -38,22 +38,35 @@
     </div>
   </aside>
 
-  <main class="flex-1 ml-64 flex flex-col">
+  <main class="flex-1 lg:ml-64 flex flex-col">
     <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-      <h1 class="text-xl font-semibold text-slate-800">Gestion des agents</h1>
-      <button id="add-token-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Créer un token
-      </button>
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <h1 class="text-xl font-semibold text-slate-800">Gestion des agents</h1>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <a href="/assign-rooms.html" class="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Assigner les salles
+        </a>
+        <button id="add-token-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Créer un token de déploiement
+        </button>
+      </div>
     </header>
 
     <div class="flex-1 p-6 space-y-6">
 
       <!-- Tokens d'enrollment -->
-      <div class="bg-white rounded-xl border border-slate-200">
+      <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <div class="px-5 py-4 border-b border-slate-100">
-          <h2 class="font-semibold text-slate-800">Tokens d'enrollment</h2>
-          <p class="text-xs text-slate-500 mt-1">Utilisés pour le premier enregistrement des agents sur les machines.</p>
+          <h2 class="font-semibold text-slate-800">Tokens de déploiement</h2>
+          <p class="text-xs text-slate-500 mt-1">Un token permet d'enroller un nombre illimité de machines. Révoquer un token bloque les nouveaux enrollments sans affecter les machines déjà enregistrées.</p>
         </div>
         <div id="tokens-loading" class="p-6 text-center text-slate-400 text-sm">Chargement...</div>
         <table id="tokens-table" class="hidden w-full text-sm">
@@ -61,6 +74,7 @@
             <tr class="bg-slate-50 border-b border-slate-200">
               <th class="text-left px-5 py-3 font-medium text-slate-600">Libellé</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Token</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Machines</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Filtres IP</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Créé le</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Dernière utilisation</th>
@@ -75,7 +89,7 @@
       </div>
 
       <!-- Machines enregistrées -->
-      <div class="bg-white rounded-xl border border-slate-200">
+      <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <div class="px-5 py-4 border-b border-slate-100">
           <h2 class="font-semibold text-slate-800">Machines enregistrées</h2>
           <p class="text-xs text-slate-500 mt-1">PCs ayant obtenu un token machine. Révoquer force un re-enrollment.</p>
@@ -98,7 +112,7 @@
       </div>
 
       <!-- Équipements récemment découverts -->
-      <div class="bg-white rounded-xl border border-slate-200">
+      <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h2 class="font-semibold text-slate-800">Équipements récemment découverts</h2>
@@ -149,7 +163,7 @@
 <div id="token-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-      <h3 class="font-semibold text-slate-800">Créer un token d'enrollment</h3>
+      <h3 class="font-semibold text-slate-800">Créer un token de déploiement</h3>
       <button id="close-token-modal" class="text-slate-400 hover:text-slate-600">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
@@ -173,7 +187,7 @@
 <div id="edit-token-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-      <h3 class="font-semibold text-slate-800">Modifier le token d'enrollment</h3>
+      <h3 class="font-semibold text-slate-800">Modifier le token de déploiement</h3>
       <button id="close-edit-token-modal" class="text-slate-400 hover:text-slate-600">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
@@ -249,6 +263,12 @@ async function loadTokens() {
           <td class="px-5 py-3.5 font-medium text-slate-800">${t.label}</td>
           <td class="px-5 py-3.5">
             <code class="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded select-all">${t.token}</code>
+          </td>
+          <td class="px-5 py-3.5">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full text-xs font-medium" title="Machines enregistrées avec ce token">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
+              ${t._count?.enrolledMachines ?? 0}
+            </span>
           </td>
           <td class="px-5 py-3.5">
             ${ipBadges || '<span class="text-slate-300 text-xs">Aucun</span>'}
@@ -456,7 +476,7 @@ document.getElementById('submit-token-btn').addEventListener('click', async () =
 });
 
 async function deactivateToken(id, label) {
-  if (!confirm(`Désactiver le token "${label}" ? Les agents utilisant ce token ne pourront plus s'enroller.`)) return;
+  if (!confirm(`Révoquer le token de déploiement "${label}" ?\n\nLes nouvelles machines ne pourront plus s'enroller avec ce token.\nLes machines déjà enregistrées continuent de fonctionner normalement.`)) return;
   try {
     await api.delete(`/agents/tokens/${id}`);
     showToast('Token désactivé');

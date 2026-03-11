@@ -34,18 +34,23 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
       }
 
       if (equipment) {
-        // Équipement existant → mettre à jour
+        // Équipement existant → mettre à jour (conserver le lien enrollmentTokenId s'il existait déjà)
         const machineToken = equipment.agentToken || uuidv4();
+        const updateData = {
+          agentInfo,
+          agentHostname: hostname || null,
+          agentToken: machineToken,
+          agentRevoked: false,
+          lastSeenAt: new Date(),
+          discoverySource: 'AGENT'
+        };
+        // Associer le token de déploiement seulement si la machine n'en avait pas encore
+        if (!equipment.enrollmentTokenId) {
+          updateData.enrollmentTokenId = enrollToken.id;
+        }
         equipment = await prisma.equipment.update({
           where: { id: equipment.id },
-          data: {
-            agentInfo,
-            agentHostname: hostname || null,
-            agentToken: machineToken,
-            agentRevoked: false,
-            lastSeenAt: new Date(),
-            discoverySource: 'AGENT'
-          }
+          data: updateData
         });
         return res.json({ agentToken: machineToken, equipmentId: equipment.id, existing: true });
       }
@@ -69,7 +74,8 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
           agentInfo,
           agentHostname: hostname || null,
           agentToken: machineToken,
-          lastSeenAt: new Date()
+          lastSeenAt: new Date(),
+          enrollmentTokenId: enrollToken.id
         }
       });
 
@@ -100,12 +106,55 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
   }
 });
 
+// ── POST /api/agents/sessions ─────────────────────────────────────────────────
+// Auth: X-Agent-Token machine uniquement (pas enrollment)
+// Body: { events: [{ winUser, event, occurredAt }] }
+router.post('/sessions', agentAuth, async (req, res, next) => {
+  try {
+    if (!req.equipmentRecord) {
+      return res.status(403).json({ error: 'Token machine requis' });
+    }
+
+    const { events } = req.body;
+    if (!Array.isArray(events) || events.length === 0) {
+      return res.status(400).json({ error: 'events requis (tableau)' });
+    }
+
+    // Valider et normaliser les événements
+    const validEvents = [];
+    for (const e of events) {
+      if (!e.winUser || !['LOGIN', 'LOGOUT'].includes(e.event)) continue;
+      const occurredAt = e.occurredAt ? new Date(e.occurredAt) : new Date();
+      if (isNaN(occurredAt.getTime())) continue;
+      validEvents.push({
+        id: require('crypto').randomUUID(),
+        equipmentId: req.equipmentRecord.id,
+        winUser: String(e.winUser).slice(0, 100),
+        event: e.event,
+        occurredAt
+      });
+    }
+
+    if (validEvents.length === 0) {
+      return res.status(400).json({ error: 'Aucun événement valide' });
+    }
+
+    await prisma.machineSessionLog.createMany({ data: validEvents });
+    res.json({ inserted: validEvents.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── GET /api/agents/tokens ────────────────────────────────────────────────────
 router.get('/tokens', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const tokens = await prisma.agentToken.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { createdBy: { select: { name: true, email: true } } }
+      include: {
+        createdBy: { select: { name: true, email: true } },
+        _count: { select: { enrolledMachines: true } }
+      }
     });
     res.json(tokens);
   } catch (err) { next(err); }
@@ -200,6 +249,35 @@ router.post('/machines/:equipId/revoke', requireAuth, requireAdmin, async (req, 
     if (err.code === 'P2025') return res.status(404).json({ error: 'Équipement introuvable' });
     next(err);
   }
+});
+
+// ── GET /api/agents/unassigned ────────────────────────────────────────────────
+// Machines agent sans salle, avec suggestions de correspondance par hostname
+router.get('/unassigned', requireAuth, async (req, res, next) => {
+  try {
+    const [machines, rooms] = await Promise.all([
+      prisma.equipment.findMany({
+        where: { agentToken: { not: null }, roomId: null },
+        orderBy: { lastSeenAt: 'desc' }
+      }),
+      prisma.room.findMany({
+        select: { id: true, name: true, number: true, building: true },
+        orderBy: [{ building: 'asc' }, { number: 'asc' }]
+      })
+    ]);
+
+    const result = machines.map(m => ({
+      id: m.id,
+      name: m.name,
+      agentHostname: m.agentHostname,
+      agentRevoked: m.agentRevoked,
+      lastSeenAt: m.lastSeenAt,
+      agentInfo: m.agentInfo ? (() => { try { return JSON.parse(m.agentInfo); } catch { return null; } })() : null,
+      suggestions: discoveryService.findTopRooms(m.agentHostname || m.name, rooms, 5)
+    }));
+
+    res.json(result);
+  } catch (err) { next(err); }
 });
 
 // ── GET /api/agents/pending ───────────────────────────────────────────────────

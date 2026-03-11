@@ -2,6 +2,13 @@
 # Généré automatiquement - ne pas modifier manuellement
 
 $ErrorActionPreference = 'Stop'
+
+# Vérifier les droits administrateur et se relancer en élevé si nécessaire
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+  Write-Host "Élévation des droits requise, relancement en administrateur..." -ForegroundColor Yellow
+  Start-Process powershell.exe -ArgumentList "-NonInteractive -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs -Wait
+  exit
+}
 $ServerUrl      = '{{SERVER_URL}}'
 $EnrollToken    = '{{ENROLLMENT_TOKEN}}'
 $InstallDir     = "$env:ProgramData\MaintenanceBoardAgent"

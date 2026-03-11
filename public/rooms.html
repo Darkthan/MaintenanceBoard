@@ -10,7 +10,7 @@
 
 <div class="min-h-screen flex">
   <!-- Sidebar -->
-  <aside class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-30">
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
     <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
       <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -39,14 +39,25 @@
   </aside>
 
   <!-- Main -->
-  <main class="flex-1 ml-64 flex flex-col">
+  <main class="flex-1 lg:ml-64 flex flex-col">
     <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-      <h1 class="text-xl font-semibold text-slate-800">Gestion des salles</h1>
-      <div class="flex gap-2" id="admin-actions">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <h1 class="text-xl font-semibold text-slate-800">Gestion des salles</h1>
+      </div>
+      <div class="flex gap-2 flex-wrap" id="admin-actions">
         <button id="import-btn" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
           Importer CSV
         </button>
+        <a href="/assign-rooms.html" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Assigner les salles
+        </a>
         <button id="add-room-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
           Nouvelle salle
@@ -68,7 +79,7 @@
       </div>
 
       <!-- Table -->
-      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <div id="rooms-loading" class="p-8 text-center text-slate-400">Chargement...</div>
         <table id="rooms-table" class="hidden w-full text-sm">
           <thead>
@@ -112,7 +123,7 @@
         <label class="block text-sm font-medium text-slate-700 mb-1">Nom *</label>
         <input id="room-name" type="text" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Bâtiment</label>
           <input id="room-building" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -136,6 +147,29 @@
         <button type="submit" id="submit-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Enregistrer</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Modal Détail salle -->
+<div id="detail-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+      <div>
+        <h3 id="detail-modal-title" class="font-semibold text-slate-800"></h3>
+        <p id="detail-modal-sub" class="text-xs text-slate-400 mt-0.5"></p>
+      </div>
+      <button id="close-detail-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto px-6 py-4">
+      <div id="detail-loading" class="text-center py-8 text-slate-400 text-sm">Chargement...</div>
+      <div id="detail-content" class="hidden"></div>
+    </div>
+    <div class="px-6 py-3 border-t border-slate-100 flex justify-between items-center flex-shrink-0">
+      <a id="detail-equip-link" href="#" class="text-xs text-blue-600 hover:underline">Voir tous les équipements →</a>
+      <button id="close-detail-modal-2" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition">Fermer</button>
+    </div>
   </div>
 </div>
 
@@ -214,7 +248,9 @@ async function loadRooms() {
     document.getElementById('rooms-tbody').innerHTML = data.data.map(room => `
       <tr class="hover:bg-slate-50 transition">
         <td class="px-5 py-3.5">
-          <p class="font-medium text-slate-800">${room.name}</p>
+          <button onclick="openRoomDetail('${room.id}')" class="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition">
+            ${room.name}
+          </button>
           ${room.description ? `<p class="text-xs text-slate-500 mt-0.5 truncate max-w-xs">${room.description}</p>` : ''}
         </td>
         <td class="px-5 py-3.5 text-slate-600">${room.building || '-'}</td>
@@ -403,6 +439,67 @@ async function doImport(preview) {
 
 document.getElementById('preview-btn').addEventListener('click', () => doImport(true));
 document.getElementById('do-import-btn').addEventListener('click', () => doImport(false));
+
+// ── Modal détail salle ───────────────────────────────────────────────────────
+const detailModal = document.getElementById('detail-modal');
+document.getElementById('close-detail-modal').addEventListener('click', () => detailModal.classList.add('hidden'));
+document.getElementById('close-detail-modal-2').addEventListener('click', () => detailModal.classList.add('hidden'));
+detailModal.addEventListener('click', e => { if (e.target === detailModal) detailModal.classList.add('hidden'); });
+
+async function openRoomDetail(roomId) {
+  document.getElementById('detail-loading').classList.remove('hidden');
+  document.getElementById('detail-content').classList.add('hidden');
+  document.getElementById('detail-modal-title').textContent = 'Chargement...';
+  document.getElementById('detail-modal-sub').textContent = '';
+  detailModal.classList.remove('hidden');
+
+  try {
+    const room = await api.get(`/rooms/${roomId}`);
+
+    document.getElementById('detail-modal-title').textContent = room.name;
+    document.getElementById('detail-modal-sub').textContent = [
+      room.building,
+      room.number ? `Salle n°${room.number}` : null,
+      room.floor != null ? `Étage ${room.floor}` : null
+    ].filter(Boolean).join(' · ');
+
+    document.getElementById('detail-equip-link').href = `/equipment.html?roomId=${roomId}`;
+
+    const equipment = room.equipment || [];
+    const statusLabel = { ACTIVE: 'Actif', INACTIVE: 'Inactif', REPAIR: 'En réparation', DECOMMISSIONED: 'Déclassé' };
+    const statusClass = { ACTIVE: 'bg-green-100 text-green-700', INACTIVE: 'bg-slate-100 text-slate-500', REPAIR: 'bg-yellow-100 text-yellow-700', DECOMMISSIONED: 'bg-red-100 text-red-600' };
+
+    document.getElementById('detail-content').innerHTML = equipment.length === 0
+      ? `<div class="text-center py-8">
+           <svg class="w-10 h-10 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
+           </svg>
+           <p class="text-sm text-slate-400">Aucun équipement dans cette salle</p>
+         </div>`
+      : `<p class="text-xs font-medium text-slate-500 mb-3">${equipment.length} équipement${equipment.length > 1 ? 's' : ''}</p>
+         <ul class="space-y-1">
+           ${equipment.map(e => `
+             <li class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition">
+               <div class="w-7 h-7 bg-slate-100 rounded-md flex items-center justify-center flex-shrink-0">
+                 <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
+                 </svg>
+               </div>
+               <div class="flex-1 min-w-0">
+                 <p class="text-sm font-medium text-slate-800 truncate">${escapeHtml(e.name)}</p>
+                 <p class="text-xs text-slate-400 truncate">${[e.type, e.brand, e.model].filter(Boolean).join(' · ')}${e.serialNumber ? ` · S/N ${e.serialNumber}` : ''}</p>
+               </div>
+               <span class="text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${statusClass[e.status] || 'bg-slate-100 text-slate-500'}">${statusLabel[e.status] || e.status}</span>
+             </li>`
+           ).join('')}
+         </ul>`;
+
+    document.getElementById('detail-loading').classList.add('hidden');
+    document.getElementById('detail-content').classList.remove('hidden');
+  } catch (err) {
+    document.getElementById('detail-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
 
 loadRooms();
 </script>

@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paramètres – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-white font-bold text-sm">MaintenanceBoard</p>
+        <p class="text-slate-400 text-xs">Parc informatique</p>
+      </div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <span id="user-avatar">?</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 lg:ml-64 flex flex-col min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <h1 class="text-xl font-semibold text-slate-800">Paramètres</h1>
+      </div>
+      <div id="header-action"></div>
+    </header>
+
+    <!-- Onglets -->
+    <div class="bg-white border-b border-slate-200 px-6 flex gap-0 overflow-x-auto">
+      <button data-tab="users" onclick="showTab('users')"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600 whitespace-nowrap">
+        Utilisateurs
+      </button>
+      <button data-tab="email" onclick="showTab('email')"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
+        Emails
+      </button>
+      <button data-tab="database" onclick="showTab('database')"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
+        Base de données
+      </button>
+    </div>
+
+    <!-- Contenu -->
+    <div class="flex-1 p-6">
+
+      <!-- ═══════════════════════════════════ TAB : UTILISATEURS -->
+      <div id="tab-users" class="max-w-5xl space-y-5">
+
+        <!-- Stats -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4">
+            <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </div>
+            <div>
+              <p id="stat-total" class="text-2xl font-bold text-slate-800">—</p>
+              <p class="text-xs text-slate-400 mt-0.5">Utilisateurs</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4">
+            <div class="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <div>
+              <p id="stat-active" class="text-2xl font-bold text-slate-800">—</p>
+              <p class="text-xs text-slate-400 mt-0.5">Actifs</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4">
+            <div class="w-10 h-10 bg-violet-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+              </svg>
+            </div>
+            <div>
+              <p id="stat-admins" class="text-2xl font-bold text-slate-800">—</p>
+              <p class="text-xs text-slate-400 mt-0.5">Administrateurs</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+          <div id="users-loading" class="p-10 text-center text-sm text-slate-400">Chargement…</div>
+          <table id="users-table" class="hidden w-full text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Utilisateur</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Rôle</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Statut</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider hidden sm:table-cell">Dernière connexion</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider hidden md:table-cell">Interventions</th>
+                <th class="px-5 py-3 w-8"></th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════ TAB : EMAILS -->
+      <div id="tab-email" class="hidden max-w-xl space-y-5">
+
+        <div class="bg-white rounded-xl border border-slate-200">
+          <div class="px-6 py-4 border-b border-slate-100">
+            <h2 class="font-semibold text-slate-800">Configuration SMTP</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Paramètres du serveur d'envoi d'emails</p>
+          </div>
+          <form id="smtp-form" class="p-6 space-y-4" onsubmit="saveSMTP(event)">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-500 mb-1.5">Serveur SMTP</label>
+                <input id="smtp-host" type="text" placeholder="smtp.example.com"
+                  class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1.5">Port</label>
+                <input id="smtp-port" type="number" placeholder="587"
+                  class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1.5">Identifiant</label>
+                <input id="smtp-user" type="text" placeholder="user@example.com"
+                  class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1.5">Mot de passe</label>
+                <input id="smtp-pass" type="password" placeholder="••••••••"
+                  class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-500 mb-1.5">Adresse expéditeur</label>
+              <input id="smtp-from" type="email" placeholder="noreply@ecole.fr"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+            </div>
+            <label class="flex items-center gap-2.5 text-sm text-slate-600 cursor-pointer select-none">
+              <input id="smtp-secure" type="checkbox" class="w-4 h-4 rounded text-blue-600"/>
+              Connexion sécurisée (SSL/TLS)
+            </label>
+            <div id="smtp-feedback" class="hidden rounded-lg px-4 py-3 text-sm"></div>
+            <div class="flex flex-wrap gap-3 pt-1">
+              <button type="submit"
+                class="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+                Enregistrer
+              </button>
+              <button type="button" onclick="testSMTP()"
+                class="px-5 py-2.5 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+                Envoyer un email de test
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex gap-3 text-sm">
+          <svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <p class="text-amber-800">
+            Les variables <code class="bg-amber-100 px-1 rounded text-xs">SMTP_*</code> du fichier <code class="bg-amber-100 px-1 rounded text-xs">.env</code> sont utilisées comme valeurs par défaut si aucune configuration n'est définie ici.
+          </p>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════ TAB : BASE DE DONNÉES -->
+      <div id="tab-database" class="hidden max-w-xl space-y-5">
+
+        <!-- Compteurs -->
+        <div class="bg-white rounded-xl border border-slate-200">
+          <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h2 class="font-semibold text-slate-800">État de la base</h2>
+            <button onclick="loadDbStats()" class="text-xs text-blue-600 hover:underline">Rafraîchir</button>
+          </div>
+          <div class="grid grid-cols-3 divide-x divide-slate-100">
+            <div class="py-5 text-center"><p id="db-users" class="text-2xl font-bold text-slate-800">—</p><p class="text-xs text-slate-400 mt-1">Utilisateurs</p></div>
+            <div class="py-5 text-center"><p id="db-rooms" class="text-2xl font-bold text-slate-800">—</p><p class="text-xs text-slate-400 mt-1">Salles</p></div>
+            <div class="py-5 text-center"><p id="db-equipment" class="text-2xl font-bold text-slate-800">—</p><p class="text-xs text-slate-400 mt-1">Équipements</p></div>
+            <div class="py-5 text-center border-t border-slate-100"><p id="db-interventions" class="text-2xl font-bold text-slate-800">—</p><p class="text-xs text-slate-400 mt-1">Interventions</p></div>
+            <div class="py-5 text-center border-t border-slate-100 col-span-2"><p id="db-orders" class="text-2xl font-bold text-slate-800">—</p><p class="text-xs text-slate-400 mt-1">Commandes</p></div>
+          </div>
+        </div>
+
+        <!-- Export -->
+        <div class="bg-white rounded-xl border border-slate-200">
+          <div class="px-6 py-4 border-b border-slate-100">
+            <h2 class="font-semibold text-slate-800">Exporter</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Télécharger toutes les données (sans mots de passe ni passkeys)</p>
+          </div>
+          <div class="px-6 py-5">
+            <a href="/api/settings/export" download
+              class="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              Télécharger la sauvegarde
+            </a>
+          </div>
+        </div>
+
+        <!-- Import -->
+        <div class="bg-white rounded-xl border border-slate-200">
+          <div class="px-6 py-4 border-b border-slate-100">
+            <h2 class="font-semibold text-slate-800">Importer</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Restaurer depuis une sauvegarde MaintenanceBoard (fusion par ID)</p>
+          </div>
+          <div class="px-6 py-5 space-y-4">
+            <label id="drop-zone"
+              class="flex flex-col items-center gap-3 border-2 border-dashed border-slate-200 rounded-xl p-8 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition group">
+              <svg class="w-8 h-8 text-slate-300 group-hover:text-blue-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <div class="text-center">
+                <p class="text-sm font-medium text-slate-600 group-hover:text-blue-700">Déposer un fichier JSON ou cliquer</p>
+                <p class="text-xs text-slate-400 mt-0.5">Sauvegarde générée par MaintenanceBoard uniquement</p>
+              </div>
+              <input id="import-file" type="file" accept=".json" class="hidden" onchange="onImportFile(this)"/>
+            </label>
+
+            <div id="import-preview" class="hidden bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm">
+              <p id="import-filename" class="font-medium text-slate-700"></p>
+              <p id="import-info" class="text-xs text-slate-500 mt-0.5"></p>
+            </div>
+
+            <div id="import-result" class="hidden rounded-lg px-4 py-3 text-sm"></div>
+
+            <div class="flex gap-3">
+              <button id="import-btn" disabled onclick="doImport()"
+                class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+                Importer
+              </button>
+              <button onclick="resetImport()" class="px-5 py-2.5 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition">
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-400 flex items-start gap-2">
+          <svg class="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          L'import fusionne les données (upsert par ID) sans supprimer l'existant. Les mots de passe des utilisateurs ne sont pas restaurés.
+        </p>
+      </div>
+
+    </div><!-- /contenu -->
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PANNEAU SLIDE-OVER — Fiche utilisateur
+═══════════════════════════════════════════════════════════ -->
+<div id="panel-backdrop" class="hidden fixed inset-0 z-40 bg-black/40" onclick="closePanel()"></div>
+
+<aside id="user-panel"
+  class="fixed top-0 right-0 bottom-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out">
+
+  <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-4 flex-shrink-0">
+    <div id="panel-initials" class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">?</div>
+    <div class="flex-1 min-w-0">
+      <p id="panel-name" class="font-semibold text-slate-800 truncate">—</p>
+      <p id="panel-email" class="text-xs text-slate-400 truncate">—</p>
+    </div>
+    <button onclick="closePanel()" class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Onglets du panneau -->
+  <div class="flex border-b border-slate-100 px-6 flex-shrink-0">
+    <button class="ptab active" data-p="edit" onclick="panelTab('edit')">Compte</button>
+    <button class="ptab" data-p="pwd" onclick="panelTab('pwd')">Sécurité</button>
+    <button class="ptab" data-p="logs" onclick="panelTab('logs')">Connexions</button>
+  </div>
+  <style>
+    .ptab { padding: .75rem 1rem; font-size:.875rem; font-weight:500; border-bottom: 2px solid transparent; color:#64748b; transition:color .15s; }
+    .ptab:hover { color:#1e293b; }
+    .ptab.active { border-bottom-color:#2563eb; color:#2563eb; }
+  </style>
+
+  <div class="flex-1 overflow-y-auto">
+
+    <!-- Onglet Compte -->
+    <div id="panel-edit" class="p-6 space-y-5">
+      <form onsubmit="saveUser(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">Nom complet</label>
+          <input id="e-name" type="text" required minlength="2"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">Email</label>
+          <input id="e-email" type="email" disabled
+            class="w-full border border-slate-100 rounded-lg px-3 py-2.5 text-sm bg-slate-50 text-slate-400 cursor-not-allowed"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">Rôle</label>
+          <select id="e-role"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="TECH">Technicien</option>
+            <option value="ADMIN">Administrateur</option>
+          </select>
+        </div>
+        <div id="e-error" class="hidden text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3"></div>
+        <div class="flex gap-2">
+          <button type="submit" class="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">Enregistrer</button>
+          <button type="button" onclick="closePanel()" class="px-5 py-2.5 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        </div>
+      </form>
+
+      <div class="border-t border-slate-100 pt-5">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Statut</p>
+        <div class="flex items-center justify-between">
+          <p id="e-status-text" class="text-sm text-slate-600">—</p>
+          <button id="btn-toggle" onclick="toggleActive()"
+            class="px-4 py-2 text-sm font-medium rounded-lg border transition">—</button>
+        </div>
+        <p id="e-self-warn" class="hidden mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+          Vous ne pouvez pas modifier votre propre statut.
+        </p>
+      </div>
+    </div>
+
+    <!-- Onglet Sécurité -->
+    <div id="panel-pwd" class="hidden p-6 space-y-6">
+      <div>
+        <p class="text-sm font-semibold text-slate-700 mb-1">Nouveau mot de passe</p>
+        <p class="text-xs text-slate-400 mb-4">Définit un nouveau mot de passe pour cet utilisateur.</p>
+        <form onsubmit="savePwd(event)" class="space-y-3">
+          <input id="new-pwd" type="password" required minlength="8" placeholder="Min. 8 caractères"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+          <div id="pwd-error" class="hidden text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3"></div>
+          <button type="submit" class="w-full px-4 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition">
+            Mettre à jour
+          </button>
+        </form>
+      </div>
+      <div class="border-t border-slate-100 pt-5">
+        <p class="text-sm font-semibold text-slate-700 mb-1">Passkeys</p>
+        <p class="text-sm text-slate-500"><span id="passkeys-count">—</span> passkey(s) enregistrée(s)</p>
+      </div>
+    </div>
+
+    <!-- Onglet Connexions -->
+    <div id="panel-logs" class="hidden p-6">
+      <div class="flex items-center gap-2 mb-5">
+        <button class="logbtn active-log" data-d="7" onclick="loadLogs(7)">7 j</button>
+        <button class="logbtn" data-d="30" onclick="loadLogs(30)">30 j</button>
+        <button class="logbtn" data-d="90" onclick="loadLogs(90)">90 j</button>
+        <span id="logs-count" class="ml-auto text-xs text-slate-400"></span>
+      </div>
+      <style>
+        .logbtn { padding:.25rem .75rem; border-radius:9999px; font-size:.75rem; font-weight:500; background:#f1f5f9; color:#64748b; transition:all .15s; }
+        .logbtn:hover { background:#e2e8f0; }
+        .logbtn.active-log { background:#2563eb; color:#fff; }
+      </style>
+      <div class="bg-slate-50 rounded-xl p-4 mb-5">
+        <p class="text-xs text-slate-400 mb-3">Activité par heure</p>
+        <div id="histo" class="flex items-end gap-px h-16"></div>
+        <div class="flex justify-between text-xs text-slate-300 mt-1.5"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span></div>
+      </div>
+      <div id="logs-body"></div>
+    </div>
+
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL — Créer un utilisateur
+═══════════════════════════════════════════════════════════ -->
+<div id="modal-create" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h2 class="font-semibold text-slate-800">Nouvel utilisateur</h2>
+      <button onclick="closeCreate()" class="p-1 text-slate-400 hover:text-slate-600 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <form id="create-form" class="p-6 space-y-4" onsubmit="submitCreate(event)">
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">Nom complet</label>
+        <input type="text" name="name" required minlength="2" placeholder="Jean Dupont"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">Email</label>
+        <input type="email" name="email" required placeholder="jean@ecole.fr"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">Mot de passe</label>
+        <input type="password" name="password" required minlength="8" placeholder="Min. 8 caractères"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">Rôle</label>
+        <select name="role" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="TECH">Technicien</option>
+          <option value="ADMIN">Administrateur</option>
+        </select>
+      </div>
+      <div id="create-error" class="hidden text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3"></div>
+      <div class="flex gap-2 pt-1">
+        <button type="button" onclick="closeCreate()" class="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" class="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">Créer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     Scripts
+═══════════════════════════════════════════════════════════ -->
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+const ME = requireLogin();
+if (!ME) throw new Error('not authenticated');
+renderNav('settings');
+let users = [];
+let currentUser = null;
+let logPeriod = 7;
+
+// ─── Onglets principaux ────────────────────────────────────────────────────
+function showTab(name) {
+  // Masquer tous les onglets de contenu
+  document.getElementById('tab-users').classList.add('hidden');
+  document.getElementById('tab-email').classList.add('hidden');
+  document.getElementById('tab-database').classList.add('hidden');
+  document.getElementById('tab-' + name).classList.remove('hidden');
+
+  // Mettre à jour les boutons d'onglet
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const active = btn.dataset.tab === name;
+    btn.className = 'tab-btn px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition ' +
+      (active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700');
+  });
+
+  // Bouton contextuel dans le header
+  document.getElementById('header-action').innerHTML = name === 'users'
+    ? `<button onclick="openCreate()"
+        class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Nouvel utilisateur
+      </button>` : '';
+
+  // Chargement lazy
+  if (name === 'users' && !users.length) loadUsers();
+  if (name === 'email') loadSMTP();
+  if (name === 'database') loadDbStats();
+}
+
+// ─── Utilisateurs ──────────────────────────────────────────────────────────
+async function loadUsers() {
+  try {
+    const res = await fetch('/api/users', { credentials: 'include' });
+    if (!res.ok) throw new Error('Erreur ' + res.status);
+    users = await res.json();
+    document.getElementById('stat-total').textContent  = users.length;
+    document.getElementById('stat-active').textContent = users.filter(u => u.isActive).length;
+    document.getElementById('stat-admins').textContent = users.filter(u => u.role === 'ADMIN').length;
+    renderTable();
+  } catch (err) {
+    document.getElementById('users-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+function initials(name) {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function renderTable() {
+  document.getElementById('users-loading').classList.add('hidden');
+  const table = document.getElementById('users-table');
+  table.classList.remove('hidden');
+
+  document.getElementById('users-tbody').innerHTML = users.map(u => {
+    const last = u.loginLogs?.[0];
+    const isSelf = u.id === ME.id;
+    return `
+    <tr class="hover:bg-slate-50 cursor-pointer transition" onclick="openPanel('${u.id}')">
+      <td class="px-5 py-3.5">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            ${initials(u.name)}
+          </div>
+          <div>
+            <p class="font-medium text-slate-800">${u.name}${isSelf ? ' <span class="text-xs font-normal text-slate-400">— vous</span>' : ''}</p>
+            <p class="text-xs text-slate-400">${u.email}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-5 py-3.5">
+        ${u.role === 'ADMIN'
+          ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">Administrateur</span>'
+          : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Technicien</span>'}
+      </td>
+      <td class="px-5 py-3.5">
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium ${u.isActive ? 'text-emerald-600' : 'text-slate-400'}">
+          <span class="w-1.5 h-1.5 rounded-full inline-block ${u.isActive ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+          ${u.isActive ? 'Actif' : 'Inactif'}
+        </span>
+      </td>
+      <td class="px-5 py-3.5 text-sm text-slate-500 hidden sm:table-cell">
+        ${last ? formatDate(last.createdAt, true) : '<span class="text-slate-300">Jamais</span>'}
+      </td>
+      <td class="px-5 py-3.5 text-sm text-slate-500 hidden md:table-cell">${u._count?.interventions ?? 0}</td>
+      <td class="px-5 py-3.5 text-right">
+        <svg class="w-4 h-4 text-slate-300 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Panneau slide-over ────────────────────────────────────────────────────
+function openPanel(uid) {
+  currentUser = users.find(u => u.id === uid);
+  if (!currentUser) return;
+
+  const ini = initials(currentUser.name);
+  document.getElementById('panel-initials').textContent = ini;
+  document.getElementById('panel-name').textContent     = currentUser.name;
+  document.getElementById('panel-email').textContent    = currentUser.email;
+
+  document.getElementById('e-name').value  = currentUser.name;
+  document.getElementById('e-email').value = currentUser.email;
+  document.getElementById('e-role').value  = currentUser.role;
+  document.getElementById('e-error').classList.add('hidden');
+
+  document.getElementById('passkeys-count').textContent = currentUser._count?.passkeys ?? 0;
+  document.getElementById('new-pwd').value = '';
+  document.getElementById('pwd-error').classList.add('hidden');
+
+  const isSelf = currentUser.id === ME.id;
+  const btnToggle = document.getElementById('btn-toggle');
+  document.getElementById('e-self-warn').classList.toggle('hidden', !isSelf);
+  btnToggle.disabled = isSelf;
+
+  if (currentUser.isActive) {
+    document.getElementById('e-status-text').textContent = 'Le compte est actif.';
+    btnToggle.textContent  = 'Désactiver';
+    btnToggle.className = 'px-4 py-2 text-sm font-medium rounded-lg border transition ' +
+      (isSelf ? 'border-slate-200 text-slate-300 cursor-not-allowed' : 'border-red-200 text-red-600 hover:bg-red-50');
+  } else {
+    document.getElementById('e-status-text').textContent = 'Le compte est désactivé.';
+    btnToggle.textContent  = 'Réactiver';
+    btnToggle.className = 'px-4 py-2 text-sm font-medium rounded-lg border transition ' +
+      (isSelf ? 'border-slate-200 text-slate-300 cursor-not-allowed' : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50');
+  }
+
+  document.getElementById('histo').innerHTML = '';
+  document.getElementById('logs-body').innerHTML = '';
+  document.getElementById('logs-count').textContent = '';
+
+  panelTab('edit');
+  document.getElementById('panel-backdrop').classList.remove('hidden');
+  requestAnimationFrame(() => document.getElementById('user-panel').classList.remove('translate-x-full'));
+}
+
+function closePanel() {
+  document.getElementById('user-panel').classList.add('translate-x-full');
+  document.getElementById('panel-backdrop').classList.add('hidden');
+  currentUser = null;
+}
+
+function panelTab(name) {
+  ['edit', 'pwd', 'logs'].forEach(t => {
+    document.getElementById('panel-' + t).classList.toggle('hidden', t !== name);
+  });
+  document.querySelectorAll('.ptab').forEach(b => {
+    b.classList.toggle('active', b.dataset.p === name);
+  });
+  if (name === 'logs') loadLogs(logPeriod);
+}
+
+// ─── Actions utilisateur ───────────────────────────────────────────────────
+async function saveUser(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('e-error');
+  errEl.classList.add('hidden');
+  const res = await fetch(`/api/users/${currentUser.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ name: document.getElementById('e-name').value.trim(), role: document.getElementById('e-role').value })
+  });
+  if (!res.ok) {
+    errEl.textContent = (await res.json()).error || 'Erreur';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  showToast('Utilisateur mis à jour');
+  closePanel();
+  users = [];
+  loadUsers();
+}
+
+async function toggleActive() {
+  if (!currentUser || currentUser.id === ME.id) return;
+  const next = !currentUser.isActive;
+  if (!confirm(`${next ? 'Réactiver' : 'Désactiver'} le compte de ${currentUser.name} ?`)) return;
+  const res = await fetch(`/api/users/${currentUser.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ isActive: next })
+  });
+  if (!res.ok) { showToast('Erreur', 'error'); return; }
+  showToast(next ? 'Compte réactivé' : 'Compte désactivé');
+  closePanel();
+  users = [];
+  loadUsers();
+}
+
+async function savePwd(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('pwd-error');
+  errEl.classList.add('hidden');
+  const res = await fetch(`/api/users/${currentUser.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ password: document.getElementById('new-pwd').value })
+  });
+  if (!res.ok) {
+    errEl.textContent = (await res.json()).error || 'Erreur';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  document.getElementById('new-pwd').value = '';
+  showToast('Mot de passe mis à jour');
+}
+
+// ─── Logs de connexion ─────────────────────────────────────────────────────
+async function loadLogs(days) {
+  if (!currentUser) return;
+  logPeriod = days;
+  document.querySelectorAll('.logbtn').forEach(b => {
+    b.classList.toggle('active-log', parseInt(b.dataset.d) === days);
+  });
+  document.getElementById('logs-body').innerHTML = '<p class="text-sm text-slate-400 text-center py-6">Chargement…</p>';
+  document.getElementById('histo').innerHTML = '';
+
+  const res = await fetch(`/api/users/${currentUser.id}/login-logs?days=${days}`, { credentials: 'include' });
+  if (!res.ok) return;
+  const data = await res.json();
+  document.getElementById('logs-count').textContent = `${data.total} connexion${data.total > 1 ? 's' : ''}`;
+
+  const max = Math.max(...data.byHour, 1);
+  document.getElementById('histo').innerHTML = data.byHour.map((n, h) =>
+    `<div class="flex-1 flex items-end group" title="${h}h : ${n}">
+      <div class="w-full rounded-sm ${n ? 'bg-blue-400 group-hover:bg-blue-500' : 'bg-slate-200'} transition"
+           style="height:${n ? Math.max(Math.round(n/max*100), 8) : 3}%"></div>
+    </div>`
+  ).join('');
+
+  if (!data.logs.length) {
+    document.getElementById('logs-body').innerHTML = '<p class="text-sm text-slate-400 text-center py-6">Aucune connexion sur cette période</p>';
+    return;
+  }
+  const byDay = {};
+  data.logs.forEach(l => {
+    const d = new Date(l.createdAt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    (byDay[d] = byDay[d] || []).push(l);
+  });
+  document.getElementById('logs-body').innerHTML = Object.entries(byDay).map(([day, logs]) => `
+    <div class="mb-4">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">${day}</p>
+      ${logs.map(l => `
+        <div class="flex items-center gap-3 bg-slate-50 rounded-lg px-3 py-2 mb-1">
+          <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${l.method === 'PASSKEY' ? 'bg-violet-100' : 'bg-blue-50'}">
+            ${l.method === 'PASSKEY'
+              ? '<svg class="w-3.5 h-3.5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>'
+              : '<svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>'}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium text-slate-700">${new Date(l.createdAt).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}</span>
+              <span class="text-xs px-1.5 py-0.5 rounded ${l.method === 'PASSKEY' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'}">${l.method === 'PASSKEY' ? 'Passkey' : 'Mot de passe'}</span>
+            </div>
+            ${l.ip ? `<p class="text-xs text-slate-400 truncate mt-0.5">${l.ip}</p>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+// ─── Créer un utilisateur ──────────────────────────────────────────────────
+function openCreate() {
+  document.getElementById('create-form').reset();
+  document.getElementById('create-error').classList.add('hidden');
+  document.getElementById('modal-create').classList.remove('hidden');
+}
+function closeCreate() {
+  document.getElementById('modal-create').classList.add('hidden');
+}
+async function submitCreate(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('create-error');
+  errEl.classList.add('hidden');
+  const res = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(Object.fromEntries(new FormData(e.target)))
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    errEl.textContent = json.error || json.errors?.[0]?.msg || 'Erreur';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  closeCreate();
+  showToast(`Compte créé pour ${json.user.name}`);
+  users = [];
+  loadUsers();
+}
+
+// ─── SMTP ──────────────────────────────────────────────────────────────────
+async function loadSMTP() {
+  const res = await fetch('/api/settings/smtp', { credentials: 'include' });
+  if (!res.ok) return;
+  const d = await res.json();
+  document.getElementById('smtp-host').value      = d.host   || '';
+  document.getElementById('smtp-port').value      = d.port   || 587;
+  document.getElementById('smtp-user').value      = d.user   || '';
+  document.getElementById('smtp-pass').value      = d.pass   || '';
+  document.getElementById('smtp-from').value      = d.from   || '';
+  document.getElementById('smtp-secure').checked  = d.secure || false;
+}
+
+async function saveSMTP(e) {
+  e.preventDefault();
+  const fb = document.getElementById('smtp-feedback');
+  fb.classList.add('hidden');
+  const res = await fetch('/api/settings/smtp', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      host:   document.getElementById('smtp-host').value,
+      port:   parseInt(document.getElementById('smtp-port').value) || 587,
+      user:   document.getElementById('smtp-user').value,
+      pass:   document.getElementById('smtp-pass').value,
+      from:   document.getElementById('smtp-from').value,
+      secure: document.getElementById('smtp-secure').checked
+    })
+  });
+  const json = await res.json();
+  fb.textContent = json.message || json.error || '';
+  fb.className = 'rounded-lg px-4 py-3 text-sm ' +
+    (res.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200');
+  fb.classList.remove('hidden');
+}
+
+async function testSMTP() {
+  const fb = document.getElementById('smtp-feedback');
+  fb.textContent = 'Envoi en cours…';
+  fb.className = 'rounded-lg px-4 py-3 text-sm bg-slate-50 text-slate-600 border border-slate-200';
+  fb.classList.remove('hidden');
+  const res = await fetch('/api/settings/smtp/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({})
+  });
+  const json = await res.json();
+  fb.textContent = json.message || json.error || '';
+  fb.className = 'rounded-lg px-4 py-3 text-sm ' +
+    (res.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200');
+}
+
+// ─── Base de données ───────────────────────────────────────────────────────
+async function loadDbStats() {
+  const res = await fetch('/api/settings/stats', { credentials: 'include' });
+  if (!res.ok) return;
+  const d = await res.json();
+  document.getElementById('db-users').textContent         = d.users;
+  document.getElementById('db-rooms').textContent         = d.rooms;
+  document.getElementById('db-equipment').textContent     = d.equipment;
+  document.getElementById('db-interventions').textContent = d.interventions;
+  document.getElementById('db-orders').textContent        = d.orders;
+}
+
+let importFile = null;
+
+function onImportFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.app !== 'MaintenanceBoard') throw new Error();
+      importFile = file;
+      const c = data.counts || {};
+      document.getElementById('import-filename').textContent = file.name;
+      document.getElementById('import-info').textContent =
+        `Sauvegarde du ${new Date(data.exportedAt).toLocaleDateString('fr-FR')} — ` +
+        `${c.users ?? '?'} utilisateurs · ${c.rooms ?? '?'} salles · ${c.equipment ?? '?'} équipements`;
+      document.getElementById('import-preview').classList.remove('hidden');
+      document.getElementById('import-result').classList.add('hidden');
+      document.getElementById('import-btn').disabled = false;
+    } catch {
+      showToast('Fichier non reconnu — utilisez une sauvegarde MaintenanceBoard', 'error');
+      resetImport();
+    }
+  };
+  reader.readAsText(file);
+}
+
+function resetImport() {
+  importFile = null;
+  document.getElementById('import-file').value = '';
+  document.getElementById('import-preview').classList.add('hidden');
+  document.getElementById('import-result').classList.add('hidden');
+  document.getElementById('import-btn').disabled = true;
+}
+
+async function doImport() {
+  if (!importFile) return;
+  if (!confirm('Importer cette sauvegarde ? Les données existantes seront fusionnées.')) return;
+  const fd = new FormData();
+  fd.append('file', importFile);
+  const res = await fetch('/api/settings/import', { method: 'POST', credentials: 'include', body: fd });
+  const json = await res.json();
+  const el = document.getElementById('import-result');
+  el.textContent = json.message || json.error || '';
+  el.className = 'rounded-lg px-4 py-3 text-sm ' +
+    (res.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200');
+  el.classList.remove('hidden');
+  if (res.ok) { resetImport(); loadDbStats(); }
+}
+
+// Drag & drop sur la zone d'import
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('border-blue-400', 'bg-blue-50'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('border-blue-400', 'bg-blue-50'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('border-blue-400', 'bg-blue-50');
+  const file = e.dataTransfer.files[0];
+  if (!file?.name.endsWith('.json')) { showToast('Seuls les fichiers .json sont acceptés', 'error'); return; }
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const inp = document.getElementById('import-file');
+  inp.files = dt.files;
+  onImportFile(inp);
+});
+
+// ─── Raccourcis clavier ────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  closePanel();
+  closeCreate();
+});
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+showTab('users');
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@
 
 <div class="min-h-screen flex">
   <!-- Sidebar (identique) -->
-  <aside class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-30">
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
     <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
       <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
@@ -29,14 +29,25 @@
     </div>
   </aside>
 
-  <main class="flex-1 ml-64 flex flex-col">
+  <main class="flex-1 lg:ml-64 flex flex-col">
     <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-      <h1 class="text-xl font-semibold text-slate-800">Gestion des équipements</h1>
-      <div class="flex gap-2" id="admin-actions">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <h1 class="text-xl font-semibold text-slate-800">Gestion des équipements</h1>
+      </div>
+      <div class="flex gap-2 flex-wrap" id="admin-actions">
         <button id="import-btn" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
           Importer CSV
         </button>
+        <a href="/assign-rooms.html" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Assigner les salles
+        </a>
         <button id="add-equip-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
           Nouvel équipement
@@ -71,7 +82,7 @@
       </div>
 
       <!-- Table -->
-      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <div id="equip-loading" class="p-8 text-center text-slate-400">Chargement...</div>
         <table id="equip-table" class="hidden w-full text-sm">
           <thead>
@@ -99,6 +110,112 @@
   </main>
 </div>
 
+<!-- Modal Fiche équipement -->
+<div id="detail-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+
+    <!-- Header -->
+    <div class="flex items-start justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 id="detail-name" class="font-semibold text-slate-800 text-lg"></h3>
+            <span id="detail-status-badge"></span>
+          </div>
+          <p id="detail-subtitle" class="text-xs text-slate-400 mt-0.5"></p>
+        </div>
+      </div>
+      <button id="close-detail-modal" class="text-slate-400 hover:text-slate-600 flex-shrink-0 ml-4">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="flex-1 overflow-y-auto flex flex-col">
+      <div id="detail-loading" class="p-8 text-center text-slate-400 text-sm">Chargement...</div>
+      <div id="detail-body" class="hidden flex flex-col flex-1">
+
+        <!-- Tabs -->
+        <div class="flex border-b border-slate-200 px-6 bg-white flex-shrink-0">
+          <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600" data-tab="info" onclick="switchDetailTab('info')">Fiche</button>
+          <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="sessions" onclick="switchDetailTab('sessions')">Sessions Windows</button>
+          <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="interventions" onclick="switchDetailTab('interventions')">Interventions <span id="detail-interv-count" class="ml-1 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full"></span></button>
+        </div>
+
+        <!-- Tab: Fiche -->
+        <div id="detail-tab-info" class="divide-y divide-slate-100">
+          <!-- Identification -->
+          <div class="px-6 py-4">
+            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Identification</h4>
+            <dl id="detail-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm"></dl>
+          </div>
+
+          <!-- Infos agent (masqué si non agent) -->
+          <div id="detail-agent-section" class="hidden px-6 py-4">
+            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Informations agent</h4>
+            <dl id="detail-agent-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm"></dl>
+          </div>
+        </div>
+
+        <!-- Tab: Sessions Windows -->
+        <div id="detail-tab-sessions" class="hidden px-6 py-4">
+          <!-- Contrôles -->
+          <div class="flex items-center gap-2 mb-4 flex-wrap">
+            <span class="text-sm text-slate-500">Période :</span>
+            <button class="sess-period-btn px-3 py-1 text-xs rounded-full bg-blue-600 text-white font-medium" data-days="7" onclick="loadSessionLogs(7)">7j</button>
+            <button class="sess-period-btn px-3 py-1 text-xs rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200" data-days="30" onclick="loadSessionLogs(30)">30j</button>
+            <button class="sess-period-btn px-3 py-1 text-xs rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200" data-days="90" onclick="loadSessionLogs(90)">90j</button>
+            <select id="sess-user-filter" onchange="renderSessions()" class="ml-2 border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Tous les utilisateurs</option>
+            </select>
+            <span class="ml-auto text-xs text-slate-400" id="sess-total"></span>
+          </div>
+
+          <!-- Histogramme -->
+          <div class="bg-slate-50 rounded-xl p-4 mb-4">
+            <p class="text-xs font-medium text-slate-500 mb-3">Activité par heure (0h–23h)</p>
+            <div class="flex items-end gap-0.5 h-20" id="sess-histogram"></div>
+            <div class="flex justify-between text-xs text-slate-400 mt-1">
+              <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+            </div>
+          </div>
+
+          <!-- Sessions groupées -->
+          <div id="sess-list">
+            <p class="text-sm text-slate-400 text-center py-4">Chargement...</p>
+          </div>
+        </div>
+
+        <!-- Tab: Interventions -->
+        <div id="detail-tab-interventions" class="hidden px-6 py-4">
+          <div id="detail-interventions"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 py-3 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
+      <a id="detail-qr-link" href="#" target="_blank"
+        class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5V16M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6z"/>
+        </svg>
+        QR Code
+      </a>
+      <div class="flex gap-2">
+        <button id="detail-edit-btn" class="hidden px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition">Modifier</button>
+        <button id="close-detail-modal-2" class="px-4 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Équipement -->
 <div id="equip-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto">
@@ -110,8 +227,8 @@
     </div>
     <form id="equip-form" class="p-6 space-y-4">
       <input type="hidden" id="equip-id" />
-      <div class="grid grid-cols-2 gap-4">
-        <div class="col-span-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
           <label class="block text-sm font-medium text-slate-700 mb-1">Nom *</label>
           <input id="equip-name" type="text" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="PC-101-01" />
         </div>
@@ -154,7 +271,7 @@
           <label class="block text-sm font-medium text-slate-700 mb-1">Fin de garantie</label>
           <input id="equip-warranty" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div class="col-span-2">
+        <div class="sm:col-span-2">
           <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
           <textarea id="equip-description" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
         </div>
@@ -289,7 +406,7 @@ async function loadEquipment() {
       <tr class="hover:bg-slate-50 transition ${e.discoverySource === 'AGENT' && e.discoveryStatus === 'PENDING' ? 'bg-orange-50 hover:bg-orange-100' : ''}">
         <td class="px-5 py-3.5">
           <div class="flex items-center gap-2 flex-wrap">
-            <p class="font-medium text-slate-800">${e.name}</p>
+            <button onclick="openEquipDetail('${e.id}')" class="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition">${e.name}</button>
             ${e.discoverySource === 'AGENT' ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">&#x1F916; Agent</span>` : ''}
             ${e.discoveryStatus === 'PENDING' ? `<span class="inline-flex items-center px-2 py-0.5 bg-orange-200 text-orange-800 rounded-full text-xs font-medium">En attente</span>` : ''}
           </div>
@@ -523,6 +640,307 @@ document.getElementById('dismiss-validate-btn').addEventListener('click', async 
     loadEquipment();
   } catch (err) { showToast(err.message, 'error'); }
 });
+
+// ── Modal fiche équipement ───────────────────────────────────────────────────
+const detailModal = document.getElementById('detail-modal');
+document.getElementById('close-detail-modal').addEventListener('click', () => detailModal.classList.add('hidden'));
+document.getElementById('close-detail-modal-2').addEventListener('click', () => detailModal.classList.add('hidden'));
+detailModal.addEventListener('click', e => { if (e.target === detailModal) detailModal.classList.add('hidden'); });
+
+function switchDetailTab(tab) {
+  ['info', 'sessions', 'interventions'].forEach(t => {
+    document.getElementById(`detail-tab-${t}`).classList.toggle('hidden', t !== tab);
+  });
+  document.querySelectorAll('.detail-tab-btn').forEach(btn => {
+    const active = btn.dataset.tab === tab;
+    btn.className = `detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`;
+  });
+}
+
+let currentSessionEquipId = null;
+let currentSessionPeriod = 7;
+let currentSessionData = null;
+
+// Apparie les événements LOGIN/LOGOUT par utilisateur
+function pairSessions(logs) {
+  const sorted = [...logs].sort((a, b) => new Date(a.occurredAt) - new Date(b.occurredAt));
+  const sessions = [];
+  const open = {}; // winUser → log entry
+
+  for (const log of sorted) {
+    if (log.event === 'LOGIN') {
+      if (open[log.winUser]) {
+        // Connexion sans déconnexion précédente → session sans fin connue
+        sessions.push({ winUser: log.winUser, loginAt: open[log.winUser].occurredAt, logoutAt: null });
+      }
+      open[log.winUser] = log;
+    } else if (log.event === 'LOGOUT') {
+      if (open[log.winUser]) {
+        sessions.push({ winUser: log.winUser, loginAt: open[log.winUser].occurredAt, logoutAt: log.occurredAt });
+        delete open[log.winUser];
+      }
+      // Déconnexion sans connexion associée → ignorée
+    }
+  }
+  // Sessions encore ouvertes (pas de déconnexion observée)
+  for (const [winUser, log] of Object.entries(open)) {
+    sessions.push({ winUser, loginAt: log.occurredAt, logoutAt: null });
+  }
+
+  return sessions.sort((a, b) => new Date(b.loginAt) - new Date(a.loginAt));
+}
+
+function formatDuration(loginAt, logoutAt) {
+  if (!logoutAt) return null;
+  const ms = new Date(logoutAt) - new Date(loginAt);
+  if (ms < 0) return null;
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h > 0) return `${h}h${String(m).padStart(2, '0')}`;
+  return `${m} min`;
+}
+
+function fmtDateTime(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderSessions() {
+  if (!currentSessionData) return;
+  const filterUser = document.getElementById('sess-user-filter').value;
+  const sessions = pairSessions(currentSessionData.logs);
+  const filtered = filterUser ? sessions.filter(s => s.winUser === filterUser) : sessions;
+
+  document.getElementById('sess-total').textContent = `${filtered.length} session${filtered.length > 1 ? 's' : ''}`;
+
+  if (!filtered.length) {
+    document.getElementById('sess-list').innerHTML = '<p class="text-sm text-slate-400 text-center py-6">Aucune session sur cette période</p>';
+    return;
+  }
+
+  // Grouper par jour (basé sur loginAt)
+  const byDay = {};
+  filtered.forEach(s => {
+    const day = new Date(s.loginAt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(s);
+  });
+
+  document.getElementById('sess-list').innerHTML = Object.entries(byDay).map(([day, daySessions]) => `
+    <div class="mb-5">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">${day}</p>
+      <div class="space-y-2">
+        ${daySessions.map(s => {
+          const duration = formatDuration(s.loginAt, s.logoutAt);
+          const isOpen = !s.logoutAt;
+          return `
+            <div class="rounded-xl border ${isOpen ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-white'} px-4 py-3">
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <span class="text-xs font-semibold text-slate-600 font-mono">${s.winUser}</span>
+                ${isOpen
+                  ? '<span class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Session active</span>'
+                  : duration
+                    ? `<span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">⏱ ${duration}</span>`
+                    : ''}
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div class="flex items-center gap-2">
+                  <div class="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-slate-400">Connexion</p>
+                    <p class="font-medium text-slate-700">${fmtDateTime(s.loginAt)}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-6 h-6 rounded-full ${isOpen ? 'bg-slate-100' : 'bg-orange-100'} flex items-center justify-center flex-shrink-0">
+                    <svg class="w-3 h-3 ${isOpen ? 'text-slate-400' : 'text-orange-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-slate-400">Déconnexion</p>
+                    <p class="font-medium ${isOpen ? 'text-slate-400 italic' : 'text-slate-700'}">${isOpen ? 'En cours…' : fmtDateTime(s.logoutAt)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadSessionLogs(days) {
+  if (!currentSessionEquipId) return;
+  currentSessionPeriod = days;
+
+  document.querySelectorAll('.sess-period-btn').forEach(btn => {
+    const active = parseInt(btn.dataset.days) === days;
+    btn.className = `sess-period-btn px-3 py-1 text-xs rounded-full font-medium ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
+  });
+
+  document.getElementById('sess-histogram').innerHTML = '<div class="w-full text-center text-xs text-slate-400 self-center">Chargement...</div>';
+  document.getElementById('sess-list').innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Chargement...</p>';
+
+  try {
+    currentSessionData = await api.get(`/equipment/${currentSessionEquipId}/sessions`, { days });
+
+    // Histogramme (sur les LOGIN uniquement)
+    const loginByHour = Array(24).fill(0);
+    currentSessionData.logs.filter(l => l.event === 'LOGIN').forEach(l => {
+      loginByHour[new Date(l.occurredAt).getHours()]++;
+    });
+    const max = Math.max(...loginByHour, 1);
+    document.getElementById('sess-histogram').innerHTML = loginByHour.map((count, h) => {
+      const pct = Math.round((count / max) * 100);
+      return `<div class="flex-1 flex flex-col items-center justify-end group" title="${h}h : ${count} connexion${count > 1 ? 's' : ''}">
+        <div class="w-full rounded-t transition-all ${count > 0 ? 'bg-blue-500 group-hover:bg-blue-400' : 'bg-slate-200'}" style="height:${Math.max(pct, count > 0 ? 4 : 0)}%"></div>
+      </div>`;
+    }).join('');
+
+    // Filtre utilisateurs
+    const userFilter = document.getElementById('sess-user-filter');
+    const prevVal = userFilter.value;
+    userFilter.innerHTML = '<option value="">Tous les utilisateurs</option>' +
+      (currentSessionData.users || []).map(u => `<option value="${u}" ${u === prevVal ? 'selected' : ''}>${u}</option>`).join('');
+
+    renderSessions();
+  } catch (err) {
+    document.getElementById('sess-list').innerHTML = `<p class="text-sm text-red-500 text-center py-4">Erreur : ${err.message}</p>`;
+  }
+}
+
+const STATUS_LABELS = { ACTIVE: 'Actif', INACTIVE: 'Inactif', REPAIR: 'En réparation', DECOMMISSIONED: 'Déclassé' };
+const STATUS_COLORS = { ACTIVE: 'bg-green-100 text-green-700', INACTIVE: 'bg-slate-100 text-slate-500', REPAIR: 'bg-yellow-100 text-yellow-700', DECOMMISSIONED: 'bg-red-100 text-red-600' };
+const INTERV_STATUS = { OPEN: 'Ouvert', IN_PROGRESS: 'En cours', RESOLVED: 'Résolu', CLOSED: 'Fermé' };
+const INTERV_STATUS_COLORS = { OPEN: 'bg-blue-100 text-blue-700', IN_PROGRESS: 'bg-orange-100 text-orange-700', RESOLVED: 'bg-green-100 text-green-700', CLOSED: 'bg-slate-100 text-slate-500' };
+const PRIORITY_COLORS = { LOW: 'text-slate-400', NORMAL: 'text-blue-500', HIGH: 'text-orange-500', CRITICAL: 'text-red-600 font-bold' };
+const PRIORITY_LABELS = { LOW: 'Basse', NORMAL: 'Normale', HIGH: 'Haute', CRITICAL: 'Critique' };
+
+function detailField(label, value) {
+  if (!value) return '';
+  return `<div><dt class="text-slate-400 text-xs">${label}</dt><dd class="text-slate-800 font-medium mt-0.5">${value}</dd></div>`;
+}
+
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : null; }
+
+function timeAgoDetail(d) {
+  if (!d) return null;
+  const diff = Date.now() - new Date(d).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 2) return 'à l\'instant';
+  if (mins < 60) return `il y a ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `il y a ${hrs}h`;
+  return `il y a ${Math.floor(hrs / 24)} jour(s)`;
+}
+
+let detailCurrentEquip = null;
+
+async function openEquipDetail(equipId) {
+  detailCurrentEquip = null;
+  currentSessionEquipId = equipId;
+  currentSessionPeriod = 7;
+  document.getElementById('detail-loading').classList.remove('hidden');
+  document.getElementById('detail-body').classList.add('hidden');
+  document.getElementById('detail-name').textContent = 'Chargement...';
+  document.getElementById('detail-subtitle').textContent = '';
+  document.getElementById('detail-status-badge').innerHTML = '';
+  switchDetailTab('info');
+  detailModal.classList.remove('hidden');
+
+  try {
+    const e = await api.get(`/equipment/${equipId}`);
+    detailCurrentEquip = e;
+
+    // Header
+    document.getElementById('detail-name').textContent = e.name;
+    document.getElementById('detail-status-badge').innerHTML =
+      `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[e.status] || 'bg-slate-100 text-slate-500'}">${STATUS_LABELS[e.status] || e.status}</span>`;
+    document.getElementById('detail-subtitle').textContent =
+      [e.type, e.brand, e.model].filter(Boolean).join(' · ');
+
+    // Liens footer
+    document.getElementById('detail-qr-link').href = `/api/equipment/${e.id}/qrcode`;
+    const editBtn = document.getElementById('detail-edit-btn');
+    if (user.role === 'ADMIN') {
+      editBtn.classList.remove('hidden');
+      editBtn.onclick = () => { detailModal.classList.add('hidden'); editEquip(e); };
+    }
+
+    // Champs identification
+    const warrantyDate = fmtDate(e.warrantyEnd);
+    const now = new Date();
+    const warrantyExpired = e.warrantyEnd && new Date(e.warrantyEnd) < now;
+    document.getElementById('detail-fields').innerHTML = [
+      detailField('Salle', e.room ? `${e.room.name}${e.room.number ? ` (n°${e.room.number})` : ''}${e.room.building ? ` — ${e.room.building}` : ''}` : '<span class="text-slate-400 font-normal">Non assigné</span>'),
+      detailField('Numéro de série', e.serialNumber ? `<span class="font-mono">${e.serialNumber}</span>` : null),
+      detailField('Date d\'achat', fmtDate(e.purchaseDate)),
+      detailField('Fin de garantie', warrantyDate ? `<span class="${warrantyExpired ? 'text-red-600' : 'text-slate-800'}">${warrantyDate}${warrantyExpired ? ' <span class="text-xs">(expirée)</span>' : ''}</span>` : null),
+      detailField('Description', e.description),
+    ].filter(Boolean).join('');
+
+    // Section agent
+    const agentSection = document.getElementById('detail-agent-section');
+    if (e.discoverySource === 'AGENT' && e.agentHostname) {
+      const info = e.agentInfo ? (typeof e.agentInfo === 'string' ? JSON.parse(e.agentInfo) : e.agentInfo) : {};
+      const ips = Array.isArray(info.ips) ? info.ips.join(', ') : null;
+      document.getElementById('detail-agent-fields').innerHTML = [
+        detailField('Hostname', `<span class="font-mono">${e.agentHostname}</span>`),
+        detailField('Système', info.os),
+        detailField('Processeur', info.cpu ? info.cpu.split('@')[0].trim() : null),
+        detailField('RAM', info.ramGb ? `${info.ramGb} Go` : null),
+        detailField('Adresses IP', ips),
+        detailField('Utilisateur', info.user),
+        detailField('Dernière remontée', timeAgoDetail(e.lastSeenAt)),
+        detailField('État agent', e.agentRevoked ? '<span class="text-red-600">Révoqué</span>' : '<span class="text-green-600">Actif</span>'),
+      ].filter(Boolean).join('');
+      agentSection.classList.remove('hidden');
+    } else {
+      agentSection.classList.add('hidden');
+    }
+
+    // Interventions
+    const interventions = e.interventions || [];
+    document.getElementById('detail-interv-count').textContent = interventions.length || '';
+
+    document.getElementById('detail-interventions').innerHTML = interventions.length === 0
+      ? `<p class="text-sm text-slate-400 italic py-2">Aucune intervention enregistrée pour cet équipement.</p>`
+      : interventions.map(i => `
+          <div class="py-3 border-b border-slate-100 last:border-0">
+            <div class="flex items-start justify-between gap-2 mb-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2 py-0.5 rounded-full text-xs font-medium ${INTERV_STATUS_COLORS[i.status] || 'bg-slate-100 text-slate-500'}">${INTERV_STATUS[i.status] || i.status}</span>
+                <span class="text-xs font-medium ${PRIORITY_COLORS[i.priority] || ''}">${PRIORITY_LABELS[i.priority] || i.priority}</span>
+                <span class="font-medium text-slate-800 text-sm">${i.title}</span>
+              </div>
+              <span class="text-xs text-slate-400 flex-shrink-0">${new Date(i.createdAt).toLocaleDateString('fr-FR')}</span>
+            </div>
+            ${i.description ? `<p class="text-xs text-slate-500 line-clamp-2 ml-0.5">${i.description}</p>` : ''}
+            <p class="text-xs text-slate-400 mt-1">Par ${i.tech?.name || '—'}${i.closedAt ? ` · Clôturée le ${new Date(i.closedAt).toLocaleDateString('fr-FR')}` : ''}</p>
+          </div>`
+        ).join('');
+
+    // Pré-charger les sessions si c'est un agent
+    if (e.discoverySource === 'AGENT') {
+      loadSessionLogs(7);
+    } else {
+      document.getElementById('sess-list').innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Cet équipement n\'a pas d\'agent installé.</p>';
+      document.getElementById('sess-histogram').innerHTML = '';
+      document.getElementById('sess-total').textContent = '';
+    }
+
+    document.getElementById('detail-loading').classList.add('hidden');
+    document.getElementById('detail-body').classList.remove('hidden');
+
+  } catch (err) {
+    document.getElementById('detail-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
 
 loadEquipment();
 </script>

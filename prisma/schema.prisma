@@ -28,6 +28,7 @@ model User {
   orders        Order[]
   refreshTokens RefreshToken[]
   agentTokens   AgentToken[]
+  loginLogs     LoginLog[]
 
   @@map("users")
 }
@@ -43,7 +44,8 @@ model AgentToken {
   ipWhitelist String?   // JSON array d'IP/CIDR. null = tout autoriser
   ipBlacklist String?   // JSON array d'IP/CIDR. null = rien bloquer
 
-  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdBy        User        @relation(fields: [createdById], references: [id])
+  enrolledMachines Equipment[]
 
   @@map("agent_tokens")
 }
@@ -112,17 +114,20 @@ model Equipment {
   updatedAt       DateTime  @updatedAt
 
   // Champs agent
-  discoverySource  String    @default("MANUAL")    // MANUAL | AGENT
-  discoveryStatus  String    @default("CONFIRMED") // CONFIRMED | PENDING
-  suggestedRoomId  String?
-  lastSeenAt       DateTime?
-  agentInfo        String?   // JSON: { cpu, ram, os, ips, macs, user, peripherals }
-  agentHostname    String?
-  agentToken       String?   @unique               // Token machine unique (UUID)
-  agentRevoked     Boolean   @default(false)       // Si true, re-enrollment requis
+  discoverySource    String    @default("MANUAL")    // MANUAL | AGENT
+  discoveryStatus    String    @default("CONFIRMED") // CONFIRMED | PENDING
+  suggestedRoomId    String?
+  lastSeenAt         DateTime?
+  agentInfo          String?   // JSON: { cpu, ram, os, ips, macs, user, peripherals }
+  agentHostname      String?
+  agentToken         String?   @unique               // Token machine unique (UUID)
+  agentRevoked       Boolean   @default(false)       // Si true, re-enrollment requis
+  enrollmentTokenId  String?                         // Token de déploiement utilisé à l'enrollment
 
-  room          Room?          @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  interventions Intervention[]
+  room            Room?       @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  interventions   Intervention[]
+  enrollmentToken AgentToken? @relation(fields: [enrollmentTokenId], references: [id], onDelete: SetNull)
+  sessionLogs     MachineSessionLog[]
 
   @@map("equipment")
 }
@@ -168,13 +173,44 @@ model Order {
   @@map("orders")
 }
 
+model LoginLog {
+  id        String   @id @default(uuid())
+  userId    String
+  method    String   // PASSWORD | PASSKEY
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("login_logs")
+}
+
+model MachineSessionLog {
+  id          String   @id @default(uuid())
+  equipmentId String
+  winUser     String   // Nom d'utilisateur Windows
+  event       String   // LOGIN | LOGOUT
+  occurredAt  DateTime
+
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([equipmentId])
+  @@index([occurredAt])
+  @@map("machine_session_logs")
+}
+
 model OrderItem {
   id        String   @id @default(uuid())
   orderId   String
   name      String
   quantity  Int
   unitPrice Float?
+  priceType String   @default("TTC") // TTC | HT
   reference String?
+  productUrl String?
   received  Int      @default(0)
   notes     String?
   createdAt DateTime @default(now())

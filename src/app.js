@@ -101,6 +101,7 @@ app.use('/api/orders', require('./routes/orders'));
 app.use('/api/qrcode', require('./routes/qrcode'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/agents', require('./routes/agents'));
+app.use('/api/settings', require('./routes/settings'));
 app.use('/downloads', require('./routes/downloads'));
 
 // ── Healthcheck ───────────────────────────────────────────────────────────────

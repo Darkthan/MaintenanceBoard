@@ -67,6 +67,16 @@ router.post('/login',
 
       authService.setAuthCookies(res, accessToken, refreshToken);
 
+      // Log de connexion (non bloquant)
+      prisma.loginLog.create({
+        data: {
+          userId: user.id,
+          method: 'PASSWORD',
+          ip: (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').replace(/^::ffff:/, '') || null,
+          userAgent: req.headers['user-agent'] || null
+        }
+      }).catch(() => {});
+
       res.json({ user, accessToken });
     } catch (err) {
       if (err.status === 401) return res.status(401).json({ error: err.message });
@@ -217,6 +227,17 @@ router.post('/webauthn/login/finish', async (req, res, next) => {
     );
 
     authService.setAuthCookies(res, accessToken, refreshToken);
+
+    // Log de connexion (non bloquant)
+    prisma.loginLog.create({
+      data: {
+        userId: user.id,
+        method: 'PASSKEY',
+        ip: (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').replace(/^::ffff:/, '') || null,
+        userAgent: req.headers['user-agent'] || null
+      }
+    }).catch(() => {});
+
     res.json({ user, accessToken });
   } catch (err) {
     if (err.status === 401) return res.status(401).json({ error: err.message });

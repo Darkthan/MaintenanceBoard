@@ -91,18 +91,45 @@ router.get('/by-token/:token', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/equipment/:id - Détail
+// GET /api/equipment/:id - Détail avec interventions
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const equip = await prisma.equipment.findUnique({
       where: { id: req.params.id },
       include: {
         room: { select: { id: true, name: true, number: true, building: true } },
+        interventions: {
+          orderBy: { createdAt: 'desc' },
+          include: { tech: { select: { id: true, name: true } } }
+        },
         _count: { select: { interventions: true } }
       }
     });
     if (!equip) return res.status(404).json({ error: 'Équipement introuvable' });
     res.json(equip);
+  } catch (err) { next(err); }
+});
+
+// GET /api/equipment/:id/sessions - Logs de sessions Windows
+router.get('/:id/sessions', requireAuth, async (req, res, next) => {
+  try {
+    const days = Math.min(90, Math.max(1, parseInt(req.query.days) || 30));
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const logs = await prisma.machineSessionLog.findMany({
+      where: { equipmentId: req.params.id, occurredAt: { gte: since } },
+      orderBy: { occurredAt: 'desc' },
+      select: { id: true, winUser: true, event: true, occurredAt: true }
+    });
+
+    // Histogramme par heure (0-23)
+    const byHour = Array(24).fill(0);
+    logs.forEach(l => byHour[new Date(l.occurredAt).getHours()]++);
+
+    // Utilisateurs distincts
+    const users = [...new Set(logs.map(l => l.winUser))];
+
+    res.json({ logs, byHour, total: logs.length, days, users });
   } catch (err) { next(err); }
 });
 
