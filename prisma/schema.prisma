@@ -5,8 +5,8 @@ generator client {
 datasource db {
   // Dev local SQLite : DATABASE_URL=file:./prisma/dev.db
   // Production PostgreSQL : utiliser schema.postgresql.prisma
+  // Prisma 7 : URL configurée dans prisma.config.ts (adapter-based)
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 // SQLite ne supporte ni enum, ni Json, ni tableaux natifs.
@@ -23,12 +23,14 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  passkeys      Passkey[]
-  interventions Intervention[]
-  orders        Order[]
-  refreshTokens RefreshToken[]
-  agentTokens   AgentToken[]
-  loginLogs     LoginLog[]
+  passkeys             Passkey[]
+  interventions        Intervention[]
+  orders               Order[]
+  refreshTokens        RefreshToken[]
+  agentTokens          AgentToken[]
+  loginLogs            LoginLog[]
+  orderAttachments     OrderAttachment[]
+  signatureRequests    SignatureRequest[]
 
   @@map("users")
 }
@@ -150,26 +152,35 @@ model Intervention {
   room      Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
   equipment Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
   tech      User       @relation(fields: [techId], references: [id])
+  orders    Order[]
 
   @@map("interventions")
 }
 
 model Order {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  status      String   @default("PENDING")  // PENDING | ORDERED | PARTIAL | RECEIVED | CANCELLED
-  supplier    String?
-  totalAmount Float?
-  requestedBy String
-  orderedAt   DateTime?
-  receivedAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(uuid())
+  title          String
+  description    String?
+  status         String   @default("PENDING")  // PENDING | ORDERED | PARTIAL | RECEIVED | CANCELLED
+  supplier       String?
+  totalAmount    Float?
+  deploymentTags String   @default("[]")       // JSON array of strings
+  requestedBy    String
+  interventionId String?
+  supplierId     String?
+  orderedAt      DateTime?
+  receivedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  requester User        @relation(fields: [requestedBy], references: [id])
-  items     OrderItem[]
+  requester          User               @relation(fields: [requestedBy], references: [id])
+  intervention       Intervention?      @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  supplierRef        Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items              OrderItem[]
+  attachments        OrderAttachment[]
+  signatureRequests  SignatureRequest[]
 
+  @@index([interventionId])
   @@map("orders")
 }
 
@@ -218,4 +229,85 @@ model OrderItem {
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("order_items")
+}
+
+model OrderAttachment {
+  id         String   @id @default(uuid())
+  orderId    String
+  filename   String
+  storedAs   String
+  mimetype   String
+  size       Int
+  category   String   @default("OTHER")  // INVOICE | SIGNED_PO | QUOTE_TO_SIGN | SIGNED_QUOTE | TO_ENTER | OTHER
+  uploadedBy String
+
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  uploader   User     @relation(fields: [uploadedBy], references: [id])
+
+  createdAt  DateTime @default(now())
+  ocrText    String?                        // texte extrait par OCR
+  ocrStatus  String   @default("PENDING")  // PENDING | PROCESSING | DONE | FAILED | SKIPPED
+
+  @@map("order_attachments")
+}
+
+model SignatureRequest {
+  id             String    @id @default(uuid())
+  orderId        String?   // null = document générique (non lié à une commande)
+  token          String    @unique
+  signatureId    String?   @unique   // SIG-YYYY-XXXXXXXX (après signature)
+
+  // Document source (quand orderId est null)
+  documentTitle      String?
+  documentNotes      String?
+  sourceFileStoredAs String?   // fichier dans uploads/signatures/source/
+  sourceFilename     String?
+  sourceFileMimetype String?
+
+  recipientEmail String
+  recipientName  String
+  message        String?
+  status         String    @default("PENDING")  // PENDING | SIGNED | EXPIRED | CANCELLED
+  otpHash        String?
+  otpExpiresAt   DateTime?
+  otpAttempts    Int       @default(0)
+  signedAt       DateTime?
+  ipAddress      String?
+  userAgent      String?
+  attachmentId   String?            // OrderAttachment ID (si commande)
+  signedFileStoredAs String?         // PDF signé standalone dans uploads/signatures/signed/
+  signedFilename     String?
+  signerTitle        String?
+  signerPlace        String?
+  posX               Float?    // Position X (0-1) de la zone de signature, définie par le demandeur
+  posY               Float?    // Position Y (0-1) de la zone de signature, définie par le demandeur
+  sigWidth           Float?    // Largeur (0-1) de la zone de signature
+  sigHeight          Float?    // Hauteur (0-1) de la zone de signature
+
+  expiresAt      DateTime
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  creator User    @relation(fields: [createdBy], references: [id])
+
+  @@map("signature_requests")
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  contact   String?
+  email     String?
+  phone     String?
+  website   String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders    Order[]
+
+  @@map("suppliers")
 }

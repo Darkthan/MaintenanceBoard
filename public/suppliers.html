@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fournisseurs – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+        </svg>
+      </div>
+      <div><p class="text-white font-bold text-sm">MaintenanceBoard</p><p class="text-slate-400 text-xs">Parc informatique</p></div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <span id="user-avatar">?</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 lg:ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <h1 class="text-xl font-semibold text-slate-800">Fournisseurs</h1>
+      </div>
+      <div id="admin-actions">
+        <button id="add-supplier-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Nouveau fournisseur
+        </button>
+      </div>
+    </header>
+
+    <div class="flex-1 p-6 space-y-4">
+      <!-- Filtres -->
+      <div data-mobile-filters="true" class="bg-white rounded-xl border border-slate-200 p-4 flex gap-4 flex-wrap">
+        <div class="flex-1 min-w-48">
+          <input id="search-input" type="search" placeholder="Rechercher (nom, email, contact...)"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <div id="suppliers-loading" class="p-8 text-center text-slate-400">Chargement...</div>
+        <table id="suppliers-table" class="hidden w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Nom</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Contact</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Email</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Téléphone</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Commandes</th>
+              <th class="text-right px-5 py-3 font-medium text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="suppliers-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+        <div id="suppliers-empty" class="hidden p-8 text-center text-slate-400">
+          <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+          <p>Aucun fournisseur trouvé</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal Nouveau fournisseur / Modifier -->
+<div id="supplier-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 id="modal-title" class="font-semibold text-slate-800">Nouveau fournisseur</h3>
+      <button id="close-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="supplier-form" class="p-6 space-y-4">
+      <input type="hidden" id="supplier-id" />
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Nom *</label>
+        <input id="supplier-name" type="text" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Contact</label>
+          <input id="supplier-contact" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
+          <input id="supplier-phone" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+        <input id="supplier-email" type="email" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Site web</label>
+        <input id="supplier-website" type="url" placeholder="https://" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Adresse</label>
+        <input id="supplier-address" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+        <textarea id="supplier-notes" rows="3" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="cancel-modal" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" id="submit-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal confirmation suppression -->
+<div id="delete-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="px-6 py-5">
+      <div class="flex items-center gap-4">
+        <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-semibold text-slate-800">Supprimer le fournisseur</h3>
+          <p id="delete-modal-text" class="text-sm text-slate-500 mt-1"></p>
+        </div>
+      </div>
+    </div>
+    <div class="px-6 pb-5 flex justify-end gap-3">
+      <button id="cancel-delete" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+      <button id="confirm-delete" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+const user = requireLogin();
+if (!user) throw new Error('Not logged in');
+renderNav('suppliers');
+if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
+
+let currentSearch = '';
+let supplierToDelete = null;
+
+// Cacher actions admin pour TECH
+if (user.role !== 'ADMIN') {
+  document.getElementById('admin-actions').style.display = 'none';
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+}
+
+async function fetchSuppliers() {
+  document.getElementById('suppliers-loading').classList.remove('hidden');
+  document.getElementById('suppliers-table').classList.add('hidden');
+  document.getElementById('suppliers-empty').classList.add('hidden');
+
+  try {
+    const params = {};
+    if (currentSearch) params.q = currentSearch;
+
+    const suppliers = await api.get('/suppliers', params);
+
+    document.getElementById('suppliers-loading').classList.add('hidden');
+
+    if (!suppliers || suppliers.length === 0) {
+      document.getElementById('suppliers-empty').classList.remove('hidden');
+      return;
+    }
+
+    renderSuppliers(suppliers);
+  } catch (err) {
+    document.getElementById('suppliers-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+function renderSuppliers(suppliers) {
+  document.getElementById('suppliers-table').classList.remove('hidden');
+  document.getElementById('suppliers-tbody').innerHTML = suppliers.map(s => `
+    <tr class="hover:bg-slate-50 transition">
+      <td class="px-5 py-3.5">
+        <span class="font-medium text-slate-800">${escapeHtml(s.name)}</span>
+        ${s.address ? `<p class="text-xs text-slate-400 mt-0.5 truncate max-w-xs">${escapeHtml(s.address)}</p>` : ''}
+      </td>
+      <td class="px-5 py-3.5 text-slate-600">${escapeHtml(s.contact) || '-'}</td>
+      <td class="px-5 py-3.5 text-slate-600">
+        ${s.email ? `<a href="mailto:${escapeHtml(s.email)}" class="text-blue-600 hover:underline">${escapeHtml(s.email)}</a>` : '-'}
+      </td>
+      <td class="px-5 py-3.5 text-slate-600">${escapeHtml(s.phone) || '-'}</td>
+      <td class="px-5 py-3.5">
+        <span class="inline-flex items-center gap-1 text-slate-600">
+          <span class="font-medium text-slate-800">${s._count ? s._count.orders : 0}</span> commande${(s._count && s._count.orders > 1) ? 's' : ''}
+        </span>
+      </td>
+      <td class="px-5 py-3.5">
+        <div class="flex items-center justify-end gap-2">
+          ${user.role === 'ADMIN' ? `
+          <button onclick="openEditModal(${JSON.stringify(s).replace(/"/g, '&quot;')})"
+            class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition" title="Modifier">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </button>
+          <button onclick="openDeleteModal('${s.id}', '${escapeHtml(s.name)}')"
+            class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-red-600 transition" title="Supprimer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+          ` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// Recherche avec debounce
+let searchTimeout;
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => { currentSearch = e.target.value; fetchSuppliers(); }, 400);
+});
+
+// Modal création
+const modal = document.getElementById('supplier-modal');
+document.getElementById('add-supplier-btn')?.addEventListener('click', openCreateModal);
+document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
+document.getElementById('cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
+modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+
+function openCreateModal() {
+  document.getElementById('modal-title').textContent = 'Nouveau fournisseur';
+  document.getElementById('supplier-id').value = '';
+  document.getElementById('supplier-form').reset();
+  document.getElementById('form-error').classList.add('hidden');
+  modal.classList.remove('hidden');
+}
+
+function openEditModal(supplier) {
+  document.getElementById('modal-title').textContent = 'Modifier le fournisseur';
+  document.getElementById('supplier-id').value = supplier.id;
+  document.getElementById('supplier-name').value = supplier.name || '';
+  document.getElementById('supplier-contact').value = supplier.contact || '';
+  document.getElementById('supplier-email').value = supplier.email || '';
+  document.getElementById('supplier-phone').value = supplier.phone || '';
+  document.getElementById('supplier-website').value = supplier.website || '';
+  document.getElementById('supplier-address').value = supplier.address || '';
+  document.getElementById('supplier-notes').value = supplier.notes || '';
+  document.getElementById('form-error').classList.add('hidden');
+  modal.classList.remove('hidden');
+}
+
+document.getElementById('supplier-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('supplier-id').value;
+  const data = {
+    name: document.getElementById('supplier-name').value,
+    contact: document.getElementById('supplier-contact').value || null,
+    email: document.getElementById('supplier-email').value || null,
+    phone: document.getElementById('supplier-phone').value || null,
+    website: document.getElementById('supplier-website').value || null,
+    address: document.getElementById('supplier-address').value || null,
+    notes: document.getElementById('supplier-notes').value || null
+  };
+
+  const submitBtn = document.getElementById('submit-btn');
+  submitBtn.disabled = true;
+  document.getElementById('form-error').classList.add('hidden');
+
+  try {
+    if (id) {
+      await api.patch(`/suppliers/${id}`, data);
+      showToast('Fournisseur modifié avec succès');
+    } else {
+      await api.post('/suppliers', data);
+      showToast('Fournisseur créé avec succès');
+    }
+    modal.classList.add('hidden');
+    fetchSuppliers();
+  } catch (err) {
+    const errEl = document.getElementById('form-error');
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+// Modal suppression
+const deleteModal = document.getElementById('delete-modal');
+document.getElementById('cancel-delete').addEventListener('click', () => deleteModal.classList.add('hidden'));
+deleteModal.addEventListener('click', e => { if (e.target === deleteModal) deleteModal.classList.add('hidden'); });
+
+function openDeleteModal(id, name) {
+  supplierToDelete = id;
+  document.getElementById('delete-modal-text').textContent = `Supprimer le fournisseur "${name}" ? Cette action est irréversible.`;
+  deleteModal.classList.remove('hidden');
+}
+
+document.getElementById('confirm-delete').addEventListener('click', async () => {
+  if (!supplierToDelete) return;
+  try {
+    await api.delete(`/suppliers/${supplierToDelete}`);
+    showToast('Fournisseur supprimé');
+    deleteModal.classList.add('hidden');
+    supplierToDelete = null;
+    fetchSuppliers();
+  } catch (err) {
+    showToast(err.message, 'error');
+    deleteModal.classList.add('hidden');
+  }
+});
+
+fetchSuppliers();
+</script>
+</body>
+</html>

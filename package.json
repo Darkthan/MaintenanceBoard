@@ -9,12 +9,16 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "node prisma/seed.js",
     "prisma:studio": "prisma studio",
-    "setup": "prisma migrate deploy && node prisma/seed.js"
+    "setup": "prisma migrate deploy && node prisma/seed.js",
+    "test": "jest --forceExit"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/adapter-better-sqlite3": "^7.5.0",
+    "@prisma/adapter-pg": "^7.5.0",
+    "@prisma/client": "^7.5.0",
     "@simplewebauthn/server": "^9.0.3",
     "bcrypt": "^5.1.1",
+    "better-sqlite3": "^12.6.2",
     "connect-pg-simple": "^9.0.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -28,16 +32,30 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.15",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^3.11.174",
+    "pdfkit": "^0.17.2",
     "qrcode": "^1.5.4",
     "sharp": "^0.33.5",
     "swagger-ui-express": "^5.0.1",
+    "tesseract.js": "^7.0.0",
     "uuid": "^10.0.0",
     "xlsx": "^0.18.5",
     "yamljs": "^0.3.0"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
     "nodemon": "^3.1.7",
-    "prisma": "^5.22.0"
+    "prisma": "^7.5.0",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/**/*.test.js"],
+    "testPathIgnorePatterns": ["/node_modules/", "/.claude/"],
+    "modulePathIgnorePatterns": ["/.claude/"],
+    "setupFiles": ["./tests/setup.js"]
   },
   "engines": {
     "node": ">=20.0.0"

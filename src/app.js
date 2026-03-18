@@ -21,7 +21,7 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: ["'self'"],
       fontSrc: ["'self'", "cdn.jsdelivr.net"],
-      frameSrc: ["'none'"]
+      frameSrc: ["'self'"]
     }
   }
 }));
@@ -94,6 +94,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
 
 // ── Routes API ────────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/search', require('./routes/search'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/interventions', require('./routes/interventions'));
@@ -102,7 +103,13 @@ app.use('/api/qrcode', require('./routes/qrcode'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/agents', require('./routes/agents'));
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/downloads', require('./routes/downloads'));
+
+const { ordersRouter: sigOrdersRouter, signRouter, signaturesRouter } = require('./routes/signatures');
+app.use('/api/orders', sigOrdersRouter);      // /:id/signature-requests
+app.use('/api/sign', signRouter);             // /:token, /:token/source, /:token/send-otp, /:token/submit
+app.use('/api/signatures', signaturesRouter); // standalone signature requests
 
 // ── Healthcheck ───────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {

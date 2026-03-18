@@ -2,6 +2,39 @@
  * Layout commun : navigation, déconnexion, sidebar mobile
  */
 
+const APP_LOGO_SRC = '/assets/app-logo.svg';
+const EQUIPMENT_ICON_PATH = 'M9 3v2m6-2v2M9 19v2m6-2v2M3 9h2m-2 6h2m14-6h2m-2 6h2M8 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Zm2.5 4h3m-3 3h3';
+
+function ensureAppFavicon() {
+  let favicon = document.querySelector('link[data-app-favicon]');
+  if (!favicon) {
+    favicon = document.createElement('link');
+    favicon.rel = 'icon';
+    favicon.type = 'image/svg+xml';
+    favicon.dataset.appFavicon = 'true';
+    document.head.appendChild(favicon);
+  }
+
+  favicon.href = APP_LOGO_SRC;
+}
+
+function getSidebarBrandInnerMarkup() {
+  return `
+    <img src="${APP_LOGO_SRC}" alt="MaintenanceBoard" class="w-10 h-10 rounded-2xl shadow-lg shadow-blue-950/30 ring-1 ring-white/10 flex-shrink-0" />
+    <div class="min-w-0">
+      <p class="text-white font-bold text-sm tracking-tight">MaintenanceBoard</p>
+      <p class="text-slate-400 text-xs">Parc informatique</p>
+    </div>
+  `;
+}
+
+function syncAppBrand() {
+  document.querySelectorAll('aside#sidebar > div:first-child').forEach(brandEl => {
+    brandEl.className = 'flex items-center gap-3 px-5 py-5 border-b border-slate-700';
+    brandEl.innerHTML = getSidebarBrandInnerMarkup();
+  });
+}
+
 function ensureResponsiveStyles() {
   if (document.getElementById('app-responsive-style')) return;
 
@@ -26,12 +59,23 @@ function ensureResponsiveStyles() {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
+        order: 3;
       }
 
       body.app-mobile-refined main > header[data-app-header] [data-mobile-header-actions] > * {
         flex: 1 1 calc(50% - 0.25rem);
         min-width: 0;
         justify-content: center;
+      }
+
+      body.app-mobile-refined main > header[data-app-header] [data-spotlight-center-slot] {
+        width: 100%;
+        order: 2;
+      }
+
+      body.app-mobile-refined main > header[data-app-header] [data-spotlight-center-slot] .spotlight-trigger {
+        width: 100%;
+        min-width: 0;
       }
 
       body.app-mobile-refined main > header[data-app-header] [data-mobile-header-actions][data-single-action] > * {
@@ -220,7 +264,9 @@ function enhanceResponsiveTables() {
 }
 
 function enhanceResponsiveLayout() {
+  ensureAppFavicon();
   ensureResponsiveStyles();
+  syncAppBrand();
   document.body.classList.add('app-mobile-refined');
 
   document.querySelectorAll('main > header').forEach(header => {
@@ -283,6 +329,957 @@ function toggleSidebar() {
   if (overlay) overlay.classList.toggle('hidden', isOpen);
 }
 
+const spotlightState = {
+  open: false,
+  query: '',
+  results: [],
+  activeIndex: -1,
+  loading: false,
+  debounceId: null,
+  controller: null
+};
+
+function ensureSpotlightStyles() {
+  if (document.getElementById('app-spotlight-style')) return;
+
+  const style = document.createElement('style');
+  style.id = 'app-spotlight-style';
+  style.textContent = `
+    body.spotlight-open {
+      overflow: hidden;
+    }
+
+    .spotlight-trigger {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: min(32rem, 52vw);
+      padding: 0.7rem 0.9rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.96), rgba(241,245,249,0.92)),
+        radial-gradient(circle at top left, rgba(14,165,233,0.12), transparent 40%);
+      color: #0f172a;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    .spotlight-trigger:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 22px 50px rgba(15, 23, 42, 0.12);
+      border-color: rgba(14, 165, 233, 0.35);
+    }
+
+    .spotlight-trigger__icon {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, rgba(14,165,233,0.16), rgba(251,191,36,0.16));
+      color: #0369a1;
+      flex-shrink: 0;
+    }
+
+    .spotlight-trigger__text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      text-align: left;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .spotlight-trigger__label {
+      font-size: 0.86rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #0f172a;
+    }
+
+    .spotlight-trigger__hint {
+      font-size: 0.73rem;
+      color: #64748b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .spotlight-trigger__kbd {
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #334155;
+      padding: 0.32rem 0.55rem;
+      border-radius: 0.75rem;
+      background: rgba(255,255,255,0.8);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.18);
+      flex-shrink: 0;
+    }
+
+    .spotlight-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 3.5rem 1rem 1rem;
+    }
+
+    .spotlight-overlay.hidden {
+      display: none;
+    }
+
+    .spotlight-backdrop {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 34%),
+        linear-gradient(180deg, rgba(15,23,42,0.68), rgba(15,23,42,0.82));
+      backdrop-filter: blur(18px);
+    }
+
+    .spotlight-panel {
+      position: relative;
+      width: min(1080px, 100%);
+      min-height: min(620px, calc(100vh - 5rem));
+      max-height: min(740px, calc(100vh - 4.5rem));
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 1.75rem;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      background:
+        linear-gradient(145deg, rgba(255,255,255,0.98), rgba(248,250,252,0.95)),
+        radial-gradient(circle at top right, rgba(251,191,36,0.16), transparent 34%);
+      box-shadow: 0 40px 110px rgba(15, 23, 42, 0.38);
+    }
+
+    .spotlight-topbar {
+      padding: 1.15rem 1.25rem 1rem;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,250,252,0.84));
+    }
+
+    .spotlight-searchbar {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      padding: 0.95rem 1rem;
+      border-radius: 1.25rem;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(255,255,255,0.82);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.65);
+    }
+
+    .spotlight-searchbar svg {
+      color: #0369a1;
+      flex-shrink: 0;
+    }
+
+    .spotlight-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: #0f172a;
+      font-size: 1.08rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .spotlight-input::placeholder {
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .spotlight-searchbar__meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #64748b;
+      font-size: 0.74rem;
+      flex-shrink: 0;
+    }
+
+    .spotlight-searchbar__pill {
+      padding: 0.28rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(241, 245, 249, 0.8);
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .spotlight-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+      min-height: 0;
+      flex: 1;
+    }
+
+    .spotlight-results {
+      min-height: 0;
+      overflow: auto;
+      padding: 1rem 1.05rem 1.15rem;
+    }
+
+    .spotlight-group + .spotlight-group {
+      margin-top: 1rem;
+    }
+
+    .spotlight-group__title {
+      margin-bottom: 0.55rem;
+      padding: 0 0.35rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #64748b;
+    }
+
+    .spotlight-result {
+      width: 100%;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.85rem;
+      padding: 0.9rem 0.95rem;
+      border: 1px solid transparent;
+      border-radius: 1.1rem;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+    }
+
+    .spotlight-result:hover,
+    .spotlight-result.is-active {
+      background: linear-gradient(135deg, rgba(240,249,255,0.9), rgba(255,251,235,0.86));
+      border-color: rgba(125, 211, 252, 0.42);
+      transform: translateY(-1px);
+    }
+
+    .spotlight-result__icon {
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 0.95rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: #0f172a;
+      background: linear-gradient(145deg, rgba(226,232,240,0.84), rgba(255,255,255,0.96));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.85);
+    }
+
+    .spotlight-result[data-type="action"] .spotlight-result__icon {
+      background: linear-gradient(135deg, rgba(14,165,233,0.18), rgba(251,191,36,0.22));
+      color: #075985;
+    }
+
+    .spotlight-result__content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .spotlight-result__title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.25;
+    }
+
+    .spotlight-result__subtitle {
+      margin-top: 0.28rem;
+      font-size: 0.77rem;
+      color: #64748b;
+      line-height: 1.35;
+    }
+
+    .spotlight-result__meta {
+      margin-top: 0.45rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #0f766e;
+    }
+
+    .spotlight-result__chevron {
+      color: #94a3b8;
+      padding-top: 0.2rem;
+      flex-shrink: 0;
+    }
+
+    .spotlight-empty {
+      min-height: 14rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.7rem;
+      text-align: center;
+      color: #64748b;
+      padding: 1.5rem;
+    }
+
+    .spotlight-empty__title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .spotlight-preview {
+      min-height: 0;
+      overflow: auto;
+      border-left: 1px solid rgba(226, 232, 240, 0.85);
+      background:
+        radial-gradient(circle at top right, rgba(251,191,36,0.14), transparent 36%),
+        linear-gradient(180deg, rgba(248,250,252,0.9), rgba(241,245,249,0.85));
+      padding: 1.2rem 1.2rem 1.35rem;
+    }
+
+    .spotlight-preview__eyebrow {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #0f766e;
+    }
+
+    .spotlight-preview__title {
+      margin-top: 0.55rem;
+      font-size: 1.2rem;
+      line-height: 1.2;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #0f172a;
+    }
+
+    .spotlight-preview__description {
+      margin-top: 0.65rem;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      color: #475569;
+    }
+
+    .spotlight-preview__badges {
+      margin-top: 0.9rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+
+    .spotlight-preview__badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.42rem 0.68rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.82);
+      border: 1px solid rgba(148,163,184,0.2);
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .spotlight-preview__list {
+      margin-top: 1rem;
+      display: grid;
+      gap: 0.6rem;
+    }
+
+    .spotlight-preview__item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      padding: 0.78rem 0.85rem;
+      border-radius: 1rem;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(226,232,240,0.7);
+      color: #334155;
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .spotlight-preview__item-dot {
+      width: 0.48rem;
+      height: 0.48rem;
+      margin-top: 0.38rem;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #0ea5e9, #f59e0b);
+      flex-shrink: 0;
+    }
+
+    .spotlight-preview__footer {
+      margin-top: auto;
+      padding-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.55rem;
+      color: #64748b;
+      font-size: 0.74rem;
+    }
+
+    .spotlight-preview__key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 2rem;
+      padding: 0.3rem 0.45rem;
+      border-radius: 0.7rem;
+      border: 1px solid rgba(148,163,184,0.2);
+      background: rgba(255,255,255,0.78);
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    .spotlight-spinner {
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid rgba(148, 163, 184, 0.35);
+      border-top-color: #0284c7;
+      border-radius: 999px;
+      animation: spotlight-spin 0.75s linear infinite;
+      display: none;
+    }
+
+    .spotlight-spinner.is-visible {
+      display: inline-flex;
+    }
+
+    @keyframes spotlight-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 900px) {
+      .spotlight-trigger {
+        min-width: 0;
+        width: 100%;
+      }
+
+      .spotlight-body {
+        grid-template-columns: 1fr;
+      }
+
+      .spotlight-preview {
+        border-left: none;
+        border-top: 1px solid rgba(226, 232, 240, 0.85);
+      }
+    }
+
+    @media (max-width: 767px) {
+      .spotlight-overlay {
+        padding: 0.5rem;
+      }
+
+      .spotlight-panel {
+        min-height: calc(100vh - 1rem);
+        max-height: calc(100vh - 1rem);
+        border-radius: 1.35rem;
+      }
+
+      .spotlight-trigger__hint,
+      .spotlight-trigger__kbd {
+        display: none;
+      }
+
+      .spotlight-trigger__label {
+        font-size: 0.82rem;
+      }
+    }
+
+    @media (min-width: 768px) {
+      main > header[data-app-header] {
+        display: grid !important;
+        grid-template-columns: minmax(0, max-content) minmax(14rem, 34rem) minmax(0, max-content);
+        align-items: center;
+        gap: 1rem;
+      }
+
+      main > header[data-app-header] [data-spotlight-center-slot] {
+        grid-column: 2;
+        justify-self: center;
+        width: 100%;
+      }
+
+      main > header[data-app-header] [data-spotlight-center-slot] .spotlight-trigger {
+        width: 100%;
+        min-width: 0;
+      }
+
+      main > header[data-app-header] [data-mobile-header-actions] {
+        grid-column: 3;
+        justify-self: end;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function ensureSpotlightMarkup() {
+  if (document.getElementById('spotlight-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'spotlight-overlay';
+  overlay.className = 'spotlight-overlay hidden';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.innerHTML = `
+    <div class="spotlight-backdrop" data-spotlight-close="true"></div>
+    <section class="spotlight-panel" role="dialog" aria-modal="true" aria-labelledby="spotlight-input">
+      <div class="spotlight-topbar">
+        <div class="spotlight-searchbar">
+          <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
+          </svg>
+          <input id="spotlight-input" class="spotlight-input" type="search" autocomplete="off" spellcheck="false"
+            placeholder="Rechercher une salle, un equipement, un document signe, une action..." />
+          <div class="spotlight-searchbar__meta">
+            <span id="spotlight-spinner" class="spotlight-spinner" aria-hidden="true"></span>
+            <span class="spotlight-searchbar__pill">Esc</span>
+          </div>
+        </div>
+      </div>
+      <div class="spotlight-body">
+        <div id="spotlight-results" class="spotlight-results"></div>
+        <aside id="spotlight-preview" class="spotlight-preview"></aside>
+      </div>
+    </section>
+  `;
+
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', event => {
+    if (event.target.dataset.spotlightClose === 'true') {
+      closeSpotlight();
+    }
+  });
+
+  overlay.querySelector('.spotlight-panel').addEventListener('click', event => {
+    event.stopPropagation();
+  });
+
+  overlay.querySelector('#spotlight-input').addEventListener('input', event => {
+    spotlightState.query = event.target.value.trim();
+    queueSpotlightSearch();
+  });
+}
+
+function getSpotlightElements() {
+  return {
+    overlay: document.getElementById('spotlight-overlay'),
+    input: document.getElementById('spotlight-input'),
+    results: document.getElementById('spotlight-results'),
+    preview: document.getElementById('spotlight-preview'),
+    spinner: document.getElementById('spotlight-spinner')
+  };
+}
+
+function getShortcutLabel() {
+  return /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? 'Cmd K' : 'Ctrl K';
+}
+
+function getSpotlightIcon(type) {
+  const icons = {
+    action: 'M12 6v12m6-6H6',
+    document: 'M9 3h6l5 5v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm6 1.5V9h4.5',
+    room: 'M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5',
+    equipment: EQUIPMENT_ICON_PATH,
+    intervention: 'M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5m-1.414-9.414a2 2 0 1 1 2.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+    order: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2'
+  };
+  return icons[type] || icons.action;
+}
+
+function getSpotlightMetaLabel(result) {
+  if (result.target === '_blank') return 'Ouverture nouvel onglet';
+  if (result.type === 'action' || result.openMode === 'direct') return 'Ouverture directe';
+  return 'Apercu disponible';
+}
+
+function ensureSpotlightTrigger() {
+  ensureSpotlightStyles();
+  ensureSpotlightMarkup();
+
+  const header = document.querySelector('main > header[data-app-header]');
+  if (!header) return;
+
+  let actions = header.querySelector('[data-mobile-header-actions]');
+  if (!actions) {
+    const currentRight = header.lastElementChild && header.lastElementChild !== header.firstElementChild
+      ? header.lastElementChild
+      : null;
+
+    actions = document.createElement('div');
+    actions.className = 'flex items-center gap-2';
+    actions.dataset.mobileHeaderActions = 'true';
+
+    if (currentRight) {
+      header.replaceChild(actions, currentRight);
+      actions.appendChild(currentRight);
+    } else {
+      header.appendChild(actions);
+    }
+  }
+
+  let centerSlot = header.querySelector('[data-spotlight-center-slot]');
+  if (!centerSlot) {
+    centerSlot = document.createElement('div');
+    centerSlot.dataset.spotlightCenterSlot = 'true';
+    centerSlot.className = 'flex items-center justify-center';
+    header.insertBefore(centerSlot, actions || null);
+  }
+
+  let trigger = header.querySelector('[data-spotlight-trigger="true"]');
+  if (!trigger) {
+    trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'spotlight-trigger';
+    trigger.dataset.spotlightTrigger = 'true';
+    trigger.innerHTML = `
+      <span class="spotlight-trigger__icon" aria-hidden="true">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
+        </svg>
+      </span>
+      <span class="spotlight-trigger__text">
+        <span class="spotlight-trigger__label">Recherche globale</span>
+        <span class="spotlight-trigger__hint">Salles, equipements, interventions, documents signes, actions</span>
+      </span>
+      <span class="spotlight-trigger__kbd">${getShortcutLabel()}</span>
+    `;
+    trigger.addEventListener('click', () => openSpotlight());
+  }
+
+  if (trigger.parentElement !== centerSlot) {
+    centerSlot.appendChild(trigger);
+  }
+
+  if (actions.children.length <= 1) actions.dataset.singleAction = 'true';
+  else delete actions.dataset.singleAction;
+}
+
+function groupSpotlightResults(results) {
+  const groups = [];
+  const seen = new Map();
+
+  results.forEach(result => {
+    if (!seen.has(result.group)) {
+      const group = { name: result.group, items: [] };
+      seen.set(result.group, group);
+      groups.push(group);
+    }
+    seen.get(result.group).items.push(result);
+  });
+
+  return groups;
+}
+
+function setSpotlightLoading(isLoading) {
+  spotlightState.loading = isLoading;
+  const { spinner } = getSpotlightElements();
+  if (spinner) spinner.classList.toggle('is-visible', isLoading);
+}
+
+function getActiveSpotlightResult() {
+  if (spotlightState.activeIndex < 0) return null;
+  return spotlightState.results[spotlightState.activeIndex] || null;
+}
+
+function renderSpotlightPreview() {
+  const { preview } = getSpotlightElements();
+  if (!preview) return;
+
+  const active = getActiveSpotlightResult();
+
+  if (!active) {
+    preview.innerHTML = `
+      <div class="spotlight-preview__eyebrow">Spotlight</div>
+      <div class="spotlight-preview__title">Recherche transversale</div>
+      <p class="spotlight-preview__description">
+        Tape pour filtrer les objets de gestion et les actions rapides. Les fleches changent la selection, Entree ouvre la cible.
+      </p>
+      <div class="spotlight-preview__list">
+        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Commence par une salle, un numero de serie, un fournisseur ou un mot-cle.</span></div>
+        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Les actions rapides ouvrent directement la page cible.</span></div>
+        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Les entites affichent un apercu avant ouverture.</span></div>
+      </div>
+      <div class="spotlight-preview__footer">
+        <span class="spotlight-preview__key">${getShortcutLabel()}</span><span>ouvrir</span>
+        <span class="spotlight-preview__key">Esc</span><span>fermer</span>
+      </div>
+    `;
+    return;
+  }
+
+  const lines = Array.isArray(active.preview?.lines) ? active.preview.lines : [];
+  const badges = Array.isArray(active.preview?.badges) ? active.preview.badges : [];
+
+  preview.innerHTML = `
+    <div class="spotlight-preview__eyebrow">${active.group}</div>
+    <div class="spotlight-preview__title">${escapeSpotlightHtml(active.preview?.title || active.title)}</div>
+    <p class="spotlight-preview__description">${escapeSpotlightHtml(active.preview?.description || active.subtitle || '')}</p>
+    ${badges.length ? `
+      <div class="spotlight-preview__badges">
+        ${badges.map(badge => `<span class="spotlight-preview__badge">${escapeSpotlightHtml(badge)}</span>`).join('')}
+      </div>` : ''}
+    ${lines.length ? `
+      <div class="spotlight-preview__list">
+        ${lines.map(line => `
+          <div class="spotlight-preview__item">
+            <span class="spotlight-preview__item-dot"></span>
+            <span>${escapeSpotlightHtml(line)}</span>
+          </div>`).join('')}
+      </div>` : ''}
+    <div class="spotlight-preview__footer">
+      <span class="spotlight-preview__key">Enter</span><span>${active.target === '_blank' ? 'ouvrir le document' : active.type === 'action' || active.openMode === 'direct' ? 'ouvrir maintenant' : 'ouvrir la page cible'}</span>
+      <span class="spotlight-preview__key">Esc</span><span>fermer</span>
+    </div>
+  `;
+}
+
+function renderSpotlightResults() {
+  const { results } = getSpotlightElements();
+  if (!results) return;
+
+  if (spotlightState.loading && !spotlightState.results.length) {
+    results.innerHTML = `
+      <div class="spotlight-empty">
+        <div class="spotlight-empty__title">Recherche en cours...</div>
+        <p>Le spotlight agrege les donnees de l application.</p>
+      </div>
+    `;
+    renderSpotlightPreview();
+    return;
+  }
+
+  if (!spotlightState.results.length) {
+    results.innerHTML = `
+      <div class="spotlight-empty">
+        <div class="spotlight-empty__title">Aucun resultat</div>
+        <p>Essaie un nom de salle, un numero de serie, un fournisseur ou une action rapide.</p>
+      </div>
+    `;
+    renderSpotlightPreview();
+    return;
+  }
+
+  const grouped = groupSpotlightResults(spotlightState.results);
+  let offset = 0;
+
+  results.innerHTML = grouped.map(group => {
+    const sectionHtml = `
+      <section class="spotlight-group">
+        <div class="spotlight-group__title">${escapeSpotlightHtml(group.name)}</div>
+        <div class="spotlight-group__items">
+          ${group.items.map((item, index) => {
+            const realIndex = offset + index;
+            const isActive = realIndex === spotlightState.activeIndex;
+            return `
+              <button type="button" class="spotlight-result ${isActive ? 'is-active' : ''}" data-index="${realIndex}" data-type="${escapeSpotlightHtml(item.type)}">
+                <span class="spotlight-result__icon" aria-hidden="true">
+                  <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${getSpotlightIcon(item.type)}"/>
+                  </svg>
+                </span>
+                <span class="spotlight-result__content">
+                  <span class="spotlight-result__title">${escapeSpotlightHtml(item.title)}</span>
+                  <span class="spotlight-result__subtitle">${escapeSpotlightHtml(item.subtitle || '')}</span>
+                  <span class="spotlight-result__meta">${escapeSpotlightHtml(getSpotlightMetaLabel(item))}</span>
+                </span>
+                <span class="spotlight-result__chevron" aria-hidden="true">
+                  <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 6 6 6-6 6"/>
+                  </svg>
+                </span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </section>
+    `;
+    offset += group.items.length;
+    return sectionHtml;
+  }).join('');
+
+  results.querySelectorAll('.spotlight-result').forEach(button => {
+    button.addEventListener('mouseenter', () => {
+      const nextIndex = Number(button.dataset.index);
+      if (nextIndex === spotlightState.activeIndex) return;
+      spotlightState.activeIndex = nextIndex;
+      renderSpotlightResults();
+    });
+    button.addEventListener('click', () => {
+      spotlightState.activeIndex = Number(button.dataset.index);
+      renderSpotlightResults();
+      activateSpotlightResult();
+    });
+  });
+
+  renderSpotlightPreview();
+  syncSpotlightActiveItemIntoView();
+}
+
+function syncSpotlightActiveItemIntoView() {
+  const { results } = getSpotlightElements();
+  if (!results) return;
+  const activeButton = results.querySelector(`.spotlight-result[data-index="${spotlightState.activeIndex}"]`);
+  activeButton?.scrollIntoView({ block: 'nearest' });
+}
+
+function escapeSpotlightHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function performSpotlightSearch() {
+  const query = spotlightState.query;
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  params.set('limit', '6');
+
+  if (spotlightState.controller) spotlightState.controller.abort();
+  spotlightState.controller = new AbortController();
+
+  setSpotlightLoading(true);
+
+  try {
+    const data = await apiFetch(`/search?${params.toString()}`, { signal: spotlightState.controller.signal });
+    spotlightState.results = Array.isArray(data.results) ? data.results : [];
+    spotlightState.activeIndex = spotlightState.results.length ? 0 : -1;
+  } catch (err) {
+    const aborted = err?.name === 'AbortError' || /abort/i.test(err?.message || '');
+    if (!aborted) {
+      spotlightState.results = [];
+      spotlightState.activeIndex = -1;
+    }
+  } finally {
+    spotlightState.controller = null;
+    setSpotlightLoading(false);
+    renderSpotlightResults();
+  }
+}
+
+function queueSpotlightSearch() {
+  clearTimeout(spotlightState.debounceId);
+  spotlightState.debounceId = setTimeout(() => {
+    performSpotlightSearch();
+  }, 140);
+}
+
+function openSpotlight() {
+  ensureSpotlightTrigger();
+  const { overlay, input } = getSpotlightElements();
+  if (!overlay || !input) return;
+
+  spotlightState.open = true;
+  overlay.classList.remove('hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('spotlight-open');
+  input.value = spotlightState.query;
+  input.focus();
+  input.select();
+
+  if (!spotlightState.results.length) {
+    spotlightState.query = '';
+    input.value = '';
+    performSpotlightSearch();
+  } else {
+    renderSpotlightResults();
+  }
+}
+
+function closeSpotlight() {
+  const { overlay, input } = getSpotlightElements();
+  if (!overlay || !input) return;
+
+  spotlightState.open = false;
+  if (spotlightState.controller) spotlightState.controller.abort();
+  overlay.classList.add('hidden');
+  overlay.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('spotlight-open');
+  input.blur();
+}
+
+function activateSpotlightResult() {
+  const active = getActiveSpotlightResult();
+  if (!active) return;
+  closeSpotlight();
+  if (active.target === '_blank') {
+    window.open(active.href, '_blank', 'noopener');
+    return;
+  }
+  window.location.href = active.href;
+}
+
+function handleSpotlightKeyboard(event) {
+  const isShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k';
+  if (isShortcut) {
+    event.preventDefault();
+    if (spotlightState.open) closeSpotlight();
+    else openSpotlight();
+    return;
+  }
+
+  if (!spotlightState.open) return;
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeSpotlight();
+    return;
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    if (!spotlightState.results.length) return;
+    spotlightState.activeIndex = (spotlightState.activeIndex + 1 + spotlightState.results.length) % spotlightState.results.length;
+    renderSpotlightResults();
+    return;
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (!spotlightState.results.length) return;
+    spotlightState.activeIndex = spotlightState.activeIndex <= 0
+      ? spotlightState.results.length - 1
+      : spotlightState.activeIndex - 1;
+    renderSpotlightResults();
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    const activeEl = document.activeElement;
+    if (activeEl?.id === 'spotlight-input') {
+      event.preventDefault();
+      activateSpotlightResult();
+    }
+  }
+}
+
+function initSpotlight() {
+  if (window.__spotlightInitialized) {
+    ensureSpotlightTrigger();
+    return;
+  }
+
+  window.__spotlightInitialized = true;
+  ensureSpotlightTrigger();
+  document.addEventListener('keydown', handleSpotlightKeyboard);
+}
+
 function renderNav(activePage) {
   enhanceResponsiveLayout();
 
@@ -292,11 +1289,12 @@ function renderNav(activePage) {
   const navItems = [
     { href: '/index.html', label: 'Tableau de bord', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', id: 'dashboard' },
     { href: '/rooms.html', label: 'Salles', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', id: 'rooms' },
-    { href: '/equipment.html', label: 'Équipements', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2', id: 'equipment' },
+    { href: '/equipment.html', label: 'Équipements', icon: EQUIPMENT_ICON_PATH, id: 'equipment' },
     { href: '/interventions.html', label: 'Interventions', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', id: 'interventions' },
     { href: '/orders.html', label: 'Commandes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', id: 'orders' },
+    { href: '/signatures.html', label: 'Signatures', icon: 'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z', id: 'signatures' },
     ...(user.role === 'ADMIN' ? [
-      { href: '/agents.html', label: 'Agents', icon: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', id: 'agents' },
+      { href: '/suppliers.html', label: 'Fournisseurs', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', id: 'suppliers' },
       { href: '/settings.html', label: 'Paramètres', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z', id: 'settings' }
     ] : []),
   ];
@@ -347,6 +1345,8 @@ function renderNav(activePage) {
       }
     });
   });
+
+  initSpotlight();
 }
 
 /**
@@ -430,16 +1430,7 @@ function getLayoutTemplate(title, activePage) {
     <!-- Sidebar -->
     <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
       <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
-        <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
-          </svg>
-        </div>
-        <div>
-          <p class="text-white font-bold text-sm">MaintenanceBoard</p>
-          <p class="text-slate-400 text-xs">Parc informatique</p>
-        </div>
+        ${getSidebarBrandInnerMarkup()}
       </div>
 
       <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
