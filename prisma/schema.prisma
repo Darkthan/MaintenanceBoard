@@ -31,6 +31,7 @@ model User {
   loginLogs            LoginLog[]
   orderAttachments     OrderAttachment[]
   signatureRequests    SignatureRequest[]
+  stockMovements       StockMovement[]
 
   @@map("users")
 }
@@ -151,8 +152,9 @@ model Intervention {
 
   room      Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
   equipment Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
-  tech      User       @relation(fields: [techId], references: [id])
-  orders    Order[]
+  tech           User            @relation(fields: [techId], references: [id])
+  orders         Order[]
+  stockMovements StockMovement[]
 
   @@map("interventions")
 }
@@ -307,7 +309,47 @@ model Supplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders    Order[]
+  orders     Order[]
+  stockItems StockItem[]
 
   @@map("suppliers")
+}
+
+model StockItem {
+  id          String   @id @default(uuid())
+  name        String
+  reference   String?
+  category    String?
+  description String?
+  quantity    Int      @default(0)
+  minQuantity Int      @default(0)
+  unitCost    Float?
+  location    String?
+  supplierId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  supplier    Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  movements   StockMovement[]
+
+  @@map("stock_items")
+}
+
+model StockMovement {
+  id             String   @id @default(uuid())
+  stockItemId    String
+  type           String                // IN | OUT | ADJUSTMENT
+  quantity       Int
+  reason         String?
+  interventionId String?
+  userId         String
+  createdAt      DateTime @default(now())
+
+  stockItem    StockItem     @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  intervention Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@index([stockItemId])
+  @@index([createdAt])
+  @@map("stock_movements")
 }

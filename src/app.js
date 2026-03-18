@@ -104,6 +104,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/agents', require('./routes/agents'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/suppliers', require('./routes/suppliers'));
+app.use('/api/stock', require('./routes/stock'));
 app.use('/downloads', require('./routes/downloads'));
 
 const { ordersRouter: sigOrdersRouter, signRouter, signaturesRouter } = require('./routes/signatures');

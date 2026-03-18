@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+        </svg>
+      </div>
+      <div><p class="text-white font-bold text-sm">MaintenanceBoard</p><p class="text-slate-400 text-xs">Parc informatique</p></div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <span id="user-avatar">?</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 lg:ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <h1 class="text-xl font-semibold text-slate-800">Stock &amp; Pièces détachées</h1>
+        <span id="alert-badge" class="hidden items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+          <span id="alert-badge-count">0</span>
+        </span>
+      </div>
+      <div id="admin-actions">
+        <button id="add-item-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Nouvel article
+        </button>
+      </div>
+    </header>
+
+    <!-- Bandeau alertes -->
+    <div id="alert-banner" class="hidden bg-orange-50 border-b border-orange-200 px-6 py-3">
+      <div class="flex items-center gap-3">
+        <svg class="w-5 h-5 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        <span id="alert-banner-text" class="text-orange-700 text-sm font-medium"></span>
+        <button onclick="filterLowStock()" class="ml-auto text-orange-600 hover:text-orange-800 text-sm underline">Voir les articles</button>
+      </div>
+    </div>
+
+    <div class="flex-1 p-6 space-y-4">
+      <!-- Filtres -->
+      <div data-mobile-filters="true" class="bg-white rounded-xl border border-slate-200 p-4 flex gap-4 flex-wrap">
+        <div class="flex-1 min-w-48">
+          <input id="search-input" type="search" placeholder="Rechercher (nom, référence, catégorie...)"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div class="min-w-40">
+          <select id="category-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Toutes catégories</option>
+          </select>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+          <input id="low-stock-filter" type="checkbox" class="rounded border-slate-300 text-orange-500 focus:ring-orange-400" />
+          Seuil bas seulement
+        </label>
+      </div>
+
+      <!-- Table -->
+      <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <div id="stock-loading" class="p-8 text-center text-slate-400">Chargement...</div>
+        <table id="stock-table" class="hidden w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Référence</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Nom</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Catégorie</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Emplacement</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Stock</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Seuil</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Fournisseur</th>
+              <th class="text-right px-5 py-3 font-medium text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="stock-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+        <div id="stock-empty" class="hidden p-8 text-center text-slate-400">
+          <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+          </svg>
+          <p>Aucun article trouvé</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal Création / Édition -->
+<div id="item-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 id="item-modal-title" class="font-semibold text-slate-800">Nouvel article</h3>
+      <button id="close-item-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="item-form" class="p-6 space-y-4">
+      <input type="hidden" id="item-id" />
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Nom *</label>
+        <input id="item-name" type="text" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Référence</label>
+          <input id="item-reference" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Catégorie</label>
+          <input id="item-category" type="text" list="category-datalist" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <datalist id="category-datalist"></datalist>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+        <textarea id="item-description" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Quantité</label>
+          <input id="item-quantity" type="number" min="0" value="0" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Seuil alerte</label>
+          <input id="item-min-quantity" type="number" min="0" value="0" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Coût unitaire (€)</label>
+          <input id="item-unit-cost" type="number" min="0" step="0.01" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Emplacement</label>
+        <input id="item-location" type="text" placeholder="Ex: Armoire A, étagère 2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Fournisseur</label>
+        <select id="item-supplier" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">— Aucun —</option>
+        </select>
+      </div>
+      <div id="item-form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="cancel-item-modal" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" id="item-submit-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Détail / Mouvements -->
+<div id="detail-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 id="detail-modal-title" class="font-semibold text-slate-800">Détail article</h3>
+      <button id="close-detail-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-5">
+      <!-- Infos article -->
+      <div id="detail-info" class="grid grid-cols-2 gap-3 text-sm"></div>
+
+      <!-- Ajouter un mouvement -->
+      <div class="border border-slate-200 rounded-xl p-4">
+        <h4 class="font-medium text-slate-700 mb-3">Ajouter un mouvement</h4>
+        <form id="movement-form" class="space-y-3">
+          <input type="hidden" id="movement-item-id" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Type *</label>
+              <select id="movement-type" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="IN">Entrée (IN)</option>
+                <option value="OUT">Sortie (OUT)</option>
+                <option value="ADJUSTMENT">Ajustement (valeur absolue)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Quantité *</label>
+              <input id="movement-quantity" type="number" min="1" value="1" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Motif</label>
+            <input id="movement-reason" type="text" placeholder="Ex: Réapprovisionnement, Intervention #123..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div id="movement-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+          <div class="flex justify-end">
+            <button type="submit" id="movement-submit-btn" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Enregistrer le mouvement</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Historique mouvements -->
+      <div>
+        <h4 class="font-medium text-slate-700 mb-3">Historique des mouvements</h4>
+        <div id="movements-loading" class="text-slate-400 text-sm text-center py-4">Chargement...</div>
+        <div id="movements-list" class="hidden space-y-2"></div>
+        <div id="movements-empty" class="hidden text-slate-400 text-sm text-center py-4">Aucun mouvement enregistré</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmation suppression -->
+<div id="delete-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="px-6 py-5">
+      <div class="flex items-center gap-4">
+        <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-semibold text-slate-800">Supprimer l'article</h3>
+          <p id="delete-modal-text" class="text-sm text-slate-500 mt-1"></p>
+        </div>
+      </div>
+    </div>
+    <div class="px-6 pb-5 flex justify-end gap-3">
+      <button id="cancel-delete" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+      <button id="confirm-delete" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+const user = requireLogin();
+if (!user) throw new Error('Not logged in');
+renderNav('stock');
+if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
+
+let currentSearch = '';
+let currentCategory = '';
+let currentLowStock = false;
+let itemToDelete = null;
+let currentDetailItem = null;
+
+// Cacher actions admin pour TECH
+if (user.role !== 'ADMIN') {
+  document.getElementById('admin-actions').style.display = 'none';
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// ── Alertes ─────────────────────────────────────────────────────
+async function fetchAlerts() {
+  try {
+    const data = await api.get('/stock/alerts');
+    if (data.count > 0) {
+      document.getElementById('alert-badge').classList.remove('hidden');
+      document.getElementById('alert-badge').classList.add('flex');
+      document.getElementById('alert-badge-count').textContent = data.count + ' alerte' + (data.count > 1 ? 's' : '');
+      document.getElementById('alert-banner').classList.remove('hidden');
+      document.getElementById('alert-banner-text').textContent =
+        data.count + ' article' + (data.count > 1 ? 's' : '') + ' sous le seuil minimum';
+    } else {
+      document.getElementById('alert-badge').classList.add('hidden');
+      document.getElementById('alert-banner').classList.add('hidden');
+    }
+  } catch (_) {}
+}
+
+// ── Catégories ──────────────────────────────────────────────────
+async function fetchCategories() {
+  try {
+    const cats = await api.get('/stock/categories');
+    const sel = document.getElementById('category-filter');
+    sel.innerHTML = '<option value="">Toutes catégories</option>' +
+      cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
+    const dl = document.getElementById('category-datalist');
+    dl.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
+  } catch (_) {}
+}
+
+// ── Liste stock ──────────────────────────────────────────────────
+async function fetchStock() {
+  document.getElementById('stock-loading').classList.remove('hidden');
+  document.getElementById('stock-table').classList.add('hidden');
+  document.getElementById('stock-empty').classList.add('hidden');
+
+  try {
+    const params = {};
+    if (currentSearch) params.q = currentSearch;
+    if (currentCategory) params.category = currentCategory;
+    if (currentLowStock) params.lowStock = 'true';
+
+    const items = await api.get('/stock', params);
+
+    document.getElementById('stock-loading').classList.add('hidden');
+
+    if (!items || items.length === 0) {
+      document.getElementById('stock-empty').classList.remove('hidden');
+      return;
+    }
+
+    renderStock(items);
+  } catch (err) {
+    document.getElementById('stock-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+function renderStock(items) {
+  document.getElementById('stock-table').classList.remove('hidden');
+  document.getElementById('stock-tbody').innerHTML = items.map(item => {
+    const isLow = item.quantity <= item.minQuantity;
+    const qtyClass = item.quantity === 0
+      ? 'text-red-600 font-bold'
+      : isLow
+        ? 'text-orange-600 font-semibold'
+        : 'text-green-700 font-medium';
+
+    return `
+      <tr class="hover:bg-slate-50 transition cursor-pointer" onclick="openDetailModal('${item.id}')">
+        <td class="px-5 py-3.5 text-slate-500 font-mono text-xs">${escapeHtml(item.reference) || '<span class="text-slate-300">—</span>'}</td>
+        <td class="px-5 py-3.5">
+          <span class="font-medium text-slate-800">${escapeHtml(item.name)}</span>
+          ${item.description ? `<p class="text-xs text-slate-400 mt-0.5 truncate max-w-xs">${escapeHtml(item.description)}</p>` : ''}
+        </td>
+        <td class="px-5 py-3.5">
+          ${item.category ? `<span class="inline-block px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">${escapeHtml(item.category)}</span>` : '<span class="text-slate-300">—</span>'}
+        </td>
+        <td class="px-5 py-3.5 text-slate-600 text-xs">${escapeHtml(item.location) || '<span class="text-slate-300">—</span>'}</td>
+        <td class="px-5 py-3.5">
+          <span class="${qtyClass}">${item.quantity}</span>
+          ${isLow ? '<span class="ml-1 text-xs text-orange-400">⚠</span>' : ''}
+        </td>
+        <td class="px-5 py-3.5 text-slate-500 text-sm">${item.minQuantity}</td>
+        <td class="px-5 py-3.5 text-slate-600 text-sm">${item.supplier ? escapeHtml(item.supplier.name) : '<span class="text-slate-300">—</span>'}</td>
+        <td class="px-5 py-3.5">
+          <div class="flex items-center justify-end gap-2" onclick="event.stopPropagation()">
+            ${user.role === 'ADMIN' ? `
+            <button onclick="openEditModal(${JSON.stringify(item).replace(/"/g, '&quot;')})"
+              class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition" title="Modifier">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </button>
+            <button onclick="openDeleteModal('${item.id}', '${escapeHtml(item.name)}')"
+              class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-red-600 transition" title="Supprimer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filterLowStock() {
+  currentLowStock = true;
+  document.getElementById('low-stock-filter').checked = true;
+  fetchStock();
+}
+
+// ── Filtres ──────────────────────────────────────────────────────
+let searchTimeout;
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => { currentSearch = e.target.value; fetchStock(); }, 400);
+});
+
+document.getElementById('category-filter').addEventListener('change', e => {
+  currentCategory = e.target.value;
+  fetchStock();
+});
+
+document.getElementById('low-stock-filter').addEventListener('change', e => {
+  currentLowStock = e.target.checked;
+  fetchStock();
+});
+
+// ── Fournisseurs pour le select ──────────────────────────────────
+async function loadSuppliers() {
+  try {
+    const suppliers = await api.get('/suppliers');
+    const sel = document.getElementById('item-supplier');
+    sel.innerHTML = '<option value="">— Aucun —</option>' +
+      suppliers.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  } catch (_) {}
+}
+
+// ── Modal création / édition ─────────────────────────────────────
+const itemModal = document.getElementById('item-modal');
+document.getElementById('add-item-btn')?.addEventListener('click', openCreateModal);
+document.getElementById('close-item-modal').addEventListener('click', () => itemModal.classList.add('hidden'));
+document.getElementById('cancel-item-modal').addEventListener('click', () => itemModal.classList.add('hidden'));
+itemModal.addEventListener('click', e => { if (e.target === itemModal) itemModal.classList.add('hidden'); });
+
+function openCreateModal() {
+  document.getElementById('item-modal-title').textContent = 'Nouvel article';
+  document.getElementById('item-id').value = '';
+  document.getElementById('item-form').reset();
+  document.getElementById('item-quantity').value = '0';
+  document.getElementById('item-min-quantity').value = '0';
+  document.getElementById('item-form-error').classList.add('hidden');
+  loadSuppliers();
+  itemModal.classList.remove('hidden');
+}
+
+function openEditModal(item) {
+  document.getElementById('item-modal-title').textContent = 'Modifier l\'article';
+  document.getElementById('item-id').value = item.id;
+  document.getElementById('item-name').value = item.name || '';
+  document.getElementById('item-reference').value = item.reference || '';
+  document.getElementById('item-category').value = item.category || '';
+  document.getElementById('item-description').value = item.description || '';
+  document.getElementById('item-quantity').value = item.quantity ?? 0;
+  document.getElementById('item-min-quantity').value = item.minQuantity ?? 0;
+  document.getElementById('item-unit-cost').value = item.unitCost ?? '';
+  document.getElementById('item-location').value = item.location || '';
+  document.getElementById('item-form-error').classList.add('hidden');
+  loadSuppliers().then(() => {
+    if (item.supplierId) document.getElementById('item-supplier').value = item.supplierId;
+  });
+  itemModal.classList.remove('hidden');
+}
+
+document.getElementById('item-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('item-id').value;
+  const data = {
+    name: document.getElementById('item-name').value,
+    reference: document.getElementById('item-reference').value || null,
+    category: document.getElementById('item-category').value || null,
+    description: document.getElementById('item-description').value || null,
+    quantity: parseInt(document.getElementById('item-quantity').value) || 0,
+    minQuantity: parseInt(document.getElementById('item-min-quantity').value) || 0,
+    unitCost: document.getElementById('item-unit-cost').value ? parseFloat(document.getElementById('item-unit-cost').value) : null,
+    location: document.getElementById('item-location').value || null,
+    supplierId: document.getElementById('item-supplier').value || null
+  };
+
+  const submitBtn = document.getElementById('item-submit-btn');
+  submitBtn.disabled = true;
+  document.getElementById('item-form-error').classList.add('hidden');
+
+  try {
+    if (id) {
+      await api.patch(`/stock/${id}`, data);
+      showToast('Article modifié avec succès');
+    } else {
+      await api.post('/stock', data);
+      showToast('Article créé avec succès');
+    }
+    itemModal.classList.add('hidden');
+    fetchStock();
+    fetchAlerts();
+    fetchCategories();
+  } catch (err) {
+    const errEl = document.getElementById('item-form-error');
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+// ── Modal détail ─────────────────────────────────────────────────
+const detailModal = document.getElementById('detail-modal');
+document.getElementById('close-detail-modal').addEventListener('click', () => detailModal.classList.add('hidden'));
+detailModal.addEventListener('click', e => { if (e.target === detailModal) detailModal.classList.add('hidden'); });
+
+async function openDetailModal(id) {
+  detailModal.classList.remove('hidden');
+  document.getElementById('detail-modal-title').textContent = 'Chargement...';
+  document.getElementById('detail-info').innerHTML = '<div class="col-span-2 text-slate-400 text-sm">Chargement...</div>';
+  document.getElementById('movements-loading').classList.remove('hidden');
+  document.getElementById('movements-list').classList.add('hidden');
+  document.getElementById('movements-empty').classList.add('hidden');
+
+  try {
+    const item = await api.get(`/stock/${id}`);
+    currentDetailItem = item;
+    document.getElementById('movement-item-id').value = item.id;
+    document.getElementById('detail-modal-title').textContent = item.name;
+
+    const isLow = item.quantity <= item.minQuantity;
+    const qtyColor = item.quantity === 0 ? 'text-red-600' : isLow ? 'text-orange-600' : 'text-green-700';
+
+    document.getElementById('detail-info').innerHTML = `
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs text-slate-500 mb-0.5">Référence</p>
+        <p class="text-sm font-medium text-slate-800">${escapeHtml(item.reference) || '—'}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs text-slate-500 mb-0.5">Catégorie</p>
+        <p class="text-sm font-medium text-slate-800">${escapeHtml(item.category) || '—'}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs text-slate-500 mb-0.5">Stock actuel</p>
+        <p class="text-sm font-bold ${qtyColor}">${item.quantity} <span class="font-normal text-xs text-slate-500">/ seuil ${item.minQuantity}</span></p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs text-slate-500 mb-0.5">Coût unitaire</p>
+        <p class="text-sm font-medium text-slate-800">${item.unitCost != null ? item.unitCost.toFixed(2) + ' €' : '—'}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs text-slate-500 mb-0.5">Emplacement</p>
+        <p class="text-sm font-medium text-slate-800">${escapeHtml(item.location) || '—'}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs text-slate-500 mb-0.5">Fournisseur</p>
+        <p class="text-sm font-medium text-slate-800">${item.supplier ? escapeHtml(item.supplier.name) : '—'}</p>
+      </div>
+      ${item.description ? `<div class="col-span-2 bg-slate-50 rounded-lg p-3">
+        <p class="text-xs text-slate-500 mb-0.5">Description</p>
+        <p class="text-sm text-slate-700">${escapeHtml(item.description)}</p>
+      </div>` : ''}
+    `;
+
+    renderMovements(item.movements || []);
+  } catch (err) {
+    document.getElementById('detail-modal-title').textContent = 'Erreur';
+    document.getElementById('detail-info').innerHTML = `<div class="col-span-2 text-red-500 text-sm">${escapeHtml(err.message)}</div>`;
+    document.getElementById('movements-loading').classList.add('hidden');
+  }
+}
+
+function renderMovements(movements) {
+  document.getElementById('movements-loading').classList.add('hidden');
+  if (!movements || movements.length === 0) {
+    document.getElementById('movements-empty').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('movements-list').classList.remove('hidden');
+  document.getElementById('movements-list').innerHTML = movements.map(m => {
+    const typeLabel = m.type === 'IN' ? 'Entrée' : m.type === 'OUT' ? 'Sortie' : 'Ajustement';
+    const typeBadge = m.type === 'IN'
+      ? 'bg-green-100 text-green-700'
+      : m.type === 'OUT'
+        ? 'bg-red-100 text-red-700'
+        : 'bg-blue-100 text-blue-700';
+    const qtyPrefix = m.type === 'IN' ? '+' : m.type === 'OUT' ? '-' : '=';
+    return `
+      <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg text-sm">
+        <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold ${typeBadge} flex-shrink-0 mt-0.5">${typeLabel}</span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="font-semibold text-slate-800">${qtyPrefix}${m.quantity}</span>
+            ${m.reason ? `<span class="text-slate-500 truncate">${escapeHtml(m.reason)}</span>` : ''}
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">${m.user ? escapeHtml(m.user.name) : '?'} · ${formatDate(m.createdAt)}</p>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Formulaire ajout mouvement
+document.getElementById('movement-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const itemId = document.getElementById('movement-item-id').value;
+  const data = {
+    type: document.getElementById('movement-type').value,
+    quantity: parseInt(document.getElementById('movement-quantity').value),
+    reason: document.getElementById('movement-reason').value || null
+  };
+
+  const btn = document.getElementById('movement-submit-btn');
+  btn.disabled = true;
+  document.getElementById('movement-error').classList.add('hidden');
+
+  try {
+    await api.post(`/stock/${itemId}/movements`, data);
+    showToast('Mouvement enregistré');
+    document.getElementById('movement-form').reset();
+    document.getElementById('movement-quantity').value = '1';
+    // Rafraîchir le détail
+    await openDetailModal(itemId);
+    fetchAlerts();
+    fetchStock();
+  } catch (err) {
+    const errEl = document.getElementById('movement-error');
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Modal suppression ─────────────────────────────────────────────
+const deleteModal = document.getElementById('delete-modal');
+document.getElementById('cancel-delete').addEventListener('click', () => deleteModal.classList.add('hidden'));
+deleteModal.addEventListener('click', e => { if (e.target === deleteModal) deleteModal.classList.add('hidden'); });
+
+function openDeleteModal(id, name) {
+  itemToDelete = id;
+  document.getElementById('delete-modal-text').textContent = `Supprimer l'article "${name}" ? Tous ses mouvements seront également supprimés. Cette action est irréversible.`;
+  deleteModal.classList.remove('hidden');
+}
+
+document.getElementById('confirm-delete').addEventListener('click', async () => {
+  if (!itemToDelete) return;
+  try {
+    await api.delete(`/stock/${itemToDelete}`);
+    showToast('Article supprimé');
+    deleteModal.classList.add('hidden');
+    itemToDelete = null;
+    fetchStock();
+    fetchAlerts();
+    fetchCategories();
+  } catch (err) {
+    showToast(err.message, 'error');
+    deleteModal.classList.add('hidden');
+  }
+});
+
+// ── Init ─────────────────────────────────────────────────────────
+fetchAlerts();
+fetchCategories();
+fetchStock();
+</script>
+</body>
+</html>
