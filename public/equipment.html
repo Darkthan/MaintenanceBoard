@@ -44,6 +44,10 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
           Importer CSV
         </button>
+        <a href="/agents.html" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+          Agents
+        </a>
         <a href="/assign-rooms.html" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           Assigner les salles
@@ -91,6 +95,7 @@
               <th class="text-left px-5 py-3 font-medium text-slate-600">Type</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Salle</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">N° de série</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Garantie</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Statut</th>
               <th class="text-right px-5 py-3 font-medium text-slate-600">Actions</th>
             </tr>
@@ -145,6 +150,8 @@
           <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600" data-tab="info" onclick="switchDetailTab('info')">Fiche</button>
           <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="sessions" onclick="switchDetailTab('sessions')">Sessions Windows</button>
           <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="interventions" onclick="switchDetailTab('interventions')">Interventions <span id="detail-interv-count" class="ml-1 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full"></span></button>
+          <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="documents" onclick="switchDetailTab('documents')">Documents <span id="detail-attach-count" class="ml-1 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full"></span></button>
+          <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="history" onclick="switchDetailTab('history'); loadEquipHistory()">Historique</button>
         </div>
 
         <!-- Tab: Fiche -->
@@ -193,7 +200,53 @@
 
         <!-- Tab: Interventions -->
         <div id="detail-tab-interventions" class="hidden px-6 py-4">
+          <div class="flex justify-end mb-3">
+            <button onclick="openNewIntervModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              Nouvelle intervention
+            </button>
+          </div>
           <div id="detail-interventions"></div>
+        </div>
+
+        <!-- Tab: Documents -->
+        <div id="detail-tab-documents" class="hidden px-6 py-4 space-y-4">
+          <!-- Upload form -->
+          <div id="attach-upload-section" class="hidden border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Ajouter un document</p>
+            <div class="flex gap-2 flex-wrap items-end">
+              <div class="flex-1 min-w-40">
+                <label class="block text-xs text-slate-600 mb-1">Fichier</label>
+                <input id="attach-file" type="file" class="w-full text-xs border border-slate-300 rounded-lg px-2 py-1.5" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-600 mb-1">Catégorie</label>
+                <select id="attach-category" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="OTHER">Autre</option>
+                  <option value="MANUAL">Manuel</option>
+                  <option value="INVOICE">Facture</option>
+                  <option value="CONTRACT">Contrat</option>
+                  <option value="PHOTO">Photo</option>
+                </select>
+              </div>
+              <div class="flex-1 min-w-40">
+                <label class="block text-xs text-slate-600 mb-1">Notes</label>
+                <input id="attach-notes" type="text" class="w-full text-xs border border-slate-300 rounded-lg px-2 py-1.5" placeholder="Optionnel" />
+              </div>
+              <button onclick="uploadAttachment()" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 transition">Envoyer</button>
+            </div>
+          </div>
+          <!-- Liste pièces jointes -->
+          <div id="detail-attachments">
+            <p class="text-sm text-slate-400 text-center py-4">Chargement...</p>
+          </div>
+        </div>
+
+        <!-- Tab: Historique -->
+        <div id="detail-tab-history" class="hidden px-6 py-4 space-y-4">
+          <div id="detail-history">
+            <p class="text-sm text-slate-400 text-center py-4">Cliquer sur "Historique" pour charger.</p>
+          </div>
         </div>
 
       </div>
@@ -213,6 +266,62 @@
         <button id="close-detail-modal-2" class="px-4 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition">Fermer</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Modal Nouvelle intervention depuis équipement -->
+<div id="new-interv-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <div>
+        <h3 class="font-semibold text-slate-800">Nouvelle intervention</h3>
+        <p id="new-interv-equip-label" class="text-xs text-slate-400 mt-0.5"></p>
+      </div>
+      <button onclick="closeNewIntervModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="new-interv-form" class="p-6 space-y-4" onsubmit="submitNewInterv(event)">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Titre <span class="text-red-500">*</span></label>
+        <input id="new-interv-title" type="text" required minlength="3" maxlength="300"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Décrivez brièvement le problème" />
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Priorité</label>
+          <select id="new-interv-priority" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="LOW">Basse</option>
+            <option value="NORMAL" selected>Normale</option>
+            <option value="HIGH">Haute</option>
+            <option value="CRITICAL">Critique</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Statut</label>
+          <select id="new-interv-status" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="OPEN" selected>Ouvert</option>
+            <option value="IN_PROGRESS">En cours</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Description <span class="text-slate-400 font-normal">(optionnel)</span></label>
+        <textarea id="new-interv-description" rows="3" placeholder="Détails supplémentaires…"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div id="new-interv-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm"></div>
+      <div class="flex gap-3 pt-1">
+        <button type="button" onclick="closeNewIntervModal()"
+          class="flex-1 py-2.5 border border-slate-300 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" id="new-interv-submit"
+          class="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Créer l'intervention
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -270,6 +379,16 @@
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Fin de garantie</label>
           <input id="equip-warranty" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Prix d'achat (€)</label>
+          <input id="equip-price" type="number" min="0" step="0.01" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Fournisseur</label>
+          <select id="equip-supplier" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Aucun</option>
+          </select>
         </div>
         <div class="sm:col-span-2">
           <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
@@ -367,6 +486,10 @@ if (user.role !== 'ADMIN') document.getElementById('admin-actions').style.displa
 
 // Préremplir filtres depuis URL
 const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('search')) {
+  currentSearch = urlParams.get('search');
+  document.getElementById('search-input').value = currentSearch;
+}
 if (urlParams.get('status')) {
   currentStatus = urlParams.get('status');
   document.getElementById('status-filter').value = currentStatus;
@@ -418,6 +541,7 @@ async function loadEquipment() {
         </td>
         <td class="px-5 py-3.5 text-slate-600 text-sm">${e.room ? `${e.room.name}${e.room.number ? ` (${e.room.number})` : ''}` : '<span class="text-slate-400">Non assigné</span>'}</td>
         <td class="px-5 py-3.5 text-slate-500 font-mono text-xs">${e.serialNumber || '-'}</td>
+        <td class="px-5 py-3.5">${warrantyBadge(e.warrantyEnd)}</td>
         <td class="px-5 py-3.5">${statusBadge(e.status)}</td>
         <td class="px-5 py-3.5">
           <div class="flex items-center justify-end gap-2">
@@ -480,6 +604,16 @@ async function loadRoomsForSelect(selectedId) {
   } catch {}
 }
 
+// Charger les fournisseurs pour le select
+async function loadSuppliersForSelect(selectedId) {
+  try {
+    const data = await api.get('/suppliers');
+    const select = document.getElementById('equip-supplier');
+    select.innerHTML = '<option value="">Aucun</option>' +
+      (Array.isArray(data) ? data : []).map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${s.name}</option>`).join('');
+  } catch {}
+}
+
 const modal = document.getElementById('equip-modal');
 document.getElementById('add-equip-btn')?.addEventListener('click', () => {
   document.getElementById('modal-title').textContent = 'Nouvel équipement';
@@ -487,6 +621,7 @@ document.getElementById('add-equip-btn')?.addEventListener('click', () => {
   document.getElementById('equip-form').reset();
   document.getElementById('form-error').classList.add('hidden');
   loadRoomsForSelect(null);
+  loadSuppliersForSelect(null);
   modal.classList.remove('hidden');
 });
 document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
@@ -504,14 +639,17 @@ function editEquip(e) {
   document.getElementById('equip-description').value = e.description || '';
   document.getElementById('equip-purchase').value = e.purchaseDate ? e.purchaseDate.slice(0,10) : '';
   document.getElementById('equip-warranty').value = e.warrantyEnd ? e.warrantyEnd.slice(0,10) : '';
+  document.getElementById('equip-price').value = e.purchasePrice !== null && e.purchasePrice !== undefined ? e.purchasePrice : '';
   document.getElementById('form-error').classList.add('hidden');
   loadRoomsForSelect(e.roomId);
+  loadSuppliersForSelect(e.supplierId);
   modal.classList.remove('hidden');
 }
 
 document.getElementById('equip-form').addEventListener('submit', async e => {
   e.preventDefault();
   const id = document.getElementById('equip-id').value;
+  const priceVal = document.getElementById('equip-price').value;
   const data = {
     name: document.getElementById('equip-name').value,
     type: document.getElementById('equip-type').value,
@@ -522,7 +660,9 @@ document.getElementById('equip-form').addEventListener('submit', async e => {
     roomId: document.getElementById('equip-room').value || null,
     description: document.getElementById('equip-description').value || null,
     purchaseDate: document.getElementById('equip-purchase').value || null,
-    warrantyEnd: document.getElementById('equip-warranty').value || null
+    warrantyEnd: document.getElementById('equip-warranty').value || null,
+    purchasePrice: priceVal !== '' ? parseFloat(priceVal) : null,
+    supplierId: document.getElementById('equip-supplier').value || null
   };
   const submitBtn = document.getElementById('submit-btn');
   submitBtn.disabled = true;
@@ -648,7 +788,7 @@ document.getElementById('close-detail-modal-2').addEventListener('click', () => 
 detailModal.addEventListener('click', e => { if (e.target === detailModal) detailModal.classList.add('hidden'); });
 
 function switchDetailTab(tab) {
-  ['info', 'sessions', 'interventions'].forEach(t => {
+  ['info', 'sessions', 'interventions', 'documents', 'history'].forEach(t => {
     document.getElementById(`detail-tab-${t}`).classList.toggle('hidden', t !== tab);
   });
   document.querySelectorAll('.detail-tab-btn').forEach(btn => {
@@ -814,6 +954,26 @@ async function loadSessionLogs(days) {
   }
 }
 
+function warrantyBadge(warrantyEnd) {
+  if (!warrantyEnd) return '<span class="text-slate-400">—</span>';
+  const now = new Date();
+  const wDate = new Date(warrantyEnd);
+  const daysLeft = Math.ceil((wDate - now) / (1000 * 60 * 60 * 24));
+  const label = wDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (daysLeft < 0) {
+    return `<span class="inline-flex flex-col gap-0.5">
+      <span class="text-xs text-red-600 font-medium">${label}</span>
+      <span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">Expirée</span>
+    </span>`;
+  } else if (daysLeft <= 30) {
+    return `<span class="inline-flex flex-col gap-0.5">
+      <span class="text-xs text-orange-600 font-medium">${label}</span>
+      <span class="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">Expire bientôt</span>
+    </span>`;
+  }
+  return `<span class="text-xs text-green-700 font-medium">${label}</span>`;
+}
+
 const STATUS_LABELS = { ACTIVE: 'Actif', INACTIVE: 'Inactif', REPAIR: 'En réparation', DECOMMISSIONED: 'Déclassé' };
 const STATUS_COLORS = { ACTIVE: 'bg-green-100 text-green-700', INACTIVE: 'bg-slate-100 text-slate-500', REPAIR: 'bg-yellow-100 text-yellow-700', DECOMMISSIONED: 'bg-red-100 text-red-600' };
 const INTERV_STATUS = { OPEN: 'Ouvert', IN_PROGRESS: 'En cours', RESOLVED: 'Résolu', CLOSED: 'Fermé' };
@@ -876,13 +1036,27 @@ async function openEquipDetail(equipId) {
     const warrantyDate = fmtDate(e.warrantyEnd);
     const now = new Date();
     const warrantyExpired = e.warrantyEnd && new Date(e.warrantyEnd) < now;
+    const warrantyDaysLeft = e.warrantyEnd ? Math.ceil((new Date(e.warrantyEnd) - now) / (1000 * 60 * 60 * 24)) : null;
     document.getElementById('detail-fields').innerHTML = [
       detailField('Salle', e.room ? `${e.room.name}${e.room.number ? ` (n°${e.room.number})` : ''}${e.room.building ? ` — ${e.room.building}` : ''}` : '<span class="text-slate-400 font-normal">Non assigné</span>'),
       detailField('Numéro de série', e.serialNumber ? `<span class="font-mono">${e.serialNumber}</span>` : null),
       detailField('Date d\'achat', fmtDate(e.purchaseDate)),
-      detailField('Fin de garantie', warrantyDate ? `<span class="${warrantyExpired ? 'text-red-600' : 'text-slate-800'}">${warrantyDate}${warrantyExpired ? ' <span class="text-xs">(expirée)</span>' : ''}</span>` : null),
+      detailField('Fin de garantie', warrantyDate ? `<span class="${warrantyExpired ? 'text-red-600' : warrantyDaysLeft <= 30 ? 'text-orange-600' : 'text-slate-800'}">${warrantyDate}${warrantyExpired ? ' <span class="text-xs">(expirée)</span>' : warrantyDaysLeft <= 30 ? ' <span class="text-xs">(expire bientôt)</span>' : ''}</span>` : null),
+      detailField('Prix d\'achat', e.purchasePrice !== null && e.purchasePrice !== undefined ? `${e.purchasePrice.toFixed(2)} €` : null),
+      detailField('Fournisseur', e.supplier ? e.supplier.name : null),
       detailField('Description', e.description),
     ].filter(Boolean).join('');
+
+    // Pièces jointes
+    const attachments = e.attachments || [];
+    const attachCount = document.getElementById('detail-attach-count');
+    if (attachCount) attachCount.textContent = attachments.length || '';
+    renderAttachments(attachments);
+    // Afficher le formulaire upload si admin
+    const uploadSection = document.getElementById('attach-upload-section');
+    if (uploadSection) uploadSection.classList.toggle('hidden', user.role !== 'ADMIN');
+    // Réinitialiser le flag d'historique
+    historyLoaded = false;
 
     // Section agent
     const agentSection = document.getElementById('detail-agent-section');
@@ -942,7 +1116,214 @@ async function openEquipDetail(equipId) {
   }
 }
 
+// ── Pièces jointes ──────────────────────────────────────────────────────────
+const ATTACH_CATEGORY_LABELS = { MANUAL: 'Manuel', INVOICE: 'Facture', CONTRACT: 'Contrat', PHOTO: 'Photo', OTHER: 'Autre' };
+
+function renderAttachments(attachments) {
+  const container = document.getElementById('detail-attachments');
+  if (!attachments || attachments.length === 0) {
+    container.innerHTML = '<p class="text-sm text-slate-400 italic text-center py-4">Aucun document attaché.</p>';
+    return;
+  }
+  container.innerHTML = attachments.map(a => {
+    const catLabel = ATTACH_CATEGORY_LABELS[a.category] || a.category;
+    const catColor = a.category === 'INVOICE' ? 'bg-green-100 text-green-700'
+      : a.category === 'MANUAL' ? 'bg-blue-100 text-blue-700'
+      : a.category === 'CONTRACT' ? 'bg-purple-100 text-purple-700'
+      : a.category === 'PHOTO' ? 'bg-orange-100 text-orange-700'
+      : 'bg-slate-100 text-slate-600';
+    return `
+      <div class="flex items-center justify-between gap-3 py-2 border-b border-slate-100 last:border-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="px-2 py-0.5 rounded text-xs font-medium ${catColor}">${catLabel}</span>
+          <span class="text-sm text-slate-700 truncate">${a.filename}</span>
+          ${a.notes ? `<span class="text-xs text-slate-400 truncate">${a.notes}</span>` : ''}
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <span class="text-xs text-slate-400">${a.uploader?.name || '—'}</span>
+          <a href="/uploads/equipment/${a.storedAs}" target="_blank" title="Télécharger"
+             class="p-1 rounded hover:bg-slate-100 text-blue-600 hover:text-blue-800 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          </a>
+          ${user.role === 'ADMIN' || a.uploadedBy === user.id ? `
+          <button onclick="deleteAttachment('${a.id}')" title="Supprimer"
+            class="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function uploadAttachment() {
+  const fileInput = document.getElementById('attach-file');
+  const file = fileInput.files[0];
+  if (!file) return showToast('Sélectionnez un fichier', 'warning');
+  if (!detailCurrentEquip) return;
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('category', document.getElementById('attach-category').value);
+  fd.append('notes', document.getElementById('attach-notes').value);
+
+  try {
+    await api.upload(`/equipment/${detailCurrentEquip.id}/attachments`, fd);
+    showToast('Document ajouté');
+    fileInput.value = '';
+    document.getElementById('attach-notes').value = '';
+    // Recharger les pièces jointes
+    const attachments = await api.get(`/equipment/${detailCurrentEquip.id}/attachments`);
+    renderAttachments(attachments);
+    const countEl = document.getElementById('detail-attach-count');
+    if (countEl) countEl.textContent = attachments.length || '';
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function deleteAttachment(attachId) {
+  if (!confirm('Supprimer ce document ?')) return;
+  if (!detailCurrentEquip) return;
+  try {
+    await api.delete(`/equipment/${detailCurrentEquip.id}/attachments/${attachId}`);
+    showToast('Document supprimé');
+    const attachments = await api.get(`/equipment/${detailCurrentEquip.id}/attachments`);
+    renderAttachments(attachments);
+    const countEl = document.getElementById('detail-attach-count');
+    if (countEl) countEl.textContent = attachments.length || '';
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+// ── Historique équipement ────────────────────────────────────────────────────
+let historyLoaded = false;
+
+async function loadEquipHistory() {
+  if (!detailCurrentEquip || historyLoaded) return;
+  historyLoaded = true;
+  const container = document.getElementById('detail-history');
+  container.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Chargement...</p>';
+  try {
+    const data = await api.get(`/equipment/${detailCurrentEquip.id}/history`);
+    let html = '';
+
+    // Coût total
+    if (data.totalCost > 0) {
+      html += `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-sm">
+        <span class="font-medium text-blue-800">Coût total estimé des commandes liées :</span>
+        <span class="ml-2 font-bold text-blue-900">${data.totalCost.toFixed(2)} €</span>
+      </div>`;
+    }
+
+    // Mouvements de stock
+    if (data.stockMovements && data.stockMovements.length > 0) {
+      html += `<div class="mb-4">
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Mouvements de stock (${data.stockMovements.length})</h4>
+        <div class="space-y-2">
+          ${data.stockMovements.map(m => {
+            const typeColor = m.type === 'IN' ? 'text-green-600' : m.type === 'OUT' ? 'text-red-600' : 'text-orange-600';
+            const typeLabel = m.type === 'IN' ? 'Entrée' : m.type === 'OUT' ? 'Sortie' : 'Ajustement';
+            return `<div class="flex items-center gap-3 py-1.5 border-b border-slate-100 last:border-0">
+              <span class="text-xs font-medium ${typeColor} w-20">${typeLabel}</span>
+              <span class="text-sm text-slate-700 flex-1">${m.stockItem?.name || '—'}</span>
+              <span class="text-sm font-medium text-slate-800">×${m.quantity}</span>
+              <span class="text-xs text-slate-400">${new Date(m.createdAt).toLocaleDateString('fr-FR')}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    // Interventions avec commandes
+    if (data.interventions && data.interventions.length > 0) {
+      html += `<div>
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Interventions (${data.interventions.length})</h4>
+        <div class="space-y-3">
+          ${data.interventions.map(i => {
+            const orderCount = (i.orders || []).length;
+            return `<div class="rounded-xl border border-slate-200 p-3">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <span class="font-medium text-sm text-slate-800">${i.title}</span>
+                <span class="text-xs text-slate-400">${new Date(i.createdAt).toLocaleDateString('fr-FR')}</span>
+              </div>
+              ${i.description ? `<p class="text-xs text-slate-500 mb-1">${i.description}</p>` : ''}
+              <div class="flex items-center gap-2 text-xs text-slate-400">
+                <span>Par ${i.tech?.name || '—'}</span>
+                ${orderCount > 0 ? `<span>· ${orderCount} commande${orderCount > 1 ? 's' : ''}</span>` : ''}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    if (!html) {
+      html = '<p class="text-sm text-slate-400 italic text-center py-4">Aucun historique disponible.</p>';
+    }
+
+    container.innerHTML = html;
+  } catch (err) {
+    container.innerHTML = `<p class="text-sm text-red-500 text-center py-4">Erreur : ${err.message}</p>`;
+  }
+}
+
 loadEquipment();
+if (urlParams.get('action') === 'create' && user.role === 'ADMIN') {
+  setTimeout(() => document.getElementById('add-equip-btn')?.click(), 50);
+}
+if (urlParams.get('focus')) {
+  setTimeout(() => openEquipDetail(urlParams.get('focus')), 220);
+}
+
+// ── Créer une intervention depuis la fiche équipement ─────────────────────────
+
+function openNewIntervModal() {
+  const e = detailCurrentEquip;
+  if (!e) return;
+  document.getElementById('new-interv-equip-label').textContent = `${e.name}${e.type ? ' · ' + e.type : ''}${e.room ? ' · ' + e.room.name : ''}`;
+  document.getElementById('new-interv-title').value = '';
+  document.getElementById('new-interv-priority').value = 'NORMAL';
+  document.getElementById('new-interv-status').value = 'OPEN';
+  document.getElementById('new-interv-description').value = '';
+  document.getElementById('new-interv-error').classList.add('hidden');
+  document.getElementById('new-interv-submit').disabled = false;
+  document.getElementById('new-interv-submit').innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Créer l'intervention`;
+  document.getElementById('new-interv-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('new-interv-title').focus(), 50);
+}
+
+function closeNewIntervModal() {
+  document.getElementById('new-interv-modal').classList.add('hidden');
+}
+
+async function submitNewInterv(e) {
+  e.preventDefault();
+  const equip = detailCurrentEquip;
+  if (!equip) return;
+
+  const btn = document.getElementById('new-interv-submit');
+  const errEl = document.getElementById('new-interv-error');
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Création…`;
+
+  try {
+    await api.post('/interventions', {
+      title: document.getElementById('new-interv-title').value.trim(),
+      status: document.getElementById('new-interv-status').value,
+      priority: document.getElementById('new-interv-priority').value,
+      description: document.getElementById('new-interv-description').value.trim() || null,
+      equipmentId: equip.id,
+      roomId: equip.roomId || null,
+    });
+    closeNewIntervModal();
+    showToast('Intervention créée');
+    await openEquipDetail(equip.id);
+    switchDetailTab('interventions');
+  } catch (err) {
+    errEl.textContent = err.message || 'Erreur lors de la création';
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Créer l'intervention`;
+  }
+}
 </script>
 </body>
 </html>

@@ -2,6 +2,9 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
 const { uploadImport } = require('../middleware/upload');
@@ -9,6 +12,20 @@ const importService = require('../services/importService');
 const qrService = require('../services/qrService');
 
 const prisma = new PrismaClient();
+
+// Multer pour les pièces jointes équipement
+const equipAttachStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(process.cwd(), 'uploads', 'equipment');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, unique + path.extname(file.originalname));
+  }
+});
+const uploadEquipAttach = multer({ storage: equipAttachStorage, limits: { fileSize: 20 * 1024 * 1024 } });
 
 const validate = (req, res) => {
   const errors = validationResult(req);
@@ -52,6 +69,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         orderBy: { name: 'asc' },
         include: {
           room: { select: { id: true, name: true, number: true, building: true } },
+          supplier: { select: { id: true, name: true } },
           _count: { select: { interventions: true } }
         }
       }),
@@ -98,6 +116,11 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         room: { select: { id: true, name: true, number: true, building: true } },
+        supplier: { select: { id: true, name: true } },
+        attachments: {
+          orderBy: { createdAt: 'desc' },
+          include: { uploader: { select: { id: true, name: true } } }
+        },
         interventions: {
           orderBy: { createdAt: 'desc' },
           include: { tech: { select: { id: true, name: true } } }
@@ -164,7 +187,7 @@ router.post('/',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { name, type, brand, model, serialNumber, status, description, roomId, purchaseDate, warrantyEnd } = req.body;
+      const { name, type, brand, model, serialNumber, status, description, roomId, purchaseDate, warrantyEnd, purchasePrice, supplierId } = req.body;
 
       const equip = await prisma.equipment.create({
         data: {
@@ -176,9 +199,11 @@ router.post('/',
           description: description || null,
           roomId: roomId || null,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
-          warrantyEnd: warrantyEnd ? new Date(warrantyEnd) : null
+          warrantyEnd: warrantyEnd ? new Date(warrantyEnd) : null,
+          purchasePrice: purchasePrice !== undefined && purchasePrice !== null && purchasePrice !== '' ? parseFloat(purchasePrice) : null,
+          supplierId: supplierId || null
         },
-        include: { room: { select: { id: true, name: true, number: true } } }
+        include: { room: { select: { id: true, name: true, number: true } }, supplier: { select: { id: true, name: true } } }
       });
       res.status(201).json(equip);
     } catch (err) {
@@ -198,7 +223,7 @@ router.patch('/:id',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { name, type, brand, model, serialNumber, status, description, roomId, purchaseDate, warrantyEnd } = req.body;
+      const { name, type, brand, model, serialNumber, status, description, roomId, purchaseDate, warrantyEnd, purchasePrice, supplierId } = req.body;
       const data = {};
       if (name !== undefined) data.name = name;
       if (type !== undefined) data.type = type;
@@ -210,11 +235,13 @@ router.patch('/:id',
       if (roomId !== undefined) data.roomId = roomId || null;
       if (purchaseDate !== undefined) data.purchaseDate = purchaseDate ? new Date(purchaseDate) : null;
       if (warrantyEnd !== undefined) data.warrantyEnd = warrantyEnd ? new Date(warrantyEnd) : null;
+      if (purchasePrice !== undefined) data.purchasePrice = purchasePrice !== null && purchasePrice !== '' ? parseFloat(purchasePrice) : null;
+      if (supplierId !== undefined) data.supplierId = supplierId || null;
 
       const equip = await prisma.equipment.update({
         where: { id: req.params.id },
         data,
-        include: { room: { select: { id: true, name: true, number: true } } }
+        include: { room: { select: { id: true, name: true, number: true } }, supplier: { select: { id: true, name: true } } }
       });
       res.json(equip);
     } catch (err) {
@@ -339,5 +366,118 @@ router.post('/import',
     }
   }
 );
+
+// GET /api/equipment/:id/attachments - Lister les pièces jointes
+router.get('/:id/attachments', requireAuth, async (req, res, next) => {
+  try {
+    const equip = await prisma.equipment.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!equip) return res.status(404).json({ error: 'Équipement introuvable' });
+
+    const attachments = await prisma.equipmentAttachment.findMany({
+      where: { equipmentId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+      include: { uploader: { select: { id: true, name: true } } }
+    });
+    res.json(attachments);
+  } catch (err) { next(err); }
+});
+
+// POST /api/equipment/:id/attachments - Uploader une pièce jointe
+router.post('/:id/attachments', requireAuth, uploadEquipAttach.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Aucun fichier fourni' });
+
+    const equip = await prisma.equipment.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!equip) return res.status(404).json({ error: 'Équipement introuvable' });
+
+    const VALID_CATEGORIES = ['MANUAL', 'INVOICE', 'CONTRACT', 'PHOTO', 'OTHER'];
+    const category = VALID_CATEGORIES.includes(req.body?.category) ? req.body.category : 'OTHER';
+
+    const attachment = await prisma.equipmentAttachment.create({
+      data: {
+        equipmentId: req.params.id,
+        filename: req.file.originalname,
+        storedAs: req.file.filename,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        category,
+        uploadedBy: req.user.id,
+        notes: req.body?.notes || null
+      },
+      include: { uploader: { select: { id: true, name: true } } }
+    });
+    res.status(201).json(attachment);
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/equipment/:id/attachments/:attachId - Supprimer une pièce jointe
+router.delete('/:id/attachments/:attachId', requireAuth, async (req, res, next) => {
+  try {
+    const attachment = await prisma.equipmentAttachment.findUnique({
+      where: { id: req.params.attachId }
+    });
+    if (!attachment) return res.status(404).json({ error: 'Pièce jointe introuvable' });
+    if (attachment.equipmentId !== req.params.id) return res.status(404).json({ error: 'Pièce jointe introuvable' });
+
+    // Admin ou uploader peuvent supprimer
+    if (req.user.role !== 'ADMIN' && attachment.uploadedBy !== req.user.id) {
+      return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    // Supprimer le fichier physique
+    const filePath = path.join(process.cwd(), 'uploads', 'equipment', attachment.storedAs);
+    fs.unlink(filePath, () => {}); // ignorer si déjà absent
+
+    await prisma.equipmentAttachment.delete({ where: { id: req.params.attachId } });
+    res.json({ message: 'Pièce jointe supprimée' });
+  } catch (err) { next(err); }
+});
+
+// GET /api/equipment/:id/history - Historique (interventions + mouvements stock)
+router.get('/:id/history', requireAuth, async (req, res, next) => {
+  try {
+    const equip = await prisma.equipment.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!equip) return res.status(404).json({ error: 'Équipement introuvable' });
+
+    // Interventions liées à cet équipement
+    const interventions = await prisma.intervention.findMany({
+      where: { equipmentId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        tech: { select: { id: true, name: true } },
+        orders: {
+          include: { items: true }
+        }
+      }
+    });
+
+    // Mouvements de stock liés aux interventions de cet équipement
+    const interventionIds = interventions.map(i => i.id);
+    const stockMovements = interventionIds.length > 0
+      ? await prisma.stockMovement.findMany({
+          where: { interventionId: { in: interventionIds } },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            stockItem: { select: { id: true, name: true, reference: true } },
+            user: { select: { id: true, name: true } }
+          }
+        })
+      : [];
+
+    // Coût total = somme des OrderItems des commandes liées aux interventions
+    let totalCost = 0;
+    for (const intervention of interventions) {
+      for (const order of (intervention.orders || [])) {
+        for (const item of (order.items || [])) {
+          if (item.unitPrice) {
+            totalCost += item.unitPrice * item.quantity;
+          }
+        }
+      }
+    }
+
+    res.json({ interventions, stockMovements, totalCost });
+  } catch (err) { next(err); }
+});
 
 module.exports = router;
