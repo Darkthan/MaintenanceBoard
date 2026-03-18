@@ -3,6 +3,9 @@ const fs = require('fs');
 const path = require('path');
 const router = express.Router();
 const config = require('../config');
+const XLSX = require('xlsx');
+const prisma = require('../lib/prisma');
+const { requireAuth } = require('../middleware/auth');
 
 const TEMPLATES_DIR = path.join(__dirname, '../../downloads/templates');
 const VERSION = '1.0.0';
@@ -115,6 +118,109 @@ router.get('/install.ps1', (req, res, next) => {
     res.set('Content-Type', 'text/plain; charset=utf-8');
     res.set('Content-Disposition', 'attachment; filename="install-maintenance-agent.ps1"');
     res.send(content);
+  } catch (err) { next(err); }
+});
+
+// ── Helper : envoyer un buffer XLSX ───────────────────────────────────────────
+function sendXlsx(res, data, sheetName, filename) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buf);
+}
+
+// ── GET /downloads/export/suppliers ──────────────────────────────────────────
+router.get('/export/suppliers', requireAuth, async (req, res, next) => {
+  try {
+    const suppliers = await prisma.supplier.findMany({
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { orders: true } } }
+    });
+    const data = suppliers.map(s => ({
+      id: s.id,
+      name: s.name,
+      contact: s.contact || '',
+      email: s.email || '',
+      phone: s.phone || '',
+      website: s.website || '',
+      address: s.address || '',
+      notes: s.notes || '',
+      orderCount: s._count.orders,
+      createdAt: s.createdAt ? new Date(s.createdAt).toISOString() : ''
+    }));
+    sendXlsx(res, data, 'Fournisseurs', `export-fournisseurs-${Date.now()}.xlsx`);
+  } catch (err) { next(err); }
+});
+
+// ── GET /downloads/export/stock ───────────────────────────────────────────────
+router.get('/export/stock', requireAuth, async (req, res, next) => {
+  try {
+    const items = await prisma.stockItem.findMany({
+      orderBy: { name: 'asc' },
+      include: { supplier: { select: { name: true } } }
+    });
+    const data = items.map(i => ({
+      id: i.id,
+      name: i.name,
+      reference: i.reference || '',
+      category: i.category || '',
+      location: i.location || '',
+      quantity: i.quantity,
+      minQuantity: i.minQuantity,
+      unitCost: i.unitCost != null ? i.unitCost : '',
+      supplier: i.supplier?.name || '',
+      createdAt: i.createdAt ? new Date(i.createdAt).toISOString() : ''
+    }));
+    sendXlsx(res, data, 'Stock', `export-stock-${Date.now()}.xlsx`);
+  } catch (err) { next(err); }
+});
+
+// ── GET /downloads/export/stock-movements ────────────────────────────────────
+router.get('/export/stock-movements', requireAuth, async (req, res, next) => {
+  try {
+    const movements = await prisma.stockMovement.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        stockItem: { select: { name: true } },
+        user: { select: { name: true } }
+      }
+    });
+    const data = movements.map(m => ({
+      stockItem: m.stockItem?.name || '',
+      type: m.type,
+      quantity: m.quantity,
+      reason: m.reason || '',
+      user: m.user?.name || '',
+      createdAt: m.createdAt ? new Date(m.createdAt).toISOString() : ''
+    }));
+    sendXlsx(res, data, 'Mouvements', `export-mouvements-stock-${Date.now()}.xlsx`);
+  } catch (err) { next(err); }
+});
+
+// ── GET /downloads/export/equipment ──────────────────────────────────────────
+router.get('/export/equipment', requireAuth, async (req, res, next) => {
+  try {
+    const equipments = await prisma.equipment.findMany({
+      orderBy: { name: 'asc' },
+      include: { room: { select: { name: true, number: true } } }
+    });
+    const data = equipments.map(e => ({
+      id: e.id,
+      name: e.name,
+      type: e.type,
+      brand: e.brand || '',
+      model: e.model || '',
+      serialNumber: e.serialNumber || '',
+      status: e.status,
+      room: e.room ? `${e.room.name}${e.room.number ? ` (${e.room.number})` : ''}` : '',
+      purchaseDate: e.purchaseDate ? new Date(e.purchaseDate).toISOString() : '',
+      warrantyEnd: e.warrantyEnd ? new Date(e.warrantyEnd).toISOString() : '',
+      createdAt: e.createdAt ? new Date(e.createdAt).toISOString() : ''
+    }));
+    sendXlsx(res, data, 'Equipements', `export-equipements-${Date.now()}.xlsx`);
   } catch (err) { next(err); }
 });
 

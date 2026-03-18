@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recherche globale – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen flex">
+
+<!-- Sidebar -->
+<aside id="sidebar"
+  class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-800 flex flex-col
+         transform -translate-x-full transition-transform duration-200 lg:translate-x-0 lg:static lg:inset-auto lg:z-auto">
+  <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+    <div class="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0">M</div>
+    <div class="min-w-0">
+      <p class="text-white font-bold text-sm tracking-tight">MaintenanceBoard</p>
+      <p class="text-slate-400 text-xs">Parc informatique</p>
+    </div>
+  </div>
+  <nav id="main-nav" class="flex-1 overflow-y-auto px-3 py-4 space-y-1"></nav>
+  <div class="px-4 py-4 border-t border-slate-700">
+    <div class="flex items-center gap-3">
+      <div id="user-avatar" class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">?</div>
+      <div class="min-w-0 flex-1">
+        <p id="user-name" class="text-white text-sm font-medium truncate"></p>
+        <p id="user-role" class="text-slate-400 text-xs truncate"></p>
+      </div>
+      <button id="logout-btn" class="text-slate-400 hover:text-white transition" title="Déconnexion">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="flex-1 flex flex-col min-w-0">
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
+    <button onclick="toggleSidebar()" class="lg:hidden text-slate-500 hover:text-slate-700">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+      </svg>
+    </button>
+    <h1 class="text-xl font-bold text-slate-800">Recherche globale</h1>
+  </header>
+
+  <!-- Content -->
+  <div class="flex-1 p-6 max-w-3xl w-full mx-auto">
+
+    <!-- Search bar -->
+    <div class="relative mb-6">
+      <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+        </svg>
+      </div>
+      <input
+        id="search-input"
+        type="search"
+        placeholder="Rechercher salles, équipements, interventions, commandes…"
+        class="w-full pl-12 pr-4 py-3.5 text-base bg-white border border-slate-300 rounded-xl shadow-sm
+               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+               placeholder-slate-400"
+        autocomplete="off"
+      />
+    </div>
+
+    <!-- Results area -->
+    <div id="results-area">
+      <!-- Empty state -->
+      <div id="state-empty" class="text-center py-16 text-slate-400">
+        <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+        </svg>
+        <p class="text-sm">Tapez votre recherche…</p>
+      </div>
+
+      <!-- Loading state -->
+      <div id="state-loading" class="hidden text-center py-16">
+        <svg class="w-8 h-8 mx-auto animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <p class="text-sm text-slate-400 mt-2">Recherche en cours…</p>
+      </div>
+
+      <!-- No results state -->
+      <div id="state-no-results" class="hidden text-center py-16 text-slate-400">
+        <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <p class="text-sm" id="no-results-text">Aucun résultat.</p>
+      </div>
+
+      <!-- Results list -->
+      <div id="state-results" class="hidden space-y-6"></div>
+    </div>
+  </div>
+</main>
+
+<script src="/js/layout.js"></script>
+<script>
+// ── Badge colour helpers ───────────────────────────────────────────────────
+const STATUS_COLOURS = {
+  // Equipment
+  ACTIVE: 'bg-green-100 text-green-700',
+  INACTIVE: 'bg-slate-100 text-slate-600',
+  REPAIR: 'bg-orange-100 text-orange-700',
+  DECOMMISSIONED: 'bg-red-100 text-red-700',
+  // Intervention
+  OPEN: 'bg-blue-100 text-blue-700',
+  IN_PROGRESS: 'bg-yellow-100 text-yellow-700',
+  RESOLVED: 'bg-green-100 text-green-700',
+  CLOSED: 'bg-slate-100 text-slate-600',
+  // Order
+  PENDING: 'bg-yellow-100 text-yellow-700',
+  ORDERED: 'bg-blue-100 text-blue-700',
+  PARTIAL: 'bg-orange-100 text-orange-700',
+  RECEIVED: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-red-100 text-red-700',
+};
+
+function badgeClass(label) {
+  return STATUS_COLOURS[label] || 'bg-slate-100 text-slate-600';
+}
+
+// ── Group icons ────────────────────────────────────────────────────────────
+const GROUP_ICONS = {
+  'Salles': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>',
+  'Equipements': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M3 9h2m-2 6h2m14-6h2m-2 6h2M8 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/>',
+  'Interventions': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>',
+  'Commandes': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>',
+  'Actions rapides': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>',
+  'Documents': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>',
+};
+
+// ── Navigate to result ─────────────────────────────────────────────────────
+function navigateTo(href, target) {
+  if (target === '_blank') {
+    window.open(href, '_blank', 'noopener');
+  } else {
+    window.location.href = href;
+  }
+}
+
+// ── Render results ─────────────────────────────────────────────────────────
+function renderResults(results, query) {
+  const container = document.getElementById('state-results');
+  container.innerHTML = '';
+
+  // Group by category
+  const groups = {};
+  for (const r of results) {
+    const g = r.group || 'Autres';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(r);
+  }
+
+  const groupOrder = ['Actions rapides', 'Documents', 'Salles', 'Equipements', 'Interventions', 'Commandes'];
+  const sortedGroups = [
+    ...groupOrder.filter(g => groups[g]),
+    ...Object.keys(groups).filter(g => !groupOrder.includes(g))
+  ];
+
+  for (const groupName of sortedGroups) {
+    const items = groups[groupName];
+    if (!items || !items.length) continue;
+
+    const section = document.createElement('section');
+
+    const iconPath = GROUP_ICONS[groupName] || '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>';
+    section.innerHTML = `
+      <div class="flex items-center gap-2 mb-2 px-1">
+        <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">${groupName}</h2>
+        <span class="ml-1 text-xs text-slate-400">(${items.length})</span>
+      </div>
+    `;
+
+    const list = document.createElement('ul');
+    list.className = 'space-y-1';
+
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.className = 'bg-white border border-slate-200 rounded-xl px-4 py-3 hover:border-blue-300 hover:shadow-sm cursor-pointer transition group';
+      li.setAttribute('role', 'button');
+      li.setAttribute('tabindex', '0');
+
+      const badges = (item.preview?.badges || [])
+        .map(b => `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badgeClass(b)}">${b}</span>`)
+        .join('');
+
+      li.innerHTML = `
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium text-slate-800 truncate group-hover:text-blue-700 transition">${item.title || ''}</p>
+            ${item.subtitle ? `<p class="text-xs text-slate-500 truncate mt-0.5">${item.subtitle}</p>` : ''}
+          </div>
+          ${badges ? `<div class="flex flex-wrap gap-1 flex-shrink-0 mt-0.5">${badges}</div>` : ''}
+        </div>
+      `;
+
+      li.addEventListener('click', () => navigateTo(item.href, item.target));
+      li.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') navigateTo(item.href, item.target); });
+
+      list.appendChild(li);
+    }
+
+    section.appendChild(list);
+    container.appendChild(section);
+  }
+}
+
+// ── State helpers ──────────────────────────────────────────────────────────
+function showState(name) {
+  ['empty', 'loading', 'no-results', 'results'].forEach(s => {
+    document.getElementById(`state-${s}`).classList.toggle('hidden', s !== name);
+  });
+}
+
+// ── Search logic ───────────────────────────────────────────────────────────
+let debounceTimer = null;
+let currentController = null;
+
+async function doSearch(query) {
+  if (!query || !query.trim()) {
+    showState('empty');
+    return;
+  }
+
+  showState('loading');
+
+  if (currentController) currentController.abort();
+  currentController = new AbortController();
+
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
+      signal: currentController.signal,
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      showState('no-results');
+      document.getElementById('no-results-text').textContent = `Aucun résultat pour "${query.trim()}"`;
+      return;
+    }
+
+    const data = await res.json();
+    const results = data.results || [];
+
+    if (!results.length) {
+      showState('no-results');
+      document.getElementById('no-results-text').textContent = `Aucun résultat pour "${query.trim()}"`;
+      return;
+    }
+
+    renderResults(results, query.trim());
+    showState('results');
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    showState('no-results');
+    document.getElementById('no-results-text').textContent = `Erreur lors de la recherche.`;
+  }
+}
+
+function onInput(e) {
+  const q = e.target.value.trim();
+
+  // Update URL param for deep links
+  const url = new URL(window.location.href);
+  if (q) {
+    url.searchParams.set('q', q);
+  } else {
+    url.searchParams.delete('q');
+  }
+  history.replaceState(null, '', url.toString());
+
+  clearTimeout(debounceTimer);
+  if (!q) { showState('empty'); return; }
+  debounceTimer = setTimeout(() => doSearch(q), 300);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initLayout('search');
+
+  const input = document.getElementById('search-input');
+  input.addEventListener('input', onInput);
+
+  // Deep link support: read ?q= from URL
+  const urlQ = new URLSearchParams(window.location.search).get('q');
+  if (urlQ) {
+    input.value = urlQ;
+    doSearch(urlQ);
+  } else {
+    showState('empty');
+  }
+});
+</script>
+</body>
+</html>
