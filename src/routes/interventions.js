@@ -1,13 +1,13 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { PrismaClient } = require('@prisma/client');
 const path = require('path');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
 const { uploadPhoto } = require('../middleware/upload');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
+const { containsFilter } = require('../lib/db-utils');
 
 // SQLite stocke photos en JSON string — normaliser en tableau JS
 function parsePhotos(intervention) {
@@ -32,7 +32,17 @@ const VALID_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'];
 const interventionInclude = {
   room: { select: { id: true, name: true, number: true, building: true } },
   equipment: { select: { id: true, name: true, type: true, brand: true, model: true } },
-  tech: { select: { id: true, name: true, email: true } }
+  tech: { select: { id: true, name: true, email: true } },
+  orders: {
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      supplier: true,
+      createdAt: true
+    },
+    orderBy: { createdAt: 'desc' }
+  }
 };
 
 // GET /api/interventions - Liste avec filtres
@@ -41,7 +51,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, parseInt(req.query.limit) || 20);
     const skip = (page - 1) * limit;
-    const { status, priority, roomId, equipmentId, techId, dateFrom, dateTo, search } = req.query;
+    const { status, priority, roomId, equipmentId, techId, dateFrom, dateTo, search, source } = req.query;
 
     const where = {};
     if (status && VALID_STATUSES.includes(status)) where.status = status;
@@ -59,10 +69,11 @@ router.get('/', requireAuth, async (req, res, next) => {
     }
     if (search) {
       where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
+        { title: containsFilter(search) },
+        { description: containsFilter(search) }
       ];
     }
+    if (source && ['INTERNAL', 'PUBLIC'].includes(source)) where.source = source;
 
     const [interventions, total] = await Promise.all([
       prisma.intervention.findMany({

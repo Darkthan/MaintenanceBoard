@@ -63,6 +63,11 @@
           <option value="HIGH">Haute</option>
           <option value="CRITICAL">Critique</option>
         </select>
+        <select id="source-filter" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Toutes sources</option>
+          <option value="INTERNAL">Internes</option>
+          <option value="PUBLIC">Publiques</option>
+        </select>
       </div>
 
       <!-- Liste -->
@@ -169,7 +174,21 @@ if (!user) throw new Error('Not logged in');
 renderNav('interventions');
 if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
 
-let currentPage = 1, currentSearch = '', currentStatus = '', currentPriority = '';
+let currentPage = 1, currentSearch = '', currentStatus = '', currentPriority = '', currentSource = '';
+const pageParams = new URLSearchParams(window.location.search);
+
+if (pageParams.get('search')) {
+  currentSearch = pageParams.get('search');
+  document.getElementById('search-input').value = currentSearch;
+}
+if (pageParams.get('status')) {
+  currentStatus = pageParams.get('status');
+  document.getElementById('status-filter').value = currentStatus;
+}
+if (pageParams.get('priority')) {
+  currentPriority = pageParams.get('priority');
+  document.getElementById('priority-filter').value = currentPriority;
+}
 
 async function loadInterventions() {
   const container = document.getElementById('interventions-container');
@@ -179,6 +198,7 @@ async function loadInterventions() {
     if (currentSearch) params.search = currentSearch;
     if (currentStatus) params.status = currentStatus;
     if (currentPriority) params.priority = currentPriority;
+    if (currentSource) params.source = currentSource;
 
     const data = await api.get('/interventions', params);
 
@@ -211,6 +231,23 @@ async function loadInterventions() {
               <span>👤 ${i.tech?.name || 'N/A'}</span>
               <span>📅 ${formatDate(i.createdAt, true)}</span>
               ${i.photos?.length ? `<span>📷 ${i.photos.length} photo(s)</span>` : ''}
+              ${i.orders?.length ? `<span>🛒 ${i.orders.length} commande(s) liée(s)</span>` : ''}
+              ${i.source === 'PUBLIC' ? '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Public</span>' : ''}
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button onclick="openCreateOrderFromIntervention('${i.id}')"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Generer une commande
+              </button>
+              ${(i.orders || []).map(order => `
+                <a href="/orders.html?focus=${encodeURIComponent(order.id)}"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium hover:bg-slate-200 transition">
+                  <span>BC ${order.id.slice(-6).toUpperCase()}</span>
+                  <span class="text-slate-400">·</span>
+                  <span class="truncate max-w-[180px]">${order.title}</span>
+                </a>
+              `).join('')}
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0 self-stretch sm:self-auto">
@@ -247,10 +284,15 @@ async function loadInterventions() {
 
 function changePage(p) { currentPage = p; loadInterventions(); }
 
+function openCreateOrderFromIntervention(interventionId) {
+  window.location = `/orders.html?action=create&interventionId=${encodeURIComponent(interventionId)}`;
+}
+
 let searchTimeout;
 document.getElementById('search-input').addEventListener('input', e => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { currentSearch = e.target.value; currentPage = 1; loadInterventions(); }, 400); });
 document.getElementById('status-filter').addEventListener('change', e => { currentStatus = e.target.value; currentPage = 1; loadInterventions(); });
 document.getElementById('priority-filter').addEventListener('change', e => { currentPriority = e.target.value; currentPage = 1; loadInterventions(); });
+document.getElementById('source-filter').addEventListener('change', e => { currentSource = e.target.value; currentPage = 1; loadInterventions(); });
 
 async function loadSelects(roomId, equipId) {
   try {
@@ -383,6 +425,20 @@ document.getElementById('upload-photos-btn').addEventListener('click', async () 
 });
 
 loadInterventions();
+
+if (pageParams.get('action') === 'create') {
+  setTimeout(() => document.getElementById('add-intervention-btn')?.click(), 50);
+}
+if (pageParams.get('focus')) {
+  setTimeout(async () => {
+    try {
+      const intervention = await api.get(`/interventions/${pageParams.get('focus')}`);
+      editIntervention(intervention);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }, 220);
+}
 </script>
 </body>
 </html>

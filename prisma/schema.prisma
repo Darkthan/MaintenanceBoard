@@ -145,14 +145,18 @@ model Intervention {
   resolution  String?
   roomId      String?
   equipmentId String?
-  techId      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  closedAt    DateTime?
+  techId         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  closedAt       DateTime?
+  source         String   @default("INTERNAL")  // INTERNAL | PUBLIC
+  reporterName   String?
+  reporterEmail  String?
+  reporterToken  String?  @unique
 
-  room      Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  equipment Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
-  tech           User            @relation(fields: [techId], references: [id])
+  room           Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  equipment      Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  tech           User?      @relation(fields: [techId], references: [id])
   orders         Order[]
   stockMovements StockMovement[]
 

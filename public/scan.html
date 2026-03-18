@@ -51,12 +51,12 @@
       <div id="history-list" class="space-y-2"></div>
     </div>
 
-    <!-- Formulaire nouvelle intervention -->
+    <!-- Formulaire nouvelle intervention (utilisateurs connectés) -->
     <div class="bg-white rounded-2xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-4">Signaler un problème</h3>
+      <h3 class="font-semibold text-slate-800 mb-4">Intervention technique</h3>
 
       <div id="auth-check" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-800">
-        <a href="/login.html" class="underline font-medium">Connectez-vous</a> pour soumettre une intervention.
+        <a href="/login.html" class="underline font-medium">Connectez-vous</a> pour soumettre une intervention technique.
       </div>
 
       <form id="intervention-form" class="space-y-3">
@@ -95,6 +95,71 @@
           Soumettre l'intervention
         </button>
       </form>
+    </div>
+
+    <!-- Formulaire signalement public (sans auth) -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-slate-800">Signaler un problème</h3>
+        <span class="text-xs bg-orange-100 text-orange-700 font-medium px-2 py-0.5 rounded-full">Sans connexion</span>
+      </div>
+
+      <!-- Bouton toggle -->
+      <button id="toggle-public-form"
+        class="w-full flex items-center justify-center gap-2 py-2.5 px-4 border border-orange-300 text-orange-700 rounded-xl text-sm font-medium hover:bg-orange-50 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        Ouvrir le formulaire de signalement
+      </button>
+
+      <!-- Formulaire (caché par défaut) -->
+      <div id="public-form-container" class="hidden mt-4">
+        <div id="public-form-success" class="hidden bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
+          <p class="font-semibold mb-1">Ticket soumis avec succès !</p>
+          <p class="mb-2">Conservez ce lien pour suivre l'avancement :</p>
+          <a id="public-ticket-link" href="#" class="inline-block underline font-mono text-green-700 break-all"></a>
+        </div>
+
+        <form id="public-ticket-form" class="space-y-3">
+          <!-- Honeypot (piège anti-bot) -->
+          <input name="_honeypot" id="public-honeypot" style="display:none" tabindex="-1" autocomplete="off" />
+
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Titre *</label>
+            <input id="pub-title" type="text" required maxlength="200"
+              class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              placeholder="Décrivez brièvement le problème..." />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <textarea id="pub-description" rows="3" maxlength="2000"
+              class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+              placeholder="Détails supplémentaires (optionnel)..."></textarea>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Votre nom</label>
+              <input id="pub-name" type="text" maxlength="100"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                placeholder="Optionnel" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Votre email</label>
+              <input id="pub-email" type="email" maxlength="200"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                placeholder="Pour le suivi (optionnel)" />
+            </div>
+          </div>
+          <div id="public-form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+          <button type="submit" id="pub-submit-btn"
+            class="w-full bg-orange-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-orange-600 transition
+                   focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2
+                   disabled:opacity-50 disabled:cursor-not-allowed">
+            Envoyer le signalement
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 </div>
@@ -288,6 +353,95 @@ document.getElementById('intervention-form').addEventListener('submit', async (e
 });
 
 resolveToken();
+
+// Toggle formulaire public
+document.getElementById('toggle-public-form').addEventListener('click', () => {
+  const container = document.getElementById('public-form-container');
+  const btn = document.getElementById('toggle-public-form');
+  const isHidden = container.classList.contains('hidden');
+  if (isHidden) {
+    container.classList.remove('hidden');
+    btn.textContent = 'Fermer le formulaire';
+  } else {
+    container.classList.add('hidden');
+    btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg> Ouvrir le formulaire de signalement`;
+  }
+});
+
+// Soumission formulaire public
+document.getElementById('public-ticket-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const title = document.getElementById('pub-title').value;
+  const description = document.getElementById('pub-description').value;
+  const reporterName = document.getElementById('pub-name').value;
+  const reporterEmail = document.getElementById('pub-email').value;
+  const honeypot = document.getElementById('public-honeypot').value;
+
+  const pubSubmitBtn = document.getElementById('pub-submit-btn');
+  const pubError = document.getElementById('public-form-error');
+  const pubSuccess = document.getElementById('public-form-success');
+
+  pubSubmitBtn.disabled = true;
+  pubSubmitBtn.textContent = 'Envoi...';
+  pubError.classList.add('hidden');
+  pubSuccess.classList.add('hidden');
+
+  try {
+    const body = {
+      title,
+      description: description || null,
+      reporterName: reporterName || null,
+      reporterEmail: reporterEmail || null,
+      _honeypot: honeypot
+    };
+
+    // Ajouter le token de salle ou d'équipement
+    if (resourceType === 'room') {
+      body.roomToken = resourceData.qrToken;
+    } else {
+      body.equipmentToken = resourceData.qrToken;
+    }
+
+    const res = await fetch('/api/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+
+    if (res.status === 429) {
+      pubError.textContent = data.error || 'Veuillez patienter avant de soumettre un nouveau ticket.';
+      pubError.classList.remove('hidden');
+      return;
+    }
+
+    if (!res.ok) {
+      pubError.textContent = data.error || 'Erreur lors de la soumission.';
+      pubError.classList.remove('hidden');
+      return;
+    }
+
+    // Succès
+    document.getElementById('public-ticket-form').classList.add('hidden');
+    pubSuccess.classList.remove('hidden');
+    if (data.token) {
+      const statusUrl = `/ticket-status.html?token=${data.token}`;
+      const link = document.getElementById('public-ticket-link');
+      link.href = statusUrl;
+      link.textContent = statusUrl;
+    }
+  } catch (err) {
+    pubError.textContent = 'Erreur réseau : ' + err.message;
+    pubError.classList.remove('hidden');
+  } finally {
+    pubSubmitBtn.disabled = false;
+    pubSubmitBtn.textContent = 'Envoyer le signalement';
+  }
+});
 </script>
 </body>
 </html>

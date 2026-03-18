@@ -105,6 +105,18 @@ app.use('/api/agents', require('./routes/agents'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/stock', require('./routes/stock'));
+
+// ── Tickets publics (sans auth, rate limit IP strict) ─────────────────────────
+const ticketLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: { error: 'Trop de tickets soumis, réessayez dans une heure.' }
+});
+if (process.env.NODE_ENV !== 'test') {
+  app.use('/api/tickets', ticketLimiter);
+}
+app.use('/api/tickets', require('./routes/tickets'));
+
 app.use('/downloads', require('./routes/downloads'));
 
 const { ordersRouter: sigOrdersRouter, signRouter, signaturesRouter } = require('./routes/signatures');
