@@ -126,11 +126,14 @@ model Equipment {
   agentToken         String?   @unique               // Token machine unique (UUID)
   agentRevoked       Boolean   @default(false)       // Si true, re-enrollment requis
   enrollmentTokenId  String?                         // Token de déploiement utilisé à l'enrollment
+  purchasePrice   Float?
+  supplierId      String?
 
   room            Room?       @relation(fields: [roomId], references: [id], onDelete: SetNull)
   interventions   Intervention[]
   enrollmentToken AgentToken? @relation(fields: [enrollmentTokenId], references: [id], onDelete: SetNull)
   sessionLogs     MachineSessionLog[]
+  supplierRef     Supplier?   @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@map("equipment")
 }
@@ -315,6 +318,7 @@ model Supplier {
 
   orders     Order[]
   stockItems StockItem[]
+  equipment  Equipment[]
 
   @@map("suppliers")
 }
