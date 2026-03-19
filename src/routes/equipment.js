@@ -67,7 +67,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         orderBy: { name: 'asc' },
         include: {
           room: { select: { id: true, name: true, number: true, building: true } },
-          supplier: { select: { id: true, name: true } },
+          supplierRef: { select: { id: true, name: true } },
           _count: { select: { interventions: true } }
         }
       }),
@@ -114,7 +114,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         room: { select: { id: true, name: true, number: true, building: true } },
-        supplier: { select: { id: true, name: true } },
+        supplierRef: { select: { id: true, name: true } },
         attachments: {
           orderBy: { createdAt: 'desc' },
           include: { uploader: { select: { id: true, name: true } } }
@@ -201,7 +201,7 @@ router.post('/',
           purchasePrice: purchasePrice !== undefined && purchasePrice !== null && purchasePrice !== '' ? parseFloat(purchasePrice) : null,
           supplierId: supplierId || null
         },
-        include: { room: { select: { id: true, name: true, number: true } }, supplier: { select: { id: true, name: true } } }
+        include: { room: { select: { id: true, name: true, number: true } }, supplierRef: { select: { id: true, name: true } } }
       });
       res.status(201).json(equip);
     } catch (err) {
@@ -239,7 +239,7 @@ router.patch('/:id',
       const equip = await prisma.equipment.update({
         where: { id: req.params.id },
         data,
-        include: { room: { select: { id: true, name: true, number: true } }, supplier: { select: { id: true, name: true } } }
+        include: { room: { select: { id: true, name: true, number: true } }, supplierRef: { select: { id: true, name: true } } }
       });
       res.json(equip);
     } catch (err) {
