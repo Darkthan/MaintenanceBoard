@@ -77,7 +77,7 @@ app.use(session({
     secure: config.env === 'production',
     httpOnly: true,
     maxAge: config.session.maxAge,
-    sameSite: 'lax'
+    sameSite: 'strict'
   },
   name: 'mb.sid'
 }));
@@ -101,6 +101,14 @@ app.use('/api/interventions', require('./routes/interventions'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/qrcode', require('./routes/qrcode'));
 app.use('/api/users', require('./routes/users'));
+// Rate limit strict sur les endpoints agent (checkin/sessions appelés par machines)
+const agentCheckinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { error: 'Trop de requêtes agent, réessayez dans 15 minutes.' }
+});
+app.use('/api/agents/checkin', agentCheckinLimiter);
+app.use('/api/agents/sessions', agentCheckinLimiter);
 app.use('/api/agents', require('./routes/agents'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/suppliers', require('./routes/suppliers'));
@@ -112,8 +120,22 @@ const ticketLimiter = rateLimit({
   max: 3,
   message: { error: 'Trop de tickets soumis, réessayez dans une heure.' }
 });
+// Magic link : limité par IP (10/h) ET par email (5/h) pour bloquer l'énumération
+const magicLinkLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { error: 'Trop de tentatives, réessayez dans une heure.' }
+});
 if (process.env.NODE_ENV !== 'test') {
-  app.use('/api/tickets', ticketLimiter);
+  app.use('/api/tickets/magic-link', magicLinkLimiter);
+  // Le ticketLimiter s'applique à la création de tickets (POST /) et aux messages
+  // mais pas à magic-link ni à la lecture de statut (GET)
+  app.use('/api/tickets', (req, res, next) => {
+    if (req.method === 'POST' && (req.path === '/' || /^\/[^/]+\/messages$/.test(req.path))) {
+      return ticketLimiter(req, res, next);
+    }
+    next();
+  });
 }
 app.use('/api/tickets', require('./routes/tickets'));
 

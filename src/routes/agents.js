@@ -1,13 +1,12 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
 const { agentAuth } = require('../middleware/agentAuth');
 const discoveryService = require('../services/discoveryService');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // ── POST /api/agents/checkin ─────────────────────────────────────────────────
 // Auth: X-Agent-Token (enrollment ou machine token)
@@ -15,7 +14,29 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
   try {
     const { hostname, serialNumber, type, cpu, ramGb, os, osVersion, user, ips, macs, peripherals } = req.body;
 
-    const agentInfo = JSON.stringify({ cpu, ramGb, os, osVersion, user, ips, macs, peripherals });
+    // Validation hostname
+    if (hostname && !/^[a-zA-Z0-9._-]{1,255}$/.test(hostname)) {
+      return res.status(400).json({ error: 'Hostname invalide' });
+    }
+
+    // Sanitisation agentInfo — limites de taille pour éviter le stockage abusif
+    const cap = (v, max) => (typeof v === 'string' ? v.slice(0, max) : v);
+    const capArr = (v, max) => (Array.isArray(v) ? v.slice(0, max).map(s => typeof s === 'string' ? s.slice(0, 256) : s) : v);
+    const sanitized = {
+      cpu: cap(cpu, 256),
+      ramGb: typeof ramGb === 'number' ? ramGb : undefined,
+      os: cap(os, 256),
+      osVersion: cap(osVersion, 256),
+      user: cap(user, 256),
+      ips: capArr(ips, 50),
+      macs: capArr(macs, 20),
+      peripherals: capArr(peripherals, 50)
+    };
+    const agentInfoStr = JSON.stringify(sanitized);
+    if (agentInfoStr.length > 10240) {
+      return res.status(400).json({ error: 'agentInfo trop volumineux (max 10 Ko)' });
+    }
+    const agentInfo = agentInfoStr;
 
     // ── Cas 1 : token d'enrollment (premier check-in ou réenrollment) ─────────
     if (req.enrollmentToken) {
@@ -34,13 +55,20 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
       }
 
       if (equipment) {
+        // Bloquer le re-enrollment si la machine a été révoquée par un admin
+        if (equipment.agentRevoked) {
+          return res.status(403).json({
+            error: 'Cet équipement a été révoqué. Un administrateur doit le réactiver avant tout re-enrollment.',
+            code: 'EQUIPMENT_REVOKED'
+          });
+        }
+
         // Équipement existant → mettre à jour (conserver le lien enrollmentTokenId s'il existait déjà)
         const machineToken = equipment.agentToken || uuidv4();
         const updateData = {
           agentInfo,
           agentHostname: hostname || null,
           agentToken: machineToken,
-          agentRevoked: false,
           lastSeenAt: new Date(),
           discoverySource: 'AGENT'
         };

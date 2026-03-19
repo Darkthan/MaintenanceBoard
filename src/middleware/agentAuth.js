@@ -1,7 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
 const { isIpAllowed } = require('../utils/ipFilter');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 /**
  * Extrait l'IP cliente depuis la requête Express.
@@ -58,13 +57,28 @@ async function agentAuth(req, res, next) {
 
     // 2. Chercher un token machine (Equipment)
     const equipment = await prisma.equipment.findUnique({
-      where: { agentToken: token }
+      where: { agentToken: token },
+      include: { enrollmentToken: true }
     });
 
     if (equipment) {
       if (equipment.agentRevoked) {
         return res.status(401).json({ error: 'Token machine révoqué. Re-enrollment requis.', code: 'AGENT_REVOKED' });
       }
+
+      // Filtrage IP hérité du token d'enrollment associé
+      if (equipment.enrollmentToken) {
+        const clientIp = getClientIp(req);
+        let whitelist = null;
+        let blacklist = null;
+        try { whitelist = equipment.enrollmentToken.ipWhitelist ? JSON.parse(equipment.enrollmentToken.ipWhitelist) : null; } catch {}
+        try { blacklist = equipment.enrollmentToken.ipBlacklist ? JSON.parse(equipment.enrollmentToken.ipBlacklist) : null; } catch {}
+
+        if (!isIpAllowed(clientIp, whitelist, blacklist)) {
+          return res.status(403).json({ error: 'IP non autorisée pour ce token machine', ip: clientIp });
+        }
+      }
+
       req.equipmentRecord = equipment;
       return next();
     }

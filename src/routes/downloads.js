@@ -15,8 +15,8 @@ function readTemplate(name) {
 }
 
 // ── GET /downloads/agent.ps1 ──────────────────────────────────────────────────
-// Script agent brut (utilisé par l'installateur Linux pour le télécharger)
-router.get('/agent.ps1', (req, res) => {
+// Script agent brut — réservé aux admins authentifiés
+router.get('/agent.ps1', requireAuth, (req, res) => {
   const content = readTemplate('agent.ps1');
   res.set('Content-Type', 'text/plain; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename="agent.ps1"');
@@ -24,7 +24,7 @@ router.get('/agent.ps1', (req, res) => {
 });
 
 // ── GET /downloads/agent.sh ───────────────────────────────────────────────────
-router.get('/agent.sh', (req, res) => {
+router.get('/agent.sh', requireAuth, (req, res) => {
   const content = readTemplate('agent.sh');
   res.set('Content-Type', 'text/plain; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename="agent.sh"');
@@ -32,22 +32,33 @@ router.get('/agent.sh', (req, res) => {
 });
 
 // ── GET /downloads/maintenance-agent.service ──────────────────────────────────
-router.get('/maintenance-agent.service', (req, res) => {
+router.get('/maintenance-agent.service', requireAuth, (req, res) => {
   const content = readTemplate('maintenance-agent.service');
   res.set('Content-Type', 'text/plain; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename="maintenance-agent.service"');
   res.send(content);
 });
 
+// ── Helper : valider un enrollment token ──────────────────────────────────────
+async function validateEnrollmentToken(token) {
+  if (!token) return null;
+  const record = await prisma.agentToken.findUnique({ where: { token } });
+  if (!record || !record.isActive) return null;
+  return record;
+}
+
 // ── GET /downloads/windows?enrollmentToken=<token> ────────────────────────────
 // Génère un .nupkg (ZIP) avec JSZip si disponible, sinon ZIP basique Node
-router.get('/windows', async (req, res, next) => {
+router.get('/windows', requireAuth, async (req, res, next) => {
   const { enrollmentToken } = req.query;
   if (!enrollmentToken) {
     return res.status(400).json({ error: 'enrollmentToken requis' });
   }
 
   try {
+    if (!await validateEnrollmentToken(enrollmentToken)) {
+      return res.status(403).json({ error: 'Token d\'enrollment invalide ou désactivé' });
+    }
     const serverUrl = config.appUrl;
     const configJson = JSON.stringify({ serverUrl, enrollmentToken }, null, 2);
     const nuspecContent = readTemplate('agent.nuspec.template')
@@ -83,13 +94,16 @@ router.get('/windows', async (req, res, next) => {
 
 // ── GET /downloads/linux?enrollmentToken=<token> ─────────────────────────────
 // Retourne install.sh avec variables injectées
-router.get('/linux', (req, res, next) => {
+router.get('/linux', requireAuth, async (req, res, next) => {
   const { enrollmentToken } = req.query;
   if (!enrollmentToken) {
     return res.status(400).json({ error: 'enrollmentToken requis' });
   }
 
   try {
+    if (!await validateEnrollmentToken(enrollmentToken)) {
+      return res.status(403).json({ error: 'Token d\'enrollment invalide ou désactivé' });
+    }
     const serverUrl = config.appUrl;
     const content = readTemplate('install.sh')
       .replace(/\{\{SERVER_URL\}\}/g, serverUrl)
@@ -103,13 +117,16 @@ router.get('/linux', (req, res, next) => {
 
 // ── GET /downloads/install.ps1?enrollmentToken=<token> ───────────────────────
 // Script PowerShell standalone (sans choco) avec config inline
-router.get('/install.ps1', (req, res, next) => {
+router.get('/install.ps1', requireAuth, async (req, res, next) => {
   const { enrollmentToken } = req.query;
   if (!enrollmentToken) {
     return res.status(400).json({ error: 'enrollmentToken requis' });
   }
 
   try {
+    if (!await validateEnrollmentToken(enrollmentToken)) {
+      return res.status(403).json({ error: 'Token d\'enrollment invalide ou désactivé' });
+    }
     const serverUrl = config.appUrl;
     const content = readTemplate('install.ps1.template')
       .replace(/\{\{SERVER_URL\}\}/g, serverUrl)
