@@ -3,72 +3,160 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scan QR – MaintenanceBoard</title>
+  <title>QR Code – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-slate-100">
 
-<div id="app" class="max-w-lg mx-auto p-4 pb-8">
+<div id="app" class="max-w-lg mx-auto p-4 pb-10">
+
   <!-- Header -->
   <div class="flex items-center gap-3 mb-6 pt-4">
-    <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+    <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
       <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
       </svg>
     </div>
     <div>
       <p class="font-bold text-slate-800">MaintenanceBoard</p>
-      <p class="text-xs text-slate-500">Scanner QR Code</p>
+      <p class="text-xs text-slate-500" id="header-subtitle">Chargement…</p>
     </div>
-    <a href="/index.html" class="ml-auto text-sm text-blue-600 hover:underline">Dashboard</a>
+    <div id="header-actions" class="ml-auto flex gap-2"></div>
   </div>
 
   <!-- Loading -->
-  <div id="loading-state" class="text-center py-12">
+  <div id="loading-state" class="text-center py-16">
     <div class="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-    <p class="text-slate-600">Résolution du QR code...</p>
+    <p class="text-slate-500 text-sm">Résolution du QR code…</p>
   </div>
 
   <!-- Erreur -->
-  <div id="error-state" class="hidden text-center py-12">
+  <div id="error-state" class="hidden text-center py-16">
     <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
       <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
       </svg>
     </div>
-    <p id="error-message" class="text-slate-700 font-medium mb-2">QR code invalide</p>
-    <p class="text-slate-500 text-sm">Ce QR code n'est pas reconnu ou a expiré.</p>
+    <p id="error-message" class="text-slate-700 font-semibold mb-2">QR code invalide</p>
+    <p class="text-slate-400 text-sm">Ce QR code n'est pas reconnu ou a expiré.</p>
   </div>
 
-  <!-- Contenu salle/équipement -->
-  <div id="content-state" class="hidden space-y-4">
-    <!-- Carte info -->
-    <div id="resource-card" class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"></div>
+  <!-- Vue NON CONNECTÉ -->
+  <div id="public-view" class="hidden space-y-4">
 
-    <!-- Historique interventions -->
-    <div id="history-section" class="bg-white rounded-2xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-3">Dernières interventions</h3>
-      <div id="history-list" class="space-y-2"></div>
-    </div>
+    <!-- Carte ressource (compacte) -->
+    <div id="pub-resource-card" class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"></div>
 
-    <!-- Formulaire nouvelle intervention (utilisateurs connectés) -->
-    <div class="bg-white rounded-2xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-4">Intervention technique</h3>
+    <!-- Formulaire signalement -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+      <h3 class="font-semibold text-slate-800 mb-1">Signaler un problème</h3>
+      <p class="text-xs text-slate-400 mb-4">Votre signalement sera traité par l'équipe technique.</p>
 
-      <div id="auth-check" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-800">
-        <a href="/login.html" class="underline font-medium">Connectez-vous</a> pour soumettre une intervention technique.
+      <div id="pub-success" class="hidden bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
+        <p class="font-semibold mb-1">Ticket soumis avec succès !</p>
+        <p class="mb-2">Conservez ce lien pour suivre l'avancement :</p>
+        <a id="pub-ticket-link" href="#" class="underline font-mono text-green-700 break-all text-xs"></a>
       </div>
 
-      <form id="intervention-form" class="space-y-3">
+      <form id="pub-form" class="space-y-3">
+        <input name="_hp" id="pub-honeypot" style="display:none" tabindex="-1" autocomplete="off" />
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Problème *</label>
+          <input id="pub-title" type="text" required maxlength="200"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            placeholder="Ex : Écran noir, imprimante bloquée…" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Détails</label>
+          <textarea id="pub-description" rows="3" maxlength="2000"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+            placeholder="Optionnel – décrire comment reproduire le problème…"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Votre nom</label>
+            <input id="pub-name" type="text" maxlength="100"
+              class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              placeholder="Optionnel" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <input id="pub-email" type="email" maxlength="200"
+              class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              placeholder="Pour le suivi" />
+          </div>
+        </div>
+        <div id="pub-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+        <button type="submit" id="pub-submit"
+          class="w-full bg-orange-500 text-white font-semibold py-3 rounded-xl hover:bg-orange-600 transition
+                 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2
+                 disabled:opacity-50 disabled:cursor-not-allowed">
+          Envoyer le signalement
+        </button>
+      </form>
+    </div>
+
+    <p class="text-center text-xs text-slate-400">
+      Vous êtes technicien ?
+      <a id="pub-login-link" href="/login.html" class="text-blue-600 underline">Se connecter</a>
+    </p>
+  </div>
+
+  <!-- Vue CONNECTÉ -->
+  <div id="auth-view" class="hidden space-y-4">
+
+    <!-- Carte ressource (complète) -->
+    <div id="auth-resource-card" class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"></div>
+
+    <!-- Interventions actives -->
+    <div id="active-section" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="font-semibold text-slate-800">Interventions en cours</h3>
+        <span id="active-count" class="text-xs bg-orange-100 text-orange-700 font-semibold px-2 py-0.5 rounded-full hidden"></span>
+      </div>
+      <div id="active-list" class="divide-y divide-slate-100"></div>
+    </div>
+
+    <!-- Équipements (salles seulement) -->
+    <div id="equip-section" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="font-semibold text-slate-800">Équipements</h3>
+        <span id="equip-count" class="text-xs text-slate-400"></span>
+      </div>
+      <div id="equip-list" class="divide-y divide-slate-100"></div>
+    </div>
+
+    <!-- Historique -->
+    <div id="history-section" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100">
+        <h3 class="font-semibold text-slate-800">Historique</h3>
+      </div>
+      <div id="history-list" class="divide-y divide-slate-100"></div>
+    </div>
+
+    <!-- Formulaire nouvelle intervention -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+      <button id="toggle-new-form"
+        class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Créer une intervention
+      </button>
+
+      <div id="new-form-container" class="hidden mt-4 space-y-3">
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Titre *</label>
           <input id="int-title" type="text" required
             class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Décrivez brièvement le problème..." />
+            placeholder="Décrivez brièvement le problème…" />
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Priorité</label>
-          <select id="int-priority" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="int-priority"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="LOW">Basse – signalement</option>
             <option value="NORMAL" selected>Normale – à traiter</option>
             <option value="HIGH">Haute – urgent</option>
@@ -79,117 +167,84 @@
           <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
           <textarea id="int-description" rows="3"
             class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            placeholder="Détails supplémentaires (optionnel)..."></textarea>
+            placeholder="Détails supplémentaires (optionnel)…"></textarea>
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Photo</label>
           <input id="int-photo" type="file" accept="image/*" capture="environment"
-            class="w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+            class="w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
         </div>
-        <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
-        <div id="form-success" class="hidden bg-green-50 border border-green-200 text-green-700 rounded-lg p-3 text-sm"></div>
-        <button type="submit" id="submit-btn"
-          class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-700 transition
-                 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-                 disabled:opacity-50 disabled:cursor-not-allowed">
-          Soumettre l'intervention
-        </button>
-      </form>
-    </div>
-
-    <!-- Formulaire signalement public (sans auth) -->
-    <div class="bg-white rounded-2xl border border-slate-200 p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-semibold text-slate-800">Signaler un problème</h3>
-        <span class="text-xs bg-orange-100 text-orange-700 font-medium px-2 py-0.5 rounded-full">Sans connexion</span>
-      </div>
-
-      <!-- Bouton toggle -->
-      <button id="toggle-public-form"
-        class="w-full flex items-center justify-center gap-2 py-2.5 px-4 border border-orange-300 text-orange-700 rounded-xl text-sm font-medium hover:bg-orange-50 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-        </svg>
-        Ouvrir le formulaire de signalement
-      </button>
-
-      <!-- Formulaire (caché par défaut) -->
-      <div id="public-form-container" class="hidden mt-4">
-        <div id="public-form-success" class="hidden bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
-          <p class="font-semibold mb-1">Ticket soumis avec succès !</p>
-          <p class="mb-2">Conservez ce lien pour suivre l'avancement :</p>
-          <a id="public-ticket-link" href="#" class="inline-block underline font-mono text-green-700 break-all"></a>
-        </div>
-
-        <form id="public-ticket-form" class="space-y-3">
-          <!-- Honeypot (piège anti-bot) -->
-          <input name="_honeypot" id="public-honeypot" style="display:none" tabindex="-1" autocomplete="off" />
-
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Titre *</label>
-            <input id="pub-title" type="text" required maxlength="200"
-              class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              placeholder="Décrivez brièvement le problème..." />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
-            <textarea id="pub-description" rows="3" maxlength="2000"
-              class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
-              placeholder="Détails supplémentaires (optionnel)..."></textarea>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Votre nom</label>
-              <input id="pub-name" type="text" maxlength="100"
-                class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                placeholder="Optionnel" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Votre email</label>
-              <input id="pub-email" type="email" maxlength="200"
-                class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                placeholder="Pour le suivi (optionnel)" />
-            </div>
-          </div>
-          <div id="public-form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
-          <button type="submit" id="pub-submit-btn"
-            class="w-full bg-orange-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-orange-600 transition
-                   focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2
-                   disabled:opacity-50 disabled:cursor-not-allowed">
-            Envoyer le signalement
+        <div id="int-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+        <div id="int-success" class="hidden bg-green-50 border border-green-200 text-green-700 rounded-lg p-3 text-sm"></div>
+        <div class="flex gap-3">
+          <button type="button" id="int-cancel"
+            class="flex-1 py-2.5 border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition">
+            Annuler
           </button>
-        </form>
+          <button type="button" id="int-submit"
+            class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition
+                   disabled:opacity-50 disabled:cursor-not-allowed">
+            Soumettre
+          </button>
+        </div>
       </div>
     </div>
+
   </div>
 </div>
 
 <script src="/js/api.js"></script>
 <script>
-// Récupérer le token depuis l'URL
-const params = new URLSearchParams(window.location.search);
-const token = params.get('token');
+const params      = new URLSearchParams(window.location.search);
+const qrToken     = params.get('token');
+const loggedUser  = JSON.parse(localStorage.getItem('user') || 'null');
 
 let resourceData = null;
 let resourceType = null;
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtDate(d) {
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function fmtRelative(d) {
+  const diff = Date.now() - new Date(d).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return 'Aujourd\'hui';
+  if (days === 1) return 'Hier';
+  if (days < 7) return `Il y a ${days} j`;
+  return fmtDate(d);
+}
+
+const STATUS_LABELS  = { OPEN: 'Ouvert', IN_PROGRESS: 'En cours', RESOLVED: 'Résolu', CLOSED: 'Fermé' };
+const STATUS_COLORS  = {
+  OPEN:        'bg-blue-100 text-blue-700',
+  IN_PROGRESS: 'bg-orange-100 text-orange-700',
+  RESOLVED:    'bg-green-100 text-green-700',
+  CLOSED:      'bg-slate-100 text-slate-600'
+};
+const PRIO_COLORS = {
+  LOW: 'text-slate-400', NORMAL: 'text-blue-500', HIGH: 'text-orange-500', CRITICAL: 'text-red-600'
+};
+const PRIO_LABELS = { LOW: '↓', NORMAL: '→', HIGH: '↑', CRITICAL: '‼' };
+const EQUIP_STATUS_COLORS = {
+  ACTIVE: 'bg-green-100 text-green-700', REPAIR: 'bg-yellow-100 text-yellow-700',
+  INACTIVE: 'bg-slate-100 text-slate-600', DECOMMISSIONED: 'bg-red-100 text-red-700'
+};
+const EQUIP_STATUS_LABELS = { ACTIVE: 'Actif', REPAIR: 'Réparation', INACTIVE: 'Inactif', DECOMMISSIONED: 'Déclassé' };
+
+// ── Résolution du token ───────────────────────────────────────────────────────
 async function resolveToken() {
-  if (!token) {
-    showError('Aucun token dans l\'URL. Scannez un QR code valide.');
-    return;
-  }
-
+  if (!qrToken) { showError('Aucun token dans l\'URL.'); return; }
   try {
-    const result = await fetch(`/api/qrcode/resolve/${token}`, { credentials: 'include' });
-    if (!result.ok) {
-      showError('QR code introuvable ou expiré.');
-      return;
-    }
-
-    const data = await result.json();
+    const r = await fetch(`/api/qrcode/resolve/${qrToken}`, { credentials: 'include' });
+    if (!r.ok) { showError('QR code introuvable ou expiré.'); return; }
+    const data = await r.json();
     resourceData = data.data;
     resourceType = data.type;
-    renderContent(data);
+    renderPage(data);
   } catch (err) {
     showError('Erreur réseau : ' + err.message);
   }
@@ -201,18 +256,70 @@ function showError(msg) {
   document.getElementById('error-message').textContent = msg;
 }
 
-function renderContent(data) {
+// ── Rendu page ────────────────────────────────────────────────────────────────
+function renderPage(data) {
   document.getElementById('loading-state').classList.add('hidden');
-  document.getElementById('content-state').classList.remove('hidden');
-
-  const res = data.data;
   const isRoom = data.type === 'room';
+  const res    = data.data;
 
-  // Carte ressource
-  const card = document.getElementById('resource-card');
-  if (isRoom) {
-    card.innerHTML = `
-      <div class="flex items-start gap-4">
+  document.getElementById('header-subtitle').textContent = isRoom ? 'Salle' : 'Équipement';
+
+  if (loggedUser) {
+    renderAuthView(res, isRoom);
+  } else {
+    renderPublicView(res, isRoom);
+  }
+}
+
+// ── Vue publique ──────────────────────────────────────────────────────────────
+function renderPublicView(res, isRoom) {
+  document.getElementById('public-view').classList.remove('hidden');
+
+  // Carte compacte
+  document.getElementById('pub-resource-card').innerHTML = isRoom
+    ? `<div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-xs text-blue-600 font-medium">Salle</p>
+          <p class="font-bold text-slate-800">${esc(res.name)}</p>
+          ${res.building ? `<p class="text-xs text-slate-500">${esc(res.building)}${res.number ? ` · Salle ${esc(res.number)}` : ''}${res.floor != null ? ` · Étage ${res.floor}` : ''}</p>` : ''}
+        </div>
+      </div>`
+    : `<div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 3v2m6-2v2M9 19v2m6-2v2M3 9h2m-2 6h2m14-6h2m-2 6h2M8 7h8a1 1 0 011 1v8a1 1 0 01-1 1H8a1 1 0 01-1-1V8a1 1 0 011-1Zm2.5 4h3m-3 3h3"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-xs text-purple-600 font-medium">Équipement</p>
+          <p class="font-bold text-slate-800">${esc(res.name)}</p>
+          <p class="text-xs text-slate-500">${esc(res.type)}${res.brand ? ` · ${esc(res.brand)}` : ''}${res.room ? ` · ${esc(res.room.name)}` : ''}</p>
+        </div>
+      </div>`;
+
+  // Lien retour avec redirect
+  document.getElementById('pub-login-link').href = `/login.html?redirect=${encodeURIComponent(location.href)}`;
+}
+
+// ── Vue connectée ─────────────────────────────────────────────────────────────
+function renderAuthView(res, isRoom) {
+  document.getElementById('auth-view').classList.remove('hidden');
+
+  // Lien dashboard
+  const dashLink = isRoom ? `/rooms.html` : `/equipment.html`;
+  document.getElementById('header-actions').innerHTML =
+    `<a href="${dashLink}" class="text-xs text-blue-600 hover:underline font-medium">Dashboard →</a>`;
+
+  // Carte complète
+  document.getElementById('auth-resource-card').innerHTML = isRoom
+    ? `<div class="flex items-start gap-4">
         <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
           <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -220,228 +327,222 @@ function renderContent(data) {
           </svg>
         </div>
         <div class="flex-1">
-          <div class="inline-block bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full mb-1">Salle</div>
-          <h2 class="text-xl font-bold text-slate-800">${res.name}</h2>
-          ${res.building ? `<p class="text-slate-600 text-sm">${res.building}${res.number ? ` · Salle ${res.number}` : ''}${res.floor != null ? ` · Étage ${res.floor}` : ''}</p>` : ''}
-          ${res.description ? `<p class="text-slate-500 text-sm mt-1">${res.description}</p>` : ''}
-          ${res.equipment?.length ? `<p class="text-xs text-slate-400 mt-2">${res.equipment.length} équipement(s)</p>` : ''}
+          <span class="inline-block bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full mb-1">Salle</span>
+          <h2 class="text-xl font-bold text-slate-800">${esc(res.name)}</h2>
+          ${res.building ? `<p class="text-slate-500 text-sm">${esc(res.building)}${res.number ? ` · Salle ${esc(res.number)}` : ''}${res.floor != null ? ` · Étage ${res.floor}` : ''}</p>` : ''}
+          ${res.description ? `<p class="text-slate-400 text-sm mt-1">${esc(res.description)}</p>` : ''}
         </div>
-      </div>`;
-  } else {
-    const statusColors = { ACTIVE: 'bg-green-100 text-green-700', REPAIR: 'bg-yellow-100 text-yellow-700', INACTIVE: 'bg-slate-100 text-slate-600', DECOMMISSIONED: 'bg-red-100 text-red-700' };
-    const statusLabels = { ACTIVE: 'Actif', REPAIR: 'En réparation', INACTIVE: 'Inactif', DECOMMISSIONED: 'Déclassé' };
-    card.innerHTML = `
-      <div class="flex items-start gap-4">
+      </div>`
+    : `<div class="flex items-start gap-4">
         <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
           <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
+              d="M9 3v2m6-2v2M9 19v2m6-2v2M3 9h2m-2 6h2m14-6h2m-2 6h2M8 7h8a1 1 0 011 1v8a1 1 0 01-1 1H8a1 1 0 01-1-1V8a1 1 0 011-1Zm2.5 4h3m-3 3h3"/>
           </svg>
         </div>
         <div class="flex-1">
           <div class="flex items-center gap-2 mb-1">
-            <div class="inline-block bg-purple-100 text-purple-700 text-xs font-medium px-2 py-0.5 rounded-full">Équipement</div>
-            <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[res.status] || ''}">${statusLabels[res.status] || res.status}</span>
+            <span class="inline-block bg-purple-100 text-purple-700 text-xs font-medium px-2 py-0.5 rounded-full">Équipement</span>
+            <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full ${EQUIP_STATUS_COLORS[res.status] || ''}">${EQUIP_STATUS_LABELS[res.status] || res.status}</span>
           </div>
-          <h2 class="text-xl font-bold text-slate-800">${res.name}</h2>
-          <p class="text-slate-600 text-sm">${res.type}${res.brand ? ` · ${res.brand}` : ''}${res.model ? ` ${res.model}` : ''}</p>
-          ${res.serialNumber ? `<p class="text-xs text-slate-400 font-mono mt-1">S/N : ${res.serialNumber}</p>` : ''}
-          ${res.room ? `<p class="text-xs text-slate-500 mt-1">📍 ${res.room.name}${res.room.number ? ` (${res.room.number})` : ''}</p>` : ''}
+          <h2 class="text-xl font-bold text-slate-800">${esc(res.name)}</h2>
+          <p class="text-slate-500 text-sm">${esc(res.type)}${res.brand ? ` · ${esc(res.brand)}` : ''}${res.model ? ` ${esc(res.model)}` : ''}</p>
+          ${res.serialNumber ? `<p class="text-xs text-slate-400 font-mono mt-1">S/N : ${esc(res.serialNumber)}</p>` : ''}
+          ${res.room ? `<p class="text-xs text-slate-500 mt-1">📍 ${esc(res.room.name)}${res.room.number ? ` (${esc(res.room.number)})` : ''}</p>` : ''}
+          ${res.warrantyEnd ? `<p class="text-xs ${new Date(res.warrantyEnd) < new Date() ? 'text-red-500' : 'text-green-600'} mt-1">Garantie : ${fmtDate(res.warrantyEnd)}</p>` : ''}
         </div>
       </div>`;
-  }
 
-  // Historique
-  const history = res.interventions || [];
-  const histList = document.getElementById('history-list');
-  if (history.length === 0) {
-    histList.innerHTML = '<p class="text-slate-400 text-sm">Aucune intervention récente</p>';
-  } else {
-    const statusColors2 = { OPEN: 'bg-blue-100 text-blue-700', IN_PROGRESS: 'bg-orange-100 text-orange-700', RESOLVED: 'bg-green-100 text-green-700', CLOSED: 'bg-slate-100 text-slate-600' };
-    const statusLabels2 = { OPEN: 'Ouvert', IN_PROGRESS: 'En cours', RESOLVED: 'Résolu', CLOSED: 'Fermé' };
-    histList.innerHTML = history.map(i => `
-      <div class="flex items-center gap-3 p-2.5 bg-slate-50 rounded-lg">
+  // Séparer interventions actives / historique
+  const interventions = res.interventions || [];
+  const active  = interventions.filter(i => ['OPEN', 'IN_PROGRESS'].includes(i.status));
+  const history = interventions.filter(i => ['RESOLVED', 'CLOSED'].includes(i.status));
+
+  // Interventions actives
+  const activeCount = document.getElementById('active-count');
+  if (active.length > 0) {
+    activeCount.textContent = active.length;
+    activeCount.classList.remove('hidden');
+  }
+  document.getElementById('active-list').innerHTML = active.length
+    ? active.map(i => interventionRow(i)).join('')
+    : '<p class="px-5 py-4 text-sm text-slate-400 italic">Aucune intervention en cours</p>';
+
+  // Équipements (salles)
+  if (isRoom && res.equipment?.length) {
+    document.getElementById('equip-section').classList.remove('hidden');
+    document.getElementById('equip-count').textContent = `${res.equipment.length} équipement(s)`;
+    document.getElementById('equip-list').innerHTML = res.equipment.map(e => `
+      <div class="flex items-center gap-3 px-5 py-3">
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-slate-800 truncate">${i.title}</p>
-          <p class="text-xs text-slate-500">${i.tech?.name || ''} · ${new Date(i.createdAt).toLocaleDateString('fr-FR')}</p>
+          <p class="text-sm font-medium text-slate-800 truncate">${esc(e.name)}</p>
+          <p class="text-xs text-slate-400">${esc(e.type)}${e.brand ? ` · ${esc(e.brand)}` : ''}</p>
         </div>
-        <span class="text-xs font-medium px-2 py-0.5 rounded-full ${statusColors2[i.status] || ''}">${statusLabels2[i.status] || i.status}</span>
+        <span class="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${EQUIP_STATUS_COLORS[e.status] || ''}">${EQUIP_STATUS_LABELS[e.status] || e.status}</span>
       </div>`).join('');
   }
 
-  // Vérifier auth
-  const loggedUser = JSON.parse(localStorage.getItem('user') || 'null');
-  if (!loggedUser) {
-    document.getElementById('auth-check').classList.remove('hidden');
-    document.getElementById('submit-btn').disabled = true;
-  }
+  // Historique
+  document.getElementById('history-list').innerHTML = history.length
+    ? history.map(i => interventionRow(i)).join('')
+    : '<p class="px-5 py-4 text-sm text-slate-400 italic">Aucune intervention passée</p>';
 }
 
-// Soumission intervention
-document.getElementById('intervention-form').addEventListener('submit', async (e) => {
+function interventionRow(i) {
+  return `<div class="flex items-start gap-3 px-5 py-3.5">
+    <span class="text-lg leading-none mt-0.5 ${PRIO_COLORS[i.priority] || ''}" title="${i.priority}">${PRIO_LABELS[i.priority] || '→'}</span>
+    <div class="flex-1 min-w-0">
+      <p class="text-sm font-medium text-slate-800 truncate">${esc(i.title)}</p>
+      <p class="text-xs text-slate-400 mt-0.5">${i.tech?.name ? esc(i.tech.name) + ' · ' : ''}${fmtRelative(i.createdAt)}</p>
+    </div>
+    <span class="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS[i.status] || ''}">${STATUS_LABELS[i.status] || i.status}</span>
+  </div>`;
+}
+
+// ── Formulaire public ─────────────────────────────────────────────────────────
+document.getElementById('pub-form').addEventListener('submit', async e => {
   e.preventDefault();
+  const title       = document.getElementById('pub-title').value;
+  const description = document.getElementById('pub-description').value;
+  const name        = document.getElementById('pub-name').value;
+  const email       = document.getElementById('pub-email').value;
+  const honeypot    = document.getElementById('pub-honeypot').value;
 
-  const loggedUser = JSON.parse(localStorage.getItem('user') || 'null');
-  if (!loggedUser) {
-    window.location.href = `/login.html?redirect=/scan.html?token=${token}`;
-    return;
-  }
+  const btn   = document.getElementById('pub-submit');
+  const err   = document.getElementById('pub-error');
+  const succ  = document.getElementById('pub-success');
 
-  const title = document.getElementById('int-title').value;
-  const priority = document.getElementById('int-priority').value;
-  const description = document.getElementById('int-description').value;
-  const photoFile = document.getElementById('int-photo').files[0];
-
-  const submitBtn = document.getElementById('submit-btn');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Envoi...';
-  document.getElementById('form-error').classList.add('hidden');
-  document.getElementById('form-success').classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Envoi…';
+  err.classList.add('hidden');
 
   try {
-    const token2 = localStorage.getItem('accessToken');
     const body = {
       title,
-      priority,
       description: description || null,
-      roomId: resourceType === 'room' ? resourceData.id : (resourceData.room?.id || null),
+      reporterName: name || null,
+      reporterEmail: email || null,
+      _honeypot: honeypot
+    };
+    if (resourceType === 'room') body.roomToken = resourceData.qrToken;
+    else body.equipmentToken = resourceData.qrToken;
+
+    const r = await fetch('/api/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      err.textContent = data.error || 'Erreur lors de la soumission.';
+      err.classList.remove('hidden');
+      return;
+    }
+
+    document.getElementById('pub-form').classList.add('hidden');
+    succ.classList.remove('hidden');
+    if (data.token) {
+      const url = `/ticket-status.html?token=${data.token}`;
+      document.getElementById('pub-ticket-link').href = url;
+      document.getElementById('pub-ticket-link').textContent = url;
+    }
+  } catch (ex) {
+    err.textContent = 'Erreur réseau : ' + ex.message;
+    err.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Envoyer le signalement';
+  }
+});
+
+// ── Formulaire intervention (connecté) ────────────────────────────────────────
+document.getElementById('toggle-new-form').addEventListener('click', () => {
+  const container = document.getElementById('new-form-container');
+  const isHidden  = container.classList.contains('hidden');
+  container.classList.toggle('hidden', !isHidden);
+  document.getElementById('toggle-new-form').classList.toggle('bg-blue-600', isHidden);
+  document.getElementById('toggle-new-form').classList.toggle('bg-slate-200', !isHidden);
+  document.getElementById('toggle-new-form').classList.toggle('text-white', isHidden);
+  document.getElementById('toggle-new-form').classList.toggle('text-slate-700', !isHidden);
+});
+
+document.getElementById('int-cancel').addEventListener('click', () => {
+  document.getElementById('new-form-container').classList.add('hidden');
+  document.getElementById('toggle-new-form').className =
+    'w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition';
+  document.getElementById('int-error').classList.add('hidden');
+  document.getElementById('int-success').classList.add('hidden');
+});
+
+document.getElementById('int-submit').addEventListener('click', async () => {
+  const title       = document.getElementById('int-title').value.trim();
+  const priority    = document.getElementById('int-priority').value;
+  const description = document.getElementById('int-description').value;
+  const photoFile   = document.getElementById('int-photo').files[0];
+
+  const btn  = document.getElementById('int-submit');
+  const err  = document.getElementById('int-error');
+  const succ = document.getElementById('int-success');
+
+  if (!title) { err.textContent = 'Le titre est requis.'; err.classList.remove('hidden'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Envoi…';
+  err.classList.add('hidden');
+  succ.classList.add('hidden');
+
+  try {
+    const accessToken = localStorage.getItem('accessToken');
+    const body = {
+      title, priority,
+      description: description || null,
+      roomId:      resourceType === 'room'      ? resourceData.id : (resourceData.room?.id || null),
       equipmentId: resourceType === 'equipment' ? resourceData.id : null
     };
 
-    const res = await fetch('/api/interventions', {
+    const r = await fetch('/api/interventions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token2 ? { 'Authorization': `Bearer ${token2}` } : {})
+        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
       },
       credentials: 'include',
       body: JSON.stringify(body)
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Erreur lors de la création');
-    }
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erreur création'); }
+    const intervention = await r.json();
 
-    const intervention = await res.json();
-
-    // Upload photo si fournie
     if (photoFile) {
       const fd = new FormData();
       fd.append('photos', photoFile);
       await fetch(`/api/interventions/${intervention.id}/photos`, {
         method: 'POST',
-        headers: token2 ? { 'Authorization': `Bearer ${token2}` } : {},
+        headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {},
         credentials: 'include',
         body: fd
       });
     }
 
-    document.getElementById('form-success').textContent = 'Intervention créée avec succès ! Numéro : ' + intervention.id.slice(0,8).toUpperCase();
-    document.getElementById('form-success').classList.remove('hidden');
-    document.getElementById('intervention-form').reset();
+    succ.textContent = `Intervention créée (${intervention.id.slice(0,8).toUpperCase()})`;
+    succ.classList.remove('hidden');
+    document.getElementById('int-title').value = '';
+    document.getElementById('int-description').value = '';
+    document.getElementById('int-photo').value = '';
 
-    // Recharger l'historique
-    setTimeout(() => resolveToken(), 1500);
-  } catch (err) {
-    document.getElementById('form-error').textContent = err.message;
-    document.getElementById('form-error').classList.remove('hidden');
+    // Rafraîchir
+    setTimeout(() => resolveToken(), 1200);
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.classList.remove('hidden');
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Soumettre l\'intervention';
+    btn.disabled = false;
+    btn.textContent = 'Soumettre';
   }
 });
 
 resolveToken();
-
-// Toggle formulaire public
-document.getElementById('toggle-public-form').addEventListener('click', () => {
-  const container = document.getElementById('public-form-container');
-  const btn = document.getElementById('toggle-public-form');
-  const isHidden = container.classList.contains('hidden');
-  if (isHidden) {
-    container.classList.remove('hidden');
-    btn.textContent = 'Fermer le formulaire';
-  } else {
-    container.classList.add('hidden');
-    btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-    </svg> Ouvrir le formulaire de signalement`;
-  }
-});
-
-// Soumission formulaire public
-document.getElementById('public-ticket-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-
-  const title = document.getElementById('pub-title').value;
-  const description = document.getElementById('pub-description').value;
-  const reporterName = document.getElementById('pub-name').value;
-  const reporterEmail = document.getElementById('pub-email').value;
-  const honeypot = document.getElementById('public-honeypot').value;
-
-  const pubSubmitBtn = document.getElementById('pub-submit-btn');
-  const pubError = document.getElementById('public-form-error');
-  const pubSuccess = document.getElementById('public-form-success');
-
-  pubSubmitBtn.disabled = true;
-  pubSubmitBtn.textContent = 'Envoi...';
-  pubError.classList.add('hidden');
-  pubSuccess.classList.add('hidden');
-
-  try {
-    const body = {
-      title,
-      description: description || null,
-      reporterName: reporterName || null,
-      reporterEmail: reporterEmail || null,
-      _honeypot: honeypot
-    };
-
-    // Ajouter le token de salle ou d'équipement
-    if (resourceType === 'room') {
-      body.roomToken = resourceData.qrToken;
-    } else {
-      body.equipmentToken = resourceData.qrToken;
-    }
-
-    const res = await fetch('/api/tickets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-
-    const data = await res.json();
-
-    if (res.status === 429) {
-      pubError.textContent = data.error || 'Veuillez patienter avant de soumettre un nouveau ticket.';
-      pubError.classList.remove('hidden');
-      return;
-    }
-
-    if (!res.ok) {
-      pubError.textContent = data.error || 'Erreur lors de la soumission.';
-      pubError.classList.remove('hidden');
-      return;
-    }
-
-    // Succès
-    document.getElementById('public-ticket-form').classList.add('hidden');
-    pubSuccess.classList.remove('hidden');
-    if (data.token) {
-      const statusUrl = `/ticket-status.html?token=${data.token}`;
-      const link = document.getElementById('public-ticket-link');
-      link.href = statusUrl;
-      link.textContent = statusUrl;
-    }
-  } catch (err) {
-    pubError.textContent = 'Erreur réseau : ' + err.message;
-    pubError.classList.remove('hidden');
-  } finally {
-    pubSubmitBtn.disabled = false;
-    pubSubmitBtn.textContent = 'Envoyer le signalement';
-  }
-});
 </script>
 </body>
 </html>
