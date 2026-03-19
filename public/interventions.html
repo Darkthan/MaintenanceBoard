@@ -79,6 +79,95 @@
   </main>
 </div>
 
+<div id="detail-backdrop" class="hidden fixed inset-0 z-40 bg-black/40" onclick="closeInterventionDetail()"></div>
+<aside id="detail-panel"
+  class="fixed top-0 right-0 bottom-0 z-50 w-full max-w-2xl bg-white shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out">
+  <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 flex-shrink-0">
+    <div class="flex-1 min-w-0">
+      <p id="detail-meta" class="text-xs text-slate-400 mb-0.5"></p>
+      <h3 id="detail-title" class="font-semibold text-slate-800 truncate"></h3>
+    </div>
+    <button onclick="closeInterventionDetail()" class="ml-3 text-slate-400 hover:text-slate-700 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div class="flex-1 overflow-y-auto">
+    <div class="px-5 py-4 space-y-3 border-b border-slate-100">
+      <div class="flex flex-wrap gap-2 items-center">
+        <span id="detail-status"></span>
+        <span id="detail-priority"></span>
+        <span id="detail-source"></span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        <div><span class="text-xs text-slate-400 block">Technicien</span><span id="detail-tech" class="font-medium text-slate-700"></span></div>
+        <div><span class="text-xs text-slate-400 block">Créée le</span><span id="detail-created" class="font-medium text-slate-700"></span></div>
+        <div><span class="text-xs text-slate-400 block">Salle</span><span id="detail-room" class="font-medium text-slate-700"></span></div>
+        <div><span class="text-xs text-slate-400 block">Équipement</span><span id="detail-equipment" class="font-medium text-slate-700"></span></div>
+      </div>
+      <div id="detail-description-wrap" class="hidden">
+        <span class="text-xs text-slate-400 block mb-1">Description</span>
+        <div id="detail-description" class="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2 whitespace-pre-wrap"></div>
+      </div>
+      <div id="detail-resolution-wrap" class="hidden">
+        <span class="text-xs text-slate-400 block mb-1">Résolution</span>
+        <div id="detail-resolution" class="text-sm text-slate-600 bg-emerald-50 rounded-lg px-3 py-2 whitespace-pre-wrap"></div>
+      </div>
+    </div>
+
+    <div class="px-5 py-4 border-b border-slate-100 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Notes d'intervention</p>
+          <p class="text-xs text-slate-400">Ajoutez un suivi libre visible depuis la fiche.</p>
+        </div>
+        <button id="save-notes-btn" onclick="saveInterventionNotes()"
+          class="px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">
+          Enregistrer
+        </button>
+      </div>
+      <textarea id="detail-notes" rows="5"
+        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        placeholder="Ex: relancé le fournisseur, intervention prioritaire, attente validation responsable..."></textarea>
+    </div>
+
+    <div class="px-5 py-4 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Suivi des commandes liées</p>
+          <p class="text-xs text-slate-400">Mettez à jour l'état de commande, la date de commande et la réception prévue.</p>
+        </div>
+        <button id="detail-create-order-btn" onclick="openCreateOrderFromIntervention(detailInterventionId)"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Générer une commande
+        </button>
+      </div>
+      <div id="detail-orders" class="space-y-3"></div>
+    </div>
+
+    <!-- Section messages (tickets publics uniquement) -->
+    <div id="detail-messages-section" class="hidden px-5 py-4 border-t border-slate-100 space-y-3">
+      <div>
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Messages du demandeur</p>
+        <p class="text-xs text-slate-400">Historique des échanges avec le demandeur du ticket public.</p>
+      </div>
+      <div id="detail-messages-list" class="space-y-2 max-h-64 overflow-y-auto bg-slate-50 rounded-xl p-3">
+        <p id="detail-no-messages" class="text-xs text-slate-400 text-center py-2">Aucun message.</p>
+      </div>
+      <div class="flex gap-2">
+        <textarea id="detail-message-input" rows="2" placeholder="Répondre au demandeur..."
+          class="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+        <button onclick="sendTechMessage()"
+          class="flex-shrink-0 self-end px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-xl transition">
+          Envoyer
+        </button>
+      </div>
+      <p id="detail-message-error" class="hidden text-xs text-red-500"></p>
+    </div>
+  </div>
+</aside>
+
 <!-- Modal Intervention -->
 <div id="intervention-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto">
@@ -176,6 +265,53 @@ if (user.name) document.getElementById('user-avatar').textContent = user.name[0]
 
 let currentPage = 1, currentSearch = '', currentStatus = '', currentPriority = '', currentSource = '';
 const pageParams = new URLSearchParams(window.location.search);
+let detailInterventionId = null;
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatDateOnly(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString('fr-FR');
+}
+
+function toDateInputValue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function orderStatusBadge(status) {
+  const config = {
+    PENDING: ['En attente', 'bg-amber-100 text-amber-700'],
+    ORDERED: ['Commandée', 'bg-blue-100 text-blue-700'],
+    PARTIAL: ['Réception partielle', 'bg-orange-100 text-orange-700'],
+    RECEIVED: ['Reçue', 'bg-emerald-100 text-emerald-700'],
+    CANCELLED: ['Annulée', 'bg-red-100 text-red-700']
+  };
+  const [label, classes] = config[status] || [status, 'bg-slate-100 text-slate-700'];
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${classes}">${label}</span>`;
+}
+
+function priorityBadge(priority) {
+  const config = {
+    LOW: ['Basse', 'bg-slate-100 text-slate-700'],
+    NORMAL: ['Normale', 'bg-blue-100 text-blue-700'],
+    HIGH: ['Haute', 'bg-orange-100 text-orange-700'],
+    CRITICAL: ['Critique', 'bg-red-100 text-red-700']
+  };
+  const [label, classes] = config[priority] || [priority, 'bg-slate-100 text-slate-700'];
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${classes}">${label}</span>`;
+}
 
 if (pageParams.get('search')) {
   currentSearch = pageParams.get('search');
@@ -216,15 +352,20 @@ async function loadInterventions() {
     const priorityBorderColor = { LOW: 'border-l-slate-300', NORMAL: 'border-l-blue-400', HIGH: 'border-l-orange-400', CRITICAL: 'border-l-red-500' };
 
     container.innerHTML = data.data.map(i => `
-      <div class="bg-white rounded-xl border border-slate-200 border-l-4 ${priorityBorderColor[i.priority] || 'border-l-blue-400'} p-5 hover:shadow-sm transition">
+      <div onclick="openInterventionDetail('${i.id}')" class="bg-white rounded-xl border border-slate-200 border-l-4 ${priorityBorderColor[i.priority] || 'border-l-blue-400'} p-5 hover:shadow-sm transition cursor-pointer">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap mb-1">
-              <h3 class="font-semibold text-slate-800">${i.title}</h3>
+              <a href="/interventions.html?focus=${encodeURIComponent(i.id)}"
+                onclick="event.stopPropagation()"
+                class="font-semibold text-slate-800 hover:text-blue-600 transition text-left underline-offset-2 hover:underline">
+                ${i.title}
+              </a>
               ${statusBadge(i.status)}
-              ${i.priority !== 'NORMAL' ? statusBadge(i.priority) : ''}
+              ${i.priority !== 'NORMAL' ? priorityBadge(i.priority) : ''}
             </div>
             ${i.description ? `<p class="text-sm text-slate-600 mt-1 line-clamp-2">${i.description}</p>` : ''}
+            ${i.notes ? `<p class="text-xs text-slate-500 mt-2">📝 Notes enregistrées</p>` : ''}
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
               ${i.room ? `<span>📍 ${i.room.name}${i.room.number ? ` (${i.room.number})` : ''}</span>` : ''}
               ${i.equipment ? `<span>🖥️ ${i.equipment.name}</span>` : ''}
@@ -235,13 +376,14 @@ async function loadInterventions() {
               ${i.source === 'PUBLIC' ? '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Public</span>' : ''}
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
-              <button onclick="openCreateOrderFromIntervention('${i.id}')"
+              <button onclick="event.stopPropagation(); openCreateOrderFromIntervention('${i.id}')"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 Generer une commande
               </button>
               ${(i.orders || []).map(order => `
                 <a href="/orders.html?focus=${encodeURIComponent(order.id)}"
+                  onclick="event.stopPropagation()"
                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium hover:bg-slate-200 transition">
                   <span>BC ${order.id.slice(-6).toUpperCase()}</span>
                   <span class="text-slate-400">·</span>
@@ -251,16 +393,16 @@ async function loadInterventions() {
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0 self-stretch sm:self-auto">
-            <button onclick="openPhotosModal('${i.id}')"
+            <button onclick="event.stopPropagation(); openPhotosModal('${i.id}')"
               class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition" title="Ajouter photos">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             </button>
-            <button onclick="editIntervention(${JSON.stringify(i).replace(/"/g, '&quot;')})"
+            <button onclick="event.stopPropagation(); editIntervention(${JSON.stringify(i).replace(/"/g, '&quot;')})"
               class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
             ${user.role === 'ADMIN' ? `
-            <button onclick="deleteIntervention('${i.id}')"
+            <button onclick="event.stopPropagation(); deleteIntervention('${i.id}')"
               class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-red-600 transition">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </button>` : ''}
@@ -286,6 +428,175 @@ function changePage(p) { currentPage = p; loadInterventions(); }
 
 function openCreateOrderFromIntervention(interventionId) {
   window.location = `/orders.html?action=create&interventionId=${encodeURIComponent(interventionId)}`;
+}
+
+function renderLinkedOrders(orders = []) {
+  const container = document.getElementById('detail-orders');
+  if (!orders.length) {
+    container.innerHTML = `<div class="border border-dashed border-slate-200 rounded-xl p-6 text-center text-sm text-slate-400">
+      Aucune commande liée pour cette intervention.
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = orders.map(order => `
+    <form class="border border-slate-200 rounded-xl p-4 space-y-3" onsubmit="event.preventDefault(); updateLinkedOrder('${order.id}', this)">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h4 class="font-medium text-slate-800">${escapeHtml(order.title)}</h4>
+            ${orderStatusBadge(order.status)}
+          </div>
+          <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">
+            <span>BC ${order.id.slice(-6).toUpperCase()}</span>
+            ${order.supplier ? `<span>Fournisseur: ${escapeHtml(order.supplier)}</span>` : ''}
+            ${order.receivedAt ? `<span>Reçue le ${formatDateOnly(order.receivedAt)}</span>` : ''}
+          </div>
+        </div>
+        <a href="/orders.html?focus=${encodeURIComponent(order.id)}"
+          class="text-xs text-blue-600 hover:underline flex-shrink-0">Ouvrir la commande</a>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Statut</label>
+          <select name="status" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="PENDING" ${order.status === 'PENDING' ? 'selected' : ''}>En attente</option>
+            <option value="ORDERED" ${order.status === 'ORDERED' ? 'selected' : ''}>Commandée</option>
+            <option value="PARTIAL" ${order.status === 'PARTIAL' ? 'selected' : ''}>Partielle</option>
+            <option value="RECEIVED" ${order.status === 'RECEIVED' ? 'selected' : ''}>Reçue</option>
+            <option value="CANCELLED" ${order.status === 'CANCELLED' ? 'selected' : ''}>Annulée</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Date de commande</label>
+          <input name="orderedAt" type="date" value="${toDateInputValue(order.orderedAt)}"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Réception prévue</label>
+          <input name="expectedDeliveryAt" type="date" value="${toDateInputValue(order.expectedDeliveryAt)}"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Notes de suivi</label>
+        <textarea name="trackingNotes" rows="3"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          placeholder="Ex: commande passée chez X, attente validation, livraison annoncée vendredi...">${escapeHtml(order.trackingNotes || '')}</textarea>
+      </div>
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-xs text-slate-400">
+          ${order.orderedAt ? `Commandée le ${formatDateOnly(order.orderedAt)}` : 'Pas encore marquée comme commandée'}
+        </p>
+        <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">
+          Enregistrer le suivi
+        </button>
+      </div>
+    </form>
+  `).join('');
+}
+
+async function openInterventionDetail(id) {
+  detailInterventionId = id;
+  try {
+    const intervention = await api.get(`/interventions/${id}`);
+    const panel = document.getElementById('detail-panel');
+    const backdrop = document.getElementById('detail-backdrop');
+
+    document.getElementById('detail-title').textContent = intervention.title;
+    document.getElementById('detail-meta').textContent = `Intervention #${intervention.id.slice(-6).toUpperCase()}`;
+    document.getElementById('detail-status').innerHTML = statusBadge(intervention.status);
+    document.getElementById('detail-priority').innerHTML = priorityBadge(intervention.priority);
+    document.getElementById('detail-source').innerHTML = intervention.source === 'PUBLIC'
+      ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Publique</span>'
+      : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Interne</span>';
+    document.getElementById('detail-tech').textContent = intervention.tech?.name || '—';
+    document.getElementById('detail-created').textContent = formatDate(intervention.createdAt, true);
+    document.getElementById('detail-room').textContent = intervention.room
+      ? `${intervention.room.name}${intervention.room.number ? ` (${intervention.room.number})` : ''}`
+      : '—';
+    document.getElementById('detail-equipment').textContent = intervention.equipment
+      ? `${intervention.equipment.name}${intervention.equipment.type ? ` (${intervention.equipment.type})` : ''}`
+      : '—';
+    document.getElementById('detail-notes').value = intervention.notes || '';
+
+    const descriptionWrap = document.getElementById('detail-description-wrap');
+    const resolutionWrap = document.getElementById('detail-resolution-wrap');
+    if (intervention.description) {
+      document.getElementById('detail-description').textContent = intervention.description;
+      descriptionWrap.classList.remove('hidden');
+    } else {
+      descriptionWrap.classList.add('hidden');
+    }
+    if (intervention.resolution) {
+      document.getElementById('detail-resolution').textContent = intervention.resolution;
+      resolutionWrap.classList.remove('hidden');
+    } else {
+      resolutionWrap.classList.add('hidden');
+    }
+
+    renderLinkedOrders(intervention.orders || []);
+
+    // Messages section (tickets publics uniquement)
+    const messagesSection = document.getElementById('detail-messages-section');
+    if (intervention.source === 'PUBLIC') {
+      messagesSection.classList.remove('hidden');
+      document.getElementById('detail-message-input').value = '';
+      document.getElementById('detail-message-error').classList.add('hidden');
+      loadDetailMessages(id);
+    } else {
+      messagesSection.classList.add('hidden');
+    }
+
+    backdrop.classList.remove('hidden');
+    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function closeInterventionDetail() {
+  const panel = document.getElementById('detail-panel');
+  const backdrop = document.getElementById('detail-backdrop');
+  panel.classList.add('translate-x-full');
+  setTimeout(() => backdrop.classList.add('hidden'), 300);
+  detailInterventionId = null;
+}
+
+async function saveInterventionNotes() {
+  if (!detailInterventionId) return;
+  const button = document.getElementById('save-notes-btn');
+  button.disabled = true;
+  try {
+    await api.patch(`/interventions/${detailInterventionId}`, {
+      notes: document.getElementById('detail-notes').value || null
+    });
+    showToast('Notes enregistrées');
+    await Promise.all([openInterventionDetail(detailInterventionId), loadInterventions()]);
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function updateLinkedOrder(orderId, form) {
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    await api.patch(`/orders/${orderId}`, {
+      status: form.status.value,
+      orderedAt: form.orderedAt.value || null,
+      expectedDeliveryAt: form.expectedDeliveryAt.value || null,
+      trackingNotes: form.trackingNotes.value || null
+    });
+    showToast('Suivi de commande mis à jour');
+    await Promise.all([openInterventionDetail(detailInterventionId), loadInterventions()]);
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
 }
 
 let searchTimeout;
@@ -424,6 +735,75 @@ document.getElementById('upload-photos-btn').addEventListener('click', async () 
   } catch (err) { showToast(err.message, 'error'); }
 });
 
+// --- Messages (tickets publics) ---
+
+async function loadDetailMessages(interventionId) {
+  const list = document.getElementById('detail-messages-list');
+  const noMsgEl = document.getElementById('detail-no-messages');
+  try {
+    const messages = await api.get(`/interventions/${interventionId}/messages`);
+    if (!messages || messages.length === 0) {
+      list.innerHTML = '<p id="detail-no-messages" class="text-xs text-slate-400 text-center py-2">Aucun message.</p>';
+      return;
+    }
+    list.innerHTML = messages.map(m => {
+      const isReporter = m.authorType === 'REPORTER';
+      const name = escapeHtml(m.authorName || (isReporter ? 'Demandeur' : 'Équipe technique'));
+      const time = new Date(m.createdAt).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      if (isReporter) {
+        return `<div class="flex justify-start">
+          <div class="max-w-[85%]">
+            <p class="text-xs text-slate-400 mb-0.5">${name} · ${time}</p>
+            <div class="bg-orange-50 border border-orange-200 text-slate-700 rounded-xl rounded-tl-sm px-3 py-2 text-xs whitespace-pre-wrap">${escapeHtml(m.content)}</div>
+          </div>
+        </div>`;
+      } else {
+        return `<div class="flex justify-end">
+          <div class="max-w-[85%]">
+            <p class="text-xs text-slate-400 text-right mb-0.5">Vous · ${time}</p>
+            <div class="bg-blue-600 text-white rounded-xl rounded-tr-sm px-3 py-2 text-xs whitespace-pre-wrap">${escapeHtml(m.content)}</div>
+          </div>
+        </div>`;
+      }
+    }).join('');
+    list.scrollTop = list.scrollHeight;
+  } catch (err) {
+    // Fail silently
+  }
+}
+
+async function sendTechMessage() {
+  if (!detailInterventionId) return;
+  const input = document.getElementById('detail-message-input');
+  const errEl = document.getElementById('detail-message-error');
+  const content = input.value.trim();
+
+  errEl.classList.add('hidden');
+  if (!content) return;
+  if (content.length > 2000) {
+    errEl.textContent = 'Le message ne peut pas dépasser 2000 caractères.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    await api.post(`/interventions/${detailInterventionId}/messages`, { content });
+    input.value = '';
+    await loadDetailMessages(detailInterventionId);
+  } catch (err) {
+    errEl.textContent = err.message || 'Erreur lors de l\'envoi.';
+    errEl.classList.remove('hidden');
+  }
+}
+
+// Allow Enter to send (Shift+Enter = newline) in detail message input
+document.getElementById('detail-message-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendTechMessage();
+  }
+});
+
 loadInterventions();
 
 if (pageParams.get('action') === 'create') {
@@ -432,8 +812,7 @@ if (pageParams.get('action') === 'create') {
 if (pageParams.get('focus')) {
   setTimeout(async () => {
     try {
-      const intervention = await api.get(`/interventions/${pageParams.get('focus')}`);
-      editIntervention(intervention);
+      await openInterventionDetail(pageParams.get('focus'));
     } catch (err) {
       showToast(err.message, 'error');
     }

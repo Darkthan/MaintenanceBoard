@@ -8,6 +8,8 @@ const { uploadPhoto } = require('../middleware/upload');
 
 const prisma = require('../lib/prisma');
 const { containsFilter } = require('../lib/db-utils');
+const { createSmtpTransporter } = require('../utils/mail');
+const config = require('../config');
 
 // SQLite stocke photos en JSON string — normaliser en tableau JS
 function parsePhotos(intervention) {
@@ -39,7 +41,11 @@ const interventionInclude = {
       title: true,
       status: true,
       supplier: true,
-      createdAt: true
+      createdAt: true,
+      orderedAt: true,
+      expectedDeliveryAt: true,
+      receivedAt: true,
+      trackingNotes: true
     },
     orderBy: { createdAt: 'desc' }
   }
@@ -148,7 +154,7 @@ router.post('/',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { title, description, status, priority, roomId, equipmentId, techId } = req.body;
+      const { title, description, notes, status, priority, roomId, equipmentId, techId } = req.body;
 
       // TECH peut seulement créer pour lui-même
       const assignedTechId = req.user.role === 'ADMIN' && techId ? techId : req.user.id;
@@ -157,6 +163,7 @@ router.post('/',
         data: {
           title,
           description: description || null,
+          notes: notes || null,
           status: status || 'OPEN',
           priority: priority || 'NORMAL',
           roomId: roomId || null,
@@ -196,10 +203,11 @@ router.patch('/:id',
         return res.status(403).json({ error: 'Accès refusé' });
       }
 
-      const { title, description, status, priority, resolution } = req.body;
+      const { title, description, notes, status, priority, resolution } = req.body;
       const data = {};
       if (title !== undefined) data.title = title;
       if (description !== undefined) data.description = description;
+      if (notes !== undefined) data.notes = notes;
       if (status !== undefined) {
         data.status = status;
         if (status === 'CLOSED' || status === 'RESOLVED') {
@@ -270,6 +278,79 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Intervention introuvable' });
     next(err);
   }
+});
+
+// GET /api/interventions/:id/messages — Messages d'une intervention (auth requise)
+router.get('/:id/messages', requireAuth, async (req, res, next) => {
+  try {
+    const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+    if (req.user.role === 'TECH' && intervention.techId !== req.user.id) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    const messages = await prisma.ticketMessage.findMany({
+      where: { interventionId: req.params.id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, content: true, authorType: true, authorName: true, createdAt: true }
+    });
+
+    res.json(messages);
+  } catch (err) { next(err); }
+});
+
+// POST /api/interventions/:id/messages — Envoyer un message tech
+router.post('/:id/messages', requireAuth, async (req, res, next) => {
+  try {
+    const { content } = req.body;
+
+    if (!content || typeof content !== 'string' || content.trim().length < 1 || content.trim().length > 2000) {
+      return res.status(400).json({ error: 'Le message doit contenir entre 1 et 2000 caractères.' });
+    }
+
+    const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+
+    const message = await prisma.ticketMessage.create({
+      data: {
+        interventionId: req.params.id,
+        content: content.trim(),
+        authorType: 'TECH',
+        authorName: req.user.name
+      }
+    });
+
+    // Notification email au reporter si email renseigné
+    if (intervention.reporterEmail && intervention.reporterToken) {
+      try {
+        const { transporter, from } = createSmtpTransporter();
+        if (transporter) {
+          const ticketLink = `${config.appUrl}/ticket-status.html?token=${intervention.reporterToken}`;
+          await transporter.sendMail({
+            from,
+            to: intervention.reporterEmail,
+            subject: `[Réponse] ${intervention.title} – MaintenanceBoard`,
+            html: `
+              <div style="font-family:sans-serif;max-width:500px;margin:0 auto;">
+                <h2 style="color:#1e293b;">Réponse de l'équipe technique</h2>
+                <p>Bonjour${intervention.reporterName ? ' ' + intervention.reporterName : ''},</p>
+                <p><strong>${req.user.name}</strong> a répondu à votre demande :</p>
+                <blockquote style="border-left:3px solid #3b82f6;padding-left:12px;color:#475569;">${content.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</blockquote>
+                <p style="margin-top:24px;">
+                  <a href="${ticketLink}" style="background:#f97316;color:white;padding:10px 20px;text-decoration:none;border-radius:8px;font-weight:bold;">Voir ma demande</a>
+                </p>
+                <p style="color:#64748b;font-size:12px;margin-top:16px;">Lien direct : <a href="${ticketLink}">${ticketLink}</a></p>
+              </div>
+            `
+          });
+        }
+      } catch (mailErr) {
+        // Fail silently
+      }
+    }
+
+    res.status(201).json(message);
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

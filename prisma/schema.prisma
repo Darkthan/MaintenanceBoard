@@ -142,6 +142,7 @@ model Intervention {
   id          String   @id @default(uuid())
   title       String
   description String?
+  notes       String?
   status      String   @default("OPEN")    // OPEN | IN_PROGRESS | RESOLVED | CLOSED
   priority    String   @default("NORMAL")  // LOW | NORMAL | HIGH | CRITICAL
   photos      String   @default("[]")      // JSON array sérialisé
@@ -162,8 +163,32 @@ model Intervention {
   tech           User?      @relation(fields: [techId], references: [id])
   orders         Order[]
   stockMovements StockMovement[]
+  messages       TicketMessage[]
 
   @@map("interventions")
+}
+
+model TicketMessage {
+  id             String       @id @default(uuid())
+  interventionId String
+  content        String
+  authorType     String       // TECH | REPORTER
+  authorName     String?
+  createdAt      DateTime     @default(now())
+
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_messages")
+}
+
+model ReporterMagicLink {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique @default(uuid())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("reporter_magic_links")
 }
 
 model Order {
@@ -178,7 +203,9 @@ model Order {
   interventionId String?
   supplierId     String?
   orderedAt      DateTime?
+  expectedDeliveryAt DateTime?
   receivedAt     DateTime?
+  trackingNotes  String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

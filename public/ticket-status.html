@@ -8,19 +8,19 @@
 </head>
 <body class="min-h-screen bg-slate-100">
 
-<div id="app" class="max-w-lg mx-auto p-4 pb-8">
+<div id="app" class="max-w-lg mx-auto p-4 pb-12">
   <!-- Header -->
   <div class="flex items-center gap-3 mb-6 pt-4">
-    <div class="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center">
+    <div class="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
       <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
       </svg>
     </div>
-    <div>
+    <div class="flex-1 min-w-0">
       <p class="font-bold text-slate-800">MaintenanceBoard</p>
       <p class="text-xs text-slate-500">Suivi de ticket</p>
     </div>
-    <button onclick="history.back()" class="ml-auto text-sm text-blue-600 hover:underline flex items-center gap-1">
+    <button onclick="history.back()" class="text-sm text-blue-600 hover:underline flex items-center gap-1 flex-shrink-0">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
       </svg>
@@ -47,14 +47,12 @@
 
   <!-- Contenu ticket -->
   <div id="content-state" class="hidden space-y-4">
+    <!-- Fiche ticket -->
     <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-      <!-- En-tête avec statut -->
       <div class="flex items-start justify-between gap-3 mb-4">
         <h2 id="ticket-title" class="text-lg font-bold text-slate-800 flex-1"></h2>
         <span id="status-badge" class="flex-shrink-0 text-xs font-semibold px-3 py-1 rounded-full"></span>
       </div>
-
-      <!-- Détails -->
       <div class="space-y-2 text-sm">
         <div class="flex items-center gap-2 text-slate-600">
           <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -83,6 +81,37 @@
       </div>
     </div>
 
+    <!-- Section chat -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Messages</p>
+      </div>
+
+      <!-- Liste de messages -->
+      <div id="messages-list" class="px-4 py-3 space-y-3 min-h-[80px] max-h-96 overflow-y-auto">
+        <p id="no-messages" class="text-sm text-slate-400 text-center py-4">Aucun message pour l'instant. N'hésitez pas à écrire si vous avez des précisions à apporter.</p>
+      </div>
+
+      <!-- Formulaire envoi message -->
+      <div class="px-4 py-3 border-t border-slate-100">
+        <div class="flex gap-2">
+          <textarea id="message-input"
+            rows="2"
+            placeholder="Votre message..."
+            class="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+          ></textarea>
+          <button id="send-btn" onclick="sendMessage()"
+            class="flex-shrink-0 self-end px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition disabled:opacity-50">
+            Envoyer
+          </button>
+        </div>
+        <p id="send-error" class="hidden text-xs text-red-500 mt-1"></p>
+      </div>
+    </div>
+
     <!-- Explication des statuts -->
     <div class="bg-slate-50 rounded-xl border border-slate-200 p-4 text-xs text-slate-500 space-y-1">
       <p class="font-semibold text-slate-600 mb-2">Signification des statuts</p>
@@ -91,30 +120,44 @@
       <p><span class="font-medium text-green-700">Résolu</span> — Problème résolu</p>
       <p><span class="font-medium text-slate-600">Fermé</span> — Dossier clôturé</p>
     </div>
+
+    <!-- Section magic link -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+      <p class="text-sm font-semibold text-slate-700 mb-1">Accéder à toutes mes demandes</p>
+      <p class="text-xs text-slate-500 mb-3">Recevez un lien par email pour consulter l'ensemble de vos tickets.</p>
+      <div class="flex gap-2">
+        <input type="email" id="magic-email" placeholder="Votre adresse email"
+          class="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+        <button onclick="requestMagicLink()"
+          class="flex-shrink-0 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-medium rounded-xl transition">
+          Recevoir un lien
+        </button>
+      </div>
+      <p id="magic-success" class="hidden text-xs text-green-600 mt-2">Un lien vous a été envoyé par email.</p>
+      <p id="magic-error" class="hidden text-xs text-red-500 mt-2"></p>
+    </div>
   </div>
 </div>
 
 <script>
-const STATUS_LABELS = {
-  OPEN: 'Ouvert',
-  IN_PROGRESS: 'En cours',
-  RESOLVED: 'Résolu',
-  CLOSED: 'Fermé'
-};
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
+const STATUS_LABELS = { OPEN:'Ouvert', IN_PROGRESS:'En cours', RESOLVED:'Résolu', CLOSED:'Fermé' };
 const STATUS_CLASSES = {
-  OPEN: 'bg-blue-100 text-blue-700',
-  IN_PROGRESS: 'bg-orange-100 text-orange-700',
-  RESOLVED: 'bg-green-100 text-green-700',
-  CLOSED: 'bg-slate-100 text-slate-600'
+  OPEN:'bg-blue-100 text-blue-700',
+  IN_PROGRESS:'bg-orange-100 text-orange-700',
+  RESOLVED:'bg-green-100 text-green-700',
+  CLOSED:'bg-slate-100 text-slate-600'
 };
+const PRIORITY_LABELS = { LOW:'Basse', NORMAL:'Normale', HIGH:'Haute', CRITICAL:'Critique' };
 
-const PRIORITY_LABELS = {
-  LOW: 'Basse',
-  NORMAL: 'Normale',
-  HIGH: 'Haute',
-  CRITICAL: 'Critique'
-};
+const params = new URLSearchParams(window.location.search);
+const ticketToken = params.get('token');
+let ticketData = null;
+let lastMessageCount = 0;
+let pollInterval = null;
 
 function showError(msg) {
   document.getElementById('loading-state').classList.add('hidden');
@@ -122,10 +165,171 @@ function showError(msg) {
   if (msg) document.getElementById('error-message').textContent = msg;
 }
 
-async function loadTicket() {
-  const params = new URLSearchParams(window.location.search);
-  const ticketToken = params.get('token');
+function formatDate(d) {
+  return new Date(d).toLocaleString('fr-FR', {
+    day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
+  });
+}
 
+function formatTime(d) {
+  return new Date(d).toLocaleString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+}
+
+function renderMessages(messages) {
+  const list = document.getElementById('messages-list');
+  const noMsg = document.getElementById('no-messages');
+
+  if (!messages || messages.length === 0) {
+    noMsg.classList.remove('hidden');
+    return;
+  }
+  noMsg.classList.add('hidden');
+
+  list.innerHTML = messages.map(m => {
+    const isReporter = m.authorType === 'REPORTER';
+    const name = esc(m.authorName || (isReporter ? 'Vous' : 'Équipe technique'));
+    const time = formatTime(m.createdAt);
+
+    if (isReporter) {
+      return `<div class="flex justify-end">
+        <div class="max-w-[80%]">
+          <p class="text-xs text-slate-400 text-right mb-0.5">${name} · ${time}</p>
+          <div class="bg-orange-500 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm whitespace-pre-wrap">${esc(m.content)}</div>
+        </div>
+      </div>`;
+    } else {
+      return `<div class="flex justify-start">
+        <div class="max-w-[80%]">
+          <p class="text-xs text-slate-400 mb-0.5">Équipe technique · ${time}</p>
+          <div class="bg-slate-100 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm whitespace-pre-wrap">${esc(m.content)}</div>
+        </div>
+      </div>`;
+    }
+  }).join('');
+
+  // Scroll to bottom
+  list.scrollTop = list.scrollHeight;
+}
+
+async function loadMessages() {
+  if (!ticketToken) return;
+  try {
+    const res = await fetch(`/api/tickets/${ticketToken}/messages`);
+    if (!res.ok) return;
+    const messages = await res.json();
+
+    // Detect new messages (from TECH) for notification
+    if (lastMessageCount > 0 && messages.length > lastMessageCount) {
+      const newMsgs = messages.slice(lastMessageCount);
+      const techMsgs = newMsgs.filter(m => m.authorType === 'TECH');
+      techMsgs.forEach(msg => {
+        if (Notification.permission === 'granted') {
+          new Notification('Nouveau message – MaintenanceBoard', {
+            body: msg.content.slice(0, 80)
+          });
+        }
+      });
+    }
+
+    lastMessageCount = messages.length;
+    renderMessages(messages);
+  } catch (e) {
+    // Fail silently for polling
+  }
+}
+
+async function sendMessage() {
+  const input = document.getElementById('message-input');
+  const btn = document.getElementById('send-btn');
+  const errEl = document.getElementById('send-error');
+  const content = input.value.trim();
+
+  errEl.classList.add('hidden');
+
+  if (!content) return;
+  if (content.length > 2000) {
+    errEl.textContent = 'Le message ne peut pas dépasser 2000 caractères.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Envoi…';
+
+  try {
+    const res = await fetch(`/api/tickets/${ticketToken}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content })
+    });
+
+    if (res.status === 429) {
+      errEl.textContent = 'Trop de messages envoyés. Réessayez dans une heure.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      errEl.textContent = data.error || 'Erreur lors de l\'envoi.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    input.value = '';
+    await loadMessages();
+  } catch (e) {
+    errEl.textContent = 'Erreur réseau.';
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Envoyer';
+  }
+}
+
+async function requestMagicLink() {
+  const emailEl = document.getElementById('magic-email');
+  const successEl = document.getElementById('magic-success');
+  const errEl = document.getElementById('magic-error');
+  const email = emailEl.value.trim();
+
+  successEl.classList.add('hidden');
+  errEl.classList.add('hidden');
+
+  if (!email) {
+    errEl.textContent = 'Veuillez saisir votre adresse email.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/tickets/magic-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      successEl.classList.remove('hidden');
+      emailEl.value = '';
+    } else {
+      errEl.textContent = data.error || 'Erreur lors de l\'envoi.';
+      errEl.classList.remove('hidden');
+    }
+  } catch (e) {
+    errEl.textContent = 'Erreur réseau.';
+    errEl.classList.remove('hidden');
+  }
+}
+
+// Allow send on Enter (Shift+Enter = newline)
+document.getElementById('message-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+async function loadTicket() {
   if (!ticketToken) {
     showError('Aucun token fourni dans l\'URL.');
     return;
@@ -133,45 +337,45 @@ async function loadTicket() {
 
   try {
     const res = await fetch(`/api/tickets/${ticketToken}`);
-    if (res.status === 404) {
-      showError('Ticket introuvable ou token invalide.');
-      return;
-    }
-    if (!res.ok) {
-      showError('Erreur lors de la récupération du ticket.');
-      return;
-    }
+    if (res.status === 404) { showError('Ticket introuvable ou token invalide.'); return; }
+    if (!res.ok) { showError('Erreur lors de la récupération du ticket.'); return; }
 
-    const data = await res.json();
+    ticketData = await res.json();
 
-    // Remplir les données
-    document.getElementById('ticket-title').textContent = data.title;
+    document.getElementById('ticket-title').textContent = ticketData.title;
 
     const badge = document.getElementById('status-badge');
-    badge.textContent = STATUS_LABELS[data.status] || data.status;
-    badge.className = 'flex-shrink-0 text-xs font-semibold px-3 py-1 rounded-full ' + (STATUS_CLASSES[data.status] || 'bg-slate-100 text-slate-600');
+    badge.textContent = STATUS_LABELS[ticketData.status] || ticketData.status;
+    badge.className = 'flex-shrink-0 text-xs font-semibold px-3 py-1 rounded-full ' + (STATUS_CLASSES[ticketData.status] || 'bg-slate-100 text-slate-600');
 
-    document.getElementById('ticket-date').textContent = new Date(data.createdAt).toLocaleString('fr-FR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    });
+    document.getElementById('ticket-date').textContent = formatDate(ticketData.createdAt);
+    document.getElementById('ticket-priority').textContent = PRIORITY_LABELS[ticketData.priority] || ticketData.priority;
 
-    document.getElementById('ticket-priority').textContent = PRIORITY_LABELS[data.priority] || data.priority;
-
-    if (data.room) {
-      document.getElementById('ticket-room').textContent = data.room.name;
+    if (ticketData.room) {
+      document.getElementById('ticket-room').textContent = ticketData.room.name;
       document.getElementById('ticket-room-row').classList.remove('hidden');
     }
-    if (data.equipment) {
-      document.getElementById('ticket-equipment').textContent = data.equipment.name;
+    if (ticketData.equipment) {
+      document.getElementById('ticket-equipment').textContent = ticketData.equipment.name;
       document.getElementById('ticket-equipment-row').classList.remove('hidden');
     }
 
     document.getElementById('loading-state').classList.add('hidden');
     document.getElementById('content-state').classList.remove('hidden');
+
+    // Charger les messages initiaux
+    await loadMessages();
+
+    // Polling toutes les 15 secondes
+    pollInterval = setInterval(loadMessages, 15000);
   } catch (err) {
     showError('Erreur réseau : ' + err.message);
   }
+}
+
+// Demander permission notifications
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
 }
 
 loadTicket();
