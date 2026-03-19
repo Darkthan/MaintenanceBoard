@@ -1,14 +1,24 @@
-const { PrismaClient } = require('@prisma/client');
+require('dotenv').config();
 const bcrypt = require('bcrypt');
 
-const prisma = new PrismaClient();
+const prisma = require('../src/lib/prisma');
+
+// ── Credentials configurables via variables d'environnement ───────────────────
+const ADMIN_EMAIL    = process.env.SEED_ADMIN_EMAIL    || 'admin@maintenance.local';
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'Admin@1234';
+const ADMIN_NAME     = process.env.SEED_ADMIN_NAME     || 'Administrateur';
+const TECH_EMAIL     = process.env.SEED_TECH_EMAIL     || 'tech@maintenance.local';
+const TECH_PASSWORD  = process.env.SEED_TECH_PASSWORD  || 'Tech@1234';
+const TECH_NAME      = process.env.SEED_TECH_NAME      || 'Technicien Démo';
+// Mettre à false pour ne créer que les comptes (pas les données de démo)
+const SEED_DEMO_DATA = process.env.SEED_DEMO_DATA !== 'false';
 
 async function main() {
   console.log('🌱 Démarrage du seed...');
 
   // Vérifier si l'admin existe déjà
   const existingAdmin = await prisma.user.findUnique({
-    where: { email: 'admin@maintenance.local' }
+    where: { email: ADMIN_EMAIL }
   });
 
   if (existingAdmin) {
@@ -17,11 +27,11 @@ async function main() {
   }
 
   // Créer l'admin par défaut
-  const passwordHash = await bcrypt.hash('Admin@1234', 12);
+  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@maintenance.local',
-      name: 'Administrateur',
+      email: ADMIN_EMAIL,
+      name: ADMIN_NAME,
       passwordHash,
       role: 'ADMIN',
       isActive: true
@@ -30,17 +40,24 @@ async function main() {
   console.log(`✅ Admin créé : ${admin.email}`);
 
   // Créer un technicien de démo
-  const techHash = await bcrypt.hash('Tech@1234', 12);
+  const techHash = await bcrypt.hash(TECH_PASSWORD, 12);
   const tech = await prisma.user.create({
     data: {
-      email: 'tech@maintenance.local',
-      name: 'Technicien Démo',
+      email: TECH_EMAIL,
+      name: TECH_NAME,
       passwordHash: techHash,
       role: 'TECH',
       isActive: true
     }
   });
   console.log(`✅ Technicien créé : ${tech.email}`);
+
+  if (!SEED_DEMO_DATA) {
+    console.log('\n🎉 Seed terminé (sans données de démo).');
+    console.log(`\n   Admin : ${ADMIN_EMAIL}`);
+    console.log(`   Tech  : ${TECH_EMAIL}`);
+    return;
+  }
 
   // Créer des salles de démo
   const rooms = await Promise.all([
@@ -191,10 +208,12 @@ async function main() {
   console.log(`✅ Commande de démo créée : ${order.title}`);
 
   console.log('\n🎉 Seed terminé avec succès !');
-  console.log('\n📋 Comptes par défaut :');
-  console.log('   Admin  : admin@maintenance.local / Admin@1234');
-  console.log('   Tech   : tech@maintenance.local  / Tech@1234');
-  console.log('\n⚠️  Pensez à changer les mots de passe en production !');
+  console.log('\n📋 Comptes créés :');
+  console.log(`   Admin : ${ADMIN_EMAIL}`);
+  console.log(`   Tech  : ${TECH_EMAIL}`);
+  if (ADMIN_PASSWORD === 'Admin@1234' || TECH_PASSWORD === 'Tech@1234') {
+    console.log('\n⚠️  Mots de passe par défaut détectés — définissez SEED_ADMIN_PASSWORD et SEED_TECH_PASSWORD en production !');
+  }
 }
 
 main()

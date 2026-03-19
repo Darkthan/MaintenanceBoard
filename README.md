@@ -65,12 +65,19 @@ npm start          # Mode production
 
 ## Comptes par défaut (seed)
 
-| Rôle | Email | Mot de passe |
-|------|-------|--------------|
-| Admin | admin@maintenance.local | Admin@1234 |
-| Tech | tech@maintenance.local | Tech@1234 |
+Les credentials du seed sont définis via des variables d'environnement (voir `.env.example`).
 
-> ⚠️ **Changez ces mots de passe en production !**
+| Variable | Défaut | Description |
+|----------|--------|-------------|
+| `SEED_ADMIN_EMAIL` | `admin@maintenance.local` | Email du compte admin |
+| `SEED_ADMIN_PASSWORD` | `Admin@1234` | Mot de passe admin |
+| `SEED_ADMIN_NAME` | `Administrateur` | Nom affiché admin |
+| `SEED_TECH_EMAIL` | `tech@maintenance.local` | Email du compte technicien |
+| `SEED_TECH_PASSWORD` | `Tech@1234` | Mot de passe technicien |
+| `SEED_TECH_NAME` | `Technicien Démo` | Nom affiché technicien |
+| `SEED_DEMO_DATA` | `true` | `false` pour créer uniquement les comptes, sans données de démo |
+
+> ⚠️ **Définissez `SEED_ADMIN_PASSWORD` et `SEED_TECH_PASSWORD` dans votre `.env` avant le premier démarrage en production.**
 
 ## Import CSV en masse
 
@@ -130,6 +137,41 @@ SESSION_SECRET=<min 32 caractères aléatoires>
 WEBAUTHN_RP_ID=votre-domaine.com   # En production
 WEBAUTHN_ORIGIN=https://votre-domaine.com
 ```
+
+### Toutes les variables disponibles
+
+| Variable | Défaut | Description |
+|----------|--------|-------------|
+| `NODE_ENV` | `development` | `production` en prod (active HTTPS cookies, masque les erreurs) |
+| `PORT` | `3000` | Port d'écoute du serveur |
+| `APP_URL` | `http://localhost:3000` | URL publique de l'application |
+| `DATABASE_URL` | — | URL Prisma (`postgresql://...` ou `file:./prisma/dev.db`) |
+| `JWT_SECRET` | *(fallback insecure)* | Clé de signature JWT — **obligatoire en prod** (≥ 32 cars) |
+| `JWT_ACCESS_EXPIRES` | `15m` | Durée de vie du token d'accès |
+| `JWT_REFRESH_EXPIRES` | `7d` | Durée de vie du refresh token |
+| `SESSION_SECRET` | *(fallback insecure)* | Secret des sessions WebAuthn — **obligatoire en prod** |
+| `SESSION_MAX_AGE` | `86400000` | Durée de vie session en ms (24h par défaut) |
+| `WEBAUTHN_RP_NAME` | `MaintenanceBoard` | Nom affiché lors de l'enregistrement d'une passkey |
+| `WEBAUTHN_RP_ID` | `localhost` | Domaine WebAuthn — doit correspondre au domaine réel en prod |
+| `WEBAUTHN_ORIGIN` | `http://localhost:3000` | Origine autorisée pour WebAuthn |
+| `UPLOAD_DIR` | `./uploads` | Dossier de stockage des fichiers uploadés |
+| `MAX_FILE_SIZE` | `10485760` | Taille max des uploads en octets (10 Mo par défaut) |
+| `SMTP_HOST` | — | Serveur SMTP (requis pour magic links tickets et signatures) |
+| `SMTP_PORT` | `587` | Port SMTP |
+| `SMTP_USER` | — | Identifiant SMTP |
+| `SMTP_PASS` | — | Mot de passe SMTP |
+| `SMTP_FROM` | `noreply@maintenance.local` | Adresse expéditeur des emails |
+| `POSTGRES_DB` | `maintenance_db` | Nom de la base (Docker Compose) |
+| `POSTGRES_USER` | `maintenance_user` | Utilisateur PostgreSQL (Docker Compose) |
+| `POSTGRES_PASSWORD` | `maintenance_pass` | Mot de passe PostgreSQL (Docker Compose) |
+| `SEED_ADMIN_EMAIL` | `admin@maintenance.local` | Email du compte admin initial |
+| `SEED_ADMIN_PASSWORD` | `Admin@1234` | Mot de passe admin initial — **à changer en prod** |
+| `SEED_ADMIN_NAME` | `Administrateur` | Nom affiché du compte admin |
+| `SEED_TECH_EMAIL` | `tech@maintenance.local` | Email du compte technicien initial |
+| `SEED_TECH_PASSWORD` | `Tech@1234` | Mot de passe technicien initial — **à changer en prod** |
+| `SEED_TECH_NAME` | `Technicien Démo` | Nom affiché du compte technicien |
+| `SEED_DEMO_DATA` | `true` | `false` pour créer uniquement les comptes sans données de démo |
+| `AGENT_ENROLLMENT_MAX_AGE` | `0` | Durée de validité des tokens d'enrollment agent en ms (0 = illimité) |
 
 ## RBAC
 
