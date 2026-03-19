@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Commandes – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/js/pdf.min.js"></script>
+  <style>
+    #attach-placement-container { position: relative; overflow: hidden; cursor: crosshair; user-select: none; }
+  </style>
 </head>
 <body class="bg-slate-50">
 
@@ -68,6 +72,250 @@
   </main>
 </div>
 
+<!-- Panneau détail commande (slide-over) -->
+<div id="detail-backdrop" class="hidden fixed inset-0 z-40 bg-black/40" onclick="closeDetail()"></div>
+<aside id="detail-panel"
+  class="fixed top-0 right-0 bottom-0 z-50 w-full max-w-lg bg-white shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 flex-shrink-0">
+    <div class="flex-1 min-w-0">
+      <p id="dp-num" class="text-xs text-slate-400 mb-0.5"></p>
+      <h3 id="dp-title" class="font-semibold text-slate-800 truncate"></h3>
+    </div>
+    <button onclick="closeDetail()" class="ml-3 text-slate-400 hover:text-slate-700 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <!-- Contenu scrollable -->
+  <div class="flex-1 overflow-y-auto">
+
+    <!-- Infos générales -->
+    <div class="px-5 py-4 space-y-3 border-b border-slate-100">
+      <div class="flex flex-wrap gap-2 items-center">
+        <span id="dp-status"></span>
+        <span id="dp-tags" class="flex flex-wrap gap-1"></span>
+      </div>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+        <div><span class="text-xs text-slate-400 block">Fournisseur</span><span id="dp-supplier" class="font-medium text-slate-700"></span></div>
+        <div><span class="text-xs text-slate-400 block">Demandeur</span><span id="dp-requester" class="font-medium text-slate-700"></span></div>
+        <div><span class="text-xs text-slate-400 block">Créé le</span><span id="dp-date" class="font-medium text-slate-700"></span></div>
+        <div><span class="text-xs text-slate-400 block">Commandé le</span><span id="dp-ordered" class="font-medium text-slate-700"></span></div>
+        <div id="dp-intervention-wrap" class="hidden col-span-2">
+          <span class="text-xs text-slate-400 block">Intervention liée</span>
+          <a id="dp-intervention-link" href="#" class="font-medium text-blue-600 hover:underline"></a>
+        </div>
+      </div>
+      <div id="dp-desc" class="hidden text-sm text-slate-500 bg-slate-50 rounded-lg px-3 py-2"></div>
+    </div>
+
+    <!-- Articles -->
+    <div class="px-5 py-4 border-b border-slate-100">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Articles</p>
+      <div id="dp-items" class="space-y-2"></div>
+    </div>
+
+    <!-- Demandes de signature -->
+    <div class="px-5 py-4 border-b border-slate-100">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Signatures</p>
+        <button onclick="openSignatureModal()"
+          class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+          </svg>
+          Demander une signature
+        </button>
+      </div>
+      <div id="dp-signatures" class="space-y-2">
+        <p class="text-xs text-slate-400 text-center py-2">Chargement…</p>
+      </div>
+    </div>
+
+    <!-- Pièces jointes -->
+    <div class="px-5 py-4">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Pièces jointes</p>
+        <span id="dp-attach-count" class="text-xs text-slate-400"></span>
+      </div>
+
+      <!-- Zone drag & drop -->
+      <div id="drop-zone"
+        class="relative border-2 border-dashed border-slate-300 rounded-xl p-5 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all"
+        ondragover="event.preventDefault();this.classList.add('border-blue-400','bg-blue-50')"
+        ondragleave="this.classList.remove('border-blue-400','bg-blue-50')"
+        ondrop="handleDrop(event)"
+        onclick="document.getElementById('attach-input-dnd').click()">
+        <svg class="w-8 h-8 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+        </svg>
+        <p class="text-sm text-slate-500">Glissez vos fichiers ici ou <span class="text-blue-600 font-medium">parcourir</span></p>
+        <p class="text-xs text-slate-400 mt-1">Images compressées · max 20 Mo · 5 fichiers</p>
+        <input id="attach-input-dnd" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" class="hidden" onchange="handleFileSelect(this)"/>
+      </div>
+
+      <!-- Zone staging (fichiers en attente d'envoi) -->
+      <div id="staging-area" class="hidden mt-3 space-y-2">
+        <div id="staged-files" class="space-y-1.5"></div>
+        <div class="flex items-center justify-between pt-1">
+          <p class="text-xs text-slate-400"><span id="staged-count">0</span> fichier(s) à envoyer</p>
+          <div class="flex gap-2">
+            <button type="button" onclick="clearStaging()"
+              class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-500 hover:bg-slate-50 transition">
+              Annuler
+            </button>
+            <button type="button" onclick="uploadStaged()"
+              class="px-4 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              Envoyer
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Liste -->
+      <div id="dp-attachments" class="space-y-2"></div>
+      <div id="attach-uploading" class="hidden text-xs text-blue-600 font-medium text-center py-3 flex items-center justify-center gap-2">
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+        Envoi en cours…
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer actions -->
+  <div class="flex items-center gap-2 px-5 py-3 border-t border-slate-100 bg-slate-50 flex-shrink-0">
+    <a id="dp-pdf-btn" href="#" target="_blank"
+      class="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 transition">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+      Bon de commande
+    </a>
+    <button id="dp-edit-btn" onclick="closeDetail()"
+      class="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-100 transition">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      Modifier
+    </button>
+  </div>
+</aside>
+
+<!-- Modal Demande de signature -->
+<div id="sig-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+        </svg>
+        Demander une signature
+      </h3>
+      <button onclick="closeSigModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="sig-form" class="p-6 space-y-4">
+      <p class="text-sm text-slate-500">Un lien de signature sécurisé sera envoyé par email. L'identité du signataire sera vérifiée par code email (OTP).</p>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Nom du signataire *</label>
+        <input id="sig-recipient-name" type="text" required placeholder="ex: Jean Dupont"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Adresse email *</label>
+        <input id="sig-recipient-email" type="email" required placeholder="jean.dupont@example.com"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Message <span class="text-slate-400 font-normal">(optionnel)</span></label>
+        <textarea id="sig-message" rows="2" placeholder="Merci de signer ce bon de commande…"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+      </div>
+      <div id="sig-form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3 pt-1">
+        <button type="button" onclick="closeSigModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" id="sig-submit-btn"
+          class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50 flex items-center gap-2">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          Envoyer le lien
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Signature depuis pièce jointe -->
+<div id="attach-sig-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+    <div class="flex items-start justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+      <div class="min-w-0">
+        <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+          <svg class="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+          </svg>
+          Signer un document
+        </h3>
+        <p id="attach-sig-filename" class="text-xs text-slate-400 mt-0.5 truncate max-w-xs"></p>
+      </div>
+      <button onclick="closeAttachSigModal()" class="text-slate-400 hover:text-slate-600 flex-shrink-0 ml-3">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 py-5 space-y-4">
+      <!-- Zone de placement -->
+      <div>
+        <p class="text-sm font-medium text-slate-700 mb-1">Zone de signature sur le document</p>
+        <p class="text-xs text-slate-400 mb-2">Dessinez un rectangle sur l'aperçu pour définir précisément la zone de signature.</p>
+        <div id="attach-placement-container"
+          class="rounded-xl select-none bg-slate-50 border border-slate-200"
+          style="min-height:120px;max-height:300px;">
+          <div id="attach-placement-loading" class="flex flex-col items-center justify-center py-8 gap-2 text-slate-400">
+            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <span class="text-sm">Chargement de l'aperçu…</span>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400 mt-1.5 text-center">Cliquez-glissez pour définir la zone · elle sera initialisée en bas à droite</p>
+      </div>
+
+      <hr class="border-slate-100" />
+
+      <!-- Destinataire -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Nom du signataire <span class="text-red-500">*</span></label>
+        <input id="attach-sig-name" type="text" placeholder="Prénom Nom"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Adresse email <span class="text-red-500">*</span></label>
+        <input id="attach-sig-email" type="email" placeholder="prenom.nom@exemple.fr"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Message <span class="text-slate-400 font-normal">(optionnel)</span></label>
+        <textarea id="attach-sig-message" rows="2" placeholder="Merci de signer ce document…"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+      </div>
+
+      <div id="attach-sig-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+
+      <div class="flex justify-end gap-3 pt-1">
+        <button type="button" onclick="closeAttachSigModal()"
+          class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        <button type="button" id="attach-sig-submit-btn" onclick="submitAttachSig()"
+          class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50 flex items-center gap-2">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          Envoyer le lien
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Commande -->
 <div id="order-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto">
@@ -86,7 +334,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Fournisseur</label>
-          <input id="order-supplier" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div id="order-supplier-picker"></div>
         </div>
         <div id="status-field" class="hidden">
           <label class="block text-sm font-medium text-slate-700 mb-1">Statut</label>
@@ -102,6 +350,31 @@
       <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
         <textarea id="order-description" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Intervention liée</label>
+        <select id="order-intervention" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">-- Aucune --</option>
+        </select>
+        <p class="text-xs text-slate-400 mt-1">Permet de rattacher cette commande à une intervention existante.</p>
+      </div>
+
+      <!-- Zones de déploiement -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Zones de déploiement <span class="text-slate-400 font-normal">(Immobilisation)</span></label>
+        <div id="tag-input-wrapper"
+          class="flex flex-wrap gap-1.5 min-h-[42px] w-full border border-slate-300 rounded-lg px-2 py-1.5 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 cursor-text"
+          onclick="document.getElementById('tag-input').focus()">
+          <!-- les tags s'insèrent ici dynamiquement -->
+          <input id="tag-input" type="text" placeholder="Salle B201, Labo info…"
+            autocomplete="off"
+            class="flex-1 min-w-28 text-sm outline-none border-none bg-transparent py-0.5 px-1"/>
+        </div>
+        <!-- dropdown suggestions -->
+        <div id="tag-suggestions"
+          class="hidden absolute z-50 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden max-h-44 overflow-y-auto text-sm"
+          style="min-width:200px"></div>
+        <p class="text-xs text-slate-400 mt-1">Entrée ou virgule pour valider · Backspace pour supprimer</p>
       </div>
 
       <!-- Lignes de commande -->
@@ -128,13 +401,26 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/sigPlacement.js"></script>
+<script src="/js/supplierPicker.js"></script>
 <script>
 const user = requireLogin();
 if (!user) throw new Error('Not logged in');
 renderNav('orders');
+const orderSupplierPicker = new SupplierPicker('order-supplier-picker');
 if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
 
 let currentPage = 1, currentSearch = '', currentStatus = '';
+const pageParams = new URLSearchParams(window.location.search);
+
+if (pageParams.get('search')) {
+  currentSearch = pageParams.get('search');
+  document.getElementById('search-input').value = currentSearch;
+}
+if (pageParams.get('status')) {
+  currentStatus = pageParams.get('status');
+  document.getElementById('status-filter').value = currentStatus;
+}
 
 async function loadOrders() {
   const container = document.getElementById('orders-container');
@@ -166,17 +452,28 @@ async function loadOrders() {
               ${statusBadge(o.status)}
             </div>
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-              ${o.supplier ? `<span>🏢 ${o.supplier}</span>` : ''}
+              ${(o.supplierRef?.name || o.supplier) ? `<span>🏢 ${escapeHtml(o.supplierRef?.name || o.supplier)}</span>` : ''}
               <span>👤 ${o.requester?.name}</span>
               <span>📦 ${o._count?.items || 0} article(s)</span>
               <span>📅 ${formatDate(o.createdAt)}</span>
+              ${o.intervention ? `<span>🛠️ ${o.intervention.title}</span>` : ''}
             </div>
+            ${(o.deploymentTags && o.deploymentTags.length) ? `
+            <div class="flex flex-wrap gap-1 mt-2">
+              ${(Array.isArray(o.deploymentTags) ? o.deploymentTags : JSON.parse(o.deploymentTags || '[]')).map(t =>
+                `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">${t}</span>`
+              ).join('')}
+            </div>` : ''}
           </div>
           <div class="flex items-center gap-2 self-stretch sm:self-auto">
-            <button onclick="viewOrder('${o.id}')"
+            <button onclick="openDetail('${o.id}')"
               class="flex-1 px-3 py-1.5 border border-slate-300 rounded-lg text-xs hover:bg-slate-50 transition sm:flex-none">
               Détails
             </button>
+            <a href="/api/orders/${o.id}/pdf" target="_blank" title="Bon de commande"
+              class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-emerald-600 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            </a>
             <button onclick="editOrder(${JSON.stringify(o).replace(/"/g, '&quot;')})"
               class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
@@ -212,6 +509,12 @@ document.getElementById('status-filter').addEventListener('change', e => { curre
 
 // Lignes de commande
 let itemCount = 0;
+const ORDER_INTERVENTION_STATUS_LABELS = {
+  OPEN: 'Ouverte',
+  IN_PROGRESS: 'En cours',
+  RESOLVED: 'Resolue',
+  CLOSED: 'Fermee'
+};
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -220,6 +523,100 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function formatInterventionLocation(intervention) {
+  if (!intervention?.room) return '';
+  return `${intervention.room.name}${intervention.room.number ? ` (${intervention.room.number})` : ''}`;
+}
+
+function buildOrderPrefillFromIntervention(intervention) {
+  const location = formatInterventionLocation(intervention);
+  const equipment = intervention?.equipment
+    ? `${intervention.equipment.name}${intervention.equipment.type ? ` (${intervention.equipment.type})` : ''}`
+    : '';
+
+  return {
+    title: `Commande - ${intervention.title}`,
+    description: [
+      `Commande liee a l intervention "${intervention.title}".`,
+      intervention.description || '',
+      location ? `Salle : ${location}` : '',
+      equipment ? `Equipement : ${equipment}` : ''
+    ].filter(Boolean).join('\n'),
+    deploymentTags: location ? [location] : []
+  };
+}
+
+function interventionOptionLabel(intervention) {
+  const meta = [
+    ORDER_INTERVENTION_STATUS_LABELS[intervention.status] || intervention.status,
+    formatInterventionLocation(intervention),
+    intervention.equipment?.name || ''
+  ].filter(Boolean);
+  return meta.length ? `${intervention.title} - ${meta.join(' - ')}` : intervention.title;
+}
+
+async function loadInterventionOptions(selectedId = '') {
+  const select = document.getElementById('order-intervention');
+  select.innerHTML = '<option value="">Chargement...</option>';
+
+  try {
+    const res = await api.get('/interventions', { limit: 200 });
+    let interventions = Array.isArray(res.data) ? [...res.data] : [];
+
+    if (selectedId && !interventions.some(intervention => intervention.id === selectedId)) {
+      try {
+        const linked = await api.get(`/interventions/${selectedId}`);
+        interventions.unshift(linked);
+      } catch {}
+    }
+
+    select.innerHTML = '<option value="">-- Aucune --</option>' + interventions.map(intervention => `
+      <option value="${intervention.id}">
+        ${escapeHtml(interventionOptionLabel(intervention))}
+      </option>
+    `).join('');
+    select.value = selectedId || '';
+  } catch {
+    select.innerHTML = '<option value="">-- Aucune --</option>';
+    select.value = '';
+  }
+}
+
+function resetOrderForm() {
+  document.getElementById('modal-title').textContent = 'Nouvelle commande';
+  document.getElementById('order-id').value = '';
+  document.getElementById('order-form').reset();
+  document.getElementById('items-container').innerHTML = '';
+  document.getElementById('status-field').classList.add('hidden');
+  document.getElementById('form-error').classList.add('hidden');
+  document.getElementById('submit-btn').disabled = false;
+  currentTags = [];
+  renderTags();
+  addItemRow();
+  orderSupplierPicker.load();
+}
+
+async function openCreateOrderModal(interventionId = '') {
+  resetOrderForm();
+  await loadInterventionOptions(interventionId || '');
+
+  if (interventionId) {
+    try {
+      const intervention = await api.get(`/interventions/${interventionId}`);
+      const prefill = buildOrderPrefillFromIntervention(intervention);
+      document.getElementById('order-title').value = prefill.title;
+      document.getElementById('order-description').value = prefill.description;
+      currentTags = [...prefill.deploymentTags];
+      renderTags();
+      document.getElementById('order-intervention').value = intervention.id;
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  modal.classList.remove('hidden');
 }
 
 function addItemRow({ name = '', qty = 1, price = '', priceType = 'TTC', ref = '', productUrl = '' } = {}) {
@@ -258,16 +655,7 @@ function addItemRow({ name = '', qty = 1, price = '', priceType = 'TTC', ref = '
 document.getElementById('add-item-btn').addEventListener('click', () => addItemRow());
 
 const modal = document.getElementById('order-modal');
-document.getElementById('add-order-btn').addEventListener('click', () => {
-  document.getElementById('modal-title').textContent = 'Nouvelle commande';
-  document.getElementById('order-id').value = '';
-  document.getElementById('order-form').reset();
-  document.getElementById('items-container').innerHTML = '';
-  document.getElementById('status-field').classList.add('hidden');
-  document.getElementById('form-error').classList.add('hidden');
-  addItemRow();
-  modal.classList.remove('hidden');
-});
+document.getElementById('add-order-btn').addEventListener('click', () => openCreateOrderModal());
 document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
 document.getElementById('cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
 
@@ -277,12 +665,17 @@ async function editOrder(orderSummary) {
     document.getElementById('modal-title').textContent = 'Modifier la commande';
     document.getElementById('order-id').value = o.id;
     document.getElementById('order-title').value = o.title;
-    document.getElementById('order-supplier').value = o.supplier || '';
+    orderSupplierPicker.load(o.supplierId || null);
     document.getElementById('order-description').value = o.description || '';
     document.getElementById('order-status').value = o.status;
     document.getElementById('status-field').classList.remove('hidden');
     document.getElementById('items-container').innerHTML = '';
     document.getElementById('form-error').classList.add('hidden');
+    document.getElementById('submit-btn').disabled = false;
+    currentTags = Array.isArray(o.deploymentTags) ? [...o.deploymentTags] : [];
+    renderTags();
+    await loadInterventionOptions(o.interventionId || o.intervention?.id || '');
+    document.getElementById('order-intervention').value = o.interventionId || o.intervention?.id || '';
 
     if (o.items?.length) {
       o.items.forEach(item => addItemRow({
@@ -303,16 +696,374 @@ async function editOrder(orderSummary) {
   }
 }
 
-async function viewOrder(id) {
+let detailOrderId = null;
+
+async function openDetail(id) {
+  detailOrderId = id;
   try {
     const o = await api.get(`/orders/${id}`);
-    alert(`Commande : ${o.title}\n\nArticles :\n${o.items.map(i => {
-      const price = i.unitPrice ? ` @ ${i.unitPrice}€ ${i.priceType || 'TTC'}` : '';
-      const ref = i.reference ? ` [Réf: ${i.reference}]` : '';
-      const link = i.productUrl ? `\n  Lien: ${i.productUrl}` : '';
-      const received = i.received ? ` (reçu: ${i.received})` : '';
-      return `- ${i.name} × ${i.quantity}${price}${ref}${received}${link}`;
-    }).join('\n')}`);
+    const panel = document.getElementById('detail-panel');
+    const backdrop = document.getElementById('detail-backdrop');
+
+    // Remplir les infos
+    document.getElementById('dp-title').textContent = o.title;
+    document.getElementById('dp-num').textContent = `Commande #${o.id.slice(-6).toUpperCase()}`;
+    document.getElementById('dp-status').innerHTML = statusBadge(o.status);
+    document.getElementById('dp-supplier').textContent = o.supplierRef?.name || o.supplier || '—';
+    document.getElementById('dp-requester').textContent = o.requester?.name || '—';
+    document.getElementById('dp-date').textContent = formatDate(o.createdAt);
+    document.getElementById('dp-ordered').textContent = o.orderedAt ? formatDate(o.orderedAt) : '—';
+    const interventionWrap = document.getElementById('dp-intervention-wrap');
+    const interventionLink = document.getElementById('dp-intervention-link');
+    if (o.intervention) {
+      interventionLink.href = `/interventions.html?focus=${encodeURIComponent(o.intervention.id)}`;
+      interventionLink.textContent = o.intervention.title;
+      interventionWrap.classList.remove('hidden');
+    } else {
+      interventionLink.href = '#';
+      interventionLink.textContent = '';
+      interventionWrap.classList.add('hidden');
+    }
+
+    const descEl = document.getElementById('dp-desc');
+    if (o.description) { descEl.textContent = o.description; descEl.classList.remove('hidden'); }
+    else descEl.classList.add('hidden');
+
+    // Tags
+    const tagsEl = document.getElementById('dp-tags');
+    const tags = Array.isArray(o.deploymentTags) ? o.deploymentTags : [];
+    tagsEl.innerHTML = tags.map(t =>
+      `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">${t}</span>`
+    ).join('');
+
+    // Articles
+    document.getElementById('dp-items').innerHTML = (o.items || []).map(item => {
+      const price = item.unitPrice != null
+        ? `<span class="text-slate-500">${item.unitPrice} €/${item.priceType}</span>` : '';
+      const ref = item.reference ? `<span class="text-slate-400 text-xs ml-2">[${item.reference}]</span>` : '';
+      const recv = item.received ? `<span class="text-emerald-600 text-xs"> · ${item.received} reçu(s)</span>` : '';
+      return `<div class="flex items-start justify-between gap-2 py-2 border-b border-slate-100 last:border-0 text-sm">
+        <div class="flex-1">
+          <span class="font-medium text-slate-700">${item.name}</span>${ref}${recv}
+          ${item.productUrl ? `<br><a href="${item.productUrl}" target="_blank" class="text-xs text-blue-500 hover:underline truncate">${item.productUrl}</a>` : ''}
+        </div>
+        <div class="text-right flex-shrink-0">
+          <div class="font-semibold text-slate-800">×${item.quantity}</div>
+          <div class="text-xs">${price}</div>
+        </div>
+      </div>`;
+    }).join('') || '<p class="text-slate-400 text-sm">Aucun article</p>';
+
+    // PDF link
+    document.getElementById('dp-pdf-btn').href = `/api/orders/${id}/pdf`;
+
+    // Bouton modifier
+    document.getElementById('dp-edit-btn').onclick = () => { closeDetail(); editOrder(o); };
+
+    // Ouvrir le panel
+    backdrop.classList.remove('hidden');
+    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+
+    // Charger les demandes de signature et les pièces jointes
+    loadSignatureRequests();
+    loadAttachments();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+function closeDetail() {
+  const panel = document.getElementById('detail-panel');
+  const backdrop = document.getElementById('detail-backdrop');
+  panel.classList.add('translate-x-full');
+  setTimeout(() => backdrop.classList.add('hidden'), 300);
+  detailOrderId = null;
+}
+
+// ── OCR helpers ──────────────────────────────────────────────────────────────
+
+function ocrStatusBadge(status) {
+  switch (status) {
+    case 'PENDING':    return '<span class="inline-flex items-center gap-1 text-xs text-slate-400"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" class="opacity-30"/><path stroke="currentColor" stroke-width="2" d="M12 6v6l4 2"/></svg>OCR…</span>';
+    case 'PROCESSING': return '<span class="inline-flex items-center gap-1 text-xs text-indigo-500"><svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>OCR en cours…</span>';
+    case 'DONE':       return '<span class="inline-flex items-center gap-1 text-xs text-green-600"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>OCR</span>';
+    case 'FAILED':     return '<span class="inline-flex items-center gap-1 text-xs text-red-400" title="Échec OCR"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>OCR échoué</span>';
+    case 'SKIPPED':    return '<span class="text-xs text-slate-300" title="Texte non extractible (PDF scanné ou format non supporté)">OCR N/A</span>';
+    default:           return '';
+  }
+}
+
+function toggleOcrText(attachId) {
+  const block = document.getElementById(`ocr-text-${attachId}`);
+  const chevron = document.getElementById(`ocr-chevron-${attachId}`);
+  if (!block) return;
+  const hidden = block.classList.toggle('hidden');
+  if (chevron) chevron.style.transform = hidden ? '' : 'rotate(180deg)';
+}
+
+// Catégories (miroir du backend)
+const ATTACH_CATS = {
+  INVOICE:       { label: 'Facture',        color: '#dc2626', bg: '#fee2e2' },
+  SIGNED_PO:     { label: 'BC signé',       color: '#16a34a', bg: '#dcfce7' },
+  QUOTE_TO_SIGN: { label: 'Devis à signer', color: '#d97706', bg: '#fef3c7' },
+  SIGNED_QUOTE:  { label: 'Devis signé',    color: '#2563eb', bg: '#dbeafe' },
+  TO_ENTER:      { label: 'À saisir',       color: '#7c3aed', bg: '#ede9fe' },
+  OTHER:         { label: 'Autre',          color: '#64748b', bg: '#f1f5f9' },
+};
+
+function catBadge(cat) {
+  const c = ATTACH_CATS[cat] || ATTACH_CATS.OTHER;
+  return `<span style="background:${c.bg};color:${c.color}" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0">${c.label}</span>`;
+}
+
+function catOptions(selected) {
+  return Object.entries(ATTACH_CATS).map(([v, c]) =>
+    `<option value="${v}" ${v === selected ? 'selected' : ''}>${c.label}</option>`
+  ).join('');
+}
+
+async function loadAttachments() {
+  if (!detailOrderId) return;
+  const container = document.getElementById('dp-attachments');
+  try {
+    const attachments = await api.get(`/orders/${detailOrderId}/attachments`);
+    document.getElementById('dp-attach-count').textContent = attachments.length ? `${attachments.length} fichier(s)` : '';
+    if (!attachments.length) {
+      container.innerHTML = '<p class="text-xs text-slate-400 text-center py-3">Aucune pièce jointe</p>';
+      return;
+    }
+    const hasPending = attachments.some(a => a.ocrStatus === 'PENDING' || a.ocrStatus === 'PROCESSING');
+    if (hasPending) {
+      // Rafraîchir automatiquement toutes les 4s tant qu'un OCR est en cours
+      setTimeout(() => { if (detailOrderId) loadAttachments(); }, 4000);
+    }
+
+    container.innerHTML = attachments.map(att => {
+      const icon = att.mimetype.startsWith('image/') ? '🖼️'
+                 : att.mimetype === 'application/pdf' ? '📄'
+                 : att.mimetype.includes('spreadsheet') || att.mimetype.includes('excel') ? '📊'
+                 : att.mimetype.includes('word') || att.mimetype.includes('document') ? '📝' : '📎';
+      const size = att.size < 1024 * 1024
+        ? `${(att.size / 1024).toFixed(0)} Ko`
+        : `${(att.size / 1024 / 1024).toFixed(1)} Mo`;
+
+      const ocrBadge = ocrStatusBadge(att.ocrStatus);
+      const ocrBlock = att.ocrStatus === 'DONE' && att.ocrText
+        ? `<div class="border-t border-slate-100">
+             <button type="button" onclick="toggleOcrText('${att.id}')"
+               class="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50 transition">
+               <span class="flex items-center gap-1.5">
+                 <svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                 Texte extrait (OCR)
+               </span>
+               <svg id="ocr-chevron-${att.id}" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+             </button>
+             <div id="ocr-text-${att.id}" class="hidden px-3 pb-3">
+               <pre class="text-xs text-slate-600 bg-slate-50 rounded p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto border border-slate-200">${escapeHtml(att.ocrText)}</pre>
+             </div>
+           </div>`
+        : '';
+
+      return `
+      <div class="border border-slate-200 rounded-lg bg-white overflow-hidden">
+        <div class="flex items-center gap-3 px-3 py-2.5">
+          <span class="text-lg flex-shrink-0">${icon}</span>
+          <div class="flex-1 min-w-0">
+            <div id="fname-wrap-${att.id}" class="flex items-center gap-1 group" data-fname="${escapeHtml(att.filename)}">
+              <span id="fname-${att.id}" class="text-sm font-medium text-slate-700 truncate flex-1">${escapeHtml(att.filename)}</span>
+              <button type="button" onclick="startRename('${att.id}')"
+                class="opacity-0 group-hover:opacity-100 p-0.5 text-slate-300 hover:text-blue-500 transition flex-shrink-0" title="Renommer">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              </button>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="text-xs text-slate-400">${size} · ${escapeHtml(att.uploader?.name || '?')} · ${formatDate(att.createdAt)}</p>
+              ${ocrBadge}
+            </div>
+          </div>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            <a href="/api/orders/${detailOrderId}/attachments/${att.id}" download="${encodeURIComponent(att.filename)}"
+              class="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition" title="Télécharger">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            </a>
+            <button onclick="deleteAttachment('${att.id}')"
+              class="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition" title="Supprimer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <!-- Ligne catégorie + actions -->
+        <div class="flex items-center gap-2 px-3 py-2 border-t border-slate-100 bg-slate-50">
+          <select onchange="changeCategory('${att.id}', this.value)"
+            class="flex-1 text-xs border border-slate-200 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+            ${catOptions(att.category || 'OTHER')}
+          </select>
+          ${catBadge(att.category || 'OTHER')}
+          <button onclick="sendAttachmentEmail('${att.id}')"
+            title="Envoyer à la compta"
+            class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition flex-shrink-0">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            Compta
+          </button>
+          <button
+            data-attach-id="${att.id}"
+            data-attach-mime="${att.mimetype}"
+            data-attach-name="${escapeHtml(att.filename)}"
+            onclick="openAttachSigModal(this)"
+            title="Demander une signature sur ce document"
+            class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 transition flex-shrink-0">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+            Signer
+          </button>
+        </div>
+        ${ocrBlock}
+      </div>`;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `<p class="text-xs text-red-500 text-center py-3">${err.message}</p>`;
+  }
+}
+
+// ─── Drag & drop / staging ────────────────────────────────────────────────
+let stagedFiles = []; // { file: File, name: string, category: string }
+
+function fileIcon(type) {
+  if (type.startsWith('image/')) return '🖼️';
+  if (type === 'application/pdf') return '📄';
+  if (type.includes('spreadsheet') || type.includes('excel')) return '📊';
+  if (type.includes('word') || type.includes('document')) return '📝';
+  return '📎';
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  document.getElementById('drop-zone').classList.remove('border-blue-400', 'bg-blue-50');
+  addToStaging(Array.from(event.dataTransfer.files));
+}
+
+function handleFileSelect(input) {
+  addToStaging(Array.from(input.files));
+  input.value = '';
+}
+
+function addToStaging(files) {
+  for (const file of files) {
+    if (stagedFiles.length >= 5) { showToast('Maximum 5 fichiers à la fois', 'error'); break; }
+    stagedFiles.push({ file, name: file.name, category: 'OTHER' });
+  }
+  renderStaging();
+}
+
+function renderStaging() {
+  const area = document.getElementById('staging-area');
+  const container = document.getElementById('staged-files');
+  document.getElementById('staged-count').textContent = stagedFiles.length;
+  if (!stagedFiles.length) { area.classList.add('hidden'); return; }
+  area.classList.remove('hidden');
+  container.innerHTML = stagedFiles.map((sf, i) => `
+    <div class="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+      <span class="text-base flex-shrink-0">${fileIcon(sf.file.type)}</span>
+      <input type="text" value="${escapeHtml(sf.name)}"
+        oninput="stagedFiles[${i}].name = this.value"
+        class="flex-1 min-w-0 text-sm border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" />
+      <select onchange="stagedFiles[${i}].category = this.value"
+        class="text-xs border border-slate-200 rounded-md px-2 py-1 bg-white focus:outline-none flex-shrink-0">
+        ${catOptions('OTHER')}
+      </select>
+      <button type="button" onclick="removeStagedFile(${i})"
+        class="p-1 text-slate-400 hover:text-red-500 transition flex-shrink-0" title="Retirer">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>`).join('');
+}
+
+function removeStagedFile(index) {
+  stagedFiles.splice(index, 1);
+  renderStaging();
+}
+
+function clearStaging() {
+  stagedFiles = [];
+  renderStaging();
+}
+
+async function uploadStaged() {
+  if (!stagedFiles.length || !detailOrderId) return;
+  const uploadingEl = document.getElementById('attach-uploading');
+  uploadingEl.classList.remove('hidden');
+  let uploaded = 0, failed = 0;
+  for (const sf of [...stagedFiles]) {
+    const formData = new FormData();
+    formData.append('category', sf.category);
+    formData.append('displayName', sf.name.trim() || sf.file.name);
+    formData.append('files', sf.file, sf.file.name);
+    try {
+      await api.upload(`/orders/${detailOrderId}/attachments`, formData);
+      uploaded++;
+    } catch { failed++; }
+  }
+  uploadingEl.classList.add('hidden');
+  if (uploaded) showToast(`${uploaded} fichier(s) envoyé(s)`);
+  if (failed) showToast(`${failed} fichier(s) en erreur`, 'error');
+  clearStaging();
+  loadAttachments();
+}
+
+// ─── Renommage fichier existant ────────────────────────────────────────────
+function startRename(attachId) {
+  const wrap = document.getElementById(`fname-wrap-${attachId}`);
+  if (!wrap) return;
+  const currentName = wrap.dataset.fname || '';
+  wrap.innerHTML = `
+    <input type="text" id="rename-input-${attachId}" value="${escapeHtml(currentName)}"
+      class="flex-1 min-w-0 text-sm border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+    <button type="button" onclick="confirmRename('${attachId}')"
+      class="p-0.5 text-emerald-500 hover:text-emerald-700 transition flex-shrink-0" title="Valider">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+    </button>
+    <button type="button" onclick="loadAttachments()"
+      class="p-0.5 text-slate-400 hover:text-red-500 transition flex-shrink-0" title="Annuler">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>`;
+  const inp = document.getElementById(`rename-input-${attachId}`);
+  if (inp) {
+    inp.select();
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); confirmRename(attachId); }
+      else if (e.key === 'Escape') loadAttachments();
+    });
+  }
+}
+
+async function confirmRename(attachId) {
+  const input = document.getElementById(`rename-input-${attachId}`);
+  if (!input) return;
+  const newName = input.value.trim();
+  if (!newName) return;
+  try {
+    await api.patch(`/orders/${detailOrderId}/attachments/${attachId}`, { filename: newName });
+    loadAttachments();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function changeCategory(attachId, category) {
+  try {
+    await api.patch(`/orders/${detailOrderId}/attachments/${attachId}`, { category });
+    loadAttachments();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function sendAttachmentEmail(attachId) {
+  try {
+    const res = await api.post(`/orders/${detailOrderId}/attachments/${attachId}/send-email`, {});
+    showToast(res.message || 'Email envoyé', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function deleteAttachment(attachId) {
+  if (!confirm('Supprimer ce fichier ?')) return;
+  try {
+    await api.delete(`/orders/${detailOrderId}/attachments/${attachId}`);
+    showToast('Fichier supprimé');
+    loadAttachments();
   } catch (err) { showToast(err.message, 'error'); }
 }
 
@@ -321,8 +1072,11 @@ document.getElementById('order-form').addEventListener('submit', async e => {
   const id = document.getElementById('order-id').value;
   const data = {
     title: document.getElementById('order-title').value,
-    supplier: document.getElementById('order-supplier').value || null,
-    description: document.getElementById('order-description').value || null
+    supplierId: orderSupplierPicker.getValue(),
+    supplier: orderSupplierPicker.getName(),
+    description: document.getElementById('order-description').value || null,
+    interventionId: document.getElementById('order-intervention').value || null,
+    deploymentTags: currentTags
   };
 
   const rows = document.getElementById('items-container').querySelectorAll('div[id^="item-"]');
@@ -386,7 +1140,335 @@ async function deleteOrder(id) {
   } catch (err) { showToast(err.message, 'error'); }
 }
 
+// ─── Tag Input ────────────────────────────────────────────────────────────
+let currentTags = [];
+let allTagSuggestions = [];
+
+async function loadTagSuggestions() {
+  try { allTagSuggestions = await api.get('/orders/tags'); } catch {}
+}
+
+function renderTags() {
+  const wrapper = document.getElementById('tag-input-wrapper');
+  const input = document.getElementById('tag-input');
+  wrapper.querySelectorAll('.tag-pill').forEach(el => el.remove());
+  currentTags.forEach((tag, i) => {
+    const pill = document.createElement('span');
+    pill.className = 'tag-pill inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 flex-shrink-0';
+    pill.innerHTML = `${escapeHtml(tag)}<button type="button" onclick="removeTag(${i})" class="ml-0.5 text-blue-500 hover:text-blue-900 font-bold leading-none">&times;</button>`;
+    wrapper.insertBefore(pill, input);
+  });
+  input.placeholder = currentTags.length ? '' : 'Salle B201, Labo info…';
+}
+
+function addTag(value) {
+  const v = value.trim();
+  if (!v || currentTags.includes(v)) { document.getElementById('tag-input').value = ''; return; }
+  currentTags.push(v);
+  renderTags();
+  document.getElementById('tag-input').value = '';
+  hideSuggestions();
+}
+
+function removeTag(index) {
+  currentTags.splice(index, 1);
+  renderTags();
+}
+
+function showSuggestions(query) {
+  const dropdown = document.getElementById('tag-suggestions');
+  const wrapper = document.getElementById('tag-input-wrapper');
+  const filtered = allTagSuggestions.filter(s =>
+    s.toLowerCase().includes(query.toLowerCase()) && !currentTags.includes(s)
+  ).slice(0, 8);
+  if (!filtered.length) { hideSuggestions(); return; }
+  dropdown.innerHTML = filtered.map(s =>
+    `<button type="button" onmousedown="event.preventDefault();addTag('${escapeHtml(s)}')"
+      class="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 hover:text-blue-700 transition">${escapeHtml(s)}</button>`
+  ).join('');
+  const r = wrapper.getBoundingClientRect();
+  dropdown.style.cssText = `position:fixed;left:${r.left}px;top:${r.bottom + 2}px;width:${r.width}px`;
+  dropdown.classList.remove('hidden');
+}
+
+function hideSuggestions() {
+  document.getElementById('tag-suggestions').classList.add('hidden');
+}
+
+const tagInputEl = document.getElementById('tag-input');
+tagInputEl.addEventListener('input', e => {
+  const v = e.target.value;
+  if (v.endsWith(',')) { addTag(v.slice(0, -1)); return; }
+  if (v) showSuggestions(v); else hideSuggestions();
+});
+tagInputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addTag(e.target.value); }
+  else if (e.key === 'Backspace' && !e.target.value && currentTags.length) removeTag(currentTags.length - 1);
+  else if (e.key === 'Escape') hideSuggestions();
+  else if (e.key === 'Tab' && e.target.value) { e.preventDefault(); addTag(e.target.value); }
+});
+tagInputEl.addEventListener('blur', () => setTimeout(hideSuggestions, 150));
+tagInputEl.addEventListener('focus', e => { if (e.target.value) showSuggestions(e.target.value); });
+
+// ─── Demandes de signature ────────────────────────────────────────────────
+
+const SIG_STATUS = {
+  PENDING:   { label: 'En attente',  color: '#d97706', bg: '#fef3c7' },
+  SIGNED:    { label: 'Signé',       color: '#16a34a', bg: '#dcfce7' },
+  EXPIRED:   { label: 'Expiré',      color: '#dc2626', bg: '#fee2e2' },
+  CANCELLED: { label: 'Annulé',      color: '#64748b', bg: '#f1f5f9' },
+};
+
+async function loadSignatureRequests() {
+  if (!detailOrderId) return;
+  const container = document.getElementById('dp-signatures');
+  try {
+    const reqs = await api.get(`/orders/${detailOrderId}/signature-requests`);
+    if (!reqs.length) {
+      container.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">Aucune demande de signature</p>';
+      return;
+    }
+    container.innerHTML = reqs.map(r => {
+      const st = SIG_STATUS[r.status] || SIG_STATUS.PENDING;
+      const badge = `<span style="background:${st.bg};color:${st.color}" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold">${st.label}</span>`;
+      const appUrl = window.location.origin;
+      const signLink = `${appUrl}/sign.html?token=HIDDEN`;
+
+      return `
+      <div class="border border-slate-200 rounded-lg p-3 bg-white">
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-sm font-medium text-slate-700 truncate">${escapeHtml(r.recipientName)}</span>
+              ${badge}
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">${escapeHtml(r.recipientEmail)}</p>
+            ${r.status === 'SIGNED' ? `
+              <p class="text-xs text-emerald-700 font-mono mt-1">${r.signatureId}</p>
+              <p class="text-xs text-slate-400">Signé le ${new Date(r.signedAt).toLocaleString('fr-FR')}</p>
+            ` : ''}
+            ${r.status === 'PENDING' ? `
+              <p class="text-xs text-slate-400 mt-0.5">Expire le ${new Date(r.expiresAt).toLocaleDateString('fr-FR')}</p>
+            ` : ''}
+          </div>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            ${r.status === 'PENDING' ? `
+              <button onclick="cancelSigRequest('${r.id}')"
+                class="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition" title="Annuler">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            ` : ''}
+            ${r.status === 'SIGNED' && r.attachmentId ? `
+              <a href="/api/orders/${detailOrderId}/attachments/${r.attachmentId}"
+                download
+                class="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition" title="Télécharger le BC signé">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              </a>
+            ` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `<p class="text-xs text-red-500 text-center py-2">${err.message}</p>`;
+  }
+}
+
+function openSignatureModal() {
+  document.getElementById('sig-recipient-name').value = '';
+  document.getElementById('sig-recipient-email').value = '';
+  document.getElementById('sig-message').value = '';
+  document.getElementById('sig-form-error').classList.add('hidden');
+  document.getElementById('sig-modal').classList.remove('hidden');
+  document.getElementById('sig-recipient-name').focus();
+}
+
+function closeSigModal() {
+  document.getElementById('sig-modal').classList.add('hidden');
+}
+
+document.getElementById('sig-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!detailOrderId) return;
+
+  const data = {
+    recipientName: document.getElementById('sig-recipient-name').value.trim(),
+    recipientEmail: document.getElementById('sig-recipient-email').value.trim(),
+    message: document.getElementById('sig-message').value.trim() || null
+  };
+
+  const btn = document.getElementById('sig-submit-btn');
+  btn.disabled = true;
+  document.getElementById('sig-form-error').classList.add('hidden');
+
+  try {
+    await api.post(`/orders/${detailOrderId}/signature-requests`, data);
+    closeSigModal();
+    showToast('Lien de signature envoyé par email');
+    loadSignatureRequests();
+  } catch (err) {
+    document.getElementById('sig-form-error').textContent = err.message;
+    document.getElementById('sig-form-error').classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function cancelSigRequest(reqId) {
+  if (!confirm('Annuler cette demande de signature ?')) return;
+  try {
+    await api.delete(`/orders/${detailOrderId}/signature-requests/${reqId}`);
+    showToast('Demande annulée');
+    loadSignatureRequests();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+// ─── Signature depuis pièce jointe ───────────────────────────────────────────
+
+let attachSigBlobUrl = null;
+let attachSigAttachId = null;
+
+async function openAttachSigModal(btn) {
+  attachSigAttachId = btn.dataset.attachId;
+  const mime = btn.dataset.attachMime || '';
+  const filename = btn.dataset.attachName || 'document';
+
+  document.getElementById('attach-sig-filename').textContent = filename;
+  document.getElementById('attach-sig-name').value = '';
+  document.getElementById('attach-sig-email').value = '';
+  document.getElementById('attach-sig-message').value = '';
+  document.getElementById('attach-sig-error').classList.add('hidden');
+  document.getElementById('attach-sig-submit-btn').disabled = false;
+  document.getElementById('attach-sig-modal').classList.remove('hidden');
+
+  const container = document.getElementById('attach-placement-container');
+  SigPlacement.destroy(container);
+  container.innerHTML = `
+    <div id="attach-placement-loading" class="flex flex-col items-center justify-center py-8 gap-2 text-slate-400">
+      <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
+      <span class="text-sm">Chargement de l'aperçu…</span>
+    </div>`;
+
+  if (attachSigBlobUrl) { URL.revokeObjectURL(attachSigBlobUrl); attachSigBlobUrl = null; }
+
+  const onReady = () => SigPlacement.init(container, {});
+
+  if (mime === 'application/pdf' || mime.startsWith('image/')) {
+    try {
+      const resp = await fetch(`/api/orders/${detailOrderId}/attachments/${attachSigAttachId}`, { credentials: 'include' });
+      if (!resp.ok) throw new Error('Fichier inaccessible');
+      const blob = await resp.blob();
+      attachSigBlobUrl = URL.createObjectURL(blob);
+      await loadAttachPreview(container, mime, attachSigBlobUrl, onReady);
+    } catch {
+      container.innerHTML = `<div style="height:180px;background:#f8fafc;display:flex;align-items:center;justify-content:center;">
+        <p class="text-xs text-slate-400">Aperçu non disponible</p></div>`;
+      onReady();
+    }
+  } else {
+    container.innerHTML = `<div style="height:180px;background:#f8fafc;display:flex;align-items:center;justify-content:center;">
+      <p class="text-xs text-slate-400">Aperçu non disponible pour ce type de fichier</p></div>`;
+    onReady();
+  }
+}
+
+async function loadAttachPreview(container, mime, blobUrl, onReady) {
+  const initPlacement = () => requestAnimationFrame(() => onReady());
+
+  if (mime.startsWith('image/')) {
+    const img = new Image();
+    img.onload = () => {
+      container.innerHTML = '';
+      img.style.cssText = 'display:block;width:100%;height:auto;pointer-events:none;';
+      container.appendChild(img);
+      initPlacement();
+    };
+    img.onerror = () => { container.innerHTML = '<div style="height:180px"></div>'; initPlacement(); };
+    img.src = blobUrl;
+    return;
+  }
+
+  if (mime === 'application/pdf' && typeof pdfjsLib !== 'undefined') {
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        '/js/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({ url: blobUrl }).promise;
+      const page = await pdf.getPage(pdf.numPages);
+      const baseVp = page.getViewport({ scale: 1 });
+      const containerW = container.clientWidth || 500;
+      const scale = containerW / baseVp.width;
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      container.innerHTML = '';
+      canvas.style.cssText = `display:block;width:${vp.width}px;height:${vp.height}px;max-width:100%;pointer-events:none;`;
+      container.appendChild(canvas);
+      initPlacement();
+      return;
+    } catch { /* fallback */ }
+  }
+
+  container.innerHTML = '<div style="height:200px;background:#f8fafc;display:flex;align-items:center;justify-content:center;"><p style="font-size:12px;color:#94a3b8;">Aperçu non disponible</p></div>';
+  initPlacement();
+}
+
+function closeAttachSigModal() {
+  const container = document.getElementById('attach-placement-container');
+  SigPlacement.destroy(container);
+  document.getElementById('attach-sig-modal').classList.add('hidden');
+  if (attachSigBlobUrl) { URL.revokeObjectURL(attachSigBlobUrl); attachSigBlobUrl = null; }
+}
+
+async function submitAttachSig() {
+  const name = document.getElementById('attach-sig-name').value.trim();
+  const email = document.getElementById('attach-sig-email').value.trim();
+  const message = document.getElementById('attach-sig-message').value.trim();
+  const errEl = document.getElementById('attach-sig-error');
+  errEl.classList.add('hidden');
+
+  if (!name || !email) { errEl.textContent = 'Nom et email requis'; errEl.classList.remove('hidden'); return; }
+
+  const btn = document.getElementById('attach-sig-submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Envoi…`;
+
+  const container = document.getElementById('attach-placement-container');
+  const pos = SigPlacement.getPos(container);
+
+  try {
+    await api.post(`/orders/${detailOrderId}/attachments/${attachSigAttachId}/request-signature`, {
+      recipientName: name,
+      recipientEmail: email,
+      message: message || null,
+      posX: pos.x,
+      posY: pos.y,
+      sigWidth: pos.w,
+      sigHeight: pos.h
+    });
+    closeAttachSigModal();
+    showToast('Lien de signature envoyé par email');
+  } catch (err) {
+    errEl.textContent = err.message || 'Erreur lors de l\'envoi';
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg> Envoyer le lien`;
+  }
+}
+
 loadOrders();
+loadTagSuggestions();
+
+if (pageParams.get('action') === 'create') {
+  setTimeout(() => openCreateOrderModal(pageParams.get('interventionId') || ''), 50);
+}
+if (pageParams.get('focus')) {
+  setTimeout(() => editOrder({ id: pageParams.get('focus') }), 220);
+}
 </script>
 </body>
 </html>
