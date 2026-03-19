@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../lib/prisma');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
@@ -10,8 +10,6 @@ const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
 const { uploadImport } = require('../middleware/upload');
 const importService = require('../services/importService');
 const qrService = require('../services/qrService');
-
-const prisma = new PrismaClient();
 
 // Multer pour les pièces jointes équipement
 const equipAttachStorage = multer.diskStorage({
