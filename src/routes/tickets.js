@@ -62,8 +62,12 @@ router.post('/', async (req, res, next) => {
       if (!equipment) return res.status(404).json({ error: 'QR code d\'équipement introuvable.' });
       equipmentId = equipment.id;
       if (equipment.roomId) roomId = equipment.roomId;
+    } else if (req.body.roomId) {
+      const room = await prisma.room.findUnique({ where: { id: req.body.roomId } });
+      if (!room) return res.status(404).json({ error: 'Salle introuvable.' });
+      roomId = room.id;
     } else {
-      return res.status(400).json({ error: 'Un roomToken ou equipmentToken est requis.' });
+      return res.status(400).json({ error: 'Une salle doit être renseignée.' });
     }
 
     const reporterToken = uuidv4();
@@ -89,6 +93,29 @@ router.post('/', async (req, res, next) => {
       token: reporterToken,
       message: 'Ticket soumis avec succès. Conservez ce token pour suivre votre demande.'
     });
+  } catch (err) { next(err); }
+});
+
+// GET /api/tickets/rooms — Liste publique des salles (pour formulaire générique)
+router.get('/rooms', async (req, res, next) => {
+  try {
+    const rooms = await prisma.room.findMany({
+      orderBy: [{ building: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, building: true, number: true, floor: true }
+    });
+    res.json(rooms);
+  } catch (err) { next(err); }
+});
+
+// GET /api/tickets/rooms/:id/equipment — Équipements d'une salle (pour autocomplétion)
+router.get('/rooms/:id/equipment', async (req, res, next) => {
+  try {
+    const equipment = await prisma.equipment.findMany({
+      where: { roomId: req.params.id, status: { not: 'DECOMMISSIONED' } },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, type: true, brand: true, model: true }
+    });
+    res.json(equipment);
   } catch (err) { next(err); }
 });
 
