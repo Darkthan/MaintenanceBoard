@@ -9,7 +9,6 @@ const STATIC_ASSETS = [
   '/orders.html',
   '/suppliers.html',
   '/stock.html',
-  '/search.html',
   '/signatures.html',
   '/downloads.html',
   '/js/layout.js',
@@ -41,8 +40,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Ne pas cacher les requêtes non-GET
+  // Ne pas cacher les requêtes non-GET ni les ressources externes (CDN)
   if (event.request.method !== 'GET') return;
+  if (url.origin !== self.location.origin) return;
 
   // API : network first, fallback cache
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) {
