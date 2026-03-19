@@ -68,6 +68,13 @@
             class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
             placeholder="Ex : Écran noir, imprimante bloquée…" />
         </div>
+        <div id="pub-equip-wrap">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Équipement concerné</label>
+          <input id="pub-equipment" type="text" maxlength="200" list="pub-equip-list" autocomplete="off"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            placeholder="Nom de l'équipement (optionnel)" />
+          <datalist id="pub-equip-list"></datalist>
+        </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Détails</label>
           <textarea id="pub-description" rows="3" maxlength="2000"
@@ -82,10 +89,10 @@
               placeholder="Optionnel" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
-            <input id="pub-email" type="email" maxlength="200"
+            <label class="block text-sm font-medium text-slate-700 mb-1">Email *</label>
+            <input id="pub-email" type="email" required maxlength="200"
               class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              placeholder="Pour le suivi" />
+              placeholder="votre@email.fr" />
           </div>
         </div>
         <div id="pub-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
@@ -304,6 +311,19 @@ function renderPublicView(res, isRoom) {
         </div>
       </div>`;
 
+  // Champ équipement
+  if (isRoom && res.equipment?.length) {
+    // Peupler le datalist avec les équipements de la salle
+    document.getElementById('pub-equip-list').innerHTML =
+      res.equipment.map(e => `<option value="${esc(e.name)}${e.brand ? ' – ' + esc(e.brand) : ''}${e.model ? ' ' + esc(e.model) : ''}"></option>`).join('');
+  } else if (!isRoom) {
+    // QR d'un équipement direct : pré-remplir et verrouiller le champ
+    const equipInput = document.getElementById('pub-equipment');
+    equipInput.value = res.name + (res.brand ? ` – ${res.brand}` : '') + (res.model ? ` ${res.model}` : '');
+    equipInput.readOnly = true;
+    equipInput.classList.add('bg-slate-50', 'text-slate-500');
+  }
+
   // Lien retour avec redirect
   document.getElementById('pub-login-link').href = `/login.html?redirect=${encodeURIComponent(location.href)}`;
 }
@@ -403,7 +423,9 @@ function interventionRow(i) {
 document.getElementById('pub-form').addEventListener('submit', async e => {
   e.preventDefault();
   const title       = document.getElementById('pub-title').value;
-  const description = document.getElementById('pub-description').value;
+  const equipName   = document.getElementById('pub-equipment').value.trim();
+  const rawDesc     = document.getElementById('pub-description').value;
+  const description = equipName ? `Équipement concerné : ${equipName}${rawDesc ? '\n\n' + rawDesc : ''}` : (rawDesc || null);
   const name        = document.getElementById('pub-name').value;
   const email       = document.getElementById('pub-email').value;
   const honeypot    = document.getElementById('pub-honeypot').value;
