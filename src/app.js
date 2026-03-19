@@ -129,6 +129,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ── Route QR scan (URL sans extension dans les QR codes générés) ──────────────
+app.get('/scan', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/scan.html'));
+});
+
 // ── SPA fallback (pages HTML) ─────────────────────────────────────────────────
 app.get('*path', (req, res) => {
   if (!req.path.startsWith('/api')) {
