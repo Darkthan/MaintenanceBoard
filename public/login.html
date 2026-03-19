@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Connexion – MaintenanceBoard</title>
+  <link rel="icon" href="/assets/app-logo.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="MaintBoard" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@simplewebauthn/browser@9.0.1/dist/bundle/index.umd.min.js"></script>
   <script>
@@ -17,12 +24,7 @@
   <div class="w-full max-w-md">
     <!-- Logo / Titre -->
     <div class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg">
-        <svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
-        </svg>
-      </div>
+      <img src="/assets/app-logo.svg" alt="MaintenanceBoard" class="w-16 h-16 mx-auto mb-4 rounded-2xl shadow-2xl shadow-blue-950/30" />
       <h1 class="text-3xl font-bold text-white">MaintenanceBoard</h1>
       <p class="text-slate-400 mt-1">Gestion du parc informatique</p>
     </div>
@@ -113,5 +115,10 @@
 
     initLoginPage();
   </script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
 </body>
 </html>

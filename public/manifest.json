@@ -1,0 +1,20 @@
+{
+  "name": "MaintenanceBoard",
+  "short_name": "MaintBoard",
+  "description": "Gestion du parc informatique scolaire",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/assets/app-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "fr"
+}
