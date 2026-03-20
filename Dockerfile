@@ -10,7 +10,7 @@ RUN apk add --no-cache \
     libc6-compat
 
 # Copier les fichiers de dépendances
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY prisma ./prisma/
 
 # Installer toutes les dépendances (dev inclus — nécessaire pour prisma CLI)
