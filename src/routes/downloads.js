@@ -49,7 +49,9 @@ async function validateEnrollmentToken(token) {
 
 // ── GET /downloads/windows?enrollmentToken=<token> ────────────────────────────
 // Génère un .nupkg (ZIP) avec JSZip si disponible, sinon ZIP basique Node
-router.get('/windows', requireAuth, async (req, res, next) => {
+// Public mais protégé par enrollment token valide pour permettre l'installation
+// depuis une machine cible sans session admin navigateur.
+router.get('/windows', async (req, res, next) => {
   const { enrollmentToken } = req.query;
   if (!enrollmentToken) {
     return res.status(400).json({ error: 'enrollmentToken requis' });
@@ -94,7 +96,7 @@ router.get('/windows', requireAuth, async (req, res, next) => {
 
 // ── GET /downloads/linux?enrollmentToken=<token> ─────────────────────────────
 // Retourne install.sh avec variables injectées
-router.get('/linux', requireAuth, async (req, res, next) => {
+router.get('/linux', async (req, res, next) => {
   const { enrollmentToken } = req.query;
   if (!enrollmentToken) {
     return res.status(400).json({ error: 'enrollmentToken requis' });
@@ -117,7 +119,7 @@ router.get('/linux', requireAuth, async (req, res, next) => {
 
 // ── GET /downloads/install.ps1?enrollmentToken=<token> ───────────────────────
 // Script PowerShell standalone (sans choco) avec config inline
-router.get('/install.ps1', requireAuth, async (req, res, next) => {
+router.get('/install.ps1', async (req, res, next) => {
   const { enrollmentToken } = req.query;
   if (!enrollmentToken) {
     return res.status(400).json({ error: 'enrollmentToken requis' });
