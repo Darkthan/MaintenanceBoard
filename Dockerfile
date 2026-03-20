@@ -11,6 +11,7 @@ RUN apk add --no-cache \
 
 # Copier les fichiers de dépendances
 COPY package*.json .npmrc ./
+COPY prisma.config.ts ./
 COPY prisma ./prisma/
 
 # Installer toutes les dépendances (dev inclus — nécessaire pour prisma CLI)
