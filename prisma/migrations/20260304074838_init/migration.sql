@@ -15,7 +15,7 @@ CREATE TABLE "passkeys" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
     "credentialId" TEXT NOT NULL,
-    "publicKey" BLOB NOT NULL,
+    "publicKey" BYTEA NOT NULL,
     "counter" BIGINT NOT NULL DEFAULT 0,
     "deviceType" TEXT,
     "backedUp" BOOLEAN NOT NULL DEFAULT false,
