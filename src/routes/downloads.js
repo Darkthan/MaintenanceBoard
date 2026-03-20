@@ -14,9 +14,32 @@ function readTemplate(name) {
   return fs.readFileSync(path.join(TEMPLATES_DIR, name), 'utf8');
 }
 
+async function validateEnrollmentToken(token) {
+  if (!token) return null;
+  const record = await prisma.agentToken.findUnique({ where: { token } });
+  if (!record || !record.isActive) return null;
+  return record;
+}
+
+async function allowAdminOrEnrollmentToken(req, res, next) {
+  try {
+    if (req.headers.authorization || req.cookies?.accessToken) {
+      return requireAuth(req, res, next);
+    }
+
+    if (await validateEnrollmentToken(req.query?.enrollmentToken)) {
+      return next();
+    }
+
+    return res.status(401).json({ error: 'Token d\'authentification manquant' });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ── GET /downloads/agent.ps1 ──────────────────────────────────────────────────
 // Script agent brut — réservé aux admins authentifiés
-router.get('/agent.ps1', requireAuth, (req, res) => {
+router.get('/agent.ps1', allowAdminOrEnrollmentToken, (req, res) => {
   const content = readTemplate('agent.ps1');
   res.set('Content-Type', 'text/plain; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename="agent.ps1"');
@@ -24,7 +47,7 @@ router.get('/agent.ps1', requireAuth, (req, res) => {
 });
 
 // ── GET /downloads/agent.sh ───────────────────────────────────────────────────
-router.get('/agent.sh', requireAuth, (req, res) => {
+router.get('/agent.sh', allowAdminOrEnrollmentToken, (req, res) => {
   const content = readTemplate('agent.sh');
   res.set('Content-Type', 'text/plain; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename="agent.sh"');
@@ -32,20 +55,12 @@ router.get('/agent.sh', requireAuth, (req, res) => {
 });
 
 // ── GET /downloads/maintenance-agent.service ──────────────────────────────────
-router.get('/maintenance-agent.service', requireAuth, (req, res) => {
+router.get('/maintenance-agent.service', allowAdminOrEnrollmentToken, (req, res) => {
   const content = readTemplate('maintenance-agent.service');
   res.set('Content-Type', 'text/plain; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename="maintenance-agent.service"');
   res.send(content);
 });
-
-// ── Helper : valider un enrollment token ──────────────────────────────────────
-async function validateEnrollmentToken(token) {
-  if (!token) return null;
-  const record = await prisma.agentToken.findUnique({ where: { token } });
-  if (!record || !record.isActive) return null;
-  return record;
-}
 
 // ── GET /downloads/windows?enrollmentToken=<token> ────────────────────────────
 // Génère un .nupkg (ZIP) avec JSZip si disponible, sinon ZIP basique Node

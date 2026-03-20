@@ -50,11 +50,28 @@ describe('public agent install downloads', () => {
     expect(res.status).toBe(400);
   });
 
+  it('autorise /downloads/agent.ps1 avec un enrollmentToken valide sans session', async () => {
+    prisma.agentToken.findUnique.mockResolvedValue({ id: 'tok-1', token: 'abc', isActive: true });
+
+    const res = await request(app).get('/downloads/agent.ps1?enrollmentToken=abc');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
+  });
+
   it('refuse /downloads/linux avec token invalide', async () => {
     prisma.agentToken.findUnique.mockResolvedValue(null);
 
     const res = await request(app).get('/downloads/linux?enrollmentToken=invalid');
 
     expect(res.status).toBe(403);
+  });
+
+  it('refuse /downloads/agent.sh sans session ni token valide', async () => {
+    prisma.agentToken.findUnique.mockResolvedValue(null);
+
+    const res = await request(app).get('/downloads/agent.sh');
+
+    expect(res.status).toBe(401);
   });
 });
