@@ -10,6 +10,10 @@ const { swaggerUi, swaggerDocument } = require('./utils/swagger');
 
 const app = express();
 
+if (config.trustProxy !== false) {
+  app.set('trust proxy', config.trustProxy);
+}
+
 // ── Sécurité ──────────────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {

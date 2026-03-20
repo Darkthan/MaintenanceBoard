@@ -4,6 +4,9 @@ module.exports = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT) || 3000,
   appUrl: process.env.APP_URL || 'http://localhost:3000',
+  trustProxy: process.env.TRUST_PROXY !== undefined
+    ? (process.env.TRUST_PROXY === 'true' ? true : parseInt(process.env.TRUST_PROXY, 10) || false)
+    : (process.env.NODE_ENV === 'production' ? 1 : false),
 
   jwt: {
     secret: process.env.JWT_SECRET || 'fallback-secret-change-in-production',

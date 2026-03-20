@@ -26,6 +26,7 @@ RUN npm prune --omit=dev
 # Copier le code source
 COPY src ./src
 COPY public ./public
+COPY downloads ./downloads
 COPY docker-entrypoint.sh ./
 
 # Créer le dossier uploads + rendre le script exécutable
