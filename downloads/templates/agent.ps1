@@ -72,11 +72,14 @@ function Send-CheckIn {
 
   try {
     $bios = Get-WmiObject Win32_BIOS
+    $cs   = Get-WmiObject Win32_ComputerSystem
     $cpu  = (Get-WmiObject Win32_Processor | Select-Object -First 1).Name
-    $ram  = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1)
+    $ram  = [math]::Round(($cs.TotalPhysicalMemory) / 1GB, 1)
     $os   = (Get-WmiObject Win32_OperatingSystem).Caption
     $osVer= (Get-WmiObject Win32_OperatingSystem).Version
-    $usr  = (Get-WmiObject Win32_ComputerSystem).UserName
+    $usr  = $cs.UserName
+    $manufacturer = $cs.Manufacturer
+    $model = $cs.Model
 
     $ips  = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                Where-Object { $_.IPAddress -ne "127.0.0.1" } |
@@ -84,11 +87,29 @@ function Send-CheckIn {
     $macs = @(Get-NetAdapter -ErrorAction SilentlyContinue |
                Where-Object { $_.Status -eq "Up" } |
                Select-Object -ExpandProperty MacAddress)
+    $disks = @(
+      Get-WmiObject Win32_LogicalDisk -ErrorAction SilentlyContinue |
+      Where-Object { $_.DriveType -eq 3 } |
+      ForEach-Object {
+        @{
+          mount = $_.DeviceID
+          label = $_.VolumeName
+          filesystem = $_.FileSystem
+          totalGb = if ($_.Size) { [math]::Round([double]$_.Size / 1GB, 1) } else { $null }
+          freeGb = if ($_.FreeSpace) { [math]::Round([double]$_.FreeSpace / 1GB, 1) } else { 0 }
+          usedPercent = if ($_.Size -and $_.FreeSpace -ne $null) {
+            [math]::Round((([double]$_.Size - [double]$_.FreeSpace) / [double]$_.Size) * 100, 1)
+          } else { $null }
+        }
+      }
+    )
 
     $body = @{
       hostname     = $env:COMPUTERNAME
       serialNumber = $bios.SerialNumber
       type         = "PC"
+      manufacturer = $manufacturer
+      model        = $model
       cpu          = $cpu
       ramGb        = $ram
       os           = $os
@@ -96,6 +117,7 @@ function Send-CheckIn {
       user         = $usr
       ips          = $ips
       macs         = $macs
+      disks        = $disks
       peripherals  = @(Get-Peripherals)
     } | ConvertTo-Json -Depth 5
 

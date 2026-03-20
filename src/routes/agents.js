@@ -5,14 +5,78 @@ const { requireAuth } = require('../middleware/auth');
 const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
 const { agentAuth } = require('../middleware/agentAuth');
 const discoveryService = require('../services/discoveryService');
+const { readSettings } = require('../utils/settings');
 
 const prisma = require('../lib/prisma');
+
+function sanitizeDisks(disks) {
+  if (!Array.isArray(disks)) return [];
+  return disks.slice(0, 20).map(disk => ({
+    mount: typeof disk?.mount === 'string' ? disk.mount.slice(0, 64) : undefined,
+    label: typeof disk?.label === 'string' ? disk.label.slice(0, 128) : undefined,
+    filesystem: typeof disk?.filesystem === 'string' ? disk.filesystem.slice(0, 64) : undefined,
+    totalGb: Number.isFinite(Number(disk?.totalGb)) ? Math.round(Number(disk.totalGb) * 10) / 10 : undefined,
+    freeGb: Number.isFinite(Number(disk?.freeGb)) ? Math.round(Number(disk.freeGb) * 10) / 10 : undefined,
+    usedPercent: Number.isFinite(Number(disk?.usedPercent)) ? Math.round(Number(disk.usedPercent) * 10) / 10 : undefined
+  }));
+}
+
+async function maybeCreateLowDiskIntervention(equipment, agentInfo) {
+  const monitoring = readSettings().agentMonitoring || {};
+  if (!monitoring.lowDiskAlertsEnabled) return;
+
+  const thresholdGb = Number(monitoring.lowDiskThresholdGb);
+  if (!Number.isFinite(thresholdGb) || thresholdGb <= 0) return;
+
+  const disks = Array.isArray(agentInfo?.disks) ? agentInfo.disks : [];
+  const lowDisks = disks.filter(disk => Number.isFinite(disk?.freeGb) && disk.freeGb < thresholdGb);
+
+  for (const disk of lowDisks) {
+    const mount = disk.mount || disk.label || 'disque';
+    const title = `Espace disque faible - ${mount}`;
+
+    const existing = await prisma.intervention.findFirst({
+      where: {
+        equipmentId: equipment.id,
+        title,
+        status: { in: ['OPEN', 'IN_PROGRESS'] }
+      },
+      select: { id: true }
+    });
+
+    if (existing) continue;
+
+    const parts = [
+      equipment.agentHostname ? `Hostname: ${equipment.agentHostname}` : null,
+      equipment.brand ? `Fabricant: ${equipment.brand}` : null,
+      equipment.model ? `Modèle: ${equipment.model}` : null,
+      `Montage: ${mount}`,
+      Number.isFinite(disk.freeGb) ? `Libre: ${disk.freeGb} Go` : null,
+      Number.isFinite(disk.totalGb) ? `Total: ${disk.totalGb} Go` : null,
+      Number.isFinite(disk.usedPercent) ? `Utilisation: ${disk.usedPercent}%` : null,
+      `Seuil configuré: ${thresholdGb} Go`
+    ].filter(Boolean);
+
+    await prisma.intervention.create({
+      data: {
+        title,
+        description: `Alerte automatique agent.\n${parts.join('\n')}`,
+        status: 'OPEN',
+        priority: 'HIGH',
+        source: 'INTERNAL',
+        techId: null,
+        roomId: equipment.roomId || null,
+        equipmentId: equipment.id
+      }
+    });
+  }
+}
 
 // ── POST /api/agents/checkin ─────────────────────────────────────────────────
 // Auth: X-Agent-Token (enrollment ou machine token)
 router.post('/checkin', agentAuth, async (req, res, next) => {
   try {
-    const { hostname, serialNumber, type, cpu, ramGb, os, osVersion, user, ips, macs, peripherals } = req.body;
+    const { hostname, serialNumber, type, manufacturer, model, cpu, ramGb, os, osVersion, user, ips, macs, peripherals, disks } = req.body;
 
     // Validation hostname
     if (hostname && !/^[a-zA-Z0-9._-]{1,255}$/.test(hostname)) {
@@ -23,6 +87,8 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
     const cap = (v, max) => (typeof v === 'string' ? v.slice(0, max) : v);
     const capArr = (v, max) => (Array.isArray(v) ? v.slice(0, max).map(s => typeof s === 'string' ? s.slice(0, 256) : s) : v);
     const sanitized = {
+      manufacturer: cap(manufacturer, 256),
+      model: cap(model, 256),
       cpu: cap(cpu, 256),
       ramGb: typeof ramGb === 'number' ? ramGb : undefined,
       os: cap(os, 256),
@@ -30,7 +96,8 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
       user: cap(user, 256),
       ips: capArr(ips, 50),
       macs: capArr(macs, 20),
-      peripherals: capArr(peripherals, 50)
+      peripherals: capArr(peripherals, 50),
+      disks: sanitizeDisks(disks)
     };
     const agentInfoStr = JSON.stringify(sanitized);
     if (agentInfoStr.length > 10240) {
@@ -66,6 +133,8 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
         // Équipement existant → mettre à jour (conserver le lien enrollmentTokenId s'il existait déjà)
         const machineToken = equipment.agentToken || uuidv4();
         const updateData = {
+          brand: sanitized.manufacturer || equipment.brand,
+          model: sanitized.model || equipment.model,
           agentInfo,
           agentHostname: hostname || null,
           agentToken: machineToken,
@@ -80,6 +149,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
           where: { id: equipment.id },
           data: updateData
         });
+        await maybeCreateLowDiskIntervention(equipment, sanitized);
         return res.json({ agentToken: machineToken, equipmentId: equipment.id, existing: true });
       }
 
@@ -94,6 +164,8 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
         data: {
           name: hostname || `PC-${Date.now()}`,
           type: type || 'PC',
+          brand: sanitized.manufacturer || null,
+          model: sanitized.model || null,
           serialNumber: serialNumber || null,
           status: 'ACTIVE',
           discoverySource: 'AGENT',
@@ -107,6 +179,8 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
         }
       });
 
+      await maybeCreateLowDiskIntervention(newEquipment, sanitized);
+
       return res.status(201).json({
         agentToken: machineToken,
         equipmentId: newEquipment.id,
@@ -117,14 +191,17 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
 
     // ── Cas 2 : token machine (check-in périodique) ────────────────────────
     if (req.equipmentRecord) {
-      await prisma.equipment.update({
+      const updatedEquipment = await prisma.equipment.update({
         where: { id: req.equipmentRecord.id },
         data: {
+          brand: sanitized.manufacturer || req.equipmentRecord.brand || null,
+          model: sanitized.model || req.equipmentRecord.model || null,
           agentInfo,
           agentHostname: hostname || null,
           lastSeenAt: new Date()
         }
       });
+      await maybeCreateLowDiskIntervention(updatedEquipment, sanitized);
       return res.json({ ok: true, equipmentId: req.equipmentRecord.id });
     }
 
@@ -254,6 +331,8 @@ router.get('/machines', requireAuth, async (req, res, next) => {
     const result = machines.map(e => ({
       id: e.id,
       name: e.name,
+      brand: e.brand,
+      model: e.model,
       agentHostname: e.agentHostname,
       agentRevoked: e.agentRevoked,
       lastSeenAt: e.lastSeenAt,
@@ -297,6 +376,8 @@ router.get('/unassigned', requireAuth, async (req, res, next) => {
     const result = machines.map(m => ({
       id: m.id,
       name: m.name,
+      brand: m.brand,
+      model: m.model,
       agentHostname: m.agentHostname,
       agentRevoked: m.agentRevoked,
       lastSeenAt: m.lastSeenAt,

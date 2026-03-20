@@ -62,6 +62,37 @@
 
     <div class="flex-1 p-6 space-y-6">
 
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100">
+          <h2 class="font-semibold text-slate-800">Surveillance disque automatique</h2>
+          <p class="text-xs text-slate-500 mt-1">Déclenche une intervention ouverte quand un agent remonte un disque sous le seuil configuré.</p>
+        </div>
+        <div class="p-5">
+          <form id="agent-monitoring-form" class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div class="flex-1 grid gap-4 sm:grid-cols-[auto_minmax(0,220px)] sm:items-end">
+              <label class="inline-flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                <input id="low-disk-enabled" type="checkbox" class="h-4 w-4 rounded text-blue-600" />
+                <span>
+                  <span class="block text-sm font-medium text-slate-700">Activer l’alerte espace disque faible</span>
+                  <span class="block text-xs text-slate-400 mt-0.5">Une seule intervention ouverte est gardée par machine et par disque.</span>
+                </span>
+              </label>
+              <label class="block">
+                <span class="block text-sm font-medium text-slate-700 mb-1">Seuil libre minimum</span>
+                <div class="relative">
+                  <input id="low-disk-threshold" type="number" min="1" max="1000" step="1" class="w-full border border-slate-300 rounded-lg px-3 py-2 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <span class="absolute inset-y-0 right-3 flex items-center text-xs text-slate-400">Go</span>
+                </div>
+              </label>
+            </div>
+            <div class="flex items-center gap-3">
+              <p id="agent-monitoring-feedback" class="text-sm text-slate-500"></p>
+              <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Enregistrer</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- Tokens d'enrollment -->
       <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <div class="px-5 py-4 border-b border-slate-100">
@@ -99,8 +130,9 @@
           <thead>
             <tr class="bg-slate-50 border-b border-slate-200">
               <th class="text-left px-5 py-3 font-medium text-slate-600">Hostname</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Poste</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Salle</th>
-              <th class="text-left px-5 py-3 font-medium text-slate-600">IP</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Réseau / disque</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Dernière remontée</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">État</th>
               <th class="text-right px-5 py-3 font-medium text-slate-600">Actions</th>
@@ -125,8 +157,9 @@
           <thead>
             <tr class="bg-slate-50 border-b border-slate-200">
               <th class="text-left px-5 py-3 font-medium text-slate-600">Hostname</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Poste</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Salle</th>
-              <th class="text-left px-5 py-3 font-medium text-slate-600">Système</th>
+              <th class="text-left px-5 py-3 font-medium text-slate-600">Système / disque</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Dernière remontée</th>
               <th class="text-left px-5 py-3 font-medium text-slate-600">Statut</th>
             </tr>
@@ -239,6 +272,45 @@ if (user.name) document.getElementById('user-avatar').textContent = user.name[0]
 const serverUrl = window.location.origin;
 let allTokens = [];
 
+function getLowestDisk(info) {
+  const disks = Array.isArray(info?.disks) ? info.disks.filter(d => typeof d?.freeGb === 'number') : [];
+  if (!disks.length) return null;
+  return disks.slice().sort((a, b) => a.freeGb - b.freeGb)[0];
+}
+
+async function loadAgentMonitoring() {
+  try {
+    const settings = await api.get('/settings/agent-monitoring');
+    document.getElementById('low-disk-enabled').checked = !!settings.lowDiskAlertsEnabled;
+    document.getElementById('low-disk-threshold').value = settings.lowDiskThresholdGb ?? 20;
+  } catch (err) {
+    document.getElementById('agent-monitoring-feedback').textContent = err.message;
+    document.getElementById('agent-monitoring-feedback').className = 'text-sm text-red-600';
+  }
+}
+
+document.getElementById('agent-monitoring-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const feedback = document.getElementById('agent-monitoring-feedback');
+  feedback.textContent = 'Enregistrement...';
+  feedback.className = 'text-sm text-slate-500';
+
+  try {
+    const res = await api.patch('/settings/agent-monitoring', {
+      lowDiskAlertsEnabled: document.getElementById('low-disk-enabled').checked,
+      lowDiskThresholdGb: Number(document.getElementById('low-disk-threshold').value || 20)
+    });
+    feedback.textContent = res.message || 'Paramètres enregistrés';
+    feedback.className = 'text-sm text-emerald-600';
+    showToast('Surveillance des agents enregistrée');
+    loadMachines();
+    loadRecentAgents();
+  } catch (err) {
+    feedback.textContent = err.message;
+    feedback.className = 'text-sm text-red-600';
+  }
+});
+
 // ── Charger les tokens ──────────────────────────────────────────────────────
 async function loadTokens() {
   try {
@@ -337,15 +409,24 @@ async function loadMachines() {
     document.getElementById('machines-tbody').innerHTML = machines.map(m => {
       const ips = m.agentInfo?.ips;
       const ipStr = Array.isArray(ips) && ips.length > 0 ? ips[0] : (typeof ips === 'string' ? ips : '-');
+      const lowestDisk = getLowestDisk(m.agentInfo);
+      const machineLabel = [m.brand || m.agentInfo?.manufacturer, m.model || m.agentInfo?.model].filter(Boolean).join(' · ') || '-';
       return `
         <tr class="hover:bg-slate-50 transition ${m.agentRevoked ? 'opacity-60' : ''}">
           <td class="px-5 py-3.5">
             <p class="font-medium text-slate-800 font-mono text-sm">${m.agentHostname || m.name}</p>
           </td>
           <td class="px-5 py-3.5 text-slate-600 text-sm">
+            <p>${machineLabel}</p>
+            ${m.agentInfo?.serialNumber ? `<p class="text-xs text-slate-400">${m.agentInfo.serialNumber}</p>` : ''}
+          </td>
+          <td class="px-5 py-3.5 text-slate-600 text-sm">
             ${m.room ? `${m.room.name}${m.room.number ? ` (${m.room.number})` : ''}` : '<span class="text-slate-400">Non assigné</span>'}
           </td>
-          <td class="px-5 py-3.5 text-slate-500 text-xs font-mono">${ipStr}</td>
+          <td class="px-5 py-3.5 text-slate-500 text-xs">
+            <p class="font-mono">${ipStr}</p>
+            ${lowestDisk ? `<p class="mt-1 ${lowestDisk.freeGb < Number(document.getElementById('low-disk-threshold').value || 0) ? 'text-amber-600 font-medium' : 'text-slate-400'}">Disque bas: ${lowestDisk.mount || 'disque'} · ${lowestDisk.freeGb} Go libres</p>` : '<p class="mt-1 text-slate-300">Disque non remonté</p>'}
+          </td>
           <td class="px-5 py-3.5 text-slate-500 text-xs">${m.lastSeenAt ? formatDate(m.lastSeenAt, true) : '-'}</td>
           <td class="px-5 py-3.5">
             ${m.agentRevoked
@@ -390,6 +471,7 @@ async function loadRecentAgents() {
     document.getElementById('recent-agents-table').classList.remove('hidden');
     document.getElementById('recent-agents-tbody').innerHTML = data.data.map(e => {
       const info = e.agentInfo ? (typeof e.agentInfo === 'string' ? JSON.parse(e.agentInfo) : e.agentInfo) : {};
+      const lowestDisk = getLowestDisk(info);
       return `
         <tr class="hover:bg-slate-50 transition">
           <td class="px-5 py-3.5">
@@ -397,10 +479,14 @@ async function loadRecentAgents() {
             ${e.serialNumber ? `<p class="text-xs text-slate-400">S/N: ${e.serialNumber}</p>` : ''}
           </td>
           <td class="px-5 py-3.5 text-slate-600 text-sm">
+            ${[e.brand, e.model].filter(Boolean).join(' · ') || '<span class="text-slate-400">Inconnu</span>'}
+          </td>
+          <td class="px-5 py-3.5 text-slate-600 text-sm">
             ${e.room ? `${e.room.name}${e.room.number ? ` (${e.room.number})` : ''}` : '<span class="text-slate-400">Non assigné</span>'}
           </td>
           <td class="px-5 py-3.5 text-slate-500 text-xs">
-            ${[info.os, info.cpu ? info.cpu.split('@')[0].trim() : null].filter(Boolean).join(' · ') || '-'}
+            <p>${[info.os, info.cpu ? info.cpu.split('@')[0].trim() : null].filter(Boolean).join(' · ') || '-'}</p>
+            ${lowestDisk ? `<p class="mt-1 ${lowestDisk.freeGb < Number(document.getElementById('low-disk-threshold').value || 0) ? 'text-amber-600 font-medium' : 'text-slate-400'}">Disque bas: ${lowestDisk.mount || 'disque'} · ${lowestDisk.freeGb} Go libres</p>` : ''}
           </td>
           <td class="px-5 py-3.5 text-slate-500 text-xs">${e.lastSeenAt ? formatDate(e.lastSeenAt, true) : '-'}</td>
           <td class="px-5 py-3.5">
@@ -544,6 +630,7 @@ document.getElementById('submit-edit-token-btn').addEventListener('click', async
 });
 
 loadTokens();
+loadAgentMonitoring();
 loadMachines();
 loadRecentAgents();
 </script>

@@ -9,6 +9,11 @@ const { readSettings, writeSettings } = require('../utils/settings');
 
 const prisma = require('../lib/prisma');
 
+const AGENT_MONITORING_DEFAULTS = {
+  lowDiskAlertsEnabled: false,
+  lowDiskThresholdGb: 20
+};
+
 // ── SMTP ───────────────────────────────────────────────────────────────────
 
 // GET /api/settings/smtp
@@ -71,6 +76,38 @@ router.post('/smtp/test', requireAuth, requireAdmin, async (req, res, next) => {
     });
     res.json({ message: `Email de test envoyé à ${to}` });
   } catch (err) { next(err); }
+});
+
+// ── Monitoring agents ────────────────────────────────────────────────────────
+
+// GET /api/settings/agent-monitoring
+router.get('/agent-monitoring', requireAuth, requireAdmin, (_req, res) => {
+  const saved = readSettings().agentMonitoring || {};
+  res.json({ ...AGENT_MONITORING_DEFAULTS, ...saved });
+});
+
+// PATCH /api/settings/agent-monitoring
+router.patch('/agent-monitoring', requireAuth, requireAdmin, (req, res) => {
+  const current = readSettings().agentMonitoring || {};
+  const next = {
+    ...AGENT_MONITORING_DEFAULTS,
+    ...current
+  };
+
+  if (req.body.lowDiskAlertsEnabled !== undefined) {
+    next.lowDiskAlertsEnabled = !!req.body.lowDiskAlertsEnabled;
+  }
+
+  if (req.body.lowDiskThresholdGb !== undefined) {
+    const threshold = Number(req.body.lowDiskThresholdGb);
+    if (!Number.isFinite(threshold) || threshold < 1 || threshold > 1000) {
+      return res.status(400).json({ error: 'Le seuil disque doit être compris entre 1 et 1000 Go.' });
+    }
+    next.lowDiskThresholdGb = Math.round(threshold * 10) / 10;
+  }
+
+  writeSettings({ agentMonitoring: next });
+  res.json({ message: 'Surveillance des agents enregistrée', settings: next });
 });
 
 // ── Export ─────────────────────────────────────────────────────────────────
