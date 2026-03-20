@@ -26,12 +26,12 @@ RUN npm prune --omit=dev
 # Copier le code source
 COPY src ./src
 COPY public ./public
+COPY docker-entrypoint.sh ./
 
-# Créer le dossier uploads
-RUN mkdir -p uploads
+# Créer le dossier uploads + rendre le script exécutable
+RUN mkdir -p uploads && chmod +x docker-entrypoint.sh
 
 # Exposer le port
 EXPOSE 3000
 
-# Démarrer l'application
-CMD ["node", "src/server.js"]
+CMD ["./docker-entrypoint.sh"]

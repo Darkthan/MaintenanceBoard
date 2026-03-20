@@ -54,7 +54,6 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-noreply@maintenance.local}
-    command: sh -c "npx prisma migrate deploy && node prisma/seed.js && node src/server.js"
 
 volumes:
   pgdata:
