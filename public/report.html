@@ -112,6 +112,38 @@
           </div>
         </div>
 
+        <!-- Photo / Fichier joint -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Photo ou document (optionnel)</label>
+          <div class="flex gap-2">
+            <label class="flex-1 cursor-pointer flex items-center justify-center gap-2 border border-slate-300 rounded-xl py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition">
+              <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+              Prendre une photo
+              <input type="file" id="rep-photo-camera" class="hidden" accept="image/*" capture="environment" onchange="onRepFileSelected(this)" />
+            </label>
+            <label class="flex-1 cursor-pointer flex items-center justify-center gap-2 border border-slate-300 rounded-xl py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition">
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+              </svg>
+              Joindre un fichier
+              <input type="file" id="rep-photo-file" class="hidden"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onchange="onRepFileSelected(this)" />
+            </label>
+          </div>
+          <div id="rep-file-preview" class="hidden mt-2">
+            <div class="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 text-sm">
+              <span id="rep-file-preview-name" class="flex-1 truncate text-slate-700 text-xs"></span>
+              <button type="button" onclick="clearRepFile()" class="text-slate-400 hover:text-red-500 transition flex-shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <img id="rep-file-preview-img" class="hidden mt-2 max-h-40 rounded-xl object-cover w-full" alt="Aperçu" />
+          </div>
+        </div>
+
         <div id="submit-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
 
         <button type="submit" id="submit-btn"
@@ -245,11 +277,59 @@ async function loadRoomEquipment(roomId) {
   } catch { /* silencieux */ }
 }
 
+// ── Gestion fichier ────────────────────────────────────────────────────────────
+let repPendingFile = null;
+const REP_IMAGE_MIMES = ['image/jpeg','image/png','image/gif','image/webp'];
+
+function onRepFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  repPendingFile = file;
+  const otherId = input.id === 'rep-photo-camera' ? 'rep-photo-file' : 'rep-photo-camera';
+  document.getElementById(otherId).value = '';
+  document.getElementById('rep-file-preview-name').textContent = file.name;
+  document.getElementById('rep-file-preview').classList.remove('hidden');
+  const imgEl = document.getElementById('rep-file-preview-img');
+  if (REP_IMAGE_MIMES.includes(file.type)) {
+    imgEl.src = URL.createObjectURL(file);
+    imgEl.classList.remove('hidden');
+  } else {
+    imgEl.classList.add('hidden');
+  }
+}
+
+function clearRepFile() {
+  repPendingFile = null;
+  document.getElementById('rep-photo-camera').value = '';
+  document.getElementById('rep-photo-file').value = '';
+  document.getElementById('rep-file-preview').classList.add('hidden');
+  document.getElementById('rep-file-preview-img').classList.add('hidden');
+  document.getElementById('rep-file-preview-name').textContent = '';
+}
+
+function compressRepImage(file, maxWidth = 1200, quality = 0.82) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // ── Soumission ─────────────────────────────────────────────────────────────────
 document.getElementById('report-form').addEventListener('submit', async e => {
   e.preventDefault();
 
-  // Vérifier qu'une salle est sélectionnée dans la liste
   if (!selectedRoomId) {
     roomSearch.classList.add('border-red-400');
     roomHint.classList.remove('hidden');
@@ -263,15 +343,6 @@ document.getElementById('report-form').addEventListener('submit', async e => {
     ? `Équipement concerné : ${equipName}${rawDesc ? '\n\n' + rawDesc : ''}`
     : (rawDesc || null);
 
-  const body = {
-    roomId:        selectedRoomId,
-    title:         document.getElementById('title').value,
-    description,
-    reporterName:  document.getElementById('reporter-name').value || null,
-    reporterEmail: document.getElementById('reporter-email').value,
-    _honeypot:     document.getElementById('honeypot').value
-  };
-
   const btn = document.getElementById('submit-btn');
   const err = document.getElementById('submit-error');
   btn.disabled = true;
@@ -279,11 +350,25 @@ document.getElementById('report-form').addEventListener('submit', async e => {
   err.classList.add('hidden');
 
   try {
-    const r    = await fetch('/api/tickets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
+    const fd = new FormData();
+    fd.append('roomId', selectedRoomId);
+    fd.append('title', document.getElementById('title').value);
+    if (description) fd.append('description', description);
+    const name = document.getElementById('reporter-name').value;
+    const email = document.getElementById('reporter-email').value;
+    if (name) fd.append('reporterName', name);
+    if (email) fd.append('reporterEmail', email);
+    fd.append('_honeypot', document.getElementById('honeypot').value);
+
+    if (repPendingFile) {
+      let fileToSend = repPendingFile;
+      if (REP_IMAGE_MIMES.includes(repPendingFile.type)) {
+        fileToSend = await compressRepImage(repPendingFile);
+      }
+      fd.append('attachment', fileToSend, repPendingFile.name);
+    }
+
+    const r = await fetch('/api/tickets', { method: 'POST', body: fd });
     const data = await r.json();
 
     if (!r.ok) {
@@ -293,8 +378,7 @@ document.getElementById('report-form').addEventListener('submit', async e => {
     }
 
     document.getElementById('report-form').classList.add('hidden');
-    const success = document.getElementById('form-success');
-    success.classList.remove('hidden');
+    document.getElementById('form-success').classList.remove('hidden');
     if (data.token) {
       const url = `/ticket-status.html?token=${data.token}`;
       document.getElementById('ticket-link').href = url;

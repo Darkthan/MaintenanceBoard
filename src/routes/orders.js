@@ -262,6 +262,9 @@ router.post('/',
     body('title').trim().isLength({ min: 3, max: 300 }),
     body('items').isArray({ min: 1 }),
     body('interventionId').optional({ values: 'falsy' }).isUUID(),
+    body('orderedAt').optional({ values: 'falsy' }).isISO8601(),
+    body('expectedDeliveryAt').optional({ values: 'falsy' }).isISO8601(),
+    body('receivedAt').optional({ values: 'falsy' }).isISO8601(),
     body('items.*.name').trim().isLength({ min: 1 }),
     body('items.*.quantity').isInt({ min: 1 }),
     body('items.*.priceType').optional().isIn(VALID_PRICE_TYPES),
@@ -270,7 +273,10 @@ router.post('/',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { title, description, supplier, supplierId, deploymentTags, items, interventionId } = req.body;
+      const {
+        title, description, supplier, supplierId, deploymentTags, items, interventionId,
+        orderedAt, expectedDeliveryAt, receivedAt, trackingNotes
+      } = req.body;
       const linkedInterventionId = await resolveInterventionLink(interventionId, req.user);
 
       const order = await prisma.order.create({
@@ -282,6 +288,10 @@ router.post('/',
           deploymentTags: serializeTags(deploymentTags || []),
           requestedBy: req.user.id,
           interventionId: linkedInterventionId,
+          orderedAt: orderedAt ? new Date(orderedAt) : null,
+          expectedDeliveryAt: expectedDeliveryAt ? new Date(expectedDeliveryAt) : null,
+          receivedAt: receivedAt ? new Date(receivedAt) : null,
+          trackingNotes: trackingNotes || null,
           items: { create: items.map(toItemData) }
         },
         include: orderInclude
@@ -301,6 +311,9 @@ router.patch('/:id',
   [
     body('status').optional().isIn(VALID_STATUSES),
     body('interventionId').optional({ values: 'falsy' }).isUUID(),
+    body('orderedAt').optional({ values: 'falsy' }).isISO8601(),
+    body('expectedDeliveryAt').optional({ values: 'falsy' }).isISO8601(),
+    body('receivedAt').optional({ values: 'falsy' }).isISO8601(),
     body('items').optional().isArray({ min: 1 }),
     body('items.*.name').optional().trim().isLength({ min: 1 }),
     body('items.*.quantity').optional().isInt({ min: 1 }),
@@ -311,7 +324,10 @@ router.patch('/:id',
     try {
       if (!validate(req, res)) return;
 
-      const { title, description, supplier, supplierId, deploymentTags, status, items, interventionId } = req.body;
+      const {
+        title, description, supplier, supplierId, deploymentTags, status, items, interventionId,
+        orderedAt, expectedDeliveryAt, receivedAt, trackingNotes
+      } = req.body;
       const data = {};
       if (title !== undefined) data.title = title;
       if (description !== undefined) data.description = description;
@@ -319,10 +335,14 @@ router.patch('/:id',
       if (supplierId !== undefined) data.supplierId = supplierId || null;
       if (deploymentTags !== undefined) data.deploymentTags = serializeTags(deploymentTags);
       if (interventionId !== undefined) data.interventionId = await resolveInterventionLink(interventionId, req.user);
+      if (orderedAt !== undefined) data.orderedAt = orderedAt ? new Date(orderedAt) : null;
+      if (expectedDeliveryAt !== undefined) data.expectedDeliveryAt = expectedDeliveryAt ? new Date(expectedDeliveryAt) : null;
+      if (receivedAt !== undefined) data.receivedAt = receivedAt ? new Date(receivedAt) : null;
+      if (trackingNotes !== undefined) data.trackingNotes = trackingNotes || null;
       if (status !== undefined) {
         data.status = status;
-        if (status === 'ORDERED') data.orderedAt = new Date();
-        if (status === 'RECEIVED') data.receivedAt = new Date();
+        if (status === 'ORDERED' && orderedAt === undefined) data.orderedAt = new Date();
+        if (status === 'RECEIVED' && receivedAt === undefined) data.receivedAt = new Date();
       }
       if (items !== undefined) {
         data.items = { deleteMany: {}, create: items.map(toItemData) };

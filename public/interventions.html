@@ -85,7 +85,15 @@
   <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 flex-shrink-0">
     <div class="flex-1 min-w-0">
       <p id="detail-meta" class="text-xs text-slate-400 mb-0.5"></p>
-      <h3 id="detail-title" class="font-semibold text-slate-800 truncate"></h3>
+      <div id="detail-title-display" onclick="openAttributeEditor('title')" class="cursor-pointer">
+        <h3 id="detail-title" class="font-semibold text-slate-800 truncate"></h3>
+      </div>
+      <div id="detail-title-editor" class="hidden flex items-center gap-2">
+        <input id="detail-title-input" type="text"
+          class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button type="button" onclick="saveAttributeEditor('title')" class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">OK</button>
+        <button type="button" onclick="closeAttributeEditor('title')" class="px-3 py-2 border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition">Annuler</button>
+      </div>
     </div>
     <button onclick="closeInterventionDetail()" class="ml-3 text-slate-400 hover:text-slate-700 transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -95,8 +103,26 @@
   <div class="flex-1 overflow-y-auto">
     <div class="px-5 py-4 space-y-3 border-b border-slate-100">
       <div class="flex flex-wrap gap-2 items-center">
-        <span id="detail-status"></span>
-        <span id="detail-priority"></span>
+        <span id="detail-status-display" onclick="openAttributeEditor('status')" class="cursor-pointer"></span>
+        <span id="detail-status-editor" class="hidden">
+          <select id="detail-status-input" onchange="saveAttributeEditor('status')"
+            class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="OPEN">Ouvert</option>
+            <option value="IN_PROGRESS">En cours</option>
+            <option value="RESOLVED">Résolu</option>
+            <option value="CLOSED">Fermé</option>
+          </select>
+        </span>
+        <span id="detail-priority-display" onclick="openAttributeEditor('priority')" class="cursor-pointer"></span>
+        <span id="detail-priority-editor" class="hidden">
+          <select id="detail-priority-input" onchange="saveAttributeEditor('priority')"
+            class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="LOW">Basse</option>
+            <option value="NORMAL">Normale</option>
+            <option value="HIGH">Haute</option>
+            <option value="CRITICAL">Critique</option>
+          </select>
+        </span>
         <span id="detail-source"></span>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -107,11 +133,31 @@
       </div>
       <div id="detail-description-wrap" class="hidden">
         <span class="text-xs text-slate-400 block mb-1">Description</span>
-        <div id="detail-description" class="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2 whitespace-pre-wrap"></div>
+        <div id="detail-description-display" onclick="openAttributeEditor('description')" class="cursor-pointer">
+          <div id="detail-description" class="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2 whitespace-pre-wrap"></div>
+        </div>
+        <div id="detail-description-editor" class="hidden space-y-2">
+          <textarea id="detail-description-input" rows="4"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+          <div class="flex justify-end gap-2">
+            <button type="button" onclick="closeAttributeEditor('description')" class="px-3 py-2 border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition">Annuler</button>
+            <button type="button" onclick="saveAttributeEditor('description')" class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">Enregistrer</button>
+          </div>
+        </div>
       </div>
       <div id="detail-resolution-wrap" class="hidden">
         <span class="text-xs text-slate-400 block mb-1">Résolution</span>
-        <div id="detail-resolution" class="text-sm text-slate-600 bg-emerald-50 rounded-lg px-3 py-2 whitespace-pre-wrap"></div>
+        <div id="detail-resolution-display" onclick="openAttributeEditor('resolution')" class="cursor-pointer">
+          <div id="detail-resolution" class="text-sm text-slate-600 bg-emerald-50 rounded-lg px-3 py-2 whitespace-pre-wrap"></div>
+        </div>
+        <div id="detail-resolution-editor" class="hidden space-y-2">
+          <textarea id="detail-resolution-input" rows="3"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+          <div class="flex justify-end gap-2">
+            <button type="button" onclick="closeAttributeEditor('resolution')" class="px-3 py-2 border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition">Annuler</button>
+            <button type="button" onclick="saveAttributeEditor('resolution')" class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">Enregistrer</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -129,6 +175,20 @@
       <textarea id="detail-notes" rows="5"
         class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         placeholder="Ex: relancé le fournisseur, intervention prioritaire, attente validation responsable..."></textarea>
+    </div>
+
+    <div id="detail-reporters-section" class="hidden px-5 py-4 border-b border-slate-100 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Demandeurs rattachés</p>
+          <p class="text-xs text-slate-400">Tous ces demandeurs partagent le même chat et le même suivi.</p>
+        </div>
+        <button type="button" onclick="openMergeModal()"
+          class="px-3 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition">
+          Fusionner une demande
+        </button>
+      </div>
+      <div id="detail-reporters-list" class="flex flex-wrap gap-2"></div>
     </div>
 
     <div class="px-5 py-4 space-y-3">
@@ -155,13 +215,33 @@
       <div id="detail-messages-list" class="space-y-2 max-h-64 overflow-y-auto bg-slate-50 rounded-xl p-3">
         <p id="detail-no-messages" class="text-xs text-slate-400 text-center py-2">Aucun message.</p>
       </div>
-      <div class="flex gap-2">
+      <!-- Prévisualisation fichier tech -->
+      <div id="tech-file-preview" class="hidden flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5 text-xs text-slate-600">
+        <svg class="w-3.5 h-3.5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+        </svg>
+        <span id="tech-file-preview-name" class="flex-1 truncate"></span>
+        <button onclick="clearTechFile()" class="text-slate-400 hover:text-red-500 transition">✕</button>
+      </div>
+      <div class="flex gap-2 items-end">
         <textarea id="detail-message-input" rows="2" placeholder="Répondre au demandeur..."
           class="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
-        <button onclick="sendTechMessage()"
-          class="flex-shrink-0 self-end px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-xl transition">
-          Envoyer
-        </button>
+        <div class="flex flex-col gap-1.5 flex-shrink-0">
+          <label class="cursor-pointer flex items-center justify-center w-8 h-8 border border-slate-300 rounded-lg hover:bg-slate-50 transition" title="Joindre un fichier">
+            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+            </svg>
+            <input type="file" id="tech-file-input" class="hidden"
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onchange="onTechFileSelected(this)" />
+          </label>
+          <button onclick="sendTechMessage()"
+            class="flex items-center justify-center w-8 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <p id="detail-message-error" class="hidden text-xs text-red-500"></p>
     </div>
@@ -232,6 +312,37 @@
   </div>
 </div>
 
+<div id="merge-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <div>
+        <h3 class="font-semibold text-slate-800">Fusionner une demande</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Les demandeurs et le chat seront regroupés sur l'intervention cible.</p>
+      </div>
+      <button type="button" onclick="closeMergeModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Choisir l'intervention cible</label>
+        <select id="merge-target-select"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Chargement...</option>
+        </select>
+      </div>
+      <div id="merge-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeMergeModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        <button type="button" id="merge-submit-btn" onclick="submitMerge()"
+          class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+          Fusionner
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Photos -->
 <div id="photos-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
@@ -257,6 +368,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/intervention-detail-shared.js"></script>
 <script>
 const user = requireLogin();
 if (!user) throw new Error('Not logged in');
@@ -266,6 +378,8 @@ if (user.name) document.getElementById('user-avatar').textContent = user.name[0]
 let currentPage = 1, currentSearch = '', currentStatus = '', currentPriority = '', currentSource = '';
 const pageParams = new URLSearchParams(window.location.search);
 let detailInterventionId = null;
+let detailInterventionData = null;
+let mergeCandidates = [];
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -351,11 +465,19 @@ async function loadInterventions() {
 
     const priorityBorderColor = { LOW: 'border-l-slate-300', NORMAL: 'border-l-blue-400', HIGH: 'border-l-orange-400', CRITICAL: 'border-l-red-500' };
 
-    container.innerHTML = data.data.map(i => `
+    container.innerHTML = data.data.map(i => {
+      // Indicateur "en attente de traitement" : ticket public avec dernier msg du reporter, ou pas encore de réponse
+      const lastMsgAuthor = i.messages?.[0]?.authorType;
+      const needsAttention = i.source === 'PUBLIC' && (
+        lastMsgAuthor === 'REPORTER' ||
+        (!lastMsgAuthor && (i.status === 'OPEN' || i.status === 'IN_PROGRESS'))
+      );
+      return `
       <div onclick="openInterventionDetail('${i.id}')" class="bg-white rounded-xl border border-slate-200 border-l-4 ${priorityBorderColor[i.priority] || 'border-l-blue-400'} p-5 hover:shadow-sm transition cursor-pointer">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap mb-1">
+              ${needsAttention ? `<span class="flex-shrink-0 w-2 h-2 rounded-full bg-red-500 animate-pulse" title="En attente de réponse"></span>` : ''}
               <a href="/interventions.html?focus=${encodeURIComponent(i.id)}"
                 onclick="event.stopPropagation()"
                 class="font-semibold text-slate-800 hover:text-blue-600 transition text-left underline-offset-2 hover:underline">
@@ -363,6 +485,7 @@ async function loadInterventions() {
               </a>
               ${statusBadge(i.status)}
               ${i.priority !== 'NORMAL' ? priorityBadge(i.priority) : ''}
+              ${needsAttention ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Réponse attendue</span>` : ''}
             </div>
             ${i.description ? `<p class="text-sm text-slate-600 mt-1 line-clamp-2">${i.description}</p>` : ''}
             ${i.notes ? `<p class="text-xs text-slate-500 mt-2">📝 Notes enregistrées</p>` : ''}
@@ -409,7 +532,7 @@ async function loadInterventions() {
           </div>
         </div>
       </div>
-    `).join('');
+    `}).join('');
 
     const { page, totalPages, total } = data.pagination;
     document.getElementById('pagination').innerHTML = `
@@ -428,6 +551,123 @@ function changePage(p) { currentPage = p; loadInterventions(); }
 
 function openCreateOrderFromIntervention(interventionId) {
   window.location = `/orders.html?action=create&interventionId=${encodeURIComponent(interventionId)}`;
+}
+
+function renderReporters(reporters = []) {
+  const section = document.getElementById('detail-reporters-section');
+  const list = document.getElementById('detail-reporters-list');
+  if (!detailInterventionData || detailInterventionData.source !== 'PUBLIC') {
+    section.classList.add('hidden');
+    list.innerHTML = '';
+    return;
+  }
+
+  section.classList.remove('hidden');
+  list.innerHTML = reporters.length
+    ? reporters.map(reporter => `
+      <div class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm">
+        <span class="font-medium text-slate-700">${escapeHtml(reporter.name || 'Demandeur')}</span>
+        ${reporter.email ? `<span class="text-slate-400">${escapeHtml(reporter.email)}</span>` : ''}
+      </div>
+    `).join('')
+    : '<p class="text-sm text-slate-400">Aucun demandeur rattaché.</p>';
+}
+
+async function openMergeModal() {
+  if (!detailInterventionId || detailInterventionData?.source !== 'PUBLIC') return;
+  const modal = document.getElementById('merge-modal');
+  const select = document.getElementById('merge-target-select');
+  const errEl = document.getElementById('merge-error');
+  errEl.classList.add('hidden');
+  select.innerHTML = '<option value="">Chargement...</option>';
+  modal.classList.remove('hidden');
+
+  try {
+    const result = await api.get('/interventions', { source: 'PUBLIC', limit: 100 });
+    mergeCandidates = (result.data || []).filter(item => item.id !== detailInterventionId);
+    select.innerHTML = '<option value="">-- Sélectionner --</option>' + mergeCandidates.map(item => `
+      <option value="${item.id}">${escapeHtml(item.title)}${item.room ? ` - ${escapeHtml(item.room.name)}` : ''}</option>
+    `).join('');
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+    select.innerHTML = '<option value="">-- Indisponible --</option>';
+  }
+}
+
+function closeMergeModal() {
+  document.getElementById('merge-modal').classList.add('hidden');
+}
+
+async function submitMerge() {
+  if (!detailInterventionId) return;
+  const targetId = document.getElementById('merge-target-select').value;
+  const errEl = document.getElementById('merge-error');
+  const btn = document.getElementById('merge-submit-btn');
+  errEl.classList.add('hidden');
+  if (!targetId) {
+    errEl.textContent = 'Sélectionnez une intervention cible.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    await api.post(`/interventions/${detailInterventionId}/merge`, { targetInterventionId: targetId });
+    closeMergeModal();
+    closeInterventionDetail();
+    showToast('Demandes fusionnées');
+    await loadInterventions();
+    await openInterventionDetail(targetId);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function openAttributeEditor(field) {
+  const display = document.getElementById(`detail-${field}-display`);
+  const editor = document.getElementById(`detail-${field}-editor`);
+  if (!display || !editor || !detailInterventionData) return;
+
+  if (field === 'title') document.getElementById('detail-title-input').value = detailInterventionData.title || '';
+  if (field === 'status') document.getElementById('detail-status-input').value = detailInterventionData.status || 'OPEN';
+  if (field === 'priority') document.getElementById('detail-priority-input').value = detailInterventionData.priority || 'NORMAL';
+  if (field === 'description') document.getElementById('detail-description-input').value = detailInterventionData.description || '';
+  if (field === 'resolution') document.getElementById('detail-resolution-input').value = detailInterventionData.resolution || '';
+
+  display.classList.add('hidden');
+  editor.classList.remove('hidden');
+}
+
+function closeAttributeEditor(field) {
+  const display = document.getElementById(`detail-${field}-display`);
+  const editor = document.getElementById(`detail-${field}-editor`);
+  if (!display || !editor) return;
+  editor.classList.add('hidden');
+  display.classList.remove('hidden');
+}
+
+async function saveAttributeEditor(field) {
+  if (!detailInterventionId) return;
+  const payload = {};
+
+  if (field === 'title') payload.title = document.getElementById('detail-title-input').value.trim();
+  if (field === 'status') payload.status = document.getElementById('detail-status-input').value;
+  if (field === 'priority') payload.priority = document.getElementById('detail-priority-input').value;
+  if (field === 'description') payload.description = document.getElementById('detail-description-input').value || null;
+  if (field === 'resolution') payload.resolution = document.getElementById('detail-resolution-input').value || null;
+
+  try {
+    await api.patch(`/interventions/${detailInterventionId}`, payload);
+    closeAttributeEditor(field);
+    showToast('Attribut mis à jour');
+    await Promise.all([openInterventionDetail(detailInterventionId), loadInterventions()]);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
 
 function renderLinkedOrders(orders = []) {
@@ -500,13 +740,14 @@ async function openInterventionDetail(id) {
   detailInterventionId = id;
   try {
     const intervention = await api.get(`/interventions/${id}`);
+    detailInterventionData = intervention;
     const panel = document.getElementById('detail-panel');
     const backdrop = document.getElementById('detail-backdrop');
 
     document.getElementById('detail-title').textContent = intervention.title;
     document.getElementById('detail-meta').textContent = `Intervention #${intervention.id.slice(-6).toUpperCase()}`;
-    document.getElementById('detail-status').innerHTML = statusBadge(intervention.status);
-    document.getElementById('detail-priority').innerHTML = priorityBadge(intervention.priority);
+    document.getElementById('detail-status-display').innerHTML = statusBadge(intervention.status);
+    document.getElementById('detail-priority-display').innerHTML = priorityBadge(intervention.priority);
     document.getElementById('detail-source').innerHTML = intervention.source === 'PUBLIC'
       ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Publique</span>'
       : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Interne</span>';
@@ -519,6 +760,7 @@ async function openInterventionDetail(id) {
       ? `${intervention.equipment.name}${intervention.equipment.type ? ` (${intervention.equipment.type})` : ''}`
       : '—';
     document.getElementById('detail-notes').value = intervention.notes || '';
+    renderReporters(intervention.reporters || []);
 
     const descriptionWrap = document.getElementById('detail-description-wrap');
     const resolutionWrap = document.getElementById('detail-resolution-wrap');
@@ -535,6 +777,8 @@ async function openInterventionDetail(id) {
       resolutionWrap.classList.add('hidden');
     }
 
+    ['title', 'status', 'priority', 'description', 'resolution'].forEach(closeAttributeEditor);
+
     renderLinkedOrders(intervention.orders || []);
 
     // Messages section (tickets publics uniquement)
@@ -543,7 +787,8 @@ async function openInterventionDetail(id) {
       messagesSection.classList.remove('hidden');
       document.getElementById('detail-message-input').value = '';
       document.getElementById('detail-message-error').classList.add('hidden');
-      loadDetailMessages(id);
+      // loadDetailMessages marque les messages reporter comme lus côté API → rafraîchir la liste ensuite
+      loadDetailMessages(id).then(() => loadInterventions());
     } else {
       messagesSection.classList.add('hidden');
     }
@@ -561,6 +806,8 @@ function closeInterventionDetail() {
   panel.classList.add('translate-x-full');
   setTimeout(() => backdrop.classList.add('hidden'), 300);
   detailInterventionId = null;
+  detailInterventionData = null;
+  document.getElementById('detail-reporters-section').classList.add('hidden');
 }
 
 async function saveInterventionNotes() {
@@ -737,9 +984,65 @@ document.getElementById('upload-photos-btn').addEventListener('click', async () 
 
 // --- Messages (tickets publics) ---
 
+const IMAGE_MIMES = ['image/jpeg','image/png','image/gif','image/webp'];
+let techPendingFile = null;
+
+function onTechFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  techPendingFile = file;
+  document.getElementById('tech-file-preview-name').textContent = file.name;
+  document.getElementById('tech-file-preview').classList.remove('hidden');
+}
+
+function clearTechFile() {
+  techPendingFile = null;
+  document.getElementById('tech-file-input').value = '';
+  document.getElementById('tech-file-preview').classList.add('hidden');
+  document.getElementById('tech-file-preview-name').textContent = '';
+}
+
+function renderTechAttachment(m, isReporter) {
+  if (!m.attachmentPath) return '';
+  const url = `/uploads/${m.attachmentPath}`;
+  const name = escapeHtml(m.attachmentName || 'Fichier joint');
+  const mime = m.attachmentMime || '';
+  const size = m.attachmentSize ? ` (${(m.attachmentSize / 1024).toFixed(0)} Ko)` : '';
+  if (IMAGE_MIMES.includes(mime)) {
+    return `<a href="${url}" target="_blank" class="block mt-1">
+      <img src="${url}" alt="${name}" class="max-w-full rounded-lg max-h-32 object-cover" loading="lazy" />
+    </a>`;
+  }
+  return `<a href="${url}" target="_blank" download
+    class="flex items-center gap-1.5 mt-1 px-2 py-1 bg-black/10 rounded-lg text-xs hover:bg-black/20 transition">
+    <svg class="w-3.5 h-3.5 flex-shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+    <span class="truncate">${name}${size}</span>
+  </a>`;
+}
+
+function compressTechImage(file, maxWidth = 1200, quality = 0.82) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function loadDetailMessages(interventionId) {
   const list = document.getElementById('detail-messages-list');
-  const noMsgEl = document.getElementById('detail-no-messages');
   try {
     const messages = await api.get(`/interventions/${interventionId}/messages`);
     if (!messages || messages.length === 0) {
@@ -750,24 +1053,35 @@ async function loadDetailMessages(interventionId) {
       const isReporter = m.authorType === 'REPORTER';
       const name = escapeHtml(m.authorName || (isReporter ? 'Demandeur' : 'Équipe technique'));
       const time = new Date(m.createdAt).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      const attachment = renderTechAttachment(m, isReporter);
+      const text = m.content ? `<div class="whitespace-pre-wrap">${escapeHtml(m.content)}</div>` : '';
       if (isReporter) {
-        return `<div class="flex justify-start">
+        // Indicateur "non lu" : message du reporter pas encore consulté par le tech
+        const unreadDot = !m.readAt
+          ? `<span class="inline-block w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0 ml-1" title="Non lu"></span>`
+          : '';
+        return `<div class="flex justify-start items-start gap-1">
           <div class="max-w-[85%]">
-            <p class="text-xs text-slate-400 mb-0.5">${name} · ${time}</p>
-            <div class="bg-orange-50 border border-orange-200 text-slate-700 rounded-xl rounded-tl-sm px-3 py-2 text-xs whitespace-pre-wrap">${escapeHtml(m.content)}</div>
+            <p class="text-xs text-slate-400 mb-0.5 flex items-center gap-1">${name} · ${time}${unreadDot}</p>
+            <div class="bg-orange-50 border border-orange-200 text-slate-700 rounded-xl rounded-tl-sm px-3 py-2 text-xs">${text}${attachment}</div>
           </div>
         </div>`;
       } else {
+        // Indicateur VU : message du tech lu par le reporter
+        const readIndicator = m.readAt
+          ? `<span class="text-blue-200 text-xs" title="Lu par le demandeur le ${new Date(m.readAt).toLocaleString('fr-FR')}">✓✓</span>`
+          : `<span class="text-blue-300/60 text-xs" title="Envoyé, en attente de lecture">✓</span>`;
         return `<div class="flex justify-end">
           <div class="max-w-[85%]">
             <p class="text-xs text-slate-400 text-right mb-0.5">Vous · ${time}</p>
-            <div class="bg-blue-600 text-white rounded-xl rounded-tr-sm px-3 py-2 text-xs whitespace-pre-wrap">${escapeHtml(m.content)}</div>
+            <div class="bg-blue-600 text-white rounded-xl rounded-tr-sm px-3 py-2 text-xs">${text}${attachment}</div>
+            <div class="flex justify-end mt-0.5">${readIndicator}</div>
           </div>
         </div>`;
       }
     }).join('');
     list.scrollTop = list.scrollHeight;
-  } catch (err) {
+  } catch {
     // Fail silently
   }
 }
@@ -779,7 +1093,7 @@ async function sendTechMessage() {
   const content = input.value.trim();
 
   errEl.classList.add('hidden');
-  if (!content) return;
+  if (!content && !techPendingFile) return;
   if (content.length > 2000) {
     errEl.textContent = 'Le message ne peut pas dépasser 2000 caractères.';
     errEl.classList.remove('hidden');
@@ -787,16 +1101,140 @@ async function sendTechMessage() {
   }
 
   try {
-    await api.post(`/interventions/${detailInterventionId}/messages`, { content });
+    let fileToSend = techPendingFile;
+    if (fileToSend && IMAGE_MIMES.includes(fileToSend.type)) {
+      fileToSend = await compressTechImage(fileToSend);
+    }
+
+    const fd = new FormData();
+    if (content) fd.append('content', content);
+    if (fileToSend) fd.append('attachment', fileToSend, techPendingFile.name);
+
+    await api.upload(`/interventions/${detailInterventionId}/messages`, fd);
     input.value = '';
+    clearTechFile();
     await loadDetailMessages(detailInterventionId);
+    // Rafraîchir la liste pour mettre à jour l'indicateur
+    loadInterventions();
   } catch (err) {
     errEl.textContent = err.message || 'Erreur lors de l\'envoi.';
     errEl.classList.remove('hidden');
   }
 }
 
-// Allow Enter to send (Shift+Enter = newline) in detail message input
+const sharedDetailController = createInterventionDetailController({
+  ids: {
+    meta: 'detail-meta',
+    title: 'detail-title',
+    statusDisplay: 'detail-status-display',
+    priorityDisplay: 'detail-priority-display',
+    source: 'detail-source',
+    tech: 'detail-tech',
+    created: 'detail-created',
+    room: 'detail-room',
+    equipment: 'detail-equipment',
+    notesInput: 'detail-notes',
+    saveNotesBtn: 'save-notes-btn',
+    descriptionWrap: 'detail-description-wrap',
+    description: 'detail-description',
+    resolutionWrap: 'detail-resolution-wrap',
+    resolution: 'detail-resolution',
+    reportersWrap: 'detail-reporters-section',
+    reportersList: 'detail-reporters-list',
+    orders: 'detail-orders',
+    messagesWrap: 'detail-messages-section',
+    messages: 'detail-messages-list',
+    messageInput: 'detail-message-input',
+    messageError: 'detail-message-error',
+    fileInput: 'tech-file-input',
+    filePreview: 'tech-file-preview',
+    filePreviewName: 'tech-file-preview-name',
+    mergeModal: 'merge-modal',
+    mergeTargetSelect: 'merge-target-select',
+    mergeError: 'merge-error',
+    mergeSubmitBtn: 'merge-submit-btn'
+  },
+  attributeIds: {
+    title: { display: 'detail-title-display', editor: 'detail-title-editor', input: 'detail-title-input' },
+    status: { display: 'detail-status-display', editor: 'detail-status-editor', input: 'detail-status-input', defaultValue: 'OPEN' },
+    priority: { display: 'detail-priority-display', editor: 'detail-priority-editor', input: 'detail-priority-input', defaultValue: 'NORMAL' },
+    description: { display: 'detail-description-display', editor: 'detail-description-editor', input: 'detail-description-input' },
+    resolution: { display: 'detail-resolution-display', editor: 'detail-resolution-editor', input: 'detail-resolution-input' }
+  },
+  globalNames: {
+    updateOrder: 'updateLinkedOrder'
+  },
+  escapeHtml,
+  formatDate: value => formatDate(value, true),
+  formatDateOnly,
+  toDateInputValue,
+  statusBadge,
+  priorityBadge,
+  sourceBadge: source => source === 'PUBLIC'
+    ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Publique</span>'
+    : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Interne</span>',
+  orderStatusBadge,
+  orderLink: orderId => `/orders.html?focus=${encodeURIComponent(orderId)}`,
+  fullLink: id => `/interventions.html?focus=${encodeURIComponent(id)}`,
+  createOrderLink: id => `/orders.html?action=create&interventionId=${encodeURIComponent(id)}`,
+  fetchIntervention: id => api.get(`/interventions/${id}`),
+  patchIntervention: (id, payload) => api.patch(`/interventions/${id}`, payload),
+  patchOrder: (id, payload) => api.patch(`/orders/${id}`, payload),
+  getMessages: id => api.get(`/interventions/${id}/messages`),
+  uploadMessage: (id, formData) => api.upload(`/interventions/${id}/messages`, formData),
+  listMergeCandidates: () => api.get('/interventions', { source: 'PUBLIC', limit: 100 }),
+  mergeIntervention: (id, targetId) => api.post(`/interventions/${id}/merge`, { targetInterventionId: targetId }),
+  formatRoom: intervention => intervention.room
+    ? `${intervention.room.name}${intervention.room.number ? ` (${intervention.room.number})` : ''}`
+    : '—',
+  formatEquipment: intervention => intervention.equipment
+    ? `${intervention.equipment.name}${intervention.equipment.type ? ` (${intervention.equipment.type})` : ''}`
+    : '—',
+  toast: showToast,
+  onRefresh: async () => { await loadInterventions(); },
+  onOpenSuccess: intervention => {
+    detailInterventionId = intervention.id;
+    detailInterventionData = intervention;
+    const panel = document.getElementById('detail-panel');
+    const backdrop = document.getElementById('detail-backdrop');
+    backdrop.classList.remove('hidden');
+    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+  },
+  onOpenError: error => showToast(error.message, 'error'),
+  onClose: () => {
+    const panel = document.getElementById('detail-panel');
+    const backdrop = document.getElementById('detail-backdrop');
+    panel.classList.add('translate-x-full');
+    setTimeout(() => backdrop.classList.add('hidden'), 300);
+    detailInterventionId = null;
+    detailInterventionData = null;
+  },
+  afterMessagesLoaded: async () => { await loadInterventions(); },
+  afterMerge: async targetId => {
+    sharedDetailController.close();
+    await loadInterventions();
+    await sharedDetailController.open(targetId);
+  },
+  emptyOrdersMessage: 'Aucune commande liée pour cette intervention.'
+});
+
+function renderReporters() {}
+function openMergeModal() { return sharedDetailController.openMergeModal(); }
+function closeMergeModal() { return sharedDetailController.closeMergeModal(); }
+function submitMerge() { return sharedDetailController.submitMerge(); }
+function openAttributeEditor(field) { return sharedDetailController.openAttributeEditor(field); }
+function closeAttributeEditor(field) { return sharedDetailController.closeAttributeEditor(field); }
+function saveAttributeEditor(field) { return sharedDetailController.saveAttribute(field); }
+function renderLinkedOrders() {}
+function openInterventionDetail(id) { return sharedDetailController.open(id); }
+function closeInterventionDetail() { return sharedDetailController.close(); }
+function saveInterventionNotes() { return sharedDetailController.saveNotes(); }
+function updateLinkedOrder(orderId, form) { return sharedDetailController.updateOrder(orderId, form); }
+function onTechFileSelected(input) { return sharedDetailController.onFileSelected(input); }
+function clearTechFile() { return sharedDetailController.clearPendingFile(); }
+function loadDetailMessages(interventionId) { return sharedDetailController.loadMessages(interventionId); }
+function sendTechMessage() { return sharedDetailController.sendMessage(); }
+
 document.getElementById('detail-message-input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();

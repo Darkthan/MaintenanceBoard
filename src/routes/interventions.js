@@ -1,10 +1,40 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
 const { uploadPhoto } = require('../middleware/upload');
+
+const ALLOWED_CHAT_MIMES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+];
+
+const chatStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(process.cwd(), 'uploads', 'ticket-messages');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '';
+    cb(null, `${uuidv4()}${ext}`);
+  }
+});
+
+const uploadChatFile = multer({
+  storage: chatStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    ALLOWED_CHAT_MIMES.includes(file.mimetype) ? cb(null, true) : cb(new Error('Type de fichier non autorisé.'));
+  }
+}).single('attachment');
 
 const prisma = require('../lib/prisma');
 const { containsFilter } = require('../lib/db-utils');
@@ -35,6 +65,10 @@ const interventionInclude = {
   room: { select: { id: true, name: true, number: true, building: true } },
   equipment: { select: { id: true, name: true, type: true, brand: true, model: true } },
   tech: { select: { id: true, name: true, email: true } },
+  reporters: {
+    select: { id: true, name: true, email: true, token: true, createdAt: true, isPrimary: true },
+    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }]
+  },
   orders: {
     select: {
       id: true,
@@ -48,6 +82,11 @@ const interventionInclude = {
       trackingNotes: true
     },
     orderBy: { createdAt: 'desc' }
+  },
+  messages: {
+    orderBy: { createdAt: 'desc' },
+    take: 1,
+    select: { authorType: true }
   }
 };
 
@@ -59,7 +98,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const skip = (page - 1) * limit;
     const { status, priority, roomId, equipmentId, techId, dateFrom, dateTo, search, source } = req.query;
 
-    const where = {};
+    const where = { mergedIntoId: null };
     if (status && VALID_STATUSES.includes(status)) where.status = status;
     if (priority && VALID_PRIORITIES.includes(priority)) where.priority = priority;
     if (roomId) where.roomId = roomId;
@@ -103,7 +142,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 router.get('/room/:roomId', requireAuth, async (req, res, next) => {
   try {
     const interventions = await prisma.intervention.findMany({
-      where: { roomId: req.params.roomId },
+      where: { roomId: req.params.roomId, mergedIntoId: null },
       orderBy: { createdAt: 'desc' },
       take: 50,
       include: interventionInclude
@@ -116,7 +155,7 @@ router.get('/room/:roomId', requireAuth, async (req, res, next) => {
 router.get('/equipment/:equipId', requireAuth, async (req, res, next) => {
   try {
     const interventions = await prisma.intervention.findMany({
-      where: { equipmentId: req.params.equipId },
+      where: { equipmentId: req.params.equipId, mergedIntoId: null },
       orderBy: { createdAt: 'desc' },
       take: 50,
       include: interventionInclude
@@ -280,19 +319,103 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   }
 });
 
+// POST /api/interventions/:id/merge - Fusionner deux demandes publiques
+router.post('/:id/merge',
+  requireAuth,
+  [body('targetInterventionId').isUUID()],
+  async (req, res, next) => {
+    try {
+      if (!validate(req, res)) return;
+      const sourceId = req.params.id;
+      const { targetInterventionId } = req.body;
+
+      if (sourceId === targetInterventionId) {
+        return res.status(400).json({ error: 'Impossible de fusionner une intervention avec elle-même.' });
+      }
+
+      const [source, target] = await Promise.all([
+        prisma.intervention.findUnique({ where: { id: sourceId }, include: interventionInclude }),
+        prisma.intervention.findUnique({ where: { id: targetInterventionId }, include: interventionInclude })
+      ]);
+
+      if (!source || !target) return res.status(404).json({ error: 'Intervention introuvable.' });
+      if (source.source !== 'PUBLIC' || target.source !== 'PUBLIC') {
+        return res.status(400).json({ error: 'Seules les demandes publiques peuvent être fusionnées.' });
+      }
+      if (source.mergedIntoId || target.mergedIntoId) {
+        return res.status(400).json({ error: 'Une demande déjà fusionnée ne peut pas être utilisée ici.' });
+      }
+      if (req.user.role === 'TECH' && (source.techId !== req.user.id || target.techId !== req.user.id)) {
+        return res.status(403).json({ error: 'Accès refusé' });
+      }
+
+      const sourcePhotos = Array.isArray(source.photos) ? source.photos : [];
+      const targetPhotos = Array.isArray(target.photos) ? target.photos : [];
+      const mergedPhotos = [...new Set([...targetPhotos, ...sourcePhotos])];
+      const mergeNote = [
+        target.notes || '',
+        `--- Fusion de demande (${new Date().toLocaleString('fr-FR')}) ---`,
+        `Demande fusionnée : ${source.title}`,
+        source.description ? `Description : ${source.description}` : '',
+        source.reporters?.length
+          ? `Demandeurs : ${source.reporters.map(r => `${r.name || 'Sans nom'}${r.email ? ` <${r.email}>` : ''}`).join(', ')}`
+          : ''
+      ].filter(Boolean).join('\n');
+
+      await prisma.$transaction([
+        prisma.ticketMessage.updateMany({ where: { interventionId: sourceId }, data: { interventionId: targetInterventionId } }),
+        prisma.order.updateMany({ where: { interventionId: sourceId }, data: { interventionId: targetInterventionId } }),
+        prisma.stockMovement.updateMany({ where: { interventionId: sourceId }, data: { interventionId: targetInterventionId } }),
+        prisma.interventionReporter.updateMany({ where: { interventionId: sourceId }, data: { interventionId: targetInterventionId } }),
+        prisma.intervention.update({
+          where: { id: targetInterventionId },
+          data: {
+            notes: mergeNote,
+            photos: JSON.stringify(mergedPhotos),
+            roomId: target.roomId || source.roomId,
+            equipmentId: target.equipmentId || source.equipmentId,
+            techId: target.techId || source.techId || null
+          }
+        }),
+        prisma.intervention.update({
+          where: { id: sourceId },
+          data: { mergedIntoId: targetInterventionId, status: 'CLOSED', closedAt: new Date() }
+        })
+      ]);
+
+      const merged = await prisma.intervention.findUnique({
+        where: { id: targetInterventionId },
+        include: interventionInclude
+      });
+
+      res.json({ message: 'Demandes fusionnées', intervention: parsePhotos(merged) });
+    } catch (err) { next(err); }
+  }
+);
+
 // GET /api/interventions/:id/messages — Messages d'une intervention (auth requise)
 router.get('/:id/messages', requireAuth, async (req, res, next) => {
   try {
-    const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
+    const intervention = await prisma.intervention.findUnique({
+      where: { id: req.params.id },
+      include: { reporters: true }
+    });
     if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
     if (req.user.role === 'TECH' && intervention.techId !== req.user.id) {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
+    // Marquer les messages REPORTER non lus comme lus (le tech les consulte)
+    await prisma.ticketMessage.updateMany({
+      where: { interventionId: req.params.id, authorType: 'REPORTER', readAt: null },
+      data: { readAt: new Date() }
+    });
+
     const messages = await prisma.ticketMessage.findMany({
       where: { interventionId: req.params.id },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, content: true, authorType: true, authorName: true, createdAt: true }
+      select: { id: true, content: true, authorType: true, authorName: true, createdAt: true,
+                readAt: true, attachmentPath: true, attachmentName: true, attachmentMime: true, attachmentSize: true }
     });
 
     res.json(messages);
@@ -300,49 +423,78 @@ router.get('/:id/messages', requireAuth, async (req, res, next) => {
 });
 
 // POST /api/interventions/:id/messages — Envoyer un message tech
-router.post('/:id/messages', requireAuth, async (req, res, next) => {
+router.post('/:id/messages', requireAuth, (req, res, next) => {
+  uploadChatFile(req, res, err => {
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, async (req, res, next) => {
   try {
-    const { content } = req.body;
+    const content = (req.body.content || '').trim();
+    const hasFile = !!req.file;
 
-    if (!content || typeof content !== 'string' || content.trim().length < 1 || content.trim().length > 2000) {
-      return res.status(400).json({ error: 'Le message doit contenir entre 1 et 2000 caractères.' });
+    if (!content && !hasFile) {
+      return res.status(400).json({ error: 'Message ou fichier requis.' });
+    }
+    if (content.length > 2000) {
+      return res.status(400).json({ error: 'Le message doit contenir 2000 caractères max.' });
     }
 
     const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
-    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+    if (!intervention) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Intervention introuvable' });
+    }
+    if (req.user.role === 'TECH' && intervention.techId !== req.user.id) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
 
     const message = await prisma.ticketMessage.create({
       data: {
         interventionId: req.params.id,
-        content: content.trim(),
+        content,
         authorType: 'TECH',
-        authorName: req.user.name
+        authorName: req.user.name,
+        ...(req.file ? {
+          attachmentPath: `ticket-messages/${req.file.filename}`,
+          attachmentName: req.file.originalname,
+          attachmentMime: req.file.mimetype,
+          attachmentSize: req.file.size
+        } : {})
       }
     });
 
-    // Notification email au reporter si email renseigné
-    if (intervention.reporterEmail && intervention.reporterToken) {
+    const reporterRecipients = [...new Map((intervention.reporters || [])
+      .filter(r => r.email)
+      .map(r => [String(r.email).toLowerCase(), { email: r.email, name: r.name, token: r.token }]))
+      .values()];
+
+    // Notification email à tous les demandeurs rattachés
+    if (reporterRecipients.length > 0) {
       try {
         const { transporter, from } = createSmtpTransporter();
         if (transporter) {
-          const ticketLink = `${config.appUrl}/ticket-status.html?token=${intervention.reporterToken}`;
-          await transporter.sendMail({
-            from,
-            to: intervention.reporterEmail,
-            subject: `[Réponse] ${intervention.title} – MaintenanceBoard`,
-            html: `
-              <div style="font-family:sans-serif;max-width:500px;margin:0 auto;">
-                <h2 style="color:#1e293b;">Réponse de l'équipe technique</h2>
-                <p>Bonjour${intervention.reporterName ? ' ' + intervention.reporterName : ''},</p>
-                <p><strong>${req.user.name}</strong> a répondu à votre demande :</p>
-                <blockquote style="border-left:3px solid #3b82f6;padding-left:12px;color:#475569;">${content.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</blockquote>
-                <p style="margin-top:24px;">
-                  <a href="${ticketLink}" style="background:#f97316;color:white;padding:10px 20px;text-decoration:none;border-radius:8px;font-weight:bold;">Voir ma demande</a>
-                </p>
-                <p style="color:#64748b;font-size:12px;margin-top:16px;">Lien direct : <a href="${ticketLink}">${ticketLink}</a></p>
-              </div>
-            `
-          });
+          await Promise.all(reporterRecipients.map(recipient => {
+            const ticketLink = `${config.appUrl}/ticket-status.html?token=${recipient.token}`;
+            return transporter.sendMail({
+              from,
+              to: recipient.email,
+              subject: `[Réponse] ${intervention.title} – MaintenanceBoard`,
+              html: `
+                <div style="font-family:sans-serif;max-width:500px;margin:0 auto;">
+                  <h2 style="color:#1e293b;">Réponse de l'équipe technique</h2>
+                  <p>Bonjour${recipient.name ? ' ' + recipient.name : ''},</p>
+                  <p><strong>${req.user.name}</strong> a répondu à votre demande :</p>
+                  <blockquote style="border-left:3px solid #3b82f6;padding-left:12px;color:#475569;">${content.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</blockquote>
+                  <p style="margin-top:24px;">
+                    <a href="${ticketLink}" style="background:#f97316;color:white;padding:10px 20px;text-decoration:none;border-radius:8px;font-weight:bold;">Voir ma demande</a>
+                  </p>
+                  <p style="color:#64748b;font-size:12px;margin-top:16px;">Lien direct : <a href="${ticketLink}">${ticketLink}</a></p>
+                </div>
+              `
+            });
+          }));
         }
       } catch (mailErr) {
         // Fail silently

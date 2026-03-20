@@ -95,6 +95,41 @@
               placeholder="votre@email.fr" />
           </div>
         </div>
+        <!-- Photo / Fichier joint -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Photo ou document (optionnel)</label>
+          <div class="flex gap-2">
+            <!-- Bouton appareil photo direct -->
+            <label class="flex-1 cursor-pointer flex items-center justify-center gap-2 border border-slate-300 rounded-xl py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition">
+              <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+              Prendre une photo
+              <input type="file" id="pub-photo-camera" class="hidden" accept="image/*" capture="environment" onchange="onPubFileSelected(this)" />
+            </label>
+            <!-- Bouton fichier depuis galerie/stockage -->
+            <label class="flex-1 cursor-pointer flex items-center justify-center gap-2 border border-slate-300 rounded-xl py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition">
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+              </svg>
+              Joindre un fichier
+              <input type="file" id="pub-photo-file" class="hidden"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onchange="onPubFileSelected(this)" />
+            </label>
+          </div>
+          <!-- Prévisualisation -->
+          <div id="pub-file-preview" class="hidden mt-2">
+            <div class="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 text-sm">
+              <span id="pub-file-preview-name" class="flex-1 truncate text-slate-700 text-xs"></span>
+              <button type="button" onclick="clearPubFile()" class="text-slate-400 hover:text-red-500 transition flex-shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <img id="pub-file-preview-img" class="hidden mt-2 max-h-40 rounded-xl object-cover w-full" alt="Aperçu" />
+          </div>
+        </div>
+
         <div id="pub-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
         <button type="submit" id="pub-submit"
           class="w-full bg-orange-500 text-white font-semibold py-3 rounded-xl hover:bg-orange-600 transition
@@ -200,7 +235,213 @@
   </div>
 </div>
 
+<div id="intervention-modal" class="hidden fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <div class="min-w-0">
+        <p id="im-meta" class="text-xs text-slate-400"></p>
+        <div id="im-title-display" onclick="openInterventionModalAttributeEditor('title')" class="cursor-pointer">
+          <h3 id="im-title" class="font-semibold text-slate-800 truncate"></h3>
+        </div>
+        <div id="im-title-editor" class="hidden flex items-center gap-2">
+          <input id="im-title-input" type="text"
+            class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <button type="button" onclick="saveInterventionModalAttribute('title')" class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">OK</button>
+          <button type="button" onclick="closeInterventionModalAttributeEditor('title')" class="px-3 py-2 border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition">Annuler</button>
+        </div>
+      </div>
+      <button type="button" onclick="closeInterventionModal()" class="text-slate-400 hover:text-slate-700 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div id="im-loading" class="px-5 py-10 text-center text-sm text-slate-400">Chargement...</div>
+    <div id="im-content" class="hidden flex-1 overflow-y-auto px-5 py-4 space-y-4">
+      <div class="flex flex-wrap gap-2 items-center">
+        <span id="im-status-display" onclick="openInterventionModalAttributeEditor('status')" class="cursor-pointer"></span>
+        <span id="im-status-editor" class="hidden">
+          <select id="im-status-input" onchange="saveInterventionModalAttribute('status')"
+            class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="OPEN">Ouvert</option>
+            <option value="IN_PROGRESS">En cours</option>
+            <option value="RESOLVED">Résolu</option>
+            <option value="CLOSED">Fermé</option>
+          </select>
+        </span>
+        <span id="im-priority-display" onclick="openInterventionModalAttributeEditor('priority')" class="cursor-pointer"></span>
+        <span id="im-priority-editor" class="hidden">
+          <select id="im-priority-input" onchange="saveInterventionModalAttribute('priority')"
+            class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="LOW">Basse</option>
+            <option value="NORMAL">Normale</option>
+            <option value="HIGH">Haute</option>
+            <option value="CRITICAL">Critique</option>
+          </select>
+        </span>
+        <span id="im-source"></span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div><span class="text-xs text-slate-400 block">Technicien</span><span id="im-tech" class="text-slate-700 font-medium"></span></div>
+        <div><span class="text-xs text-slate-400 block">Créée le</span><span id="im-created" class="text-slate-700 font-medium"></span></div>
+        <div><span class="text-xs text-slate-400 block">Salle</span><span id="im-room" class="text-slate-700 font-medium"></span></div>
+        <div><span class="text-xs text-slate-400 block">Équipement</span><span id="im-equipment" class="text-slate-700 font-medium"></span></div>
+      </div>
+      <div id="im-description-wrap" class="hidden">
+        <span class="text-xs text-slate-400 block mb-1">Description</span>
+        <div id="im-description-display" onclick="openInterventionModalAttributeEditor('description')" class="cursor-pointer">
+          <div id="im-description" class="bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-600 whitespace-pre-wrap"></div>
+        </div>
+        <div id="im-description-editor" class="hidden space-y-2">
+          <textarea id="im-description-input" rows="4"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+          <div class="flex justify-end gap-2">
+            <button type="button" onclick="closeInterventionModalAttributeEditor('description')" class="px-3 py-2 border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition">Annuler</button>
+            <button type="button" onclick="saveInterventionModalAttribute('description')" class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">Enregistrer</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Notes d'intervention</p>
+            <p class="text-xs text-slate-400">Suivi libre partagé avec la fiche principale.</p>
+          </div>
+          <button id="im-save-notes-btn" type="button" onclick="saveInterventionModalNotes()"
+            class="px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">
+            Enregistrer
+          </button>
+        </div>
+        <textarea id="im-notes-input" rows="4"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          placeholder="Ajouter un suivi, une relance fournisseur, un contexte d'intervention..."></textarea>
+      </div>
+      <div id="im-resolution-wrap" class="hidden">
+        <span class="text-xs text-slate-400 block mb-1">Résolution</span>
+        <div id="im-resolution-display" onclick="openInterventionModalAttributeEditor('resolution')" class="cursor-pointer">
+          <div id="im-resolution" class="bg-emerald-50 rounded-xl px-3 py-2 text-sm text-slate-600 whitespace-pre-wrap"></div>
+        </div>
+        <div id="im-resolution-editor" class="hidden space-y-2">
+          <textarea id="im-resolution-input" rows="3"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+          <div class="flex justify-end gap-2">
+            <button type="button" onclick="closeInterventionModalAttributeEditor('resolution')" class="px-3 py-2 border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition">Annuler</button>
+            <button type="button" onclick="saveInterventionModalAttribute('resolution')" class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">Enregistrer</button>
+          </div>
+        </div>
+      </div>
+      <div id="im-reporters-wrap" class="hidden">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Demandeurs rattachés</p>
+            <p class="text-xs text-slate-400">Tous ces demandeurs partagent le même chat.</p>
+          </div>
+          <button type="button" onclick="openInterventionModalMerge()" class="px-3 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition">
+            Fusionner une demande
+          </button>
+        </div>
+        <div id="im-reporters" class="flex flex-wrap gap-2"></div>
+      </div>
+      <div id="im-photos-wrap" class="hidden">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-slate-400 font-medium uppercase tracking-wide">Photos</span>
+          <span id="im-photos-count" class="text-xs text-slate-400"></span>
+        </div>
+        <div id="im-photos" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Commandes liées</p>
+            <p class="text-xs text-slate-400">Suivi des commandes et dates de réception.</p>
+          </div>
+          <button id="im-create-order-btn" type="button" onclick="openCreateOrderFromQrIntervention()"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Générer une commande
+          </button>
+        </div>
+        <div class="flex items-center justify-end mb-2">
+          <a id="im-full-link" href="#" class="text-xs text-blue-600 hover:underline">Ouvrir la fiche complète</a>
+        </div>
+        <div id="im-orders" class="space-y-3"></div>
+      </div>
+      <div id="im-messages-wrap" class="hidden">
+        <div class="mb-2">
+          <span class="text-xs text-slate-400 font-medium uppercase tracking-wide">Messages du demandeur</span>
+          <p class="text-xs text-slate-400 mt-1">Historique des échanges du ticket public.</p>
+        </div>
+        <div id="im-messages" class="space-y-2 max-h-64 overflow-y-auto bg-slate-50 rounded-xl p-3">
+          <p class="text-xs text-slate-400 text-center py-2">Aucun message.</p>
+        </div>
+        <div id="im-file-preview" class="hidden flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5 text-xs text-slate-600 mt-3">
+          <svg class="w-3.5 h-3.5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+          </svg>
+          <span id="im-file-preview-name" class="flex-1 truncate"></span>
+          <button type="button" onclick="clearInterventionModalFile()" class="text-slate-400 hover:text-red-500 transition">✕</button>
+        </div>
+        <div class="flex gap-2 items-end mt-3">
+          <textarea id="im-message-input" rows="2" placeholder="Répondre au demandeur..."
+            class="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+          <div class="flex flex-col gap-1.5 flex-shrink-0">
+            <label class="cursor-pointer flex items-center justify-center w-8 h-8 border border-slate-300 rounded-lg hover:bg-slate-50 transition" title="Joindre un fichier">
+              <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+              </svg>
+              <input type="file" id="im-file-input" class="hidden"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onchange="onInterventionModalFileSelected(this)" />
+            </label>
+            <button type="button" onclick="sendInterventionModalMessage()"
+              class="flex items-center justify-center w-8 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <p id="im-message-error" class="hidden text-xs text-red-500 mt-2"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="im-merge-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <div>
+        <h3 class="font-semibold text-slate-800">Fusionner une demande</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Les demandeurs et le chat seront regroupés sur l'intervention cible.</p>
+      </div>
+      <button type="button" onclick="closeInterventionModalMerge()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Choisir l'intervention cible</label>
+        <select id="im-merge-target-select"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Chargement...</option>
+        </select>
+      </div>
+      <div id="im-merge-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeInterventionModalMerge()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        <button type="button" id="im-merge-submit-btn" onclick="submitInterventionModalMerge()"
+          class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+          Fusionner
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="qr-toast" class="hidden fixed bottom-4 left-1/2 z-[70] -translate-x-1/2 rounded-full px-4 py-2 text-sm font-medium shadow-lg"></div>
+
 <script src="/js/api.js"></script>
+<script src="/js/intervention-detail-shared.js"></script>
 <script>
 const params      = new URLSearchParams(window.location.search);
 const qrToken     = params.get('token');
@@ -208,6 +449,11 @@ const loggedUser  = JSON.parse(localStorage.getItem('user') || 'null');
 
 let resourceData = null;
 let resourceType = null;
+let currentModalInterventionId = null;
+let currentModalInterventionData = null;
+let modalMergeCandidates = [];
+const IMAGE_MIMES = ['image/jpeg','image/png','image/gif','image/webp'];
+let modalPendingFile = null;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function esc(s) {
@@ -223,6 +469,32 @@ function fmtRelative(d) {
   if (days === 1) return 'Hier';
   if (days < 7) return `Il y a ${days} j`;
   return fmtDate(d);
+}
+
+function fmtDateOnly(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('fr-FR');
+}
+
+function toDateInputValue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('qr-toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = `fixed bottom-4 left-1/2 z-[70] -translate-x-1/2 rounded-full px-4 py-2 text-sm font-medium shadow-lg ${
+    type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'
+  }`;
+  toast.classList.remove('hidden');
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => toast.classList.add('hidden'), 2500);
 }
 
 const STATUS_LABELS  = { OPEN: 'Ouvert', IN_PROGRESS: 'En cours', RESOLVED: 'Résolu', CLOSED: 'Fermé' };
@@ -241,6 +513,32 @@ const EQUIP_STATUS_COLORS = {
   INACTIVE: 'bg-slate-100 text-slate-600', DECOMMISSIONED: 'bg-red-100 text-red-700'
 };
 const EQUIP_STATUS_LABELS = { ACTIVE: 'Actif', REPAIR: 'Réparation', INACTIVE: 'Inactif', DECOMMISSIONED: 'Déclassé' };
+const INTERVENTION_STATUS_COLORS = {
+  OPEN: 'bg-blue-100 text-blue-700',
+  IN_PROGRESS: 'bg-orange-100 text-orange-700',
+  RESOLVED: 'bg-green-100 text-green-700',
+  CLOSED: 'bg-slate-100 text-slate-600'
+};
+const INTERVENTION_PRIORITY_COLORS = {
+  LOW: 'bg-slate-100 text-slate-700',
+  NORMAL: 'bg-blue-100 text-blue-700',
+  HIGH: 'bg-orange-100 text-orange-700',
+  CRITICAL: 'bg-red-100 text-red-700'
+};
+const ORDER_STATUS_COLORS = {
+  PENDING: 'bg-amber-100 text-amber-700',
+  ORDERED: 'bg-blue-100 text-blue-700',
+  PARTIAL: 'bg-orange-100 text-orange-700',
+  RECEIVED: 'bg-emerald-100 text-emerald-700',
+  CANCELLED: 'bg-red-100 text-red-700'
+};
+const ORDER_STATUS_LABELS = {
+  PENDING: 'En attente',
+  ORDERED: 'Commandée',
+  PARTIAL: 'Partielle',
+  RECEIVED: 'Reçue',
+  CANCELLED: 'Annulée'
+};
 
 // ── Résolution du token ───────────────────────────────────────────────────────
 async function resolveToken() {
@@ -334,8 +632,14 @@ function renderAuthView(res, isRoom) {
 
   // Lien dashboard
   const dashLink = isRoom ? `/rooms.html` : `/equipment.html`;
-  document.getElementById('header-actions').innerHTML =
-    `<a href="${dashLink}" class="text-xs text-blue-600 hover:underline font-medium">Dashboard →</a>`;
+  const roomDetailLink = isRoom
+    ? `/rooms.html?focus=${encodeURIComponent(res.id)}`
+    : (res.room?.id ? `/rooms.html?focus=${encodeURIComponent(res.room.id)}` : '');
+
+  document.getElementById('header-actions').innerHTML = `
+    ${roomDetailLink ? `<a href="${roomDetailLink}" class="text-xs text-blue-600 hover:underline font-medium">Fiche salle →</a>` : ''}
+    <a href="${dashLink}" class="text-xs text-blue-600 hover:underline font-medium">Dashboard →</a>
+  `;
 
   // Carte complète
   document.getElementById('auth-resource-card').innerHTML = isRoom
@@ -409,17 +713,529 @@ function renderAuthView(res, isRoom) {
 }
 
 function interventionRow(i) {
-  return `<div class="flex items-start gap-3 px-5 py-3.5">
+  return `<button type="button" onclick="openInterventionModal('${i.id}')"
+    class="w-full text-left flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition">
     <span class="text-lg leading-none mt-0.5 ${PRIO_COLORS[i.priority] || ''}" title="${i.priority}">${PRIO_LABELS[i.priority] || '→'}</span>
     <div class="flex-1 min-w-0">
-      <p class="text-sm font-medium text-slate-800 truncate">${esc(i.title)}</p>
+      <p class="text-sm font-medium text-slate-800 truncate hover:text-blue-600 transition">${esc(i.title)}</p>
       <p class="text-xs text-slate-400 mt-0.5">${i.tech?.name ? esc(i.tech.name) + ' · ' : ''}${fmtRelative(i.createdAt)}</p>
     </div>
-    <span class="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS[i.status] || ''}">${STATUS_LABELS[i.status] || i.status}</span>
-  </div>`;
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <span class="text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[i.status] || ''}">${STATUS_LABELS[i.status] || i.status}</span>
+      <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition" aria-hidden="true">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </span>
+    </div>
+  </button>`;
 }
 
-// ── Formulaire public ─────────────────────────────────────────────────────────
+function badge(label, classes) {
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${classes}">${esc(label)}</span>`;
+}
+
+function renderInterventionModalReporters(reporters = []) {
+  const wrap = document.getElementById('im-reporters-wrap');
+  const container = document.getElementById('im-reporters');
+  if (!currentModalInterventionData || currentModalInterventionData.source !== 'PUBLIC') {
+    wrap.classList.add('hidden');
+    container.innerHTML = '';
+    return;
+  }
+
+  wrap.classList.remove('hidden');
+  container.innerHTML = reporters.length
+    ? reporters.map(reporter => `
+      <div class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm">
+        <span class="font-medium text-slate-700">${esc(reporter.name || 'Demandeur')}</span>
+        ${reporter.email ? `<span class="text-slate-400">${esc(reporter.email)}</span>` : ''}
+      </div>
+    `).join('')
+    : '<p class="text-sm text-slate-400">Aucun demandeur rattaché.</p>';
+}
+
+function renderInterventionModalOrders(orders = []) {
+  const container = document.getElementById('im-orders');
+  if (!orders.length) {
+    container.innerHTML = '<div class="border border-dashed border-slate-200 rounded-xl p-4 text-sm text-slate-400 text-center">Aucune commande liée</div>';
+    return;
+  }
+
+  container.innerHTML = orders.map(order => `
+    <form class="border border-slate-200 rounded-xl p-4 space-y-3" onsubmit="event.preventDefault(); updateInterventionModalOrder('${order.id}', this)">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h4 class="font-medium text-slate-800">${esc(order.title)}</h4>
+            ${badge(ORDER_STATUS_LABELS[order.status] || order.status, ORDER_STATUS_COLORS[order.status] || 'bg-slate-100 text-slate-700')}
+          </div>
+          <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">
+            <span>BC ${order.id.slice(-6).toUpperCase()}</span>
+            ${order.supplier ? `<span>Fournisseur: ${esc(order.supplier)}</span>` : ''}
+            ${order.receivedAt ? `<span>Reçue le ${fmtDateOnly(order.receivedAt)}</span>` : ''}
+          </div>
+        </div>
+        <a href="/orders.html?focus=${encodeURIComponent(order.id)}" class="text-xs text-blue-600 hover:underline flex-shrink-0">Ouvrir la commande</a>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Statut</label>
+          <select name="status" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="PENDING" ${order.status === 'PENDING' ? 'selected' : ''}>En attente</option>
+            <option value="ORDERED" ${order.status === 'ORDERED' ? 'selected' : ''}>Commandée</option>
+            <option value="PARTIAL" ${order.status === 'PARTIAL' ? 'selected' : ''}>Partielle</option>
+            <option value="RECEIVED" ${order.status === 'RECEIVED' ? 'selected' : ''}>Reçue</option>
+            <option value="CANCELLED" ${order.status === 'CANCELLED' ? 'selected' : ''}>Annulée</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Date de commande</label>
+          <input name="orderedAt" type="date" value="${toDateInputValue(order.orderedAt)}"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Réception prévue</label>
+          <input name="expectedDeliveryAt" type="date" value="${toDateInputValue(order.expectedDeliveryAt)}"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Notes de suivi</label>
+        <textarea name="trackingNotes" rows="3"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          placeholder="Ex: commande passée chez X, attente validation, livraison annoncée vendredi...">${esc(order.trackingNotes || '')}</textarea>
+      </div>
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-xs text-slate-400">
+          ${order.orderedAt ? `Commandée le ${fmtDateOnly(order.orderedAt)}` : 'Pas encore marquée comme commandée'}
+        </p>
+        <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition">
+          Enregistrer le suivi
+        </button>
+      </div>
+    </form>
+  `).join('');
+}
+
+function openInterventionModalAttributeEditor(field) {
+  const display = document.getElementById(`im-${field}-display`);
+  const editor = document.getElementById(`im-${field}-editor`);
+  if (!display || !editor || !currentModalInterventionData) return;
+
+  if (field === 'title') document.getElementById('im-title-input').value = currentModalInterventionData.title || '';
+  if (field === 'status') document.getElementById('im-status-input').value = currentModalInterventionData.status || 'OPEN';
+  if (field === 'priority') document.getElementById('im-priority-input').value = currentModalInterventionData.priority || 'NORMAL';
+  if (field === 'description') document.getElementById('im-description-input').value = currentModalInterventionData.description || '';
+  if (field === 'resolution') document.getElementById('im-resolution-input').value = currentModalInterventionData.resolution || '';
+
+  display.classList.add('hidden');
+  editor.classList.remove('hidden');
+}
+
+function closeInterventionModalAttributeEditor(field) {
+  const display = document.getElementById(`im-${field}-display`);
+  const editor = document.getElementById(`im-${field}-editor`);
+  if (!display || !editor) return;
+  editor.classList.add('hidden');
+  display.classList.remove('hidden');
+}
+
+async function saveInterventionModalAttribute(field) {
+  if (!currentModalInterventionId) return;
+  const payload = {};
+
+  if (field === 'title') payload.title = document.getElementById('im-title-input').value.trim();
+  if (field === 'status') payload.status = document.getElementById('im-status-input').value;
+  if (field === 'priority') payload.priority = document.getElementById('im-priority-input').value;
+  if (field === 'description') payload.description = document.getElementById('im-description-input').value || null;
+  if (field === 'resolution') payload.resolution = document.getElementById('im-resolution-input').value || null;
+
+  try {
+    await api.patch(`/interventions/${currentModalInterventionId}`, payload);
+    closeInterventionModalAttributeEditor(field);
+    showToast('Attribut mis à jour');
+    await Promise.all([openInterventionModal(currentModalInterventionId), resolveToken()]);
+  } catch (err) {
+    showToast(err.message || 'Mise à jour impossible', 'error');
+  }
+}
+
+async function saveInterventionModalNotes() {
+  if (!currentModalInterventionId) return;
+  const button = document.getElementById('im-save-notes-btn');
+  button.disabled = true;
+  try {
+    await api.patch(`/interventions/${currentModalInterventionId}`, {
+      notes: document.getElementById('im-notes-input').value || null
+    });
+    showToast('Notes enregistrées');
+    await Promise.all([openInterventionModal(currentModalInterventionId), resolveToken()]);
+  } catch (err) {
+    showToast(err.message || 'Enregistrement impossible', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function updateInterventionModalOrder(orderId, form) {
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    await api.patch(`/orders/${orderId}`, {
+      status: form.status.value,
+      orderedAt: form.orderedAt.value || null,
+      expectedDeliveryAt: form.expectedDeliveryAt.value || null,
+      trackingNotes: form.trackingNotes.value || null
+    });
+    showToast('Suivi de commande mis à jour');
+    await Promise.all([openInterventionModal(currentModalInterventionId), resolveToken()]);
+  } catch (err) {
+    showToast(err.message || 'Mise à jour impossible', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function openCreateOrderFromQrIntervention() {
+  if (!currentModalInterventionId) return;
+  window.location = `/orders.html?action=create&interventionId=${encodeURIComponent(currentModalInterventionId)}`;
+}
+
+async function openInterventionModalMerge() {
+  if (!currentModalInterventionId || currentModalInterventionData?.source !== 'PUBLIC') return;
+  const modal = document.getElementById('im-merge-modal');
+  const select = document.getElementById('im-merge-target-select');
+  const errEl = document.getElementById('im-merge-error');
+  errEl.classList.add('hidden');
+  select.innerHTML = '<option value="">Chargement...</option>';
+  modal.classList.remove('hidden');
+
+  try {
+    const result = await api.get('/interventions', { source: 'PUBLIC', limit: 100 });
+    modalMergeCandidates = (result.data || []).filter(item => item.id !== currentModalInterventionId);
+    select.innerHTML = '<option value="">-- Sélectionner --</option>' + modalMergeCandidates.map(item => `
+      <option value="${item.id}">${esc(item.title)}${item.room ? ` - ${esc(item.room.name)}` : ''}</option>
+    `).join('');
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+    select.innerHTML = '<option value="">-- Indisponible --</option>';
+  }
+}
+
+function closeInterventionModalMerge() {
+  document.getElementById('im-merge-modal').classList.add('hidden');
+}
+
+async function submitInterventionModalMerge() {
+  if (!currentModalInterventionId) return;
+  const targetId = document.getElementById('im-merge-target-select').value;
+  const errEl = document.getElementById('im-merge-error');
+  const button = document.getElementById('im-merge-submit-btn');
+  errEl.classList.add('hidden');
+  if (!targetId) {
+    errEl.textContent = 'Sélectionnez une intervention cible.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    await api.post(`/interventions/${currentModalInterventionId}/merge`, { targetInterventionId: targetId });
+    closeInterventionModalMerge();
+    showToast('Demandes fusionnées');
+    currentModalInterventionId = targetId;
+    await Promise.all([resolveToken(), openInterventionModal(targetId)]);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function onInterventionModalFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  modalPendingFile = file;
+  document.getElementById('im-file-preview-name').textContent = file.name;
+  document.getElementById('im-file-preview').classList.remove('hidden');
+}
+
+function clearInterventionModalFile() {
+  modalPendingFile = null;
+  document.getElementById('im-file-input').value = '';
+  document.getElementById('im-file-preview').classList.add('hidden');
+  document.getElementById('im-file-preview-name').textContent = '';
+}
+
+function renderInterventionModalAttachment(m) {
+  if (!m.attachmentPath) return '';
+  const url = `/uploads/${m.attachmentPath}`;
+  const name = esc(m.attachmentName || 'Fichier joint');
+  const mime = m.attachmentMime || '';
+  const size = m.attachmentSize ? ` (${(m.attachmentSize / 1024).toFixed(0)} Ko)` : '';
+  if (IMAGE_MIMES.includes(mime)) {
+    return `<a href="${url}" target="_blank" class="block mt-1">
+      <img src="${url}" alt="${name}" class="max-w-full rounded-lg max-h-32 object-cover" loading="lazy" />
+    </a>`;
+  }
+  return `<a href="${url}" target="_blank" download
+    class="flex items-center gap-1.5 mt-1 px-2 py-1 bg-black/10 rounded-lg text-xs hover:bg-black/20 transition">
+    <svg class="w-3.5 h-3.5 flex-shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+    <span class="truncate">${name}${size}</span>
+  </a>`;
+}
+
+function compressModalImage(file, maxWidth = 1200, quality = 0.82) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function openInterventionModal(id) {
+  const modal = document.getElementById('intervention-modal');
+  currentModalInterventionId = id;
+  currentModalInterventionData = null;
+  document.getElementById('im-loading').classList.remove('hidden');
+  document.getElementById('im-loading').textContent = 'Chargement...';
+  document.getElementById('im-content').classList.add('hidden');
+  modal.classList.remove('hidden');
+
+  try {
+    const intervention = await api.get(`/interventions/${id}`);
+    currentModalInterventionData = intervention;
+    document.getElementById('im-meta').textContent = `Intervention #${intervention.id.slice(-6).toUpperCase()}`;
+    document.getElementById('im-title').textContent = intervention.title;
+    document.getElementById('im-status-display').innerHTML = badge(STATUS_LABELS[intervention.status] || intervention.status, INTERVENTION_STATUS_COLORS[intervention.status] || 'bg-slate-100 text-slate-700');
+    document.getElementById('im-priority-display').innerHTML = badge(intervention.priority, INTERVENTION_PRIORITY_COLORS[intervention.priority] || 'bg-slate-100 text-slate-700');
+    document.getElementById('im-source').innerHTML = intervention.source === 'PUBLIC'
+      ? badge('Publique', 'bg-orange-100 text-orange-700')
+      : badge('Interne', 'bg-slate-100 text-slate-700');
+    document.getElementById('im-tech').textContent = intervention.tech?.name || '—';
+    document.getElementById('im-created').textContent = fmtDate(intervention.createdAt);
+    document.getElementById('im-room').textContent = intervention.room ? `${intervention.room.name}${intervention.room.number ? ` (${intervention.room.number})` : ''}` : '—';
+    document.getElementById('im-equipment').textContent = intervention.equipment ? intervention.equipment.name : '—';
+    document.getElementById('im-full-link').href = `/interventions.html?focus=${encodeURIComponent(intervention.id)}`;
+    document.getElementById('im-notes-input').value = intervention.notes || '';
+    ['title', 'status', 'priority', 'description', 'resolution'].forEach(closeInterventionModalAttributeEditor);
+    renderInterventionModalReporters(intervention.reporters || []);
+
+    const setBlock = (wrapId, contentId, value) => {
+      const wrap = document.getElementById(wrapId);
+      if (value) {
+        document.getElementById(contentId).textContent = value;
+        wrap.classList.remove('hidden');
+      } else {
+        wrap.classList.add('hidden');
+      }
+    };
+
+    setBlock('im-description-wrap', 'im-description', intervention.description);
+    setBlock('im-resolution-wrap', 'im-resolution', intervention.resolution);
+
+    const photosWrap = document.getElementById('im-photos-wrap');
+    const photos = Array.isArray(intervention.photos) ? intervention.photos : [];
+    if (photos.length) {
+      document.getElementById('im-photos-count').textContent = `${photos.length} photo(s)`;
+      document.getElementById('im-photos').innerHTML = photos.map(photo => `
+        <a href="${esc(photo)}" target="_blank" class="block group">
+          <img src="${esc(photo)}" alt="Photo intervention" class="w-full h-28 object-cover rounded-xl border border-slate-200 group-hover:opacity-90 transition" />
+        </a>
+      `).join('');
+      photosWrap.classList.remove('hidden');
+    } else {
+      photosWrap.classList.add('hidden');
+      document.getElementById('im-photos').innerHTML = '';
+      document.getElementById('im-photos-count').textContent = '';
+    }
+
+    renderInterventionModalOrders(intervention.orders || []);
+
+    const messagesWrap = document.getElementById('im-messages-wrap');
+    if (intervention.source === 'PUBLIC') {
+      messagesWrap.classList.remove('hidden');
+      document.getElementById('im-message-input').value = '';
+      document.getElementById('im-message-error').classList.add('hidden');
+      clearInterventionModalFile();
+      await loadInterventionModalMessages(intervention.id);
+    } else {
+      messagesWrap.classList.add('hidden');
+      document.getElementById('im-messages').innerHTML = '<p class="text-xs text-slate-400 text-center py-2">Aucun message.</p>';
+    }
+
+    document.getElementById('im-loading').classList.add('hidden');
+    document.getElementById('im-content').classList.remove('hidden');
+  } catch (err) {
+    document.getElementById('im-loading').textContent = `Erreur : ${err.message}`;
+  }
+}
+
+function closeInterventionModal() {
+  document.getElementById('intervention-modal').classList.add('hidden');
+  closeInterventionModalMerge();
+  currentModalInterventionId = null;
+  currentModalInterventionData = null;
+  clearInterventionModalFile();
+}
+
+document.getElementById('intervention-modal').addEventListener('click', e => {
+  if (e.target.id === 'intervention-modal') closeInterventionModal();
+});
+
+async function loadInterventionModalMessages(interventionId) {
+  const container = document.getElementById('im-messages');
+  try {
+    const messages = await api.get(`/interventions/${interventionId}/messages`);
+    if (!messages || messages.length === 0) {
+      container.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">Aucun message.</p>';
+      return;
+    }
+    container.innerHTML = messages.map(m => {
+      const isReporter = m.authorType === 'REPORTER';
+      const name = esc(m.authorName || (isReporter ? 'Demandeur' : 'Équipe technique'));
+      const time = new Date(m.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const attachment = renderInterventionModalAttachment(m);
+      const text = m.content ? `<div class="whitespace-pre-wrap">${esc(m.content)}</div>` : '';
+      if (isReporter) {
+        const unreadDot = !m.readAt
+          ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0 ml-1" title="Non lu"></span>'
+          : '';
+        return `<div class="flex justify-start">
+          <div class="max-w-[85%]">
+            <p class="text-xs text-slate-400 mb-0.5 flex items-center gap-1">${name} · ${time}${unreadDot}</p>
+            <div class="bg-orange-50 border border-orange-200 text-slate-700 rounded-xl rounded-tl-sm px-3 py-2 text-xs">${text}${attachment}</div>
+          </div>
+        </div>`;
+      }
+      const readIndicator = m.readAt
+        ? `<span class="text-blue-200 text-xs" title="Lu par le demandeur le ${new Date(m.readAt).toLocaleString('fr-FR')}">✓✓</span>`
+        : '<span class="text-blue-300/60 text-xs" title="Envoyé, en attente de lecture">✓</span>';
+      return `<div class="flex justify-end">
+        <div class="max-w-[85%]">
+          <p class="text-xs text-slate-400 text-right mb-0.5">Vous · ${time}</p>
+          <div class="bg-blue-600 text-white rounded-xl rounded-tr-sm px-3 py-2 text-xs">${text}${attachment}</div>
+          <div class="flex justify-end mt-0.5">${readIndicator}</div>
+        </div>
+      </div>`;
+    }).join('');
+    container.scrollTop = container.scrollHeight;
+  } catch {
+    container.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">Impossible de charger les messages.</p>';
+  }
+}
+
+async function sendInterventionModalMessage() {
+  if (!currentModalInterventionId) return;
+  const input = document.getElementById('im-message-input');
+  const errEl = document.getElementById('im-message-error');
+  const content = input.value.trim();
+
+  errEl.classList.add('hidden');
+  if (!content && !modalPendingFile) return;
+  if (content.length > 2000) {
+    errEl.textContent = 'Le message ne peut pas dépasser 2000 caractères.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    let fileToSend = modalPendingFile;
+    if (fileToSend && IMAGE_MIMES.includes(fileToSend.type)) {
+      fileToSend = await compressModalImage(fileToSend);
+    }
+
+    const fd = new FormData();
+    if (content) fd.append('content', content);
+    if (fileToSend) fd.append('attachment', fileToSend, modalPendingFile.name);
+
+    await api.upload(`/interventions/${currentModalInterventionId}/messages`, fd);
+    input.value = '';
+    clearInterventionModalFile();
+    await loadInterventionModalMessages(currentModalInterventionId);
+    resolveToken();
+  } catch (err) {
+    errEl.textContent = err.message || 'Erreur lors de l\'envoi.';
+    errEl.classList.remove('hidden');
+  }
+}
+
+document.getElementById('im-message-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendInterventionModalMessage();
+  }
+});
+
+// ── Formulaire public — gestion fichier ───────────────────────────────────────
+let pubPendingFile = null;
+const PUB_IMAGE_MIMES = ['image/jpeg','image/png','image/gif','image/webp'];
+
+function onPubFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  pubPendingFile = file;
+  // Vider l'autre input pour éviter doublons
+  const otherId = input.id === 'pub-photo-camera' ? 'pub-photo-file' : 'pub-photo-camera';
+  document.getElementById(otherId).value = '';
+
+  document.getElementById('pub-file-preview-name').textContent = file.name;
+  document.getElementById('pub-file-preview').classList.remove('hidden');
+
+  const imgEl = document.getElementById('pub-file-preview-img');
+  if (PUB_IMAGE_MIMES.includes(file.type)) {
+    imgEl.src = URL.createObjectURL(file);
+    imgEl.classList.remove('hidden');
+  } else {
+    imgEl.classList.add('hidden');
+  }
+}
+
+function clearPubFile() {
+  pubPendingFile = null;
+  document.getElementById('pub-photo-camera').value = '';
+  document.getElementById('pub-photo-file').value = '';
+  document.getElementById('pub-file-preview').classList.add('hidden');
+  document.getElementById('pub-file-preview-img').classList.add('hidden');
+  document.getElementById('pub-file-preview-name').textContent = '';
+}
+
+function compressPubImage(file, maxWidth = 1200, quality = 0.82) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Formulaire public — soumission ────────────────────────────────────────────
 document.getElementById('pub-form').addEventListener('submit', async e => {
   e.preventDefault();
   const title       = document.getElementById('pub-title').value;
@@ -439,21 +1255,24 @@ document.getElementById('pub-form').addEventListener('submit', async e => {
   err.classList.add('hidden');
 
   try {
-    const body = {
-      title,
-      description: description || null,
-      reporterName: name || null,
-      reporterEmail: email || null,
-      _honeypot: honeypot
-    };
-    if (resourceType === 'room') body.roomToken = resourceData.qrToken;
-    else body.equipmentToken = resourceData.qrToken;
+    const fd = new FormData();
+    fd.append('title', title);
+    if (description) fd.append('description', description);
+    if (name)  fd.append('reporterName', name);
+    if (email) fd.append('reporterEmail', email);
+    fd.append('_honeypot', honeypot);
+    if (resourceType === 'room') fd.append('roomToken', resourceData.qrToken);
+    else fd.append('equipmentToken', resourceData.qrToken);
 
-    const r = await fetch('/api/tickets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
+    if (pubPendingFile) {
+      let fileToSend = pubPendingFile;
+      if (PUB_IMAGE_MIMES.includes(pubPendingFile.type)) {
+        fileToSend = await compressPubImage(pubPendingFile);
+      }
+      fd.append('attachment', fileToSend, pubPendingFile.name);
+    }
+
+    const r = await fetch('/api/tickets', { method: 'POST', body: fd });
     const data = await r.json();
 
     if (!r.ok) {
@@ -563,6 +1382,126 @@ document.getElementById('int-submit').addEventListener('click', async () => {
     btn.textContent = 'Soumettre';
   }
 });
+
+const qrInterventionController = createInterventionDetailController({
+  ids: {
+    meta: 'im-meta',
+    title: 'im-title',
+    statusDisplay: 'im-status-display',
+    priorityDisplay: 'im-priority-display',
+    source: 'im-source',
+    tech: 'im-tech',
+    created: 'im-created',
+    room: 'im-room',
+    equipment: 'im-equipment',
+    notesInput: 'im-notes-input',
+    saveNotesBtn: 'im-save-notes-btn',
+    descriptionWrap: 'im-description-wrap',
+    description: 'im-description',
+    resolutionWrap: 'im-resolution-wrap',
+    resolution: 'im-resolution',
+    reportersWrap: 'im-reporters-wrap',
+    reportersList: 'im-reporters',
+    photosWrap: 'im-photos-wrap',
+    photosCount: 'im-photos-count',
+    photos: 'im-photos',
+    orders: 'im-orders',
+    fullLink: 'im-full-link',
+    loading: 'im-loading',
+    content: 'im-content',
+    messagesWrap: 'im-messages-wrap',
+    messages: 'im-messages',
+    messageInput: 'im-message-input',
+    messageError: 'im-message-error',
+    fileInput: 'im-file-input',
+    filePreview: 'im-file-preview',
+    filePreviewName: 'im-file-preview-name',
+    mergeModal: 'im-merge-modal',
+    mergeTargetSelect: 'im-merge-target-select',
+    mergeError: 'im-merge-error',
+    mergeSubmitBtn: 'im-merge-submit-btn'
+  },
+  attributeIds: {
+    title: { display: 'im-title-display', editor: 'im-title-editor', input: 'im-title-input' },
+    status: { display: 'im-status-display', editor: 'im-status-editor', input: 'im-status-input', defaultValue: 'OPEN' },
+    priority: { display: 'im-priority-display', editor: 'im-priority-editor', input: 'im-priority-input', defaultValue: 'NORMAL' },
+    description: { display: 'im-description-display', editor: 'im-description-editor', input: 'im-description-input' },
+    resolution: { display: 'im-resolution-display', editor: 'im-resolution-editor', input: 'im-resolution-input' }
+  },
+  globalNames: {
+    updateOrder: 'updateInterventionModalOrder'
+  },
+  escapeHtml: esc,
+  formatDate: fmtDate,
+  formatDateOnly: fmtDateOnly,
+  toDateInputValue,
+  statusBadge: status => badge(STATUS_LABELS[status] || status, INTERVENTION_STATUS_COLORS[status] || 'bg-slate-100 text-slate-700'),
+  priorityBadge: priority => badge(priority, INTERVENTION_PRIORITY_COLORS[priority] || 'bg-slate-100 text-slate-700'),
+  sourceBadge: source => source === 'PUBLIC'
+    ? badge('Publique', 'bg-orange-100 text-orange-700')
+    : badge('Interne', 'bg-slate-100 text-slate-700'),
+  orderStatusBadge: status => badge(ORDER_STATUS_LABELS[status] || status, ORDER_STATUS_COLORS[status] || 'bg-slate-100 text-slate-700'),
+  orderLink: orderId => `/orders.html?focus=${encodeURIComponent(orderId)}`,
+  fullLink: id => `/interventions.html?focus=${encodeURIComponent(id)}`,
+  createOrderLink: id => `/orders.html?action=create&interventionId=${encodeURIComponent(id)}`,
+  fetchIntervention: id => api.get(`/interventions/${id}`),
+  patchIntervention: (id, payload) => api.patch(`/interventions/${id}`, payload),
+  patchOrder: (id, payload) => api.patch(`/orders/${id}`, payload),
+  getMessages: id => api.get(`/interventions/${id}/messages`),
+  uploadMessage: (id, formData) => api.upload(`/interventions/${id}/messages`, formData),
+  listMergeCandidates: () => api.get('/interventions', { source: 'PUBLIC', limit: 100 }),
+  mergeIntervention: (id, targetId) => api.post(`/interventions/${id}/merge`, { targetInterventionId: targetId }),
+  formatRoom: intervention => intervention.room ? `${intervention.room.name}${intervention.room.number ? ` (${intervention.room.number})` : ''}` : '—',
+  formatEquipment: intervention => intervention.equipment ? intervention.equipment.name : '—',
+  toast: showToast,
+  onRefresh: async () => { await resolveToken(); },
+  onOpenStart: () => {
+    const modal = document.getElementById('intervention-modal');
+    currentModalInterventionId = null;
+    currentModalInterventionData = null;
+    document.getElementById('im-loading').classList.remove('hidden');
+    document.getElementById('im-loading').textContent = 'Chargement...';
+    document.getElementById('im-content').classList.add('hidden');
+    modal.classList.remove('hidden');
+  },
+  onOpenSuccess: intervention => {
+    currentModalInterventionId = intervention.id;
+    currentModalInterventionData = intervention;
+    document.getElementById('im-loading').classList.add('hidden');
+    document.getElementById('im-content').classList.remove('hidden');
+  },
+  onOpenError: error => {
+    document.getElementById('im-loading').textContent = `Erreur : ${error.message}`;
+  },
+  onClose: () => {
+    document.getElementById('intervention-modal').classList.add('hidden');
+    document.getElementById('im-merge-modal').classList.add('hidden');
+    currentModalInterventionId = null;
+    currentModalInterventionData = null;
+  },
+  afterMerge: async targetId => {
+    await resolveToken();
+    await qrInterventionController.open(targetId);
+  }
+});
+
+function renderInterventionModalReporters() {}
+function renderInterventionModalOrders() {}
+function openInterventionModalAttributeEditor(field) { return qrInterventionController.openAttributeEditor(field); }
+function closeInterventionModalAttributeEditor(field) { return qrInterventionController.closeAttributeEditor(field); }
+function saveInterventionModalAttribute(field) { return qrInterventionController.saveAttribute(field); }
+function saveInterventionModalNotes() { return qrInterventionController.saveNotes(); }
+function updateInterventionModalOrder(orderId, form) { return qrInterventionController.updateOrder(orderId, form); }
+function openCreateOrderFromQrIntervention() { return qrInterventionController.createOrder(); }
+function openInterventionModalMerge() { return qrInterventionController.openMergeModal(); }
+function closeInterventionModalMerge() { return qrInterventionController.closeMergeModal(); }
+function submitInterventionModalMerge() { return qrInterventionController.submitMerge(); }
+function onInterventionModalFileSelected(input) { return qrInterventionController.onFileSelected(input); }
+function clearInterventionModalFile() { return qrInterventionController.clearPendingFile(); }
+function openInterventionModal(id) { return qrInterventionController.open(id); }
+function closeInterventionModal() { return qrInterventionController.close(); }
+function loadInterventionModalMessages(interventionId) { return qrInterventionController.loadMessages(interventionId); }
+function sendInterventionModalMessage() { return qrInterventionController.sendMessage(); }
 
 resolveToken();
 </script>

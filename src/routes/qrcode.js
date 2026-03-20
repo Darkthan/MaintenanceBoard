@@ -1,10 +1,9 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
 const { optionalAuth } = require('../middleware/auth');
 const qrService = require('../services/qrService');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // GET /api/qrcode/resolve/:token - Résoudre un token (salle ou équipement)
 // Accessible sans auth pour permettre le scan mobile

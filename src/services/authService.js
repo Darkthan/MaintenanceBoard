@@ -7,10 +7,9 @@ const {
   generateAuthenticationOptions,
   verifyAuthenticationResponse
 } = require('@simplewebauthn/server');
-const { PrismaClient } = require('@prisma/client');
 const config = require('../config');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // SQLite stocke les tableaux en JSON string — helper de désérialisation
 function parseJsonField(value) {

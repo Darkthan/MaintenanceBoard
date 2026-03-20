@@ -1,4 +1,4 @@
-const CACHE_NAME = 'maintenanceboard-v1';
+const CACHE_NAME = 'maintenanceboard-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -46,6 +46,23 @@ self.addEventListener('fetch', event => {
 
   // API : network first, fallback cache
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Pages HTML : toujours demander au réseau d'abord pour éviter de servir une ancienne interface.
+  const acceptsHtml = event.request.headers.get('accept')?.includes('text/html');
+  if (acceptsHtml) {
     event.respondWith(
       fetch(event.request)
         .then(response => {

@@ -1,6 +1,5 @@
 const express = require('express');
 const { body, query, validationResult } = require('express-validator');
-const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
@@ -8,7 +7,7 @@ const { uploadImport } = require('../middleware/upload');
 const importService = require('../services/importService');
 const qrService = require('../services/qrService');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const validate = (req, res) => {
   const errors = validationResult(req);

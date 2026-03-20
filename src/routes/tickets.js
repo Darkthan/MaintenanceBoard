@@ -1,12 +1,96 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { createSmtpTransporter } = require('../utils/mail');
 const config = require('../config');
 
+// Rate limit magic-link par email (5/h par adresse) — en plus du rate limit IP dans app.js
+const magicLinkEmailLimiter = process.env.NODE_ENV !== 'test'
+  ? rateLimit({
+      windowMs: 60 * 60 * 1000,
+      max: 5,
+      keyGenerator: req => (req.body?.email || '').trim().toLowerCase() || req.ip,
+      message: { error: 'Trop de tentatives pour cet email, réessayez dans une heure.' },
+      skip: req => !req.body?.email
+    })
+  : (req, res, next) => next();
+
+async function resolveReporterAccess(token) {
+  if (prisma.interventionReporter?.findUnique) {
+    const reporter = await prisma.interventionReporter.findUnique({
+      where: { token },
+      include: {
+        intervention: {
+          include: {
+            room: { select: { name: true } },
+            equipment: { select: { name: true } },
+            tech: { select: { email: true, name: true } }
+          }
+        }
+      }
+    });
+    if (reporter?.intervention) return { reporter, intervention: reporter.intervention };
+  }
+
+  const legacyIntervention = await prisma.intervention.findUnique({
+    where: { reporterToken: token },
+    include: {
+      room: { select: { name: true } },
+      equipment: { select: { name: true } },
+      tech: { select: { email: true, name: true } }
+    }
+  });
+  if (!legacyIntervention) return null;
+  return {
+    reporter: {
+      token,
+      name: legacyIntervention.reporterName,
+      email: legacyIntervention.reporterEmail,
+      interventionId: legacyIntervention.id
+    },
+    intervention: legacyIntervention
+  };
+}
+
+const ALLOWED_CHAT_MIMES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+];
+
+const chatStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(process.cwd(), 'uploads', 'ticket-messages');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '';
+    cb(null, `${uuidv4()}${ext}`);
+  }
+});
+
+const uploadChatFile = multer({
+  storage: chatStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    ALLOWED_CHAT_MIMES.includes(file.mimetype) ? cb(null, true) : cb(new Error('Type de fichier non autorisé.'));
+  }
+}).single('attachment');
+
 // POST /api/tickets — Soumission publique de ticket
-router.post('/', async (req, res, next) => {
+router.post('/', (req, res, next) => {
+  uploadChatFile(req, res, err => {
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, async (req, res, next) => {
   try {
     const {
       roomToken,
@@ -30,7 +114,7 @@ router.post('/', async (req, res, next) => {
 
     // Validation email
     if (reporterEmail) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
       if (!emailRegex.test(reporterEmail)) {
         return res.status(400).json({ error: 'Format d\'email invalide.' });
       }
@@ -74,7 +158,7 @@ router.post('/', async (req, res, next) => {
 
     const reporterToken = uuidv4();
 
-    await prisma.intervention.create({
+    const intervention = await prisma.intervention.create({
       data: {
         title: title.trim(),
         description: description ? description.trim().slice(0, 2000) : null,
@@ -86,16 +170,43 @@ router.post('/', async (req, res, next) => {
         equipmentId,
         reporterName: reporterName ? reporterName.trim() : null,
         reporterEmail: reporterEmail ? reporterEmail.trim() : null,
-        reporterToken
+        reporterToken,
+        reporters: {
+          create: {
+            name: reporterName ? reporterName.trim() : null,
+            email: reporterEmail ? reporterEmail.trim().toLowerCase() : null,
+            token: reporterToken,
+            isPrimary: true
+          }
+        }
       }
     });
+
+    // Si une photo/pièce jointe est envoyée, créer un message initial
+    if (req.file) {
+      await prisma.ticketMessage.create({
+        data: {
+          interventionId: intervention.id,
+          content: '',
+          authorType: 'REPORTER',
+          authorName: reporterName ? reporterName.trim() : null,
+          attachmentPath: `ticket-messages/${req.file.filename}`,
+          attachmentName: req.file.originalname,
+          attachmentMime: req.file.mimetype,
+          attachmentSize: req.file.size
+        }
+      });
+    }
 
     return res.status(201).json({
       success: true,
       token: reporterToken,
       message: 'Ticket soumis avec succès. Conservez ce token pour suivre votre demande.'
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (req.file) fs.unlinkSync(req.file.path);
+    next(err);
+  }
 });
 
 // GET /api/tickets/rooms — Liste publique des salles (pour formulaire générique)
@@ -122,13 +233,13 @@ router.get('/rooms/:id/equipment', async (req, res, next) => {
 });
 
 // POST /api/tickets/magic-link — Envoi d'un magic link par email
-router.post('/magic-link', async (req, res, next) => {
+router.post('/magic-link', magicLinkEmailLimiter, async (req, res, next) => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== 'string') {
       return res.status(400).json({ error: 'Email requis.' });
     }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
     if (!emailRegex.test(email.trim())) {
       return res.status(400).json({ error: 'Format d\'email invalide.' });
     }
@@ -136,9 +247,11 @@ router.post('/magic-link', async (req, res, next) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Vérifier si des tickets existent pour cet email
-    const count = await prisma.intervention.count({
-      where: { reporterEmail: normalizedEmail, source: 'PUBLIC' }
-    });
+    const [legacyCount, participantCount] = await Promise.all([
+      prisma.intervention.count({ where: { reporterEmail: normalizedEmail, source: 'PUBLIC' } }),
+      prisma.interventionReporter?.count ? prisma.interventionReporter.count({ where: { email: normalizedEmail } }) : 0
+    ]);
+    const count = legacyCount + participantCount;
 
     if (count > 0) {
       // Créer le magic link
@@ -192,35 +305,73 @@ router.get('/my/:magicToken', async (req, res, next) => {
       return res.status(404).json({ error: 'Lien invalide ou expiré.' });
     }
 
-    const tickets = await prisma.intervention.findMany({
-      where: { reporterEmail: link.email, source: 'PUBLIC' },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        room: { select: { name: true } },
-        equipment: { select: { name: true } },
-        messages: { orderBy: { createdAt: 'desc' }, take: 1 }
-      }
-    });
+    const reporterLinks = prisma.interventionReporter?.findMany
+      ? await prisma.interventionReporter.findMany({
+          where: { email: link.email },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            intervention: {
+              include: {
+                room: { select: { name: true } },
+                equipment: { select: { name: true } },
+                messages: { orderBy: { createdAt: 'desc' }, take: 1 }
+              }
+            }
+          }
+        })
+      : [];
 
-    return res.json({ email: link.email, tickets });
+    const deduped = new Map();
+    for (const reporter of reporterLinks) {
+      const intervention = reporter.intervention;
+      if (!intervention || intervention.mergedIntoId) continue;
+      if (!deduped.has(intervention.id)) {
+        deduped.set(intervention.id, {
+          ...intervention,
+          reporterToken: reporter.token
+        });
+      }
+    }
+
+    if (deduped.size === 0) {
+      const legacyTickets = await prisma.intervention.findMany({
+        where: { reporterEmail: link.email, source: 'PUBLIC', mergedIntoId: null },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          room: { select: { name: true } },
+          equipment: { select: { name: true } },
+          messages: { orderBy: { createdAt: 'desc' }, take: 1 }
+        }
+      });
+      for (const ticket of legacyTickets) {
+        deduped.set(ticket.id, ticket);
+      }
+    }
+
+    return res.json({ email: link.email, tickets: [...deduped.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) });
   } catch (err) { next(err); }
 });
 
 // GET /api/tickets/:token/messages — Messages d'un ticket (public)
 router.get('/:token/messages', async (req, res, next) => {
   try {
-    const intervention = await prisma.intervention.findUnique({
-      where: { reporterToken: req.params.token }
-    });
-
-    if (!intervention) {
+    const access = await resolveReporterAccess(req.params.token);
+    if (!access) {
       return res.status(404).json({ error: 'Ticket introuvable.' });
     }
+    const { intervention } = access;
+
+    // Marquer les messages TECH non lus comme lus (le reporter les consulte)
+    await prisma.ticketMessage.updateMany({
+      where: { interventionId: intervention.id, authorType: 'TECH', readAt: null },
+      data: { readAt: new Date() }
+    });
 
     const messages = await prisma.ticketMessage.findMany({
       where: { interventionId: intervention.id },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, content: true, authorType: true, authorName: true, createdAt: true }
+      select: { id: true, content: true, authorType: true, authorName: true, createdAt: true,
+                readAt: true, attachmentPath: true, attachmentName: true, attachmentMime: true, attachmentSize: true }
     });
 
     return res.json(messages);
@@ -228,43 +379,62 @@ router.get('/:token/messages', async (req, res, next) => {
 });
 
 // POST /api/tickets/:token/messages — Envoyer un message (reporter public)
-router.post('/:token/messages', async (req, res, next) => {
+router.post('/:token/messages', (req, res, next) => {
+  uploadChatFile(req, res, err => {
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, async (req, res, next) => {
   try {
-    const { content, authorName } = req.body;
+    const content = (req.body.content || '').trim();
+    const hasFile = !!req.file;
 
-    if (!content || typeof content !== 'string' || content.trim().length < 1 || content.trim().length > 2000) {
-      return res.status(400).json({ error: 'Le message doit contenir entre 1 et 2000 caractères.' });
+    if (!content && !hasFile) {
+      return res.status(400).json({ error: 'Message ou fichier requis.' });
+    }
+    if (content.length > 2000) {
+      return res.status(400).json({ error: 'Message trop long (2000 caractères max).' });
     }
 
-    const intervention = await prisma.intervention.findUnique({
-      where: { reporterToken: req.params.token },
-      include: { tech: { select: { email: true, name: true } } }
-    });
+    const { authorName } = req.body;
 
-    if (!intervention) {
+    const access = await resolveReporterAccess(req.params.token);
+    if (!access) {
+      if (req.file) fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'Ticket introuvable.' });
     }
+    const { intervention, reporter } = access;
 
-    // Rate limit : max 5 messages par ticket par heure
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    // Rate limit : 5 messages max depuis la dernière réponse du support (ou depuis 1h)
+    const lastTechMsg = await prisma.ticketMessage.findFirst({
+      where: { interventionId: intervention.id, authorType: 'TECH' },
+      orderBy: { createdAt: 'desc' }
+    });
+    const windowStart = lastTechMsg
+      ? lastTechMsg.createdAt
+      : new Date(Date.now() - 60 * 60 * 1000);
+
     const recentCount = await prisma.ticketMessage.count({
-      where: {
-        interventionId: intervention.id,
-        authorType: 'REPORTER',
-        createdAt: { gte: oneHourAgo }
-      }
+      where: { interventionId: intervention.id, authorType: 'REPORTER', createdAt: { gte: windowStart } }
     });
 
     if (recentCount >= 5) {
-      return res.status(429).json({ error: 'Trop de messages envoyés. Réessayez dans une heure.' });
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(429).json({ error: 'Trop de messages envoyés. Attendez une réponse du support.' });
     }
 
     const message = await prisma.ticketMessage.create({
       data: {
         interventionId: intervention.id,
-        content: content.trim(),
+        content,
         authorType: 'REPORTER',
-        authorName: authorName ? authorName.trim() : (intervention.reporterName || null)
+        authorName: authorName ? authorName.trim() : (reporter?.name || intervention.reporterName || null),
+        ...(req.file ? {
+          attachmentPath: `ticket-messages/${req.file.filename}`,
+          attachmentName: req.file.originalname,
+          attachmentMime: req.file.mimetype,
+          attachmentSize: req.file.size
+        } : {})
       }
     });
 
@@ -290,7 +460,7 @@ router.post('/:token/messages', async (req, res, next) => {
         }
 
         if (recipientEmail) {
-          const senderName = message.authorName || intervention.reporterEmail || 'Demandeur';
+          const senderName = message.authorName || reporter?.email || intervention.reporterEmail || 'Demandeur';
           await transporter.sendMail({
             from,
             to: recipientEmail,
@@ -317,17 +487,11 @@ router.post('/:token/messages', async (req, res, next) => {
 // GET /api/tickets/:token — Suivi public du statut
 router.get('/:token', async (req, res, next) => {
   try {
-    const intervention = await prisma.intervention.findUnique({
-      where: { reporterToken: req.params.token },
-      include: {
-        room: { select: { name: true } },
-        equipment: { select: { name: true } }
-      }
-    });
-
-    if (!intervention) {
+    const access = await resolveReporterAccess(req.params.token);
+    if (!access) {
       return res.status(404).json({ error: 'Ticket introuvable.' });
     }
+    const { intervention } = access;
 
     // Retourner uniquement les infos non sensibles
     return res.json({

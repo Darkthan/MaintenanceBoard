@@ -218,10 +218,16 @@ if (user.name) document.getElementById('user-avatar').textContent = user.name[0]
 let currentPage = 1;
 let currentSearch = '';
 let currentBuilding = '';
+const pageParams = new URLSearchParams(window.location.search);
 
 // Cacher actions admin pour TECH
 if (user.role !== 'ADMIN') {
   document.getElementById('admin-actions').style.display = 'none';
+}
+
+if (pageParams.get('search')) {
+  currentSearch = pageParams.get('search');
+  document.getElementById('search-input').value = currentSearch;
 }
 
 async function loadRooms() {
@@ -502,6 +508,15 @@ async function openRoomDetail(roomId) {
 }
 
 loadRooms();
+
+const createIntent = pageParams.get('action');
+const focusIntent = pageParams.get('focus');
+if (createIntent === 'create' && user.role === 'ADMIN') {
+  setTimeout(() => document.getElementById('add-room-btn')?.click(), 50);
+}
+if (focusIntent) {
+  setTimeout(() => openRoomDetail(focusIntent), 200);
+}
 </script>
 </body>
 </html>

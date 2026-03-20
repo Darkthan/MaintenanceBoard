@@ -96,19 +96,47 @@
       </div>
 
       <!-- Formulaire envoi message -->
-      <div class="px-4 py-3 border-t border-slate-100">
-        <div class="flex gap-2">
-          <textarea id="message-input"
-            rows="2"
-            placeholder="Votre message..."
-            class="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
-          ></textarea>
-          <button id="send-btn" onclick="sendMessage()"
-            class="flex-shrink-0 self-end px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition disabled:opacity-50">
-            Envoyer
+      <div class="px-4 py-3 border-t border-slate-100 space-y-2">
+        <!-- Prévisualisation fichier sélectionné -->
+        <div id="file-preview" class="hidden flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-600">
+          <svg class="w-4 h-4 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+          </svg>
+          <span id="file-preview-name" class="flex-1 truncate"></span>
+          <button onclick="clearFile()" class="text-slate-400 hover:text-red-500 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
           </button>
         </div>
-        <p id="send-error" class="hidden text-xs text-red-500 mt-1"></p>
+        <div class="flex gap-2">
+          <div class="flex-1 flex flex-col gap-1.5">
+            <textarea id="message-input"
+              rows="2"
+              placeholder="Votre message…"
+              class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+            ></textarea>
+          </div>
+          <div class="flex flex-col gap-1.5 flex-shrink-0">
+            <!-- Bouton fichier -->
+            <label class="cursor-pointer flex items-center justify-center w-10 h-10 border border-slate-300 rounded-xl hover:bg-slate-50 transition" title="Joindre un fichier">
+              <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+              </svg>
+              <input type="file" id="file-input" class="hidden"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onchange="onFileSelected(this)" />
+            </label>
+            <!-- Bouton envoyer -->
+            <button id="send-btn" onclick="sendMessage()"
+              class="flex items-center justify-center w-10 h-10 bg-orange-500 hover:bg-orange-600 text-white rounded-xl transition disabled:opacity-50">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <p id="send-error" class="hidden text-xs text-red-500"></p>
       </div>
     </div>
 
@@ -141,7 +169,7 @@
 
 <script>
 function esc(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 const STATUS_LABELS = { OPEN:'Ouvert', IN_PROGRESS:'En cours', RESOLVED:'Résolu', CLOSED:'Fermé' };
@@ -152,29 +180,76 @@ const STATUS_CLASSES = {
   CLOSED:'bg-slate-100 text-slate-600'
 };
 const PRIORITY_LABELS = { LOW:'Basse', NORMAL:'Normale', HIGH:'Haute', CRITICAL:'Critique' };
+const IMAGE_MIMES = ['image/jpeg','image/png','image/gif','image/webp'];
 
 const params = new URLSearchParams(window.location.search);
 const ticketToken = params.get('token');
 let ticketData = null;
 let lastMessageCount = 0;
 let pollInterval = null;
+let pendingFile = null; // File object à joindre
 
-function showError(msg) {
-  document.getElementById('loading-state').classList.add('hidden');
-  document.getElementById('error-state').classList.remove('hidden');
-  if (msg) document.getElementById('error-message').textContent = msg;
-}
-
-function formatDate(d) {
-  return new Date(d).toLocaleString('fr-FR', {
-    day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
+// ── Compression image ────────────────────────────────────────────────────────
+function compressImage(file, maxWidth = 1200, quality = 0.82) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
   });
 }
 
-function formatTime(d) {
-  return new Date(d).toLocaleString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+// ── Sélection fichier ─────────────────────────────────────────────────────────
+function onFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  pendingFile = file;
+  document.getElementById('file-preview-name').textContent = file.name;
+  document.getElementById('file-preview').classList.remove('hidden');
 }
 
+function clearFile() {
+  pendingFile = null;
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-preview').classList.add('hidden');
+  document.getElementById('file-preview-name').textContent = '';
+}
+
+// ── Rendu pièce jointe dans bulle ─────────────────────────────────────────────
+function renderAttachment(m, isReporter) {
+  if (!m.attachmentPath) return '';
+  const url = `/uploads/${m.attachmentPath}`;
+  const name = esc(m.attachmentName || 'Fichier joint');
+  const mime = m.attachmentMime || '';
+  const size = m.attachmentSize ? ` (${(m.attachmentSize / 1024).toFixed(0)} Ko)` : '';
+
+  if (IMAGE_MIMES.includes(mime)) {
+    return `<a href="${url}" target="_blank" class="block mt-1">
+      <img src="${url}" alt="${name}" class="max-w-full rounded-lg max-h-48 object-cover" loading="lazy" />
+    </a>`;
+  }
+
+  const iconColor = isReporter ? 'text-orange-200' : 'text-slate-400';
+  return `<a href="${url}" target="_blank" download
+    class="flex items-center gap-2 mt-1 px-2 py-1.5 bg-black/10 rounded-lg text-xs hover:bg-black/20 transition">
+    <svg class="w-4 h-4 ${iconColor} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+    <span class="truncate">${name}${size}</span>
+  </a>`;
+}
+
+// ── Rendu messages ────────────────────────────────────────────────────────────
 function renderMessages(messages) {
   const list = document.getElementById('messages-list');
   const noMsg = document.getElementById('no-messages');
@@ -188,29 +263,36 @@ function renderMessages(messages) {
   list.innerHTML = messages.map(m => {
     const isReporter = m.authorType === 'REPORTER';
     const name = esc(m.authorName || (isReporter ? 'Vous' : 'Équipe technique'));
-    const time = formatTime(m.createdAt);
+    const time = new Date(m.createdAt).toLocaleString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+    const attachment = renderAttachment(m, isReporter);
+    const text = m.content ? `<div class="text-sm whitespace-pre-wrap">${esc(m.content)}</div>` : '';
 
     if (isReporter) {
+      // Indicateur VU : message lu par le tech
+      const readIndicator = m.readAt
+        ? `<span class="text-orange-200 text-xs" title="Lu par le support le ${new Date(m.readAt).toLocaleString('fr-FR')}">✓✓</span>`
+        : `<span class="text-orange-300/60 text-xs" title="Envoyé, en attente de lecture">✓</span>`;
       return `<div class="flex justify-end">
         <div class="max-w-[80%]">
           <p class="text-xs text-slate-400 text-right mb-0.5">${name} · ${time}</p>
-          <div class="bg-orange-500 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm whitespace-pre-wrap">${esc(m.content)}</div>
+          <div class="bg-orange-500 text-white rounded-2xl rounded-tr-sm px-4 py-2.5">${text}${attachment}</div>
+          <div class="flex justify-end mt-0.5">${readIndicator}</div>
         </div>
       </div>`;
     } else {
       return `<div class="flex justify-start">
         <div class="max-w-[80%]">
           <p class="text-xs text-slate-400 mb-0.5">Équipe technique · ${time}</p>
-          <div class="bg-slate-100 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm whitespace-pre-wrap">${esc(m.content)}</div>
+          <div class="bg-slate-100 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2.5">${text}${attachment}</div>
         </div>
       </div>`;
     }
   }).join('');
 
-  // Scroll to bottom
   list.scrollTop = list.scrollHeight;
 }
 
+// ── Polling messages ──────────────────────────────────────────────────────────
 async function loadMessages() {
   if (!ticketToken) return;
   try {
@@ -218,14 +300,12 @@ async function loadMessages() {
     if (!res.ok) return;
     const messages = await res.json();
 
-    // Detect new messages (from TECH) for notification
     if (lastMessageCount > 0 && messages.length > lastMessageCount) {
       const newMsgs = messages.slice(lastMessageCount);
-      const techMsgs = newMsgs.filter(m => m.authorType === 'TECH');
-      techMsgs.forEach(msg => {
+      newMsgs.filter(m => m.authorType === 'TECH').forEach(msg => {
         if (Notification.permission === 'granted') {
           new Notification('Nouveau message – MaintenanceBoard', {
-            body: msg.content.slice(0, 80)
+            body: (msg.content || msg.attachmentName || 'Fichier joint').slice(0, 80)
           });
         }
       });
@@ -233,20 +313,19 @@ async function loadMessages() {
 
     lastMessageCount = messages.length;
     renderMessages(messages);
-  } catch (e) {
-    // Fail silently for polling
-  }
+  } catch {}
 }
 
+// ── Envoi message ─────────────────────────────────────────────────────────────
 async function sendMessage() {
-  const input = document.getElementById('message-input');
-  const btn = document.getElementById('send-btn');
-  const errEl = document.getElementById('send-error');
+  const input  = document.getElementById('message-input');
+  const btn    = document.getElementById('send-btn');
+  const errEl  = document.getElementById('send-error');
   const content = input.value.trim();
 
   errEl.classList.add('hidden');
 
-  if (!content) return;
+  if (!content && !pendingFile) return;
   if (content.length > 2000) {
     errEl.textContent = 'Le message ne peut pas dépasser 2000 caractères.';
     errEl.classList.remove('hidden');
@@ -254,17 +333,26 @@ async function sendMessage() {
   }
 
   btn.disabled = true;
-  btn.textContent = 'Envoi…';
 
   try {
+    let fileToSend = pendingFile;
+
+    // Compression si image
+    if (fileToSend && IMAGE_MIMES.includes(fileToSend.type)) {
+      fileToSend = await compressImage(fileToSend);
+    }
+
+    const fd = new FormData();
+    if (content) fd.append('content', content);
+    if (fileToSend) fd.append('attachment', fileToSend, pendingFile.name);
+
     const res = await fetch(`/api/tickets/${ticketToken}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content })
+      body: fd
     });
 
     if (res.status === 429) {
-      errEl.textContent = 'Trop de messages envoyés. Réessayez dans une heure.';
+      errEl.textContent = 'Trop de messages envoyés. Attendez une réponse du support.';
       errEl.classList.remove('hidden');
       return;
     }
@@ -276,16 +364,17 @@ async function sendMessage() {
     }
 
     input.value = '';
+    clearFile();
     await loadMessages();
   } catch (e) {
     errEl.textContent = 'Erreur réseau.';
     errEl.classList.remove('hidden');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Envoyer';
   }
 }
 
+// ── Magic link ─────────────────────────────────────────────────────────────────
 async function requestMagicLink() {
   const emailEl = document.getElementById('magic-email');
   const successEl = document.getElementById('magic-success');
@@ -307,33 +396,34 @@ async function requestMagicLink() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email })
     });
-    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       successEl.classList.remove('hidden');
       emailEl.value = '';
     } else {
+      const data = await res.json().catch(() => ({}));
       errEl.textContent = data.error || 'Erreur lors de l\'envoi.';
       errEl.classList.remove('hidden');
     }
-  } catch (e) {
+  } catch {
     errEl.textContent = 'Erreur réseau.';
     errEl.classList.remove('hidden');
   }
 }
 
-// Allow send on Enter (Shift+Enter = newline)
+// Enter pour envoyer (Shift+Enter = saut de ligne)
 document.getElementById('message-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 
+// ── Chargement ticket ─────────────────────────────────────────────────────────
+function showError(msg) {
+  document.getElementById('loading-state').classList.add('hidden');
+  document.getElementById('error-state').classList.remove('hidden');
+  if (msg) document.getElementById('error-message').textContent = msg;
+}
+
 async function loadTicket() {
-  if (!ticketToken) {
-    showError('Aucun token fourni dans l\'URL.');
-    return;
-  }
+  if (!ticketToken) { showError('Aucun token fourni dans l\'URL.'); return; }
 
   try {
     const res = await fetch(`/api/tickets/${ticketToken}`);
@@ -348,7 +438,9 @@ async function loadTicket() {
     badge.textContent = STATUS_LABELS[ticketData.status] || ticketData.status;
     badge.className = 'flex-shrink-0 text-xs font-semibold px-3 py-1 rounded-full ' + (STATUS_CLASSES[ticketData.status] || 'bg-slate-100 text-slate-600');
 
-    document.getElementById('ticket-date').textContent = formatDate(ticketData.createdAt);
+    document.getElementById('ticket-date').textContent = new Date(ticketData.createdAt).toLocaleString('fr-FR', {
+      day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
+    });
     document.getElementById('ticket-priority').textContent = PRIORITY_LABELS[ticketData.priority] || ticketData.priority;
 
     if (ticketData.room) {
@@ -363,17 +455,13 @@ async function loadTicket() {
     document.getElementById('loading-state').classList.add('hidden');
     document.getElementById('content-state').classList.remove('hidden');
 
-    // Charger les messages initiaux
     await loadMessages();
-
-    // Polling toutes les 15 secondes
     pollInterval = setInterval(loadMessages, 15000);
   } catch (err) {
     showError('Erreur réseau : ' + err.message);
   }
 }
 
-// Demander permission notifications
 if ('Notification' in window && Notification.permission === 'default') {
   Notification.requestPermission();
 }

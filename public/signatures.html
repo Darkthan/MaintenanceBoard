@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Signatures – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/js/pdf.min.js"></script>
+  <style>
+    #modal-placement-container { position: relative; overflow: hidden; cursor: crosshair; user-select: none; }
+  </style>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
+      </div>
+      <div><p class="text-white font-bold text-sm">MaintenanceBoard</p><p class="text-slate-400 text-xs">Parc informatique</p></div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold"><span id="user-avatar">?</span></div>
+        <div class="flex-1 min-w-0"><p id="user-name" class="text-white text-sm font-medium truncate">...</p><p id="user-role" class="text-slate-400 text-xs"></p></div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 lg:ml-64 flex flex-col">
+    <header data-app-header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <h1 class="text-xl font-semibold text-slate-800">Signatures</h1>
+      </div>
+      <div data-mobile-header-actions>
+        <button id="new-sig-btn" onclick="openNewSigModal()"
+          class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Nouvelle signature
+        </button>
+      </div>
+    </header>
+
+    <div class="flex-1 p-6 space-y-4">
+      <!-- Filtres -->
+      <div data-mobile-filters="true" class="bg-white rounded-xl border border-slate-200 p-4 flex gap-3 flex-wrap">
+        <input id="search-input" type="search" placeholder="Rechercher par titre, destinataire..."
+          class="flex-1 min-w-48 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          oninput="filterSignatures()" />
+        <select id="status-filter"
+          class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          onchange="filterSignatures()">
+          <option value="">Tous les statuts</option>
+          <option value="PENDING">En attente</option>
+          <option value="SIGNED">Signé</option>
+          <option value="EXPIRED">Expiré</option>
+          <option value="CANCELLED">Annulé</option>
+        </select>
+      </div>
+
+      <!-- Liste -->
+      <div id="sigs-container" class="space-y-3">
+        <p class="text-slate-400 text-center py-8">Chargement...</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── Modal Nouvelle Signature ──────────────────────────────────────────────── -->
+<div id="modal-backdrop" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onclick="closeNewSigModal(event)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h3 class="font-semibold text-slate-800 text-lg">Nouvelle demande de signature</h3>
+      <button onclick="closeNewSigModal()" class="text-slate-400 hover:text-slate-700 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <form id="new-sig-form" onsubmit="submitNewSig(event)" class="px-6 py-5 space-y-4">
+      <!-- Titre du document -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Titre du document <span class="text-red-500">*</span></label>
+        <input id="form-title" type="text" required placeholder="Ex: Contrat de prestation, Devis n°123..."
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      </div>
+
+      <!-- Notes -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Notes / Description</label>
+        <textarea id="form-notes" rows="2" placeholder="Description optionnelle du document..."
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+      </div>
+
+      <!-- Upload fichier -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Fichier (optionnel)</label>
+        <div id="drop-zone"
+          class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition"
+          onclick="document.getElementById('file-input').click()"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event)">
+          <svg class="w-8 h-8 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+          <p id="drop-text" class="text-sm text-slate-500">Glissez un fichier ici ou <span class="text-indigo-600 font-medium">parcourez</span></p>
+          <p class="text-xs text-slate-400 mt-1">PDF, images, Word, Excel — 20 Mo max</p>
+        </div>
+        <input id="file-input" type="file" class="hidden"
+          accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx"
+          onchange="handleFileSelect(event)" />
+        <div id="file-info" class="hidden mt-2 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+          <svg class="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <span id="file-name" class="text-sm text-indigo-700 font-medium truncate flex-1"></span>
+          <button type="button" onclick="clearFile()" class="text-indigo-400 hover:text-red-500 transition flex-shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Zone de signature (visible après sélection d'un PDF ou image) -->
+      <div id="placement-section" class="hidden">
+        <div class="border border-slate-200 rounded-xl p-3 bg-slate-50">
+          <p class="text-sm font-medium text-slate-700 mb-1">Zone de signature sur le document</p>
+          <p class="text-xs text-slate-400 mb-2">Dessinez un rectangle sur l'aperçu pour définir précisément la zone de signature.</p>
+          <div id="modal-placement-container"
+            class="rounded-xl select-none bg-white border border-slate-200"
+            style="min-height:120px;max-height:340px;">
+            <div id="modal-placement-loading" class="flex flex-col items-center justify-center py-8 gap-2 text-slate-400">
+              <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+              <span class="text-sm">Chargement de l'aperçu…</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400 mt-1.5 text-center">Cliquez-glissez pour définir la zone · elle sera initialisée en bas à droite</p>
+        </div>
+      </div>
+
+      <hr class="border-slate-200" />
+
+      <!-- Destinataire -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Nom du destinataire <span class="text-red-500">*</span></label>
+        <input id="form-recipient-name" type="text" required placeholder="Prénom Nom"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Email du destinataire <span class="text-red-500">*</span></label>
+        <input id="form-recipient-email" type="email" required placeholder="prenom.nom@exemple.fr"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Message (optionnel)</label>
+        <textarea id="form-message" rows="2" placeholder="Message personnalisé à inclure dans l'email..."
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+      </div>
+
+      <!-- Erreur formulaire -->
+      <div id="form-error" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700"></div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeNewSigModal()"
+          class="flex-1 py-2.5 border border-slate-300 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
+          Annuler
+        </button>
+        <button id="form-submit-btn" type="submit"
+          class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          Envoyer pour signature
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="hidden fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-sm">
+  <span id="toast-msg"></span>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/sigPlacement.js"></script>
+<script>
+// ── État ──────────────────────────────────────────────────────────────────────
+let allSignatures = [];
+let selectedFile = null;
+let sigPlacementPos = { ...SigPlacement.DEFAULT_POS };
+let currentBlobUrl = null;
+
+// ── Diagnostic erreurs globales ────────────────────────────────────────────────
+window.addEventListener('unhandledrejection', e => {
+  const c = document.getElementById('sigs-container');
+  if (c && c.textContent.includes('Chargement')) {
+    c.innerHTML = `<p class="text-red-500 text-center py-8">Erreur JS : ${escapeHtml(String(e.reason?.message || e.reason || 'inconnue'))}</p>`;
+  }
+});
+window.onerror = (msg, src, line) => {
+  const c = document.getElementById('sigs-container');
+  if (c && c.textContent.includes('Chargement')) {
+    c.innerHTML = `<p class="text-red-500 text-center py-8">Erreur JS : ${escapeHtml(String(msg))} (ligne ${line})</p>`;
+  }
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    renderNav('signatures');
+  } catch (e) {
+    console.error('renderNav error:', e);
+  }
+  loadSignatures();
+});
+
+// ── Chargement de la liste ─────────────────────────────────────────────────────
+async function loadSignatures() {
+  const container = document.getElementById('sigs-container');
+  if (!container) return;
+  container.innerHTML = '<p class="text-slate-400 text-center py-8">Chargement...</p>';
+
+  // Timeout de sécurité : si rien ne se passe en 8s, afficher une erreur
+  const timeout = setTimeout(() => {
+    if (container.textContent.includes('Chargement')) {
+      container.innerHTML = '<p class="text-red-500 text-center py-8">Délai dépassé — vérifiez votre connexion ou rechargez la page (Ctrl+Shift+R)</p>';
+    }
+  }, 8000);
+
+  try {
+    const data = await api.get('/signatures');
+    clearTimeout(timeout);
+    allSignatures = Array.isArray(data) ? data : [];
+    renderSignatures(allSignatures);
+  } catch (err) {
+    clearTimeout(timeout);
+    container.innerHTML = `<p class="text-red-500 text-center py-8">${escapeHtml(err.message || 'Erreur de chargement')}</p>`;
+  }
+}
+
+function renderSignatures(list) {
+  const container = document.getElementById('sigs-container');
+  if (!list.length) {
+    container.innerHTML = `
+      <div class="bg-white rounded-xl border border-slate-200 py-16 text-center">
+        <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+        </svg>
+        <p class="text-slate-400 text-sm">Aucune demande de signature</p>
+        <button onclick="openNewSigModal()" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition">
+          Créer une demande
+        </button>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(s => {
+    const statusBadge = statusBadgeHtml(s.status);
+    const icon = s.orderId ? '🛒' : '📄';
+    const title = escapeHtml(s.documentTitle || s.orderId || 'Document');
+    const dateStr = formatDate(s.createdAt);
+    const appUrl = window.location.origin;
+    const signLink = `${appUrl}/sign.html?token=${s.token}`;
+
+    return `
+    <div class="bg-white rounded-xl border border-slate-200 px-5 py-4 flex flex-wrap items-center gap-4">
+      <div class="text-2xl flex-shrink-0">${icon}</div>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-slate-800 truncate">${title}</p>
+        <p class="text-sm text-slate-500 truncate">${escapeHtml(s.recipientName)} &lt;${escapeHtml(s.recipientEmail)}&gt;</p>
+        <p class="text-xs text-slate-400 mt-0.5">${dateStr}</p>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0 flex-wrap">
+        ${statusBadge}
+        <button onclick="copySignLink('${escapeHtml(signLink)}')"
+          title="Copier le lien de signature"
+          class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+          </svg>
+        </button>
+        ${s.status === 'SIGNED' ? `
+        <button onclick="downloadSigned('${s.id}')"
+          title="Télécharger le PDF signé"
+          class="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+        </button>` : ''}
+        ${s.status === 'PENDING' ? `
+        <button onclick="cancelRequest('${s.id}')"
+          title="Annuler la demande"
+          class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>` : `
+        <button onclick="deleteRequest('${s.id}')"
+          title="Supprimer définitivement"
+          class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function statusBadgeHtml(status) {
+  const map = {
+    'PENDING':   ['bg-amber-100 text-amber-700',  'En attente'],
+    'SIGNED':    ['bg-green-100 text-green-700',   'Signé'],
+    'EXPIRED':   ['bg-red-100 text-red-700',       'Expiré'],
+    'CANCELLED': ['bg-slate-100 text-slate-600',   'Annulé']
+  };
+  const [cls, label] = map[status] || ['bg-slate-100 text-slate-600', status];
+  return `<span class="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${cls}">${label}</span>`;
+}
+
+// ── Filtre ────────────────────────────────────────────────────────────────────
+function filterSignatures() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const statusFilter = document.getElementById('status-filter').value;
+
+  const filtered = allSignatures.filter(s => {
+    const title = (s.documentTitle || s.orderId || '').toLowerCase();
+    const name = (s.recipientName || '').toLowerCase();
+    const email = (s.recipientEmail || '').toLowerCase();
+    const matchQ = !q || title.includes(q) || name.includes(q) || email.includes(q);
+    const matchStatus = !statusFilter || s.status === statusFilter;
+    return matchQ && matchStatus;
+  });
+  renderSignatures(filtered);
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+async function cancelRequest(id) {
+  if (!confirm('Annuler cette demande de signature ?')) return;
+  try {
+    await api.delete(`/signatures/${id}`);
+    showToast('Demande annulée', 'success');
+    loadSignatures();
+  } catch (err) {
+    showToast(err.message || 'Erreur lors de l\'annulation', 'error');
+  }
+}
+
+async function deleteRequest(id) {
+  if (!confirm('Supprimer définitivement cette demande ? Les fichiers associés seront également supprimés.')) return;
+  try {
+    await api.delete(`/signatures/${id}`);
+    showToast('Demande supprimée', 'success');
+    loadSignatures();
+  } catch (err) {
+    showToast(err.message || 'Erreur lors de la suppression', 'error');
+  }
+}
+
+function copySignLink(link) {
+  navigator.clipboard.writeText(link).then(() => {
+    showToast('Lien copié dans le presse-papiers', 'success');
+  }).catch(() => {
+    showToast('Impossible de copier le lien', 'error');
+  });
+}
+
+function downloadSigned(id) {
+  window.location.href = `/api/signatures/${id}/download`;
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openNewSigModal() {
+  document.getElementById('modal-backdrop').classList.remove('hidden');
+  document.getElementById('new-sig-form').reset();
+  document.getElementById('form-error').classList.add('hidden');
+  sigPlacementPos = { ...SigPlacement.DEFAULT_POS };
+  clearFile();
+}
+
+function closeNewSigModal(event) {
+  if (event && event.target !== document.getElementById('modal-backdrop')) return;
+  document.getElementById('modal-backdrop').classList.add('hidden');
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('border-indigo-400', 'bg-indigo-50');
+}
+
+function handleDragLeave(e) {
+  document.getElementById('drop-zone').classList.remove('border-indigo-400', 'bg-indigo-50');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  handleDragLeave(e);
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(file);
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) setFile(file);
+}
+
+function setFile(file) {
+  if (file.size > 20 * 1024 * 1024) {
+    showToast('Fichier trop volumineux (max 20 Mo)', 'error');
+    return;
+  }
+  selectedFile = file;
+  document.getElementById('file-name').textContent = file.name;
+  document.getElementById('file-info').classList.remove('hidden');
+  document.getElementById('drop-text').textContent = 'Fichier sélectionné';
+
+  if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
+    showModalPlacement(file);
+  } else {
+    document.getElementById('placement-section').classList.add('hidden');
+  }
+}
+
+function clearFile() {
+  selectedFile = null;
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-info').classList.add('hidden');
+  document.getElementById('drop-text').innerHTML = 'Glissez un fichier ici ou <span class="text-indigo-600 font-medium">parcourez</span>';
+  document.getElementById('placement-section').classList.add('hidden');
+  SigPlacement.destroy(document.getElementById('modal-placement-container'));
+  if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; }
+  sigPlacementPos = { ...SigPlacement.DEFAULT_POS };
+}
+
+// ── Placement de signature dans le modal ──────────────────────────────────────
+
+async function showModalPlacement(file) {
+  const section = document.getElementById('placement-section');
+  const container = document.getElementById('modal-placement-container');
+  section.classList.remove('hidden');
+  SigPlacement.destroy(container);
+  sigPlacementPos = { ...SigPlacement.DEFAULT_POS };
+
+  container.innerHTML = `
+    <div id="modal-placement-loading" class="flex flex-col items-center justify-center py-8 gap-2 text-slate-400">
+      <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
+      <span class="text-sm">Chargement de l'aperçu…</span>
+    </div>`;
+
+  if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); }
+  currentBlobUrl = URL.createObjectURL(file);
+
+  const initPlacement = () => requestAnimationFrame(() => {
+    SigPlacement.init(container, { onUpdate: pos => { sigPlacementPos = pos; } });
+  });
+
+  if (file.type.startsWith('image/')) {
+    const img = new Image();
+    img.onload = () => {
+      container.innerHTML = '';
+      img.style.cssText = 'display:block;width:100%;height:auto;pointer-events:none;';
+      container.appendChild(img);
+      initPlacement();
+    };
+    img.onerror = () => { container.innerHTML = '<div style="height:180px"></div>'; initPlacement(); };
+    img.src = currentBlobUrl;
+    return;
+  }
+
+  if (file.type === 'application/pdf' && typeof pdfjsLib !== 'undefined') {
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        '/js/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({ url: currentBlobUrl }).promise;
+      const page = await pdf.getPage(pdf.numPages);
+      const baseVp = page.getViewport({ scale: 1 });
+      const containerW = container.clientWidth || 500;
+      const scale = containerW / baseVp.width;
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      container.innerHTML = '';
+      // Forcer les dimensions CSS — height:auto est mal supporté sur canvas
+      canvas.style.cssText = `display:block;width:${vp.width}px;height:${vp.height}px;max-width:100%;pointer-events:none;`;
+      container.appendChild(canvas);
+      initPlacement();
+      return;
+    } catch { /* fallback */ }
+  }
+
+  // Fallback sans aperçu
+  container.innerHTML = '<div style="height:200px;background:#f8fafc;display:flex;align-items:center;justify-content:center;"><p style="font-size:12px;color:#94a3b8;">Aperçu non disponible — dessinez la zone ci-dessous</p></div>';
+  initPlacement();
+}
+
+// ── Soumission formulaire ─────────────────────────────────────────────────────
+async function submitNewSig(e) {
+  e.preventDefault();
+  const btn = document.getElementById('form-submit-btn');
+  const errEl = document.getElementById('form-error');
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Envoi…`;
+
+  try {
+    const formData = new FormData();
+    formData.append('documentTitle', document.getElementById('form-title').value.trim());
+    formData.append('documentNotes', document.getElementById('form-notes').value.trim());
+    formData.append('recipientName', document.getElementById('form-recipient-name').value.trim());
+    formData.append('recipientEmail', document.getElementById('form-recipient-email').value.trim());
+    formData.append('message', document.getElementById('form-message').value.trim());
+    if (selectedFile) {
+      formData.append('file', selectedFile);
+      const pos = SigPlacement.getPos(document.getElementById('modal-placement-container'));
+      formData.append('posX', String(pos.x));
+      formData.append('posY', String(pos.y));
+      formData.append('sigWidth', String(pos.w));
+      formData.append('sigHeight', String(pos.h));
+    }
+
+    const res = await fetch('/api/signatures', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Erreur lors de la création';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    document.getElementById('modal-backdrop').classList.add('hidden');
+    showToast('Demande de signature envoyée', 'success');
+    loadSignatures();
+  } catch (err) {
+    errEl.textContent = err.message || 'Erreur réseau';
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg> Envoyer pour signature`;
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  try {
+    return new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  } catch { return d; }
+}
+
+function showToast(msg, type = 'info') {
+  const toast = document.getElementById('toast');
+  const toastMsg = document.getElementById('toast-msg');
+  toast.className = 'fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-sm';
+  if (type === 'success') toast.classList.add('bg-green-600', 'text-white');
+  else if (type === 'error') toast.classList.add('bg-red-600', 'text-white');
+  else toast.classList.add('bg-slate-800', 'text-white');
+  toastMsg.textContent = msg;
+  toast.classList.remove('hidden');
+  setTimeout(() => toast.classList.add('hidden'), 3500);
+}
+</script>
+</body>
+</html>

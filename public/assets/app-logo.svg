@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">MaintenanceBoard</title>
+  <desc id="desc">Logo MaintenanceBoard avec monogramme M et details de circuit</desc>
+  <defs>
+    <linearGradient id="bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8" />
+      <stop offset="0.5" stop-color="#2563eb" />
+      <stop offset="1" stop-color="#4338ca" />
+    </linearGradient>
+    <linearGradient id="accent" x1="18" y1="20" x2="48" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="1" stop-color="#bfdbfe" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="url(#bg)" />
+  <rect x="1" y="1" width="62" height="62" rx="17" fill="none" stroke="#ffffff" opacity="0.14" />
+  <circle cx="49" cy="15" r="11" fill="#ffffff" opacity="0.14" />
+  <path d="M16 45V19l16 15 16-15v26" fill="none" stroke="url(#accent)" stroke-linecap="round" stroke-linejoin="round" stroke-width="5" />
+  <path d="M16 19h6M42 19h6M32 34v9" fill="none" stroke="#dbeafe" stroke-linecap="round" stroke-width="3" />
+  <circle cx="16" cy="19" r="3.5" fill="#ffffff" />
+  <circle cx="48" cy="19" r="3.5" fill="#ffffff" />
+  <circle cx="32" cy="45" r="4.25" fill="#dbeafe" />
+</svg>

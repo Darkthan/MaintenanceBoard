@@ -1,32 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
-const fs = require('fs');
-const path = require('path');
 const multer = require('multer');
-const { PrismaClient } = require('@prisma/client');
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
 const config = require('../config');
+const { readSettings, writeSettings } = require('../utils/settings');
 
-const prisma = new PrismaClient();
-const SETTINGS_FILE = path.join(process.cwd(), 'data', 'app-settings.json');
-
-// ── Helpers fichier settings ───────────────────────────────────────────────
-function readSettings() {
-  try {
-    if (fs.existsSync(SETTINGS_FILE)) return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-  } catch {}
-  return {};
-}
-
-function writeSettings(patch) {
-  const dir = path.dirname(SETTINGS_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const merged = { ...readSettings(), ...patch };
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2));
-  return merged;
-}
+const prisma = require('../lib/prisma');
 
 // ── SMTP ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +20,7 @@ router.get('/smtp', requireAuth, requireAdmin, (req, res) => {
     user:      s.user  ?? config.smtp.user  ?? '',
     pass:      (s.pass ?? config.smtp.pass) ? '••••••••' : '',
     from:      s.from  ?? config.smtp.from  ?? '',
+    testTo:    s.testTo ?? req.user.email ?? '',
     secure:    s.secure ?? false,
     configured: !!(s.host ?? config.smtp.host)
   });
@@ -46,7 +28,7 @@ router.get('/smtp', requireAuth, requireAdmin, (req, res) => {
 
 // PATCH /api/settings/smtp
 router.patch('/smtp', requireAuth, requireAdmin, (req, res) => {
-  const { host, port, user, pass, from, secure } = req.body;
+  const { host, port, user, pass, from, testTo, secure } = req.body;
   const cur = (readSettings().smtp) || {};
   writeSettings({
     smtp: {
@@ -54,6 +36,7 @@ router.patch('/smtp', requireAuth, requireAdmin, (req, res) => {
       port:   port   !== undefined ? port   : cur.port,
       user:   user   !== undefined ? user   : cur.user,
       from:   from   !== undefined ? from   : cur.from,
+      testTo: testTo !== undefined ? testTo : cur.testTo,
       secure: secure !== undefined ? secure : (cur.secure ?? false),
       // Ne pas écraser si l'UI renvoie les bullets masqués
       pass:   (pass && !pass.startsWith('•')) ? pass : cur.pass
@@ -70,7 +53,7 @@ router.post('/smtp/test', requireAuth, requireAdmin, async (req, res, next) => {
   const user = s.user || config.smtp.user;
   const pass = s.pass || config.smtp.pass;
   const from = s.from || config.smtp.from || 'noreply@maintenance.local';
-  const to   = req.body.to || req.user.email;
+  const to   = req.body.to || s.testTo || req.user.email;
 
   if (!host) return res.status(400).json({ error: 'Serveur SMTP non configuré' });
 
@@ -225,6 +208,62 @@ router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (
     message: `Import terminé : ${results.users} utilisateurs, ${results.rooms} salles, ${results.equipment} équipements, ${results.interventions} interventions, ${results.orders} commandes.${results.errors ? ` ${results.errors} erreur(s) ignorée(s).` : ''}`,
     results
   });
+});
+
+// ── Modèle bon de commande ──────────────────────────────────────────────────
+
+const PO_DEFAULTS = {
+  orgName: '',
+  orgAddress: '',
+  orgCity: '',
+  orgPhone: '',
+  orgEmail: '',
+  orgSiret: '',
+  tvaRate: 20,
+  currency: 'EUR',
+  poPrefix: 'BC-',
+  paymentTerms: '30 jours net',
+  footerNote: '',
+  orgLogo: '',
+  accountingEmail: '',
+  autoEmailCategories: []
+};
+
+// GET /api/settings/po-template
+router.get('/po-template', requireAuth, requireAdmin, (req, res) => {
+  const saved = readSettings().poTemplate || {};
+  res.json({ ...PO_DEFAULTS, ...saved });
+});
+
+// PATCH /api/settings/po-template
+router.patch('/po-template', requireAuth, requireAdmin, (req, res) => {
+  const allowed = Object.keys(PO_DEFAULTS);
+  const patch = {};
+  for (const k of allowed) {
+    if (req.body[k] !== undefined) patch[k] = req.body[k];
+  }
+  const cur = readSettings().poTemplate || {};
+  writeSettings({ poTemplate: { ...cur, ...patch } });
+  res.json({ message: 'Modèle enregistré' });
+});
+
+// POST /api/settings/po-template/logo
+router.post('/po-template/logo', requireAuth, requireAdmin, upload.single('logo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Fichier manquant' });
+  if (!req.file.mimetype.startsWith('image/')) return res.status(400).json({ error: 'Format image requis' });
+  if (req.file.size > 2 * 1024 * 1024) return res.status(400).json({ error: 'Image trop grande (max 2 Mo)' });
+  const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+  const cur = readSettings().poTemplate || {};
+  writeSettings({ poTemplate: { ...cur, orgLogo: base64 } });
+  res.json({ logo: base64 });
+});
+
+// DELETE /api/settings/po-template/logo
+router.delete('/po-template/logo', requireAuth, requireAdmin, (req, res) => {
+  const cur = readSettings().poTemplate || {};
+  delete cur.orgLogo;
+  writeSettings({ poTemplate: cur });
+  res.json({ message: 'Logo supprimé' });
 });
 
 module.exports = router;
