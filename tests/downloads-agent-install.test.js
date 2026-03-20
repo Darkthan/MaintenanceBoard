@@ -43,6 +43,7 @@ describe('public agent install downloads', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/text\/plain/);
     expect(res.text).toContain('abc');
+    expect(res.text).toContain('/downloads/agent.ps1?enrollmentToken=');
   });
 
   it('refuse /downloads/install.ps1 sans token', async () => {

@@ -28,7 +28,8 @@ if (-not (Test-Path $InstallDir)) { New-Item -ItemType Directory -Path $InstallD
 # Télécharger agent.ps1
 $agentScript = "$InstallDir\agent.ps1"
 try {
-  Invoke-WebRequest -Uri "$ServerUrl/downloads/agent.ps1" -OutFile $agentScript -UseBasicParsing
+  $encodedToken = [uri]::EscapeDataString($EnrollToken)
+  Invoke-WebRequest -Uri "$ServerUrl/downloads/agent.ps1?enrollmentToken=$encodedToken" -OutFile $agentScript -UseBasicParsing
 } catch {
   Write-Warning "Impossible de télécharger agent.ps1 : $_"
   exit 1
