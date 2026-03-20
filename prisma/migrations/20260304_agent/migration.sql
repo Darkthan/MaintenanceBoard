@@ -7,8 +7,8 @@ CREATE TABLE "agent_tokens" (
   "token"       TEXT NOT NULL UNIQUE,
   "label"       TEXT NOT NULL,
   "isActive"    BOOLEAN NOT NULL DEFAULT true,
-  "createdAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "lastUsedAt"  DATETIME,
+  "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "lastUsedAt"  TIMESTAMPTZ,
   "createdById" TEXT NOT NULL,
   CONSTRAINT "agent_tokens_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
@@ -17,7 +17,7 @@ CREATE TABLE "agent_tokens" (
 ALTER TABLE "equipment" ADD COLUMN "discoverySource"  TEXT NOT NULL DEFAULT 'MANUAL';
 ALTER TABLE "equipment" ADD COLUMN "discoveryStatus"  TEXT NOT NULL DEFAULT 'CONFIRMED';
 ALTER TABLE "equipment" ADD COLUMN "suggestedRoomId"  TEXT;
-ALTER TABLE "equipment" ADD COLUMN "lastSeenAt"       DATETIME;
+ALTER TABLE "equipment" ADD COLUMN "lastSeenAt"       TIMESTAMPTZ;
 ALTER TABLE "equipment" ADD COLUMN "agentInfo"        TEXT;
 ALTER TABLE "equipment" ADD COLUMN "agentHostname"    TEXT;
 ALTER TABLE "equipment" ADD COLUMN "agentToken"       TEXT;

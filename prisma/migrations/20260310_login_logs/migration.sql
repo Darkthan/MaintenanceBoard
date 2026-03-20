@@ -5,7 +5,7 @@ CREATE TABLE "login_logs" (
   "method"    TEXT NOT NULL DEFAULT 'PASSWORD',
   "ip"        TEXT,
   "userAgent" TEXT,
-  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "login_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 

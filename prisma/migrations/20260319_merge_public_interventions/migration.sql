@@ -7,7 +7,7 @@ CREATE TABLE "intervention_reporters" (
   "email" TEXT,
   "token" TEXT NOT NULL,
   "isPrimary" BOOLEAN NOT NULL DEFAULT false,
-  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "intervention_reporters_interventionId_fkey" FOREIGN KEY ("interventionId") REFERENCES "interventions" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
