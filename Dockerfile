@@ -13,11 +13,14 @@ RUN apk add --no-cache \
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Installer les dépendances
-RUN npm ci --only=production
+# Installer toutes les dépendances (dev inclus — nécessaire pour prisma CLI)
+RUN npm ci
 
 # Générer le client Prisma
 RUN npx prisma generate
+
+# Supprimer les devDependencies après génération
+RUN npm prune --omit=dev
 
 # Copier le code source
 COPY src ./src
