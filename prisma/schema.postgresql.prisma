@@ -56,6 +56,7 @@ model User {
   loginLogs            LoginLog[]
   orderAttachments     OrderAttachment[]
   signatureRequests    SignatureRequest[]
+  stockMovements       StockMovement[]
 
   @@map("users")
 }
@@ -150,11 +151,14 @@ model Equipment {
   agentToken         String?   @unique
   agentRevoked       Boolean   @default(false)     // Si true, re-enrollment requis
   enrollmentTokenId  String?                       // Token de déploiement utilisé à l'enrollment
+  purchasePrice      Float?
+  supplierId         String?
 
   room            Room?       @relation(fields: [roomId], references: [id], onDelete: SetNull)
   interventions   Intervention[]
   enrollmentToken AgentToken? @relation(fields: [enrollmentTokenId], references: [id], onDelete: SetNull)
   sessionLogs     MachineSessionLog[]
+  supplierRef     Supplier?   @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@map("equipment")
 }
@@ -170,19 +174,25 @@ model Intervention {
   resolution  String?
   roomId      String?
   equipmentId String?
-  techId      String
+  techId      String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   closedAt    DateTime?
-  mergedIntoId String?
+  source         String    @default("INTERNAL")
+  reporterName   String?
+  reporterEmail  String?
+  reporterToken  String?   @unique
+  mergedIntoId   String?
 
   room      Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
   equipment Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
-  tech      User       @relation(fields: [techId], references: [id])
+  tech      User?      @relation(fields: [techId], references: [id])
   mergedInto     Intervention? @relation("MergedInterventions", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   mergedChildren Intervention[] @relation("MergedInterventions")
   orders    Order[]
   reporters InterventionReporter[]
+  stockMovements StockMovement[]
+  messages       TicketMessage[]
 
   @@map("interventions")
 }
@@ -201,6 +211,34 @@ model InterventionReporter {
   @@index([interventionId])
   @@index([email])
   @@map("intervention_reporters")
+}
+
+model TicketMessage {
+  id             String       @id @default(uuid())
+  interventionId String
+  content        String       @default("")
+  authorType     String
+  authorName     String?
+  attachmentPath String?
+  attachmentName String?
+  attachmentMime String?
+  attachmentSize Int?
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_messages")
+}
+
+model ReporterMagicLink {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique @default(uuid())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("reporter_magic_links")
 }
 
 model LoginLog {
@@ -228,6 +266,7 @@ model Order {
   deploymentTags String[]    @default([])
   requestedBy    String
   interventionId String?
+  supplierId     String?
   orderedAt      DateTime?
   expectedDeliveryAt DateTime?
   receivedAt     DateTime?
@@ -237,6 +276,7 @@ model Order {
 
   requester          User               @relation(fields: [requestedBy], references: [id])
   intervention       Intervention?      @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  supplierRef        Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   items              OrderItem[]
   attachments        OrderAttachment[]
   signatureRequests  SignatureRequest[]
@@ -339,4 +379,62 @@ model SignatureRequest {
   creator User    @relation(fields: [createdBy], references: [id])
 
   @@map("signature_requests")
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  contact   String?
+  email     String?
+  phone     String?
+  website   String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders     Order[]
+  stockItems StockItem[]
+  equipment  Equipment[]
+
+  @@map("suppliers")
+}
+
+model StockItem {
+  id          String   @id @default(uuid())
+  name        String
+  reference   String?
+  category    String?
+  description String?
+  quantity    Int      @default(0)
+  minQuantity Int      @default(0)
+  unitCost    Float?
+  location    String?
+  supplierId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  supplier    Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  movements   StockMovement[]
+
+  @@map("stock_items")
+}
+
+model StockMovement {
+  id             String   @id @default(uuid())
+  stockItemId    String
+  type           String
+  quantity       Int
+  reason         String?
+  interventionId String?
+  userId         String
+  createdAt      DateTime @default(now())
+
+  stockItem    StockItem     @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  intervention Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@index([stockItemId])
+  @@index([createdAt])
+  @@map("stock_movements")
 }
