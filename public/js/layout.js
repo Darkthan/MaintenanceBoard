@@ -1280,8 +1280,250 @@ function initSpotlight() {
   document.addEventListener('keydown', handleSpotlightKeyboard);
 }
 
+const accountSettingsState = {
+  initialized: false,
+  currentProfile: null
+};
+
+function splitAccountName(name) {
+  const value = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!value) return { firstName: '', lastName: '' };
+  const [firstName, ...rest] = value.split(' ');
+  return { firstName, lastName: rest.join(' ') };
+}
+
+function syncStoredUser(user) {
+  if (!user) return;
+  localStorage.setItem('user', JSON.stringify(user));
+  const nameEl = document.getElementById('user-name');
+  const roleEl = document.getElementById('user-role');
+  const avatarEl = document.getElementById('user-avatar');
+  if (nameEl) nameEl.textContent = user.name || 'Utilisateur';
+  if (roleEl) roleEl.textContent = user.role || '';
+  if (avatarEl) avatarEl.textContent = user.name ? user.name[0].toUpperCase() : '?';
+}
+
+function ensureAccountSettingsModal() {
+  if (document.getElementById('account-settings-modal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'account-settings-modal';
+  modal.className = 'hidden fixed inset-0 z-[130]';
+  modal.innerHTML = `
+    <div id="account-settings-backdrop" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"></div>
+    <div class="relative z-10 min-h-full flex items-center justify-center p-4">
+      <div class="w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl" data-mobile-modal-panel="true">
+        <div class="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Utilisateur</p>
+            <h2 class="text-xl font-semibold text-slate-900">Paramètres du compte</h2>
+            <p class="mt-1 text-sm text-slate-500">Mettez à jour vos informations et vos accès.</p>
+          </div>
+          <button type="button" id="account-settings-close" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-slate-900">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 6 12 12M18 6 6 18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <form id="account-profile-form" class="space-y-5 border-b border-slate-200 px-6 py-6 lg:border-b-0 lg:border-r">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-900">Informations</h3>
+              <p class="mt-1 text-sm text-slate-500">Le prénom et le nom affichés dans l’application sont mis à jour immédiatement.</p>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block text-sm">
+                <span class="mb-1.5 block font-medium text-slate-700">Prénom</span>
+                <input id="account-first-name" type="text" required maxlength="60" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200" />
+              </label>
+              <label class="block text-sm">
+                <span class="mb-1.5 block font-medium text-slate-700">Nom</span>
+                <input id="account-last-name" type="text" required maxlength="60" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200" />
+              </label>
+            </div>
+            <label class="block text-sm">
+              <span class="mb-1.5 block font-medium text-slate-700">Email de connexion</span>
+              <input id="account-login-email" type="email" disabled class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-500 outline-none" />
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1.5 block font-medium text-slate-700">Email de contact</span>
+              <input id="account-contact-email" type="email" maxlength="200" placeholder="notifications@etablissement.fr" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200" />
+              <span class="mt-1.5 block text-xs text-slate-400">Utilisé pour les notifications, sans changer votre identifiant de connexion.</span>
+            </label>
+            <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4" data-mobile-modal-footer="true">
+              <p id="account-profile-feedback" class="text-sm text-slate-500"></p>
+              <button type="submit" id="account-profile-submit" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700">Enregistrer</button>
+            </div>
+          </form>
+          <form id="account-password-form" class="space-y-5 px-6 py-6">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-900">Sécurité</h3>
+              <p class="mt-1 text-sm text-slate-500">Changez votre mot de passe sans quitter la page.</p>
+            </div>
+            <label class="block text-sm">
+              <span class="mb-1.5 block font-medium text-slate-700">Mot de passe actuel</span>
+              <input id="account-current-password" type="password" autocomplete="current-password" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200" />
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1.5 block font-medium text-slate-700">Nouveau mot de passe</span>
+              <input id="account-new-password" type="password" autocomplete="new-password" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200" />
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1.5 block font-medium text-slate-700">Confirmer le nouveau mot de passe</span>
+              <input id="account-confirm-password" type="password" autocomplete="new-password" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200" />
+            </label>
+            <p class="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">Le mot de passe doit contenir au moins 8 caractères avec une majuscule, une minuscule et un chiffre.</p>
+            <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4" data-mobile-modal-footer="true">
+              <p id="account-password-feedback" class="text-sm text-slate-500"></p>
+              <button type="submit" id="account-password-submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">Changer le mot de passe</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function fillAccountSettingsForm(profile) {
+  const parts = splitAccountName(profile?.name);
+  document.getElementById('account-first-name').value = profile?.firstName || parts.firstName || '';
+  document.getElementById('account-last-name').value = profile?.lastName || parts.lastName || '';
+  document.getElementById('account-login-email').value = profile?.email || '';
+  document.getElementById('account-contact-email').value = profile?.contactEmail || '';
+  document.getElementById('account-profile-feedback').textContent = '';
+  document.getElementById('account-password-feedback').textContent = '';
+}
+
+function closeAccountSettings() {
+  const modal = document.getElementById('account-settings-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  document.body.classList.remove('overflow-hidden');
+}
+
+async function openAccountSettings() {
+  ensureAccountSettingsModal();
+  const modal = document.getElementById('account-settings-modal');
+  const feedback = document.getElementById('account-profile-feedback');
+  const profileSubmit = document.getElementById('account-profile-submit');
+
+  modal.classList.remove('hidden');
+  document.body.classList.add('overflow-hidden');
+  feedback.textContent = 'Chargement du profil...';
+  profileSubmit.disabled = true;
+
+  try {
+    const profile = await api.get('/auth/me');
+    accountSettingsState.currentProfile = profile;
+    fillAccountSettingsForm(profile);
+  } catch (err) {
+    feedback.textContent = err.message || 'Impossible de charger le profil.';
+    feedback.className = 'text-sm text-red-600';
+    return;
+  } finally {
+    profileSubmit.disabled = false;
+  }
+
+  feedback.className = 'text-sm text-slate-500';
+  document.getElementById('account-first-name').focus();
+}
+
+function initAccountSettings() {
+  if (accountSettingsState.initialized) return;
+  accountSettingsState.initialized = true;
+  ensureAccountSettingsModal();
+
+  document.getElementById('account-settings-close')?.addEventListener('click', closeAccountSettings);
+  document.getElementById('account-settings-backdrop')?.addEventListener('click', closeAccountSettings);
+
+  document.getElementById('account-profile-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const feedback = document.getElementById('account-profile-feedback');
+    const submit = document.getElementById('account-profile-submit');
+
+    feedback.className = 'text-sm text-slate-500';
+    feedback.textContent = 'Enregistrement...';
+    submit.disabled = true;
+
+    try {
+      const payload = {
+        firstName: document.getElementById('account-first-name').value.trim(),
+        lastName: document.getElementById('account-last-name').value.trim(),
+        contactEmail: document.getElementById('account-contact-email').value.trim() || null
+      };
+
+      const updated = await api.patch('/auth/me', payload);
+      accountSettingsState.currentProfile = updated;
+
+      const storedUser = JSON.parse(localStorage.getItem('user') || 'null') || {};
+      syncStoredUser({
+        ...storedUser,
+        id: updated.id,
+        email: updated.email,
+        contactEmail: updated.contactEmail,
+        name: updated.name,
+        role: updated.role,
+        isActive: updated.isActive
+      });
+
+      fillAccountSettingsForm(updated);
+      feedback.className = 'text-sm text-emerald-600';
+      feedback.textContent = 'Profil mis à jour.';
+      showToast('Profil mis à jour', 'success');
+    } catch (err) {
+      feedback.className = 'text-sm text-red-600';
+      feedback.textContent = err.message || 'Impossible d’enregistrer le profil.';
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  document.getElementById('account-password-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const feedback = document.getElementById('account-password-feedback');
+    const submit = document.getElementById('account-password-submit');
+    const currentPassword = document.getElementById('account-current-password').value;
+    const newPassword = document.getElementById('account-new-password').value;
+    const confirmPassword = document.getElementById('account-confirm-password').value;
+
+    if (newPassword !== confirmPassword) {
+      feedback.className = 'text-sm text-red-600';
+      feedback.textContent = 'La confirmation ne correspond pas au nouveau mot de passe.';
+      return;
+    }
+
+    feedback.className = 'text-sm text-slate-500';
+    feedback.textContent = 'Mise à jour du mot de passe...';
+    submit.disabled = true;
+
+    try {
+      await api.post('/auth/change-password', { currentPassword, newPassword });
+      document.getElementById('account-current-password').value = '';
+      document.getElementById('account-new-password').value = '';
+      document.getElementById('account-confirm-password').value = '';
+      feedback.className = 'text-sm text-emerald-600';
+      feedback.textContent = 'Mot de passe mis à jour.';
+      showToast('Mot de passe mis à jour', 'success');
+    } catch (err) {
+      feedback.className = 'text-sm text-red-600';
+      feedback.textContent = err.message || 'Impossible de changer le mot de passe.';
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !document.getElementById('account-settings-modal')?.classList.contains('hidden')) {
+      closeAccountSettings();
+    }
+  });
+}
+
 function renderNav(activePage) {
   enhanceResponsiveLayout();
+  initAccountSettings();
 
   const user = JSON.parse(localStorage.getItem('user') || 'null');
   if (!user) return;
@@ -1324,8 +1566,28 @@ function renderNav(activePage) {
   if (roleEl)   roleEl.textContent   = user.role;
   if (avatarEl) avatarEl.textContent = user.name ? user.name[0].toUpperCase() : '?';
 
+  const accountTrigger = document.getElementById('account-settings-btn')
+    || avatarEl?.closest('.flex.items-center');
+  if (accountTrigger && accountTrigger.dataset.accountBound !== 'true') {
+    accountTrigger.dataset.accountBound = 'true';
+    accountTrigger.classList.add('cursor-pointer', 'transition');
+    accountTrigger.title = 'Ouvrir les paramètres du compte';
+    accountTrigger.setAttribute('role', 'button');
+    accountTrigger.setAttribute('tabindex', '0');
+    accountTrigger.addEventListener('click', () => openAccountSettings());
+    accountTrigger.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openAccountSettings();
+      }
+    });
+  }
+
   // Bouton déconnexion
-  document.getElementById('logout-btn')?.addEventListener('click', logout);
+  document.getElementById('logout-btn')?.addEventListener('click', event => {
+    event.stopPropagation();
+    logout();
+  });
 
   // Overlay mobile (injecté une seule fois)
   if (!document.getElementById('nav-overlay')) {

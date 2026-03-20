@@ -1,8 +1,7 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config');
-const { PrismaClient } = require('@prisma/client');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 /**
  * Middleware de vérification du JWT
@@ -25,7 +24,7 @@ async function requireAuth(req, res, next) {
     // Vérifier que l'utilisateur existe et est actif
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, email: true, name: true, role: true, isActive: true }
+      select: { id: true, email: true, contactEmail: true, name: true, role: true, isActive: true }
     });
 
     if (!user || !user.isActive) {
@@ -59,7 +58,7 @@ async function optionalAuth(req, res, next) {
     const payload = jwt.verify(token, config.jwt.secret);
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, email: true, name: true, role: true, isActive: true }
+      select: { id: true, email: true, contactEmail: true, name: true, role: true, isActive: true }
     });
 
     if (user && user.isActive) req.user = user;

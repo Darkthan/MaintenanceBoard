@@ -16,6 +16,7 @@ datasource db {
 model User {
   id            String   @id @default(uuid())
   email         String   @unique
+  contactEmail  String?
   name          String
   passwordHash  String?
   role          String   @default("TECH")   // ADMIN | TECH
@@ -157,23 +158,48 @@ model Intervention {
   reporterName   String?
   reporterEmail  String?
   reporterToken  String?  @unique
+  mergedIntoId   String?
 
   room           Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
   equipment      Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
   tech           User?      @relation(fields: [techId], references: [id])
+  mergedInto     Intervention? @relation("MergedInterventions", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedChildren Intervention[] @relation("MergedInterventions")
   orders         Order[]
   stockMovements StockMovement[]
   messages       TicketMessage[]
+  reporters      InterventionReporter[]
 
   @@map("interventions")
+}
+
+model InterventionReporter {
+  id             String       @id @default(uuid())
+  interventionId String
+  name           String?
+  email          String?
+  token          String       @unique @default(uuid())
+  isPrimary      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  @@index([interventionId])
+  @@index([email])
+  @@map("intervention_reporters")
 }
 
 model TicketMessage {
   id             String       @id @default(uuid())
   interventionId String
-  content        String
+  content        String       @default("")
   authorType     String       // TECH | REPORTER
   authorName     String?
+  attachmentPath String?      // chemin relatif sous uploads/
+  attachmentName String?      // nom original du fichier
+  attachmentMime String?
+  attachmentSize Int?
+  readAt         DateTime?    // null = non lu, valeur = horodatage de lecture
   createdAt      DateTime     @default(now())
 
   intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)

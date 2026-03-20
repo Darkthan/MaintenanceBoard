@@ -1,12 +1,11 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
-const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const validate = (req, res) => {
   const errors = validationResult(req);
@@ -22,7 +21,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const users = await prisma.user.findMany({
       select: {
-        id: true, email: true, name: true, role: true,
+        id: true, email: true, contactEmail: true, name: true, role: true,
         isActive: true, createdAt: true,
         _count: { select: { interventions: true, passkeys: true, loginLogs: true } },
         loginLogs: { take: 1, orderBy: { createdAt: 'desc' }, select: { createdAt: true, method: true } }
@@ -75,7 +74,7 @@ router.patch('/:id',
       const user = await prisma.user.update({
         where: { id: req.params.id },
         data,
-        select: { id: true, email: true, name: true, role: true, isActive: true }
+        select: { id: true, email: true, contactEmail: true, name: true, role: true, isActive: true }
       });
       res.json(user);
     } catch (err) {

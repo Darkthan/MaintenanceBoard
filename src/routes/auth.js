@@ -1,13 +1,28 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
-const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
 const authService = require('../services/authService');
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
+
+function splitDisplayName(name) {
+  const value = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!value) return { firstName: '', lastName: '' };
+  const [firstName, ...rest] = value.split(' ');
+  return { firstName, lastName: rest.join(' ') };
+}
+
+function buildDisplayName(firstName, lastName) {
+  return [firstName, lastName]
+    .map(v => String(v || '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 // ── Validation helpers ────────────────────────────────────────────────────────
 const validate = (req, res) => {
@@ -124,16 +139,64 @@ router.get('/me', requireAuth, async (req, res, next) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: {
-        id: true, email: true, name: true, role: true,
+        id: true, email: true, contactEmail: true, name: true, role: true,
         isActive: true, createdAt: true,
         passkeys: { select: { id: true, name: true, createdAt: true, lastUsedAt: true } }
       }
     });
-    res.json(user);
+    res.json({
+      ...user,
+      ...splitDisplayName(user?.name)
+    });
   } catch (err) {
     next(err);
   }
 });
+
+// ── PATCH /api/auth/me ────────────────────────────────────────────────────────
+router.patch('/me',
+  requireAuth,
+  [
+    body('firstName').trim().isLength({ min: 1, max: 60 }),
+    body('lastName').trim().isLength({ min: 1, max: 60 }),
+    body('contactEmail').optional({ nullable: true, checkFalsy: true }).isEmail().normalizeEmail()
+  ],
+  async (req, res, next) => {
+    try {
+      if (!validate(req, res)) return;
+
+      const fullName = buildDisplayName(req.body.firstName, req.body.lastName);
+      if (!fullName) {
+        return res.status(400).json({ error: 'Le nom complet est requis' });
+      }
+
+      const user = await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+          name: fullName,
+          contactEmail: req.body.contactEmail || null
+        },
+        select: {
+          id: true,
+          email: true,
+          contactEmail: true,
+          name: true,
+          role: true,
+          isActive: true,
+          createdAt: true
+        }
+      });
+
+      res.json({
+        ...user,
+        ...splitDisplayName(user.name)
+      });
+    } catch (err) {
+      if (err.code === 'P2025') return res.status(404).json({ error: 'Utilisateur introuvable' });
+      next(err);
+    }
+  }
+);
 
 // ── POST /api/auth/change-password ────────────────────────────────────────────
 router.post('/change-password',

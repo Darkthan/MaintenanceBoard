@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
+  // Prisma 7 : URL configurée dans prisma.config.ts (adapter-based)
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -40,6 +40,7 @@ enum OrderStatus {
 model User {
   id            String         @id @default(uuid())
   email         String         @unique
+  contactEmail  String?
   name          String
   passwordHash  String?
   role          Role           @default(TECH)
@@ -47,12 +48,14 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  passkeys      Passkey[]
-  interventions Intervention[]
-  orders        Order[]
-  refreshTokens RefreshToken[]
-  agentTokens   AgentToken[]
-  loginLogs     LoginLog[]
+  passkeys             Passkey[]
+  interventions        Intervention[]
+  orders               Order[]
+  refreshTokens        RefreshToken[]
+  agentTokens          AgentToken[]
+  loginLogs            LoginLog[]
+  orderAttachments     OrderAttachment[]
+  signatureRequests    SignatureRequest[]
 
   @@map("users")
 }
@@ -160,6 +163,7 @@ model Intervention {
   id          String    @id @default(uuid())
   title       String
   description String?
+  notes       String?
   status      IntStatus @default(OPEN)
   priority    String    @default("NORMAL")
   photos      String[]
@@ -170,12 +174,33 @@ model Intervention {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   closedAt    DateTime?
+  mergedIntoId String?
 
   room      Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
   equipment Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
   tech      User       @relation(fields: [techId], references: [id])
+  mergedInto     Intervention? @relation("MergedInterventions", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedChildren Intervention[] @relation("MergedInterventions")
+  orders    Order[]
+  reporters InterventionReporter[]
 
   @@map("interventions")
+}
+
+model InterventionReporter {
+  id             String       @id @default(uuid())
+  interventionId String
+  name           String?
+  email          String?
+  token          String       @unique @default(uuid())
+  isPrimary      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  @@index([interventionId])
+  @@index([email])
+  @@map("intervention_reporters")
 }
 
 model LoginLog {
@@ -194,21 +219,29 @@ model LoginLog {
 }
 
 model Order {
-  id          String      @id @default(uuid())
-  title       String
-  description String?
-  status      OrderStatus @default(PENDING)
-  supplier    String?
-  totalAmount Decimal?    @db.Decimal(10, 2)
-  requestedBy String
-  orderedAt   DateTime?
-  receivedAt  DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id             String      @id @default(uuid())
+  title          String
+  description    String?
+  status         OrderStatus @default(PENDING)
+  supplier       String?
+  totalAmount    Decimal?    @db.Decimal(10, 2)
+  deploymentTags String[]    @default([])
+  requestedBy    String
+  interventionId String?
+  orderedAt      DateTime?
+  expectedDeliveryAt DateTime?
+  receivedAt     DateTime?
+  trackingNotes  String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
-  requester User        @relation(fields: [requestedBy], references: [id])
-  items     OrderItem[]
+  requester          User               @relation(fields: [requestedBy], references: [id])
+  intervention       Intervention?      @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  items              OrderItem[]
+  attachments        OrderAttachment[]
+  signatureRequests  SignatureRequest[]
 
+  @@index([interventionId])
   @@map("orders")
 }
 
@@ -242,4 +275,68 @@ model OrderItem {
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("order_items")
+}
+
+model OrderAttachment {
+  id         String   @id @default(uuid())
+  orderId    String
+  filename   String
+  storedAs   String
+  mimetype   String
+  size       Int
+  category   String   @default("OTHER")
+  uploadedBy String
+
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  uploader   User     @relation(fields: [uploadedBy], references: [id])
+
+  createdAt  DateTime @default(now())
+  ocrText    String?                        // texte extrait par OCR
+  ocrStatus  String   @default("PENDING")  // PENDING | PROCESSING | DONE | FAILED | SKIPPED
+
+  @@map("order_attachments")
+}
+
+model SignatureRequest {
+  id             String    @id @default(uuid())
+  orderId        String?   // null = document générique (non lié à une commande)
+  token          String    @unique
+  signatureId    String?   @unique
+
+  // Document source (quand orderId est null)
+  documentTitle      String?
+  documentNotes      String?
+  sourceFileStoredAs String?   // fichier dans uploads/signatures/source/
+  sourceFilename     String?
+  sourceFileMimetype String?
+
+  recipientEmail String
+  recipientName  String
+  message        String?
+  status         String    @default("PENDING")  // PENDING | SIGNED | EXPIRED | CANCELLED
+  otpHash        String?
+  otpExpiresAt   DateTime?
+  otpAttempts    Int       @default(0)
+  signedAt       DateTime?
+  ipAddress      String?
+  userAgent      String?
+  attachmentId   String?            // OrderAttachment ID (si commande)
+  signedFileStoredAs String?         // PDF signé standalone dans uploads/signatures/signed/
+  signedFilename     String?
+  signerTitle        String?
+  signerPlace        String?
+  posX               Float?    // Position X (0-1) de la zone de signature, définie par le demandeur
+  posY               Float?    // Position Y (0-1) de la zone de signature, définie par le demandeur
+  sigWidth           Float?    // Largeur (0-1) de la zone de signature
+  sigHeight          Float?    // Hauteur (0-1) de la zone de signature
+
+  expiresAt      DateTime
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  creator User    @relation(fields: [createdBy], references: [id])
+
+  @@map("signature_requests")
 }
