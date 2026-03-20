@@ -24,7 +24,7 @@ services:
     container_name: maintenance_app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:${PORT:-3000}"
     depends_on:
       db:
         condition: service_healthy
@@ -34,6 +34,7 @@ services:
     env_file:
       - .env
     environment:
+      PORT: ${PORT:-3000}
       DATABASE_URL: postgresql://${POSTGRES_USER:-maintenance_user}:${POSTGRES_PASSWORD:-maintenance_pass}@db:5432/${POSTGRES_DB:-maintenance_db}
     command: sh -c "npx prisma migrate deploy && node prisma/seed.js && node src/server.js"
 
