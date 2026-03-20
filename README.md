@@ -15,8 +15,9 @@ Application de gestion du parc informatique scolaire/entreprise.
 ## Démarrage rapide avec Docker
 
 ```bash
-# 1. Copier la configuration
+# 1. Copier et adapter la configuration
 cp .env.example .env
+# Éditer .env : JWT_SECRET, SESSION_SECRET, SEED_ADMIN_PASSWORD, SEED_TECH_PASSWORD, APP_URL
 
 # 2. Démarrer l'application (DB + App)
 docker-compose up -d
@@ -24,6 +25,23 @@ docker-compose up -d
 # L'app effectue automatiquement les migrations et le seed au démarrage
 # Attendre ~30 secondes pour la 1ère initialisation
 ```
+
+> Le fichier `.env` est **optionnel** — si absent, les variables doivent être définies via la plateforme de déploiement (Portainer, Docker Swarm, etc.). Les variables sans valeur par défaut qui doivent impérativement être configurées sont : `JWT_SECRET`, `SESSION_SECRET`, `SEED_ADMIN_PASSWORD`, `SEED_TECH_PASSWORD`.
+
+### Déploiement via Portainer (Stack)
+
+Dans l'interface Portainer → Stacks → Add stack → Web editor, collez le contenu de `docker-compose.yml` puis définissez les variables d'environnement dans la section **Environment variables** :
+
+| Variable | Valeur |
+|----------|--------|
+| `JWT_SECRET` | Chaîne aléatoire ≥ 32 caractères |
+| `SESSION_SECRET` | Chaîne aléatoire ≥ 32 caractères |
+| `POSTGRES_PASSWORD` | Mot de passe PostgreSQL |
+| `SEED_ADMIN_PASSWORD` | Mot de passe du compte admin |
+| `SEED_TECH_PASSWORD` | Mot de passe du compte technicien |
+| `APP_URL` | URL publique (ex: `https://maintenance.mondomaine.fr`) |
+| `WEBAUTHN_RP_ID` | Domaine sans protocole (ex: `maintenance.mondomaine.fr`) |
+| `WEBAUTHN_ORIGIN` | URL complète (ex: `https://maintenance.mondomaine.fr`) |
 
 ## Démarrage en développement (sans Docker)
 

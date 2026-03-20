@@ -32,10 +32,28 @@ services:
       - ./uploads:/app/uploads
       - ./public:/app/public
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3000}
+      APP_URL: ${APP_URL:-http://localhost:3000}
       DATABASE_URL: postgresql://${POSTGRES_USER:-maintenance_user}:${POSTGRES_PASSWORD:-maintenance_pass}@db:5432/${POSTGRES_DB:-maintenance_db}
+      JWT_SECRET: ${JWT_SECRET}
+      SESSION_SECRET: ${SESSION_SECRET}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:3000}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-MaintenanceBoard}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@maintenance.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      SEED_TECH_EMAIL: ${SEED_TECH_EMAIL:-tech@maintenance.local}
+      SEED_TECH_PASSWORD: ${SEED_TECH_PASSWORD}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@maintenance.local}
     command: sh -c "npx prisma migrate deploy && node prisma/seed.js && node src/server.js"
 
 volumes:
