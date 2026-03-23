@@ -241,7 +241,6 @@
 <script src="/js/layout.js"></script>
 <script>
 let user;
-requireLogin().then(u => { user = u; renderNav('rooms'); });
 
 let currentPage = 1;
 let currentSearch = '';
@@ -250,7 +249,7 @@ let buildingsCatalog = [];
 const pageParams = new URLSearchParams(window.location.search);
 
 // Cacher actions admin pour TECH
-if (user.role !== 'ADMIN') {
+if (user?.role !== 'ADMIN') {
   document.getElementById('admin-actions').style.display = 'none';
 }
 
@@ -309,7 +308,7 @@ async function loadRooms() {
                   d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5V16M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6z"/>
               </svg>
             </a>
-            ${user.role === 'ADMIN' ? `
+            ${user?.role === 'ADMIN' ? `
             <button onclick="editRoom('${room.id}', '${escapeHtml(room.name)}', '${escapeHtml(room.building || '')}', ${room.floor ?? ''}, '${escapeHtml(room.number || '')}', '${escapeHtml(room.description || '')}')"
               class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
@@ -654,19 +653,23 @@ async function openRoomDetail(roomId) {
   }
 }
 
-requireLogin().then(async () => {
+requireLogin().then(async u => {
+  user = u;
+  renderNav('rooms');
+  if (user.role !== 'ADMIN') {
+    document.getElementById('admin-actions').style.display = 'none';
+  }
   await loadBuildings();
   await loadRooms();
+  const createIntent = pageParams.get('action');
+  const focusIntent = pageParams.get('focus');
+  if (createIntent === 'create' && user.role === 'ADMIN') {
+    setTimeout(() => document.getElementById('add-room-btn')?.click(), 50);
+  }
+  if (focusIntent) {
+    setTimeout(() => openRoomDetail(focusIntent), 200);
+  }
 });
-
-const createIntent = pageParams.get('action');
-const focusIntent = pageParams.get('focus');
-if (createIntent === 'create' && user.role === 'ADMIN') {
-  setTimeout(() => document.getElementById('add-room-btn')?.click(), 50);
-}
-if (focusIntent) {
-  setTimeout(() => openRoomDetail(focusIntent), 200);
-}
 </script>
 </body>
 </html>

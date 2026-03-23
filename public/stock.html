@@ -261,7 +261,6 @@
 <script src="/js/supplierPicker.js"></script>
 <script>
 let user;
-requireLogin().then(u => { user = u; renderNav('stock'); });
 
 let currentSearch = '';
 let currentCategory = '';
@@ -270,7 +269,7 @@ let itemToDelete = null;
 let currentDetailItem = null;
 
 // Cacher actions admin pour TECH
-if (user.role !== 'ADMIN') {
+if (user?.role !== 'ADMIN') {
   document.getElementById('admin-actions').style.display = 'none';
 }
 
@@ -370,7 +369,7 @@ function renderStock(items) {
         <td class="px-5 py-3.5 text-slate-600 text-sm">${item.supplier ? escapeHtml(item.supplier.name) : '<span class="text-slate-300">—</span>'}</td>
         <td class="px-5 py-3.5">
           <div class="flex items-center justify-end gap-2" onclick="event.stopPropagation()">
-            ${user.role === 'ADMIN' ? `
+            ${user?.role === 'ADMIN' ? `
             <button onclick="openEditModal(${JSON.stringify(item).replace(/"/g, '&quot;')})"
               class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition" title="Modifier">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
@@ -638,7 +637,16 @@ document.getElementById('confirm-delete').addEventListener('click', async () => 
 });
 
 // ── Init ─────────────────────────────────────────────────────────
-requireLogin().then(() => { fetchAlerts(); fetchCategories(); fetchStock(); });
+requireLogin().then(async u => {
+  user = u;
+  renderNav('stock');
+  if (user.role !== 'ADMIN') {
+    document.getElementById('admin-actions').style.display = 'none';
+  }
+  await fetchAlerts();
+  await fetchCategories();
+  await fetchStock();
+});
 </script>
 </body>
 </html>
