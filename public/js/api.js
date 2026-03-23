@@ -79,7 +79,21 @@ async function tryRefreshToken() {
 // Raccourcis
 const api = {
   get: (path, params) => {
-    const url = params ? `${path}?${new URLSearchParams(params)}` : path;
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '') return;
+        if (Array.isArray(value)) {
+          value.forEach(item => {
+            if (item !== undefined && item !== null && item !== '') searchParams.append(key, item);
+          });
+          return;
+        }
+        searchParams.append(key, value);
+      });
+    }
+    const query = searchParams.toString();
+    const url = query ? `${path}?${query}` : path;
     return apiFetch(url);
   },
   post: (path, body) => apiFetch(path, { method: 'POST', body: JSON.stringify(body) }),
