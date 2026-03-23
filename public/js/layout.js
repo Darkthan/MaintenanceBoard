@@ -1375,28 +1375,15 @@ function ensureAccountSettingsModal() {
               <p class="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">Le mot de passe doit contenir au moins 8 caractères avec une majuscule, une minuscule et un chiffre.</p>
               <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4" data-mobile-modal-footer="true">
                 <p id="account-password-feedback" class="text-sm text-slate-500"></p>
-                <button type="submit" id="account-password-submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">Changer le mot de passe</button>
+                <div class="flex items-center gap-2">
+                  <button type="button" id="account-add-passkey-btn"
+                    class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Passkey
+                  </button>
+                  <button type="submit" id="account-password-submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">Changer le mot de passe</button>
+                </div>
               </div>
             </form>
-            <div id="account-passkeys-section" class="space-y-4 px-6 py-6">
-              <div>
-                <h3 class="text-sm font-semibold text-slate-900">Passkeys</h3>
-                <p class="mt-1 text-sm text-slate-500">Authentification sans mot de passe via empreinte, Face ID ou clé matérielle.</p>
-              </div>
-              <div id="account-passkeys-list" class="space-y-2">
-                <p class="text-sm text-slate-400 italic">Chargement...</p>
-              </div>
-              <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
-                <p id="account-passkeys-feedback" class="text-sm text-slate-500"></p>
-                <button type="button" id="account-add-passkey-btn"
-                  class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                  </svg>
-                  Ajouter une passkey
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -1428,43 +1415,6 @@ async function ensureSimpleWebAuthnLoaded() {
   return window.SimpleWebAuthnBrowser;
 }
 
-function renderPasskeysList(passkeys) {
-  const listEl = document.getElementById('account-passkeys-list');
-  if (!listEl) return;
-
-  if (!passkeys || passkeys.length === 0) {
-    listEl.innerHTML = '<p class="text-sm text-slate-400 italic">Aucune passkey enregistrée.</p>';
-    return;
-  }
-
-  listEl.innerHTML = passkeys.map(pk => {
-    const name = (pk.name || 'Passkey').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const dateLabel = pk.lastUsedAt
-      ? 'Utilisée le ' + formatDate(pk.lastUsedAt)
-      : 'Créée le ' + formatDate(pk.createdAt);
-    return `
-      <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <div class="flex items-center gap-3 min-w-0">
-          <svg class="h-5 w-5 flex-shrink-0 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-          </svg>
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-slate-900 truncate">${name}</p>
-            <p class="text-xs text-slate-500">${dateLabel}</p>
-          </div>
-        </div>
-        <button type="button" data-delete-passkey-id="${pk.id}"
-          class="flex-shrink-0 inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-          title="Supprimer cette passkey">
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-          </svg>
-        </button>
-      </div>`;
-  }).join('');
-}
 
 function closeAccountSettings() {
   const modal = document.getElementById('account-settings-modal');
@@ -1488,7 +1438,6 @@ async function openAccountSettings() {
     const profile = await api.get('/auth/me');
     accountSettingsState.currentProfile = profile;
     fillAccountSettingsForm(profile);
-    renderPasskeysList(profile.passkeys || []);
   } catch (err) {
     feedback.textContent = err.message || 'Impossible de charger le profil.';
     feedback.className = 'text-sm text-red-600';
@@ -1587,19 +1536,16 @@ function initAccountSettings() {
 
   // Ajouter une passkey
   document.getElementById('account-add-passkey-btn')?.addEventListener('click', async () => {
-    const feedback = document.getElementById('account-passkeys-feedback');
     const addBtn = document.getElementById('account-add-passkey-btn');
 
     const name = window.prompt('Nom de la passkey (ex : MacBook Touch ID, iPhone Face ID)');
-    if (name === null) return; // annulé
+    if (name === null) return;
 
-    feedback.className = 'text-sm text-slate-500';
-    feedback.textContent = 'Initialisation...';
     addBtn.disabled = true;
+    addBtn.textContent = '...';
 
     try {
       const swab = await ensureSimpleWebAuthnLoaded();
-
       const options = await api.post('/auth/webauthn/register/begin', {});
 
       let attResp;
@@ -1613,48 +1559,12 @@ function initAccountSettings() {
 
       attResp.name = name.trim() || 'Ma passkey';
       await api.post('/auth/webauthn/register/finish', attResp);
-
-      // Recharger la liste depuis le serveur
-      const profile = await api.get('/auth/me');
-      accountSettingsState.currentProfile = profile;
-      renderPasskeysList(profile.passkeys || []);
-
-      feedback.className = 'text-sm text-emerald-600';
-      feedback.textContent = 'Passkey ajoutée.';
       showToast('Passkey enregistrée avec succès', 'success');
     } catch (err) {
-      feedback.className = 'text-sm text-red-600';
-      feedback.textContent = err.message || 'Échec de l\'enregistrement.';
+      showToast(err.message || 'Échec de l\'enregistrement', 'error');
     } finally {
       addBtn.disabled = false;
-    }
-  });
-
-  // Supprimer une passkey (délégation d'événement)
-  document.getElementById('account-passkeys-list')?.addEventListener('click', async event => {
-    const btn = event.target.closest('[data-delete-passkey-id]');
-    if (!btn) return;
-
-    const passkeyId = btn.dataset.deletePasskeyId;
-    if (!window.confirm('Supprimer cette passkey ? Vous ne pourrez plus l\'utiliser pour vous connecter.')) return;
-
-    const feedback = document.getElementById('account-passkeys-feedback');
-    btn.disabled = true;
-
-    try {
-      await api.delete(`/auth/passkeys/${passkeyId}`);
-
-      const profile = await api.get('/auth/me');
-      accountSettingsState.currentProfile = profile;
-      renderPasskeysList(profile.passkeys || []);
-
-      feedback.className = 'text-sm text-emerald-600';
-      feedback.textContent = 'Passkey supprimée.';
-      showToast('Passkey supprimée', 'success');
-    } catch (err) {
-      feedback.className = 'text-sm text-red-600';
-      feedback.textContent = err.message || 'Impossible de supprimer la passkey.';
-      btn.disabled = false;
+      addBtn.textContent = 'Passkey';
     }
   });
 
