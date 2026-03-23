@@ -675,9 +675,8 @@
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
 <script>
-const ME = requireLogin();
-if (!ME) throw new Error('not authenticated');
-renderNav('settings');
+let ME;
+requireLogin().then(u => { ME = u; renderNav('settings'); });
 let users = [];
 let currentUser = null;
 let logPeriod = 7;
@@ -1216,7 +1215,7 @@ async function saveWebAuthn() {
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────
-showTab('users');
+requireLogin().then(() => showTab('users'));
 </script>
 </body>
 </html>

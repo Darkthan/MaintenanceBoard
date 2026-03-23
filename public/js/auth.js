@@ -1,18 +1,17 @@
 /**
  * Authentification : mot de passe + Passkeys (WebAuthn)
+ * Les tokens (accessToken, refreshToken) sont gérés en cookies httpOnly côté serveur.
+ * Aucune donnée sensible n'est stockée côté client.
  */
 
-// Importer la bibliothèque SimpleWebAuthn browser (chargée via CDN dans login.html)
-// @simplewebauthn/browser est chargé en tant que SimpleWebAuthnBrowser
-
 async function loginWithPassword(email, password) {
+  // Le serveur pose les cookies httpOnly — on n'a rien à stocker
   const res = await apiFetch('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password })
   });
-  if (res.user && res.accessToken) {
-    localStorage.setItem('user', JSON.stringify(res.user));
-    localStorage.setItem('accessToken', res.accessToken);
+  if (res.user) {
+    _currentUser = res.user;
   }
   return res;
 }
@@ -21,8 +20,7 @@ async function logout() {
   try {
     await api.post('/auth/logout');
   } catch {}
-  localStorage.removeItem('user');
-  localStorage.removeItem('accessToken');
+  _currentUser = null;
   window.location.href = '/login.html';
 }
 
@@ -55,9 +53,8 @@ async function startPasskeyLogin(email) {
     body: JSON.stringify(assertionResponse)
   });
 
-  if (result.user && result.accessToken) {
-    localStorage.setItem('user', JSON.stringify(result.user));
-    localStorage.setItem('accessToken', result.accessToken);
+  if (result.user) {
+    _currentUser = result.user;
   }
   return result;
 }
@@ -99,12 +96,12 @@ async function registerPasskey(name) {
 // ── Initialisation page login ─────────────────────────────────────────────────
 
 function initLoginPage() {
-  // Rediriger si déjà connecté
-  const token = localStorage.getItem('accessToken');
-  if (token) {
+  // Vérifier si déjà connecté via le serveur
+  apiFetch('/auth/me').then(() => {
     window.location.href = '/index.html';
-    return;
-  }
+  }).catch(() => {
+    // Non connecté — afficher le formulaire normalement
+  });
 
   const form = document.getElementById('login-form');
   const passkeyBtn = document.getElementById('passkey-login-btn');

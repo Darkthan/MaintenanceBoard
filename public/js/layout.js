@@ -1293,7 +1293,7 @@ function splitAccountName(name) {
 
 function syncStoredUser(user) {
   if (!user) return;
-  localStorage.setItem('user', JSON.stringify(user));
+  _currentUser = user;
   const nameEl = document.getElementById('user-name');
   const roleEl = document.getElementById('user-role');
   const avatarEl = document.getElementById('user-avatar');
@@ -1477,9 +1477,8 @@ function initAccountSettings() {
       const updated = await api.patch('/auth/me', payload);
       accountSettingsState.currentProfile = updated;
 
-      const storedUser = JSON.parse(localStorage.getItem('user') || 'null') || {};
       syncStoredUser({
-        ...storedUser,
+        ...(_currentUser || {}),
         id: updated.id,
         email: updated.email,
         contactEmail: updated.contactEmail,
@@ -1579,7 +1578,7 @@ function renderNav(activePage) {
   enhanceResponsiveLayout();
   initAccountSettings();
 
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const user = _currentUser;
   if (!user) return;
 
   const navItems = [

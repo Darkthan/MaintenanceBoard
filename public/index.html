@@ -141,12 +141,8 @@
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
 <script>
-const user = requireLogin();
-if (user) {
+requireLogin().then(user => {
   renderNav('dashboard');
-
-  const avatarEl = document.getElementById('user-avatar');
-  if (avatarEl && user.name) avatarEl.textContent = user.name[0].toUpperCase();
 
   document.getElementById('current-date').textContent = new Date().toLocaleDateString('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'

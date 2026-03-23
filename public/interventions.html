@@ -404,10 +404,8 @@
 <script src="/js/layout.js"></script>
 <script src="/js/intervention-detail-shared.js"></script>
 <script>
-const user = requireLogin();
-if (!user) throw new Error('Not logged in');
-renderNav('interventions');
-if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
+let user;
+requireLogin().then(u => { user = u; renderNav('interventions'); });
 
 let currentPage = 1, currentSearch = '', currentStatuses = [], currentPriority = '', currentSource = '';
 const pageParams = new URLSearchParams(window.location.search);
@@ -1427,11 +1425,12 @@ document.getElementById('detail-message-input').addEventListener('keydown', e =>
   }
 });
 
-loadInterventions();
-
-if (pageParams.get('action') === 'create') {
-  setTimeout(() => document.getElementById('add-intervention-btn')?.click(), 50);
-}
+requireLogin().then(() => {
+  loadInterventions();
+  if (pageParams.get('action') === 'create') {
+    setTimeout(() => document.getElementById('add-intervention-btn')?.click(), 50);
+  }
+});
 if (pageParams.get('focus')) {
   setTimeout(async () => {
     try {

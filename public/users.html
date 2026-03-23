@@ -297,8 +297,8 @@
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
 <script>
-  requireAuth();
-  renderNav('users');
+  let user;
+  requireLogin().then(u => { user = u; renderNav('users'); });
 
   const API = '/api';
   let users = [];
@@ -397,7 +397,7 @@
       ? 'px-4 py-2 text-sm rounded-lg border border-red-300 text-red-700 hover:bg-red-50 transition'
       : 'px-4 py-2 text-sm rounded-lg border border-green-300 text-green-700 hover:bg-green-50 transition';
 
-    const loggedUserId = JSON.parse(localStorage.getItem('user') || '{}').id;
+    const loggedUserId = user?.id;
     document.getElementById('btn-toggle-active').disabled = currentUser.id === loggedUserId;
     if (currentUser.id === loggedUserId) {
       btnToggle.classList.add('opacity-40', 'cursor-not-allowed');
@@ -608,7 +608,7 @@
     }
   });
 
-  loadUsers();
+  requireLogin().then(() => loadUsers());
 </script>
 </body>
 </html>

@@ -1,13 +1,14 @@
 /**
- * Client API centralisé
+ * Client API centralisé — auth par cookies httpOnly uniquement
  */
 const API_BASE = '/api';
 
+// Cache en mémoire de l'utilisateur courant (pas de localStorage)
+let _currentUser = null;
+
 async function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('accessToken');
   const headers = {
     'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...options.headers
   };
 
@@ -17,20 +18,17 @@ async function apiFetch(path, options = {}) {
   }
 
   try {
+    // credentials: 'include' envoie automatiquement les cookies httpOnly
     const res = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' });
 
     if (res.status === 401) {
-      // Tentative de refresh
+      // Tentative de refresh via cookie refreshToken
       const refreshed = await tryRefreshToken();
       if (refreshed) {
-        const newToken = localStorage.getItem('accessToken');
-        headers['Authorization'] = `Bearer ${newToken}`;
         const retryRes = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' });
         return handleResponse(retryRes);
       } else {
-        // Rediriger vers login
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('user');
+        _currentUser = null;
         if (!window.location.pathname.includes('/login')) {
           window.location.href = '/login.html';
         }
@@ -65,12 +63,7 @@ async function tryRefreshToken() {
       method: 'POST',
       credentials: 'include'
     });
-    if (res.ok) {
-      const data = await res.json();
-      localStorage.setItem('accessToken', data.accessToken);
-      return true;
-    }
-    return false;
+    return res.ok;
   } catch {
     return false;
   }
@@ -102,24 +95,28 @@ const api = {
   upload: (path, formData, method = 'POST') => apiFetch(path, { method, body: formData })
 };
 
-// Vérifier l'auth au chargement (pages protégées)
-function requireLogin() {
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  const token = localStorage.getItem('accessToken');
-  if (!user || !token) {
-    window.location.href = '/login.html';
-    return null;
+// Vérifier l'auth — appel serveur, résultat mis en cache en mémoire
+async function requireLogin() {
+  if (_currentUser) return _currentUser;
+  try {
+    _currentUser = await apiFetch('/auth/me');
+    return _currentUser;
+  } catch {
+    if (!window.location.pathname.includes('/login')) {
+      window.location.href = '/login.html';
+    }
+    // Suspendre l'exécution pendant la redirection
+    await new Promise(() => {});
   }
-  return user;
 }
 
-// Afficher le nom dans le header
-function initUserNav() {
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  if (user) {
-    const nameEl = document.getElementById('user-name');
-    const roleEl = document.getElementById('user-role');
-    if (nameEl) nameEl.textContent = user.name;
-    if (roleEl) roleEl.textContent = user.role;
-  }
+// Mettre à jour l'affichage nav avec les infos user
+function initUserNav(user) {
+  if (!user) return;
+  const nameEl = document.getElementById('user-name');
+  const roleEl = document.getElementById('user-role');
+  const avatarEl = document.getElementById('user-avatar');
+  if (nameEl) nameEl.textContent = user.name || 'Utilisateur';
+  if (roleEl) roleEl.textContent = user.role || '';
+  if (avatarEl && user.name) avatarEl.textContent = user.name[0].toUpperCase();
 }

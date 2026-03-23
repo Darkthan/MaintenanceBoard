@@ -445,7 +445,8 @@
 <script>
 const params      = new URLSearchParams(window.location.search);
 const qrToken     = params.get('token');
-const loggedUser  = JSON.parse(localStorage.getItem('user') || 'null');
+let loggedUser = null;
+requireLogin().then(u => { loggedUser = u; }).catch(() => { loggedUser = null; });
 
 let resourceData = null;
 let resourceType = null;
@@ -1334,7 +1335,6 @@ document.getElementById('int-submit').addEventListener('click', async () => {
   succ.classList.add('hidden');
 
   try {
-    const accessToken = localStorage.getItem('accessToken');
     const body = {
       title, priority,
       description: description || null,
@@ -1344,10 +1344,7 @@ document.getElementById('int-submit').addEventListener('click', async () => {
 
     const r = await fetch('/api/interventions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
-      },
+      headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify(body)
     });

@@ -170,10 +170,8 @@
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
 <script>
-const user = requireLogin();
-if (!user) throw new Error('Not logged in');
-renderNav('suppliers');
-if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
+let user;
+requireLogin().then(u => { user = u; renderNav('suppliers'); });
 
 let currentSearch = '';
 let supplierToDelete = null;
@@ -344,7 +342,7 @@ document.getElementById('confirm-delete').addEventListener('click', async () => 
   }
 });
 
-fetchSuppliers();
+requireLogin().then(() => fetchSuppliers());
 </script>
 </body>
 </html>

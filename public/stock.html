@@ -260,10 +260,8 @@
 <script src="/js/layout.js"></script>
 <script src="/js/supplierPicker.js"></script>
 <script>
-const user = requireLogin();
-if (!user) throw new Error('Not logged in');
-renderNav('stock');
-if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
+let user;
+requireLogin().then(u => { user = u; renderNav('stock'); });
 
 let currentSearch = '';
 let currentCategory = '';
@@ -640,9 +638,7 @@ document.getElementById('confirm-delete').addEventListener('click', async () => 
 });
 
 // ── Init ─────────────────────────────────────────────────────────
-fetchAlerts();
-fetchCategories();
-fetchStock();
+requireLogin().then(() => { fetchAlerts(); fetchCategories(); fetchStock(); });
 </script>
 </body>
 </html>

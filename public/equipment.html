@@ -475,10 +475,8 @@
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
 <script>
-const user = requireLogin();
-if (!user) throw new Error('Not logged in');
-renderNav('equipment');
-if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
+let user;
+requireLogin().then(u => { user = u; renderNav('equipment'); });
 
 let currentPage = 1, currentSearch = '', currentStatus = '', currentType = '', currentSource = '', currentDiscovery = '';
 
@@ -1264,10 +1262,12 @@ async function loadEquipHistory() {
   }
 }
 
-loadEquipment();
-if (urlParams.get('action') === 'create' && user.role === 'ADMIN') {
-  setTimeout(() => document.getElementById('add-equip-btn')?.click(), 50);
-}
+requireLogin().then(() => {
+  loadEquipment();
+  if (urlParams.get('action') === 'create' && user?.role === 'ADMIN') {
+    setTimeout(() => document.getElementById('add-equip-btn')?.click(), 50);
+  }
+});
 if (urlParams.get('focus')) {
   setTimeout(() => openEquipDetail(urlParams.get('focus')), 220);
 }

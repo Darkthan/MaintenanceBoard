@@ -404,11 +404,9 @@
 <script src="/js/sigPlacement.js"></script>
 <script src="/js/supplierPicker.js"></script>
 <script>
-const user = requireLogin();
-if (!user) throw new Error('Not logged in');
-renderNav('orders');
+let user;
+requireLogin().then(u => { user = u; renderNav('orders'); });
 const orderSupplierPicker = new SupplierPicker('order-supplier-picker');
-if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
 
 let currentPage = 1, currentSearch = '', currentStatus = '';
 const pageParams = new URLSearchParams(window.location.search);
@@ -1460,15 +1458,16 @@ async function submitAttachSig() {
   }
 }
 
-loadOrders();
-loadTagSuggestions();
-
-if (pageParams.get('action') === 'create') {
-  setTimeout(() => openCreateOrderModal(pageParams.get('interventionId') || ''), 50);
-}
-if (pageParams.get('focus')) {
-  setTimeout(() => editOrder({ id: pageParams.get('focus') }), 220);
-}
+requireLogin().then(() => {
+  loadOrders();
+  loadTagSuggestions();
+  if (pageParams.get('action') === 'create') {
+    setTimeout(() => openCreateOrderModal(pageParams.get('interventionId') || ''), 50);
+  }
+  if (pageParams.get('focus')) {
+    setTimeout(() => editOrder({ id: pageParams.get('focus') }), 220);
+  }
+});
 </script>
 </body>
 </html>
