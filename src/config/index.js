@@ -1,9 +1,28 @@
 require('dotenv').config();
 
+const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+function deriveWebAuthnDefaults(urlValue) {
+  try {
+    const parsed = new URL(urlValue);
+    return {
+      origin: parsed.origin,
+      rpId: parsed.hostname
+    };
+  } catch {
+    return {
+      origin: 'http://localhost:3000',
+      rpId: 'localhost'
+    };
+  }
+}
+
+const webauthnDefaults = deriveWebAuthnDefaults(appUrl);
+
 module.exports = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT) || 3000,
-  appUrl: process.env.APP_URL || 'http://localhost:3000',
+  appUrl,
   trustProxy: process.env.TRUST_PROXY !== undefined
     ? (process.env.TRUST_PROXY === 'true' ? true : parseInt(process.env.TRUST_PROXY, 10) || false)
     : (process.env.NODE_ENV === 'production' ? 1 : false),
@@ -21,8 +40,8 @@ module.exports = {
 
   webauthn: {
     rpName: process.env.WEBAUTHN_RP_NAME || 'MaintenanceBoard',
-    rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
-    origin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000',
+    rpId: process.env.WEBAUTHN_RP_ID || webauthnDefaults.rpId,
+    origin: process.env.WEBAUTHN_ORIGIN || webauthnDefaults.origin,
   },
 
   upload: {
