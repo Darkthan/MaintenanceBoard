@@ -1198,12 +1198,32 @@ async function loadWebAuthn() {
 async function saveWebAuthn() {
   const feedback = document.getElementById('webauthn-feedback');
   try {
+    const rpName = document.getElementById('wn-rpname').value.trim();
+    const rawRpId = document.getElementById('wn-rpid').value.trim().toLowerCase().replace(/\.$/, '');
+    const rawOrigin = document.getElementById('wn-origin').value.trim();
+
+    if (!rawOrigin) {
+      throw new Error('L\'origine WebAuthn est obligatoire');
+    }
+
+    let parsedOrigin;
+    try {
+      parsedOrigin = new URL(rawOrigin);
+    } catch {
+      throw new Error('L\'origine WebAuthn doit être une URL valide');
+    }
+
+    const origin = parsedOrigin.origin;
+    const rpId = rawRpId || parsedOrigin.hostname.toLowerCase();
+
     feedback.textContent = 'Enregistrement...';
-    await api.patch('/settings/webauthn', {
-      rpName: document.getElementById('wn-rpname').value.trim(),
-      rpId:   document.getElementById('wn-rpid').value.trim(),
-      origin: document.getElementById('wn-origin').value.trim()
+    const response = await api.patch('/settings/webauthn', {
+      rpName,
+      rpId,
+      origin
     });
+    document.getElementById('wn-rpid').value = response.webauthn?.rpId || rpId;
+    document.getElementById('wn-origin').value = response.webauthn?.origin || origin;
     feedback.className = 'text-sm text-emerald-600';
     feedback.textContent = 'Configuration enregistrée.';
     document.getElementById('webauthn-alert').classList.add('hidden');

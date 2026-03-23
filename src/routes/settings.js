@@ -120,6 +120,41 @@ router.patch('/agent-monitoring', requireAuth, requireAdmin, (req, res) => {
 
 // ── WebAuthn ────────────────────────────────────────────────────────────────
 
+function normalizeWebAuthnSettings(input = {}) {
+  const rpName = String(input.rpName ?? '').trim() || config.webauthn.rpName || 'MaintenanceBoard';
+  const rawRpId = String(input.rpId ?? '').trim().toLowerCase().replace(/\.$/, '');
+  const rawOrigin = String(input.origin ?? '').trim();
+
+  if (!rawOrigin) {
+    throw Object.assign(new Error('L\'origine WebAuthn est obligatoire'), { status: 400 });
+  }
+
+  let parsedOrigin;
+  try {
+    parsedOrigin = new URL(rawOrigin);
+  } catch {
+    throw Object.assign(new Error('L\'origine WebAuthn doit être une URL valide'), { status: 400 });
+  }
+
+  if (!['http:', 'https:'].includes(parsedOrigin.protocol)) {
+    throw Object.assign(new Error('L\'origine WebAuthn doit commencer par http:// ou https://'), { status: 400 });
+  }
+
+  const origin = parsedOrigin.origin;
+  const originHost = parsedOrigin.hostname.toLowerCase();
+  const rpId = rawRpId || originHost;
+
+  if (!/^[a-z0-9.-]+$/.test(rpId) || rpId.startsWith('.') || rpId.endsWith('.')) {
+    throw Object.assign(new Error('Le rpId WebAuthn est invalide'), { status: 400 });
+  }
+
+  if (originHost !== rpId && !originHost.endsWith(`.${rpId}`)) {
+    throw Object.assign(new Error('Le domaine de l\'origine doit correspondre au rpId WebAuthn'), { status: 400 });
+  }
+
+  return { rpName, rpId, origin };
+}
+
 // GET /api/settings/webauthn
 router.get('/webauthn', requireAuth, requireAdmin, (req, res) => {
   const s = readSettings().webauthn || {};
@@ -131,17 +166,20 @@ router.get('/webauthn', requireAuth, requireAdmin, (req, res) => {
 });
 
 // PATCH /api/settings/webauthn
-router.patch('/webauthn', requireAuth, requireAdmin, (req, res) => {
-  const { rpName, rpId, origin } = req.body;
-  const cur = readSettings().webauthn || {};
-  writeSettings({
-    webauthn: {
-      rpName: rpName !== undefined ? String(rpName).trim() : cur.rpName,
-      rpId:   rpId   !== undefined ? String(rpId).trim()   : cur.rpId,
-      origin: origin !== undefined ? String(origin).trim() : cur.origin
-    }
-  });
-  res.json({ message: 'Configuration WebAuthn enregistrée' });
+router.patch('/webauthn', requireAuth, requireAdmin, (req, res, next) => {
+  try {
+    const cur = readSettings().webauthn || {};
+    const nextSettings = normalizeWebAuthnSettings({
+      rpName: req.body.rpName !== undefined ? req.body.rpName : cur.rpName,
+      rpId: req.body.rpId !== undefined ? req.body.rpId : cur.rpId,
+      origin: req.body.origin !== undefined ? req.body.origin : cur.origin
+    });
+
+    writeSettings({ webauthn: nextSettings });
+    res.json({ message: 'Configuration WebAuthn enregistrée', webauthn: nextSettings });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── Export ─────────────────────────────────────────────────────────────────

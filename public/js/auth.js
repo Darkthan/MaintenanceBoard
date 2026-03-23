@@ -35,6 +35,9 @@ async function startPasskeyLogin(email) {
     method: 'POST',
     body: JSON.stringify({ email: email || undefined })
   });
+  if (!options?.challenge || !options?.rpId) {
+    throw new Error('Configuration WebAuthn invalide ou incomplète');
+  }
 
   // 2. Interagir avec l'authentificateur
   let assertionResponse;
@@ -68,6 +71,9 @@ async function registerPasskey(name) {
     method: 'POST',
     body: JSON.stringify({})
   });
+  if (!options?.challenge || !options?.user?.id || !options?.rp?.id) {
+    throw new Error('Configuration WebAuthn invalide ou incomplète');
+  }
 
   // 2. Créer la credential
   let attResp;

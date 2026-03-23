@@ -1546,6 +1546,9 @@ function initAccountSettings() {
     try {
       const swab = await ensureSimpleWebAuthnLoaded();
       const options = await api.post('/auth/webauthn/register/begin', {});
+      if (!options?.challenge || !options?.user?.id || !options?.rp?.id) {
+        throw new Error('Configuration WebAuthn invalide ou incomplète');
+      }
       let attResp;
       try {
         attResp = await swab.startRegistration({ optionsJSON: options });
