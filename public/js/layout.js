@@ -1403,16 +1403,16 @@ function fillAccountSettingsForm(profile) {
   document.getElementById('account-password-feedback').textContent = '';
 }
 
-async function ensureSimpleWebAuthnLoaded() {
-  if (window.SimpleWebAuthnBrowser) return window.SimpleWebAuthnBrowser;
+async function ensureWebAuthnClientLoaded() {
+  if (window.WebAuthnClient) return window.WebAuthnClient;
   await new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'https://unpkg.com/@simplewebauthn/browser@9.0.1/dist/bundle/index.umd.min.js';
+    script.src = '/js/webauthn-client.js';
     script.onload = resolve;
-    script.onerror = () => reject(new Error('Impossible de charger la bibliothèque WebAuthn'));
+    script.onerror = () => reject(new Error('Impossible de charger le module WebAuthn'));
     document.head.appendChild(script);
   });
-  return window.SimpleWebAuthnBrowser;
+  return window.WebAuthnClient;
 }
 
 
@@ -1544,14 +1544,17 @@ function initAccountSettings() {
     addBtn.textContent = '...';
 
     try {
-      const swab = await ensureSimpleWebAuthnLoaded();
+      const webauthn = await ensureWebAuthnClientLoaded();
+      if (!webauthn?.supportsWebAuthn?.()) {
+        throw new Error('WebAuthn non supporté par ce navigateur');
+      }
       const options = await api.post('/auth/webauthn/register/begin', {});
       if (!options?.challenge || !options?.user?.id || !options?.rp?.id) {
         throw new Error('Configuration WebAuthn invalide ou incomplète');
       }
       let attResp;
       try {
-        attResp = await swab.startRegistration({ optionsJSON: options });
+        attResp = await webauthn.startRegistration(options);
       } catch (err) {
         if (err.name === 'InvalidStateError') throw new Error('Un authenticateur identique est déjà enregistré');
         if (err.name === 'NotAllowedError') throw new Error('Enregistrement annulé');

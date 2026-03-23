@@ -32,6 +32,14 @@ function assertWebAuthnConfig() {
   return webauthn;
 }
 
+function toBase64Url(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    return value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+  return Buffer.from(value).toString('base64url');
+}
+
 // SQLite stocke les tableaux en JSON string — helper de désérialisation
 function parseJsonField(value) {
   if (Array.isArray(value)) return value;
@@ -137,7 +145,7 @@ async function beginPasskeyRegistration(user) {
     userDisplayName: String(user.name || user.email || '').trim() || 'Utilisateur',
     attestationType: 'none',
     excludeCredentials: existingPasskeys.map(pk => ({
-      id: pk.credentialId,
+      id: toBase64Url(pk.credentialId),
       type: 'public-key',
       transports: parseJsonField(pk.transports)
     })),
@@ -170,14 +178,20 @@ async function finishPasskeyRegistration(user, response, challenge, passkeyName)
     throw Object.assign(new Error('Enregistrement WebAuthn non vérifié'), { status: 400 });
   }
 
-  const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
+  const {
+    credentialID,
+    credentialPublicKey,
+    counter,
+    credentialDeviceType,
+    credentialBackedUp,
+  } = verification.registrationInfo;
 
   const passkey = await prisma.passkey.create({
     data: {
       userId: user.id,
-      credentialId: Buffer.from(credential.id).toString('base64url'),
-      publicKey: Buffer.from(credential.publicKey),
-      counter: BigInt(credential.counter),
+      credentialId: toBase64Url(credentialID),
+      publicKey: Buffer.from(credentialPublicKey),
+      counter: BigInt(counter),
       deviceType: credentialDeviceType,
       backedUp: credentialBackedUp,
       transports: JSON.stringify(response.response?.transports || []),
@@ -220,7 +234,7 @@ async function beginPasskeyLogin(email) {
 async function finishPasskeyLogin(response, challenge, userId) {
   const webauthn = assertWebAuthnConfig();
   // Trouver la passkey par credentialId
-  const credentialId = response.id;
+  const credentialId = toBase64Url(response.id);
   const passkey = await prisma.passkey.findUnique({
     where: { credentialId },
     include: { user: true }

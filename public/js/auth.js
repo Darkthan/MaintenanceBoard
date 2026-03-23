@@ -27,8 +27,8 @@ async function logout() {
 // ── Passkeys ──────────────────────────────────────────────────────────────────
 
 async function startPasskeyLogin(email) {
-  const swab = window.SimpleWebAuthnBrowser;
-  if (!swab) throw new Error('Bibliothèque WebAuthn non chargée');
+  const webauthn = window.WebAuthnClient;
+  if (!webauthn?.supportsWebAuthn?.()) throw new Error('WebAuthn non supporté par ce navigateur');
 
   // 1. Obtenir les options du serveur
   const options = await apiFetch('/auth/webauthn/login/begin', {
@@ -42,7 +42,7 @@ async function startPasskeyLogin(email) {
   // 2. Interagir avec l'authentificateur
   let assertionResponse;
   try {
-    assertionResponse = await swab.startAuthentication({ optionsJSON: options });
+    assertionResponse = await webauthn.startAuthentication(options);
   } catch (err) {
     if (err.name === 'NotAllowedError') {
       throw new Error('Authentification annulée par l\'utilisateur');
@@ -63,8 +63,8 @@ async function startPasskeyLogin(email) {
 }
 
 async function registerPasskey(name) {
-  const swab = window.SimpleWebAuthnBrowser;
-  if (!swab) throw new Error('Bibliothèque WebAuthn non chargée');
+  const webauthn = window.WebAuthnClient;
+  if (!webauthn?.supportsWebAuthn?.()) throw new Error('WebAuthn non supporté par ce navigateur');
 
   // 1. Obtenir les options
   const options = await apiFetch('/auth/webauthn/register/begin', {
@@ -78,7 +78,7 @@ async function registerPasskey(name) {
   // 2. Créer la credential
   let attResp;
   try {
-    attResp = await swab.startRegistration({ optionsJSON: options });
+    attResp = await webauthn.startRegistration(options);
   } catch (err) {
     if (err.name === 'InvalidStateError') {
       throw new Error('Un authenticateur identique est déjà enregistré');
