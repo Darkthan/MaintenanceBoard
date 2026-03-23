@@ -152,8 +152,16 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
         <div><span class="text-xs text-slate-400 block">Technicien</span><span id="detail-tech" class="font-medium text-slate-700"></span></div>
         <div><span class="text-xs text-slate-400 block">Créée le</span><span id="detail-created" class="font-medium text-slate-700"></span></div>
-        <div><span class="text-xs text-slate-400 block">Salle</span><span id="detail-room" class="font-medium text-slate-700"></span></div>
-        <div><span class="text-xs text-slate-400 block">Équipement</span><span id="detail-equipment" class="font-medium text-slate-700"></span></div>
+        <div>
+          <span class="text-xs text-slate-400 block">Salle</span>
+          <span id="detail-room" class="font-medium text-slate-700"></span>
+          <div id="detail-room-suggestion" class="hidden mt-1"></div>
+        </div>
+        <div>
+          <span class="text-xs text-slate-400 block">Équipement</span>
+          <span id="detail-equipment" class="font-medium text-slate-700"></span>
+          <div id="detail-equipment-suggestion" class="hidden mt-1"></div>
+        </div>
       </div>
       <div id="detail-description-wrap" class="hidden">
         <span class="text-xs text-slate-400 block mb-1">Description</span>
@@ -308,15 +316,17 @@
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Salle</label>
-          <select id="int-room" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="int-room" onchange="toggleSuggestionInput('room')" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">-- Aucune --</option>
           </select>
+          <input id="int-room-suggestion" type="text" maxlength="200" placeholder="Nom de la salle à créer..." class="hidden mt-2 w-full border border-amber-300 bg-amber-50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Équipement</label>
-          <select id="int-equip" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="int-equip" onchange="toggleSuggestionInput('equip')" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">-- Aucun --</option>
           </select>
+          <input id="int-equip-suggestion" type="text" maxlength="200" placeholder="Nom de l'équipement à créer..." class="hidden mt-2 w-full border border-amber-300 bg-amber-50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
         </div>
       </div>
       <div>
@@ -860,6 +870,33 @@ async function openInterventionDetail(id) {
     document.getElementById('detail-equipment').textContent = intervention.equipment
       ? `${intervention.equipment.name}${intervention.equipment.type ? ` (${intervention.equipment.type})` : ''}`
       : '—';
+
+    // Afficher les suggestions en attente
+    const roomSuggestEl = document.getElementById('detail-room-suggestion');
+    if (!intervention.roomId && intervention.suggestedRoom) {
+      roomSuggestEl.innerHTML = `<span class="inline-flex items-center gap-1.5 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-2 py-1">
+        <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        Suggérée : <strong>${escapeHtml(intervention.suggestedRoom)}</strong>
+        ${user.role === 'ADMIN' ? `<button onclick="approveSuggestion('room','${intervention.id}')" class="ml-1 px-2 py-0.5 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition">Valider</button>` : ''}
+      </span>`;
+      roomSuggestEl.classList.remove('hidden');
+    } else {
+      roomSuggestEl.innerHTML = '';
+      roomSuggestEl.classList.add('hidden');
+    }
+
+    const equipSuggestEl = document.getElementById('detail-equipment-suggestion');
+    if (!intervention.equipmentId && intervention.suggestedEquipment) {
+      equipSuggestEl.innerHTML = `<span class="inline-flex items-center gap-1.5 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-2 py-1">
+        <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        Suggéré : <strong>${escapeHtml(intervention.suggestedEquipment)}</strong>
+        ${user.role === 'ADMIN' ? `<button onclick="approveSuggestion('equipment','${intervention.id}')" class="ml-1 px-2 py-0.5 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition">Valider</button>` : ''}
+      </span>`;
+      equipSuggestEl.classList.remove('hidden');
+    } else {
+      equipSuggestEl.innerHTML = '';
+      equipSuggestEl.classList.add('hidden');
+    }
     document.getElementById('detail-notes').value = intervention.notes || '';
     renderReporters(intervention.reporters || []);
 
@@ -955,16 +992,55 @@ document.getElementById('source-filter').addEventListener('change', e => { curre
 document.getElementById('toggle-filters-btn').addEventListener('click', () => setFiltersExpanded(!filtersExpanded));
 document.getElementById('clear-filters-btn').addEventListener('click', resetFilters);
 
-async function loadSelects(roomId, equipId) {
+async function approveSuggestion(type, id) {
+  try {
+    const res = await api.post(`/interventions/${id}/approve-${type}`, {});
+    showToast(res.message, 'success');
+    openInterventionDetail(id);
+    loadInterventions();
+  } catch (err) {
+    showToast(err.message || 'Erreur lors de la validation', 'error');
+  }
+}
+
+function toggleSuggestionInput(type) {
+  const select = document.getElementById(type === 'room' ? 'int-room' : 'int-equip');
+  const input  = document.getElementById(type === 'room' ? 'int-room-suggestion' : 'int-equip-suggestion');
+  if (select.value === '__suggest__') {
+    input.classList.remove('hidden');
+    input.focus();
+  } else {
+    input.classList.add('hidden');
+    input.value = '';
+  }
+}
+
+async function loadSelects(roomId, equipId, suggestedRoom, suggestedEquipment) {
   try {
     const [rooms, equips] = await Promise.all([
       api.get('/rooms', { limit: 200 }),
       api.get('/equipment', { limit: 500 })
     ]);
+    const suggestRoomOpt = '<option value="__suggest__">+ Suggérer une nouvelle salle...</option>';
+    const suggestEquipOpt = '<option value="__suggest__">+ Suggérer un nouvel équipement...</option>';
     document.getElementById('int-room').innerHTML = '<option value="">-- Aucune --</option>' +
-      rooms.data.map(r => `<option value="${r.id}" ${r.id === roomId ? 'selected' : ''}>${r.name}${r.number ? ` (${r.number})` : ''}</option>`).join('');
+      rooms.data.map(r => `<option value="${r.id}" ${r.id === roomId ? 'selected' : ''}>${r.name}${r.number ? ` (${r.number})` : ''}</option>`).join('') +
+      suggestRoomOpt;
     document.getElementById('int-equip').innerHTML = '<option value="">-- Aucun --</option>' +
-      equips.data.map(e => `<option value="${e.id}" ${e.id === equipId ? 'selected' : ''}>${e.name} (${e.type})</option>`).join('');
+      equips.data.map(e => `<option value="${e.id}" ${e.id === equipId ? 'selected' : ''}>${e.name} (${e.type})</option>`).join('') +
+      suggestEquipOpt;
+
+    // Restaurer une suggestion existante (mode édition)
+    if (suggestedRoom && !roomId) {
+      document.getElementById('int-room').value = '__suggest__';
+      document.getElementById('int-room-suggestion').value = suggestedRoom;
+      document.getElementById('int-room-suggestion').classList.remove('hidden');
+    }
+    if (suggestedEquipment && !equipId) {
+      document.getElementById('int-equip').value = '__suggest__';
+      document.getElementById('int-equip-suggestion').value = suggestedEquipment;
+      document.getElementById('int-equip-suggestion').classList.remove('hidden');
+    }
   } catch {}
 }
 
@@ -975,6 +1051,8 @@ document.getElementById('add-intervention-btn').addEventListener('click', () => 
   document.getElementById('intervention-form').reset();
   document.getElementById('form-error').classList.add('hidden');
   document.getElementById('resolution-field').classList.add('hidden');
+  document.getElementById('int-room-suggestion').classList.add('hidden');
+  document.getElementById('int-equip-suggestion').classList.add('hidden');
   loadSelects(null, null);
   modal.classList.remove('hidden');
 });
@@ -1001,21 +1079,25 @@ function editIntervention(i) {
   } else {
     document.getElementById('resolution-field').classList.add('hidden');
   }
-  loadSelects(i.roomId, i.equipmentId);
+  loadSelects(i.roomId, i.equipmentId, i.suggestedRoom, i.suggestedEquipment);
   modal.classList.remove('hidden');
 }
 
 document.getElementById('intervention-form').addEventListener('submit', async e => {
   e.preventDefault();
   const id = document.getElementById('intervention-id').value;
+  const roomVal  = document.getElementById('int-room').value;
+  const equipVal = document.getElementById('int-equip').value;
   const data = {
     title: document.getElementById('int-title').value,
     status: document.getElementById('int-status').value,
     priority: document.getElementById('int-priority').value,
     description: document.getElementById('int-description').value || null,
     resolution: document.getElementById('int-resolution').value || null,
-    roomId: document.getElementById('int-room').value || null,
-    equipmentId: document.getElementById('int-equip').value || null
+    roomId: (roomVal && roomVal !== '__suggest__') ? roomVal : null,
+    equipmentId: (equipVal && equipVal !== '__suggest__') ? equipVal : null,
+    suggestedRoom: roomVal === '__suggest__' ? (document.getElementById('int-room-suggestion').value.trim() || null) : null,
+    suggestedEquipment: equipVal === '__suggest__' ? (document.getElementById('int-equip-suggestion').value.trim() || null) : null
   };
 
   const submitBtn = document.getElementById('submit-btn');

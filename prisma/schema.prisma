@@ -160,6 +160,8 @@ model Intervention {
   reporterEmail  String?
   reporterToken  String?  @unique
   mergedIntoId   String?
+  suggestedRoom      String?
+  suggestedEquipment String?
 
   room           Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
   equipment      Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)

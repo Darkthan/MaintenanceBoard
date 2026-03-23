@@ -203,7 +203,7 @@ router.post('/',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { title, description, notes, status, priority, roomId, equipmentId, techId } = req.body;
+      const { title, description, notes, status, priority, roomId, equipmentId, techId, suggestedRoom, suggestedEquipment } = req.body;
 
       // TECH peut seulement créer pour lui-même
       const assignedTechId = req.user.role === 'ADMIN' && techId ? techId : req.user.id;
@@ -217,7 +217,9 @@ router.post('/',
           priority: priority || 'NORMAL',
           roomId: roomId || null,
           equipmentId: equipmentId || null,
-          techId: assignedTechId
+          techId: assignedTechId,
+          suggestedRoom: (!roomId && suggestedRoom) ? String(suggestedRoom).trim() || null : null,
+          suggestedEquipment: (!equipmentId && suggestedEquipment) ? String(suggestedEquipment).trim() || null : null
         },
         include: interventionInclude
       });
@@ -252,7 +254,7 @@ router.patch('/:id',
         return res.status(403).json({ error: 'Accès refusé' });
       }
 
-      const { title, description, notes, status, priority, resolution } = req.body;
+      const { title, description, notes, status, priority, resolution, roomId, equipmentId, suggestedRoom, suggestedEquipment } = req.body;
       const data = {};
       if (title !== undefined) data.title = title;
       if (description !== undefined) data.description = description;
@@ -265,6 +267,16 @@ router.patch('/:id',
       }
       if (priority !== undefined) data.priority = priority;
       if (resolution !== undefined) data.resolution = resolution;
+      if (roomId !== undefined) {
+        data.roomId = roomId || null;
+        if (roomId) data.suggestedRoom = null;
+      }
+      if (equipmentId !== undefined) {
+        data.equipmentId = equipmentId || null;
+        if (equipmentId) data.suggestedEquipment = null;
+      }
+      if (suggestedRoom !== undefined) data.suggestedRoom = suggestedRoom ? String(suggestedRoom).trim() || null : null;
+      if (suggestedEquipment !== undefined) data.suggestedEquipment = suggestedEquipment ? String(suggestedEquipment).trim() || null : null;
 
       const intervention = await prisma.intervention.update({
         where: { id: req.params.id },
@@ -528,6 +540,40 @@ router.post('/:id/messages', requireAuth, (req, res, next) => {
     }
 
     res.status(201).json(message);
+  } catch (err) { next(err); }
+});
+
+// POST /api/interventions/:id/approve-room — Admin valide une suggestion de salle
+router.post('/:id/approve-room', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+    if (!intervention.suggestedRoom) return res.status(400).json({ error: 'Aucune suggestion de salle en attente' });
+
+    const room = await prisma.room.create({ data: { name: intervention.suggestedRoom } });
+    const updated = await prisma.intervention.update({
+      where: { id: req.params.id },
+      data: { roomId: room.id, suggestedRoom: null },
+      include: interventionInclude
+    });
+    res.json({ message: `Salle "${room.name}" créée et liée à l'intervention`, intervention: parsePhotos(updated) });
+  } catch (err) { next(err); }
+});
+
+// POST /api/interventions/:id/approve-equipment — Admin valide une suggestion d'équipement
+router.post('/:id/approve-equipment', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+    if (!intervention.suggestedEquipment) return res.status(400).json({ error: "Aucune suggestion d'équipement en attente" });
+
+    const equipment = await prisma.equipment.create({ data: { name: intervention.suggestedEquipment, type: 'OTHER' } });
+    const updated = await prisma.intervention.update({
+      where: { id: req.params.id },
+      data: { equipmentId: equipment.id, suggestedEquipment: null },
+      include: interventionInclude
+    });
+    res.json({ message: `Équipement "${equipment.name}" créé et lié à l'intervention`, intervention: parsePhotos(updated) });
   } catch (err) { next(err); }
 });
 
