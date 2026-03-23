@@ -110,7 +110,7 @@ async function beginPasskeyRegistration(user) {
   const options = await generateRegistrationOptions({
     rpName: config.webauthn.rpName,
     rpID: config.webauthn.rpId,
-    userID: Buffer.from(user.id),
+    userID: user.id,
     userName: user.email,
     userDisplayName: user.name,
     attestationType: 'none',
