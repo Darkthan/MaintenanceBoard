@@ -35,6 +35,7 @@ const validate = (req, res) => {
 };
 
 const VALID_STATUSES = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED'];
+const tableMissing = err => err?.code === 'P2021';
 
 // GET /api/equipment - Liste avec filtres
 router.get('/', requireAuth, async (req, res, next) => {
@@ -115,10 +116,6 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       include: {
         room: { select: { id: true, name: true, number: true, building: true } },
         supplierRef: { select: { id: true, name: true } },
-        attachments: {
-          orderBy: { createdAt: 'desc' },
-          include: { uploader: { select: { id: true, name: true } } }
-        },
         interventions: {
           orderBy: { createdAt: 'desc' },
           include: { tech: { select: { id: true, name: true } } }
@@ -137,11 +134,13 @@ router.get('/:id/sessions', requireAuth, async (req, res, next) => {
     const days = Math.min(90, Math.max(1, parseInt(req.query.days) || 30));
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const logs = await prisma.machineSessionLog.findMany({
-      where: { equipmentId: req.params.id, occurredAt: { gte: since } },
-      orderBy: { occurredAt: 'desc' },
-      select: { id: true, winUser: true, event: true, occurredAt: true }
-    });
+    const logs = prisma.machineSessionLog?.findMany
+      ? await prisma.machineSessionLog.findMany({
+        where: { equipmentId: req.params.id, occurredAt: { gte: since } },
+        orderBy: { occurredAt: 'desc' },
+        select: { id: true, winUser: true, event: true, occurredAt: true }
+      }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
+      : [];
 
     // Histogramme par heure (0-23)
     const byHour = Array(24).fill(0);
