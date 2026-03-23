@@ -33,6 +33,7 @@ jest.mock('jsonwebtoken', () => ({
 
 const prisma = require('../src/lib/prisma');
 const {
+  generateRegistrationOptions,
   verifyRegistrationResponse,
   verifyAuthenticationResponse,
 } = require('@simplewebauthn/server');
@@ -41,6 +42,23 @@ const authService = require('../src/services/authService');
 describe('authService WebAuthn', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('génère des options d’enregistrement avec un user.id en base64url', async () => {
+    prisma.passkey.findMany.mockResolvedValue([]);
+    generateRegistrationOptions.mockResolvedValue({ challenge: 'challenge-1' });
+
+    await authService.beginPasskeyRegistration({
+      id: 'user-1',
+      email: 'admin@test.local',
+      name: 'Admin',
+    });
+
+    expect(generateRegistrationOptions).toHaveBeenCalledWith(expect.objectContaining({
+      userID: 'dXNlci0x',
+      userName: 'admin@test.local',
+      userDisplayName: 'Admin',
+    }));
   });
 
   it('enregistre la passkey avec le credentialID renvoyé par verifyRegistrationResponse', async () => {

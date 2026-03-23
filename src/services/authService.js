@@ -40,6 +40,10 @@ function toBase64Url(value) {
   return Buffer.from(value).toString('base64url');
 }
 
+function encodeUtf8ToBase64Url(value) {
+  return Buffer.from(String(value || ''), 'utf8').toString('base64url');
+}
+
 // SQLite stocke les tableaux en JSON string — helper de désérialisation
 function parseJsonField(value) {
   if (Array.isArray(value)) return value;
@@ -140,7 +144,7 @@ async function beginPasskeyRegistration(user) {
   const options = await generateRegistrationOptions({
     rpName: webauthn.rpName,
     rpID: webauthn.rpId,
-    userID: Buffer.from(user.id),
+    userID: encodeUtf8ToBase64Url(user.id),
     userName: String(user.email || '').trim() || `user-${user.id}`,
     userDisplayName: String(user.name || user.email || '').trim() || 'Utilisateur',
     attestationType: 'none',
