@@ -166,7 +166,7 @@
       <div id="detail-description-wrap" class="hidden">
         <span class="text-xs text-slate-400 block mb-1">Description</span>
         <div id="detail-description-display" onclick="openAttributeEditor('description')" class="cursor-pointer">
-          <div id="detail-description" class="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2 whitespace-pre-wrap"></div>
+          <div id="detail-description" class="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2"></div>
         </div>
         <div id="detail-description-editor" class="hidden space-y-2">
           <textarea id="detail-description-input" rows="4"
@@ -180,7 +180,7 @@
       <div id="detail-resolution-wrap" class="hidden">
         <span class="text-xs text-slate-400 block mb-1">Résolution</span>
         <div id="detail-resolution-display" onclick="openAttributeEditor('resolution')" class="cursor-pointer">
-          <div id="detail-resolution" class="text-sm text-slate-600 bg-emerald-50 rounded-lg px-3 py-2 whitespace-pre-wrap"></div>
+          <div id="detail-resolution" class="text-sm text-slate-600 bg-emerald-50 rounded-lg px-3 py-2"></div>
         </div>
         <div id="detail-resolution-editor" class="hidden space-y-2">
           <textarea id="detail-resolution-input" rows="3"
@@ -207,6 +207,10 @@
       <textarea id="detail-notes" rows="5"
         class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         placeholder="Ex: relancé le fournisseur, intervention prioritaire, attente validation responsable..."></textarea>
+      <div>
+        <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-2">Aperçu</p>
+        <div id="detail-notes-preview" class="hidden text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2"></div>
+      </div>
     </div>
 
     <div id="detail-reporters-section" class="hidden px-5 py-4 border-b border-slate-100 space-y-3">
@@ -402,6 +406,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/rich-text.js"></script>
 <script src="/js/intervention-detail-shared.js"></script>
 <script>
 let user;
@@ -596,7 +601,7 @@ async function loadInterventions() {
               ${i.priority !== 'NORMAL' ? priorityBadge(i.priority) : ''}
               ${needsAttention ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Réponse attendue</span>` : ''}
             </div>
-            ${i.description ? `<p class="text-sm text-slate-600 mt-1 line-clamp-2">${i.description}</p>` : ''}
+            ${i.description ? `<p class="text-sm text-slate-600 mt-1 line-clamp-2">${escapeHtml(typeof richTextToPlainText === 'function' ? richTextToPlainText(i.description) : i.description)}</p>` : ''}
             ${i.notes ? `<p class="text-xs text-slate-500 mt-2">📝 Notes enregistrées</p>` : ''}
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
               ${i.room ? `<span>📍 ${i.room.name}${i.room.number ? ` (${i.room.number})` : ''}</span>` : ''}
@@ -1317,6 +1322,7 @@ const sharedDetailController = createInterventionDetailController({
     room: 'detail-room',
     equipment: 'detail-equipment',
     notesInput: 'detail-notes',
+    notesPreview: 'detail-notes-preview',
     saveNotesBtn: 'save-notes-btn',
     descriptionWrap: 'detail-description-wrap',
     description: 'detail-description',

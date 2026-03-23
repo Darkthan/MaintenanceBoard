@@ -52,6 +52,24 @@
       return document.getElementById(config.ids[key]);
     }
 
+    function renderRichContent(value) {
+      if (typeof window.renderRichText === 'function') return window.renderRichText(value);
+      return config.escapeHtml(String(value || '')).replace(/\n/g, '<br>');
+    }
+
+    function refreshNotesPreview(value) {
+      const preview = config.ids.notesPreview ? el('notesPreview') : null;
+      if (!preview) return;
+      const content = String(value || '').trim();
+      if (!content) {
+        preview.classList.add('hidden');
+        preview.innerHTML = '';
+        return;
+      }
+      preview.innerHTML = renderRichContent(content);
+      preview.classList.remove('hidden');
+    }
+
     function closeAttributeEditor(field) {
       const display = document.getElementById(config.attributeIds[field].display);
       const editor = document.getElementById(config.attributeIds[field].editor);
@@ -197,13 +215,16 @@
         el('room').textContent = config.formatRoom(intervention);
         el('equipment').textContent = config.formatEquipment(intervention);
         if (config.ids.fullLink) el('fullLink').href = config.fullLink(intervention.id);
-        if (config.ids.notesInput) el('notesInput').value = intervention.notes || '';
+        if (config.ids.notesInput) {
+          el('notesInput').value = intervention.notes || '';
+          refreshNotesPreview(intervention.notes || '');
+        }
 
         const setBlock = (wrapKey, contentKey, value) => {
           const wrap = el(wrapKey);
           if (!wrap) return;
           if (value) {
-            el(contentKey).textContent = value;
+            el(contentKey).innerHTML = renderRichContent(value);
             wrap.classList.remove('hidden');
           } else {
             wrap.classList.add('hidden');
@@ -379,6 +400,14 @@
       if (config.ids.fileInput) el('fileInput').value = '';
       if (config.ids.filePreview) el('filePreview').classList.add('hidden');
       if (config.ids.filePreviewName) el('filePreviewName').textContent = '';
+    }
+
+    if (config.ids.notesInput && config.ids.notesPreview) {
+      const notesInput = el('notesInput');
+      if (notesInput && !notesInput.dataset.richTextPreviewBound) {
+        notesInput.addEventListener('input', event => refreshNotesPreview(event.target.value));
+        notesInput.dataset.richTextPreviewBound = 'true';
+      }
     }
 
     async function loadMessages(interventionId) {

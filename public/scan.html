@@ -290,7 +290,7 @@
       <div id="im-description-wrap" class="hidden">
         <span class="text-xs text-slate-400 block mb-1">Description</span>
         <div id="im-description-display" onclick="openInterventionModalAttributeEditor('description')" class="cursor-pointer">
-          <div id="im-description" class="bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-600 whitespace-pre-wrap"></div>
+          <div id="im-description" class="bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-600"></div>
         </div>
         <div id="im-description-editor" class="hidden space-y-2">
           <textarea id="im-description-input" rows="4"
@@ -315,11 +315,15 @@
         <textarea id="im-notes-input" rows="4"
           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           placeholder="Ajouter un suivi, une relance fournisseur, un contexte d'intervention..."></textarea>
+        <div>
+          <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-2">Aperçu</p>
+          <div id="im-notes-preview" class="hidden bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-600"></div>
+        </div>
       </div>
       <div id="im-resolution-wrap" class="hidden">
         <span class="text-xs text-slate-400 block mb-1">Résolution</span>
         <div id="im-resolution-display" onclick="openInterventionModalAttributeEditor('resolution')" class="cursor-pointer">
-          <div id="im-resolution" class="bg-emerald-50 rounded-xl px-3 py-2 text-sm text-slate-600 whitespace-pre-wrap"></div>
+          <div id="im-resolution" class="bg-emerald-50 rounded-xl px-3 py-2 text-sm text-slate-600"></div>
         </div>
         <div id="im-resolution-editor" class="hidden space-y-2">
           <textarea id="im-resolution-input" rows="3"
@@ -441,6 +445,7 @@
 <div id="qr-toast" class="hidden fixed bottom-4 left-1/2 z-[70] -translate-x-1/2 rounded-full px-4 py-2 text-sm font-medium shadow-lg"></div>
 
 <script src="/js/api.js"></script>
+<script src="/js/rich-text.js"></script>
 <script src="/js/intervention-detail-shared.js"></script>
 <script>
 const params      = new URLSearchParams(window.location.search);
@@ -655,7 +660,7 @@ function renderAuthView(res, isRoom) {
           <span class="inline-block bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full mb-1">Salle</span>
           <h2 class="text-xl font-bold text-slate-800">${esc(res.name)}</h2>
           ${res.building ? `<p class="text-slate-500 text-sm">${esc(res.building)}${res.number ? ` · Salle ${esc(res.number)}` : ''}${res.floor != null ? ` · Étage ${res.floor}` : ''}</p>` : ''}
-          ${res.description ? `<p class="text-slate-400 text-sm mt-1">${esc(res.description)}</p>` : ''}
+          ${res.description ? `<p class="text-slate-400 text-sm mt-1">${esc(typeof richTextToPlainText === 'function' ? richTextToPlainText(res.description) : res.description)}</p>` : ''}
         </div>
       </div>`
     : `<div class="flex items-start gap-4">
@@ -1392,6 +1397,7 @@ const qrInterventionController = createInterventionDetailController({
     room: 'im-room',
     equipment: 'im-equipment',
     notesInput: 'im-notes-input',
+    notesPreview: 'im-notes-preview',
     saveNotesBtn: 'im-save-notes-btn',
     descriptionWrap: 'im-description-wrap',
     description: 'im-description',
