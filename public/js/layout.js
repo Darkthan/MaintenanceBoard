@@ -841,7 +841,7 @@ function ensureSpotlightMarkup() {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
           </svg>
           <input id="spotlight-input" class="spotlight-input" type="search" autocomplete="off" spellcheck="false"
-            placeholder="Rechercher une salle, un equipement, un document signe, une action..." />
+            placeholder="Rechercher une salle, un equipement, un agent, un fournisseur, un document ou une action..." />
           <div class="spotlight-searchbar__meta">
             <span id="spotlight-spinner" class="spotlight-spinner" aria-hidden="true"></span>
             <span class="spotlight-searchbar__pill">Esc</span>
@@ -952,7 +952,7 @@ function ensureSpotlightTrigger() {
       </span>
       <span class="spotlight-trigger__text">
         <span class="spotlight-trigger__label">Recherche globale</span>
-        <span class="spotlight-trigger__hint">Salles, equipements, interventions, documents signes, actions</span>
+        <span class="spotlight-trigger__hint">Salles, equipements, agents, fournisseurs, documents, actions</span>
       </span>
       <span class="spotlight-trigger__kbd">${getShortcutLabel()}</span>
     `;
@@ -1008,7 +1008,7 @@ function renderSpotlightPreview() {
         Tape pour filtrer les objets de gestion et les actions rapides. Les fleches changent la selection, Entree ouvre la cible.
       </p>
       <div class="spotlight-preview__list">
-        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Commence par une salle, un numero de serie, un fournisseur ou un mot-cle.</span></div>
+        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Commence par une salle, un numero de serie, un agent, un fournisseur ou un mot-cle.</span></div>
         <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Les actions rapides ouvrent directement la page cible.</span></div>
         <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Les entites affichent un apercu avant ouverture.</span></div>
       </div>
@@ -1065,7 +1065,7 @@ function renderSpotlightResults() {
     results.innerHTML = `
       <div class="spotlight-empty">
         <div class="spotlight-empty__title">Aucun resultat</div>
-        <p>Essaie un nom de salle, un numero de serie, un fournisseur ou une action rapide.</p>
+        <p>Essaie un nom de salle, un numero de serie, un agent, un fournisseur ou une action rapide.</p>
       </div>
     `;
     renderSpotlightPreview();
@@ -1307,11 +1307,11 @@ function ensureAccountSettingsModal() {
 
   const modal = document.createElement('div');
   modal.id = 'account-settings-modal';
-  modal.className = 'hidden fixed inset-0 z-[130]';
+  modal.className = 'hidden fixed inset-0 z-[130] overflow-y-auto';
   modal.innerHTML = `
     <div id="account-settings-backdrop" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"></div>
-    <div class="relative z-10 flex min-h-full items-start justify-center overflow-y-auto p-4 sm:items-center">
-      <div class="my-auto w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl" data-mobile-modal-panel="true">
+    <div class="relative z-10 flex min-h-full items-center justify-center p-4">
+      <div class="w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl" data-mobile-modal-panel="true">
         <div class="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
           <div>
             <p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Utilisateur</p>
