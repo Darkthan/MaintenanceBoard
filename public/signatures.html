@@ -203,6 +203,7 @@
 </div>
 
 <script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
 <script src="/js/sigPlacement.js"></script>
 <script>
@@ -227,14 +228,16 @@ window.onerror = (msg, src, line) => {
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
+async function initSignaturesPage() {
   try {
+    await requireLogin();
     renderNav('signatures');
   } catch (e) {
-    console.error('renderNav error:', e);
+    console.error('signatures init error:', e);
+    return;
   }
-  loadSignatures();
-});
+  await loadSignatures();
+}
 
 // ── Chargement de la liste ─────────────────────────────────────────────────────
 async function loadSignatures() {
@@ -252,7 +255,7 @@ async function loadSignatures() {
   try {
     const data = await api.get('/signatures');
     clearTimeout(timeout);
-    allSignatures = Array.isArray(data) ? data : [];
+    allSignatures = Array.isArray(data) ? data.filter(item => item && typeof item === 'object') : [];
     renderSignatures(allSignatures);
   } catch (err) {
     clearTimeout(timeout);
@@ -594,6 +597,8 @@ function showToast(msg, type = 'info') {
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3500);
 }
+
+initSignaturesPage();
 </script>
 </body>
 </html>
