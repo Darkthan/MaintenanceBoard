@@ -87,7 +87,13 @@ app.use(session({
 }));
 
 // ── Fichiers statiques ────────────────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js') || filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ── Documentation API ─────────────────────────────────────────────────────────
