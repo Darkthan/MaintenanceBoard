@@ -498,6 +498,22 @@ function showToast(message, type = 'success') {
   toast.className = `fixed bottom-4 left-1/2 z-[70] -translate-x-1/2 rounded-full px-4 py-2 text-sm font-medium shadow-lg ${
     type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'
   }`;
+
+  if (type === 'error') {
+    toast.classList.add('cursor-copy', 'select-text');
+    toast.title = 'Cliquer pour copier le message d’erreur';
+    toast.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(String(message || ''));
+        toast.textContent = 'Erreur copiée dans le presse-papiers';
+        toast.className = 'fixed bottom-4 left-1/2 z-[70] -translate-x-1/2 rounded-full px-4 py-2 text-sm font-medium shadow-lg bg-emerald-600 text-white';
+      } catch {}
+    };
+  } else {
+    toast.title = '';
+    toast.onclick = null;
+  }
+
   toast.classList.remove('hidden');
   clearTimeout(showToast._timer);
   showToast._timer = setTimeout(() => toast.classList.add('hidden'), 2500);

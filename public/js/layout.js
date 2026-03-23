@@ -1674,6 +1674,25 @@ function renderNav(activePage) {
 /**
  * Toast notifications
  */
+async function copyToastMessageToClipboard(message) {
+  const text = String(message || '').trim();
+  if (!text) throw new Error('Message vide');
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', 'readonly');
+  textarea.className = 'fixed -left-[9999px] -top-[9999px] opacity-0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
 function showToast(message, type = 'success') {
   const colors = {
     success: 'bg-green-600',
@@ -1686,6 +1705,28 @@ function showToast(message, type = 'success') {
   toast.className = `fixed bottom-4 right-4 z-[200] px-5 py-3 rounded-xl text-white shadow-lg text-sm font-medium
                      transform translate-y-2 opacity-0 transition-all duration-300 ${colors[type] || colors.info}`;
   toast.textContent = message;
+
+  if (type === 'error') {
+    toast.classList.add('cursor-copy', 'select-text', 'relative', 'pr-14');
+    toast.title = 'Cliquer pour copier le message d’erreur';
+
+    const hint = document.createElement('span');
+    hint.className = 'absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-semibold uppercase tracking-wide text-white/80 pointer-events-none';
+    hint.textContent = 'Copier';
+    toast.appendChild(hint);
+
+    toast.addEventListener('click', async () => {
+      try {
+        await copyToastMessageToClipboard(message);
+        toast.classList.remove('bg-red-600');
+        toast.classList.add('bg-emerald-600');
+        toast.textContent = 'Erreur copiée dans le presse-papiers';
+      } catch {
+        toast.classList.add('ring-2', 'ring-white/70');
+      }
+    }, { once: true });
+  }
+
   document.body.appendChild(toast);
 
   requestAnimationFrame(() => {

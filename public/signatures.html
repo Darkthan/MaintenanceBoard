@@ -594,6 +594,23 @@ function showToast(msg, type = 'info') {
   else if (type === 'error') toast.classList.add('bg-red-600', 'text-white');
   else toast.classList.add('bg-slate-800', 'text-white');
   toastMsg.textContent = msg;
+
+   if (type === 'error') {
+    toast.classList.add('cursor-copy', 'select-text');
+    toast.title = 'Cliquer pour copier le message d’erreur';
+    toast.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(String(msg || ''));
+        toast.classList.remove('bg-red-600');
+        toast.classList.add('bg-emerald-600');
+        toastMsg.textContent = 'Erreur copiée dans le presse-papiers';
+      } catch {}
+    };
+  } else {
+    toast.title = '';
+    toast.onclick = null;
+  }
+
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3500);
 }
