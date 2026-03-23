@@ -1547,12 +1547,6 @@ function initAccountSettings() {
     try {
       const swab = await ensureSimpleWebAuthnLoaded();
       const options = await api.post('/auth/webauthn/register/begin', {});
-      console.log('[Passkey options]', JSON.stringify({
-        challenge: options?.challenge,
-        userId: options?.user?.id,
-        rpId: options?.rp?.id
-      }));
-
       let attResp;
       try {
         attResp = await swab.startRegistration({ optionsJSON: options });

@@ -15,9 +15,9 @@ const prisma = require('../lib/prisma');
 function getWebAuthnConfig() {
   const s = readSettings().webauthn || {};
   return {
-    rpName: s.rpName || getWebAuthnConfig().rpName,
-    rpId:   s.rpId   || getWebAuthnConfig().rpId,
-    origin: s.origin || getWebAuthnConfig().origin
+    rpName: s.rpName || config.webauthn?.rpName || 'MaintenanceBoard',
+    rpId:   s.rpId   || config.webauthn?.rpId   || '',
+    origin: s.origin || config.webauthn?.origin  || ''
   };
 }
 
@@ -125,7 +125,7 @@ async function beginPasskeyRegistration(user) {
     userDisplayName: user.name,
     attestationType: 'none',
     excludeCredentials: existingPasskeys.map(pk => ({
-      id: Buffer.from(pk.credentialId, 'base64url'),
+      id: pk.credentialId,
       type: 'public-key',
       transports: parseJsonField(pk.transports)
     })),
