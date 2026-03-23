@@ -77,15 +77,16 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Statiques : cache first, fallback network
+  // Statiques JS/CSS : network first pour toujours servir la dernière version
   event.respondWith(
-    caches.match(event.request)
-      .then(cached => cached || fetch(event.request).then(response => {
+    fetch(event.request)
+      .then(response => {
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
-      }))
+      })
+      .catch(() => caches.match(event.request))
   );
 });
