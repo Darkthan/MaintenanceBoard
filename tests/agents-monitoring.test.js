@@ -44,7 +44,8 @@ jest.mock('../src/lib/prisma', () => ({
   equipment: {
     update: jest.fn(),
     create: jest.fn(),
-    findMany: jest.fn()
+    findMany: jest.fn(),
+    findUnique: jest.fn()
   },
   intervention: {
     findFirst: jest.fn(),
@@ -115,7 +116,8 @@ describe('POST /api/agents/checkin', () => {
       roomId: 'room-1',
       brand: 'Dell',
       model: 'OptiPlex 7010',
-      agentHostname: 'PC-101'
+      agentHostname: 'PC-101',
+      agentAlertState: null
     });
     prisma.intervention.findFirst.mockResolvedValue(null);
     prisma.intervention.create.mockResolvedValue({ id: 'int-1' });
@@ -155,6 +157,115 @@ describe('POST /api/agents/checkin', () => {
         roomId: 'room-1',
         title: 'Espace disque faible - C:',
         priority: 'HIGH'
+      })
+    }));
+  });
+
+  it('ne recrée pas d’intervention si l’alerte disque a déjà été acquittée', async () => {
+    prisma.equipment.update.mockResolvedValue({
+      id: 'equip-1',
+      roomId: 'room-1',
+      brand: 'Dell',
+      model: 'OptiPlex 7010',
+      agentHostname: 'PC-101',
+      agentAlertState: JSON.stringify({
+        lowDisk: {
+          'C:': {
+            suppressed: true,
+            interventionId: 'int-1',
+            acknowledgedAt: '2026-03-23T09:00:00.000Z'
+          }
+        }
+      })
+    });
+
+    const res = await request(buildApp())
+      .post('/api/agents/checkin')
+      .set('x-test-agent-mode', 'machine')
+      .send({
+        hostname: 'PC-101',
+        manufacturer: 'Dell',
+        model: 'OptiPlex 7010',
+        disks: [
+          { mount: 'C:', totalGb: 512, freeGb: 8.2, usedPercent: 98.4 }
+        ]
+      });
+
+    expect(res.status).toBe(200);
+    expect(prisma.intervention.findFirst).not.toHaveBeenCalled();
+    expect(prisma.intervention.create).not.toHaveBeenCalled();
+  });
+
+  it('réarme l’alerte après retour à la normale puis recrée une intervention si le défaut revient', async () => {
+    prisma.equipment.update
+      .mockResolvedValueOnce({
+        id: 'equip-1',
+        roomId: 'room-1',
+        brand: 'Dell',
+        model: 'OptiPlex 7010',
+        agentHostname: 'PC-101',
+        agentAlertState: JSON.stringify({
+          lowDisk: {
+            'C:': {
+              suppressed: true,
+              interventionId: 'int-1',
+              acknowledgedAt: '2026-03-23T09:00:00.000Z'
+            }
+          }
+        })
+      })
+      .mockResolvedValueOnce({
+        id: 'equip-1',
+        roomId: 'room-1',
+        agentAlertState: null
+      })
+      .mockResolvedValueOnce({
+        id: 'equip-1',
+        roomId: 'room-1',
+        brand: 'Dell',
+        model: 'OptiPlex 7010',
+        agentHostname: 'PC-101',
+        agentAlertState: null
+      });
+    prisma.intervention.findFirst.mockResolvedValue(null);
+    prisma.intervention.create.mockResolvedValue({ id: 'int-2' });
+
+    const healthyRes = await request(buildApp())
+      .post('/api/agents/checkin')
+      .set('x-test-agent-mode', 'machine')
+      .send({
+        hostname: 'PC-101',
+        manufacturer: 'Dell',
+        model: 'OptiPlex 7010',
+        disks: [
+          { mount: 'C:', totalGb: 512, freeGb: 120, usedPercent: 76.5 }
+        ]
+      });
+
+    const lowDiskRes = await request(buildApp())
+      .post('/api/agents/checkin')
+      .set('x-test-agent-mode', 'machine')
+      .send({
+        hostname: 'PC-101',
+        manufacturer: 'Dell',
+        model: 'OptiPlex 7010',
+        disks: [
+          { mount: 'C:', totalGb: 512, freeGb: 7.1, usedPercent: 98.9 }
+        ]
+      });
+
+    expect(healthyRes.status).toBe(200);
+    expect(lowDiskRes.status).toBe(200);
+    expect(prisma.equipment.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'equip-1' },
+      data: expect.objectContaining({
+        agentAlertState: null
+      })
+    }));
+    expect(prisma.intervention.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        title: 'Espace disque faible - C:',
+        equipmentId: 'equip-1'
       })
     }));
   });

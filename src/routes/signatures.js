@@ -1,7 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { readSettings } = require('../utils/settings');
-const nodemailer = require('nodemailer');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
@@ -9,6 +8,7 @@ const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const { PDFDocument: PDFLibDocument, StandardFonts, rgb } = require('pdf-lib');
 const multer = require('multer');
+const { createSmtpTransporter } = require('../utils/mail');
 
 const prisma = require('../lib/prisma');
 
@@ -60,20 +60,9 @@ function fmtCurrency(n, currency) {
 }
 
 function createTransporter() {
-  const s = readSettings();
-  const smtp = s.smtp || {};
-  if (!smtp.host) throw new Error('SMTP non configuré (voir Paramètres → Emails)');
-  return {
-    transporter: nodemailer.createTransport({
-      host: smtp.host,
-      port: parseInt(smtp.port) || 587,
-      secure: smtp.secure || false,
-      auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
-      tls: { rejectUnauthorized: false }
-    }),
-    from: smtp.from || s.poTemplate?.orgEmail || 'noreply@maintenance.local',
-    orgName: s.poTemplate?.orgName || 'MaintenanceBoard'
-  };
+  const smtpConfig = createSmtpTransporter();
+  if (!smtpConfig.transporter) throw new Error('SMTP non configuré (voir Paramètres → Emails)');
+  return smtpConfig;
 }
 
 function orderNum(order) {

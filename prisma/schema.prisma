@@ -123,6 +123,7 @@ model Equipment {
   suggestedRoomId    String?
   lastSeenAt         DateTime?
   agentInfo          String?   // JSON: { cpu, ram, os, ips, macs, user, peripherals }
+  agentAlertState    String?   // JSON: suppressions temporaires des alertes agent (réarmées après retour à la normale)
   agentHostname      String?
   agentToken         String?   @unique               // Token machine unique (UUID)
   agentRevoked       Boolean   @default(false)       // Si true, re-enrollment requis

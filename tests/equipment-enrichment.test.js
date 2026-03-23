@@ -110,6 +110,23 @@ describe('GET /api/equipment/:id (enriched)', () => {
   });
 });
 
+describe('GET /api/equipment/:id/sessions', () => {
+  it('retourne des sessions vides si la table n existe pas encore', async () => {
+    prisma.machineSessionLog.findMany.mockRejectedValue({ code: 'P2021' });
+
+    const res = await request(app).get('/api/equipment/equip-1/sessions');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      logs: [],
+      byHour: Array(24).fill(0),
+      total: 0,
+      days: 30,
+      users: []
+    });
+  });
+});
+
 // ─── GET /api/equipment/:id/attachments ──────────────────────────────────────
 describe('GET /api/equipment/:id/attachments', () => {
   it('retourne 200 + tableau de pièces jointes', async () => {

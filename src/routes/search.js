@@ -127,6 +127,18 @@ const ACTIONS = [
     }
   },
   {
+    id: 'action:agents',
+    title: 'Agents',
+    subtitle: 'Superviser les machines remontees par agent',
+    href: '/agents.html',
+    keywords: ['agent', 'agents', 'monitoring', 'supervision', 'machine', 'poste', 'espace disque', 'disque'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Supervision agent',
+      description: 'Ouvre la vue des agents, du dernier check-in et des alertes de supervision.'
+    }
+  },
+  {
     id: 'action:signatures',
     title: 'Signatures',
     subtitle: 'Voir les documents signes ou a signer',
@@ -136,6 +148,66 @@ const ACTIONS = [
     preview: {
       title: 'Documents',
       description: 'Ouvre la liste des documents en signature et deja signes.'
+    }
+  },
+  {
+    id: 'action:stock',
+    title: 'Stock',
+    subtitle: 'Consulter le stock et les alertes de seuil',
+    href: '/stock.html',
+    keywords: ['stock', 'consommable', 'article', 'inventaire', 'alerte', 'seuil'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Stock',
+      description: 'Ouvre la gestion de stock et les alertes de seuil.'
+    }
+  },
+  {
+    id: 'action:suppliers',
+    title: 'Fournisseurs',
+    subtitle: 'Consulter les fournisseurs et leurs contacts',
+    href: '/suppliers.html',
+    keywords: ['fournisseur', 'fournisseurs', 'contact', 'achat', 'commande', 'societe'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Fournisseurs',
+      description: 'Ouvre l annuaire fournisseurs et leurs informations de contact.'
+    }
+  },
+  {
+    id: 'action:assign-rooms',
+    title: 'Affectation des salles',
+    subtitle: 'Traiter les equipements a rattacher a une salle',
+    href: '/assign-rooms.html',
+    keywords: ['affectation', 'salle', 'salles', 'rattacher', 'assigner', 'agent', 'decouverte'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Affectation',
+      description: 'Ouvre l outil d affectation manuelle des salles.'
+    }
+  },
+  {
+    id: 'action:settings',
+    title: 'Parametres',
+    subtitle: 'Configurer l application et les integrations',
+    href: '/settings.html',
+    keywords: ['parametre', 'parametres', 'configuration', 'smtp', 'application', 'reglage'],
+    roles: ['ADMIN'],
+    preview: {
+      title: 'Configuration',
+      description: 'Ouvre les parametres globaux de MaintenanceBoard.'
+    }
+  },
+  {
+    id: 'action:users',
+    title: 'Utilisateurs',
+    subtitle: 'Gerer les comptes et les acces',
+    href: '/users.html',
+    keywords: ['utilisateur', 'utilisateurs', 'compte', 'acces', 'role', 'admin', 'tech'],
+    roles: ['ADMIN'],
+    preview: {
+      title: 'Gestion des acces',
+      description: 'Ouvre la liste des utilisateurs et leurs droits.'
     }
   },
   {
@@ -160,6 +232,18 @@ const ACTIONS = [
     preview: {
       title: 'Creation rapide',
       description: 'Ouvre le formulaire de creation d un equipement.'
+    }
+  },
+  {
+    id: 'action:new-supplier',
+    title: 'Nouveau fournisseur',
+    subtitle: 'Ajouter un fournisseur',
+    href: '/suppliers.html?action=create',
+    keywords: ['fournisseur', 'creer', 'ajouter', 'contact', 'societe'],
+    roles: ['ADMIN'],
+    preview: {
+      title: 'Creation rapide',
+      description: 'Ouvre le formulaire de creation d un fournisseur.'
     }
   }
 ];

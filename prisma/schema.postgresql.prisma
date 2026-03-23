@@ -147,6 +147,7 @@ model Equipment {
   suggestedRoomId    String?
   lastSeenAt         DateTime?
   agentInfo          String?
+  agentAlertState    String?
   agentHostname      String?
   agentToken         String?   @unique
   agentRevoked       Boolean   @default(false)     // Si true, re-enrollment requis

@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
 const config = require('../config');
 const { readSettings, writeSettings } = require('../utils/settings');
+const { buildSmtpTransportOptions } = require('../utils/mail');
 
 const prisma = require('../lib/prisma');
 
@@ -26,14 +27,15 @@ router.get('/smtp', requireAuth, requireAdmin, (req, res) => {
     pass:      (s.pass ?? config.smtp.pass) ? '••••••••' : '',
     from:      s.from  ?? config.smtp.from  ?? '',
     testTo:    s.testTo ?? req.user.email ?? '',
-    secure:    s.secure ?? false,
+    secure:    s.secure ?? config.smtp.secure ?? false,
+    starttls:  s.starttls ?? config.smtp.starttls ?? false,
     configured: !!(s.host ?? config.smtp.host)
   });
 });
 
 // PATCH /api/settings/smtp
 router.patch('/smtp', requireAuth, requireAdmin, (req, res) => {
-  const { host, port, user, pass, from, testTo, secure } = req.body;
+  const { host, port, user, pass, from, testTo, secure, starttls } = req.body;
   const cur = (readSettings().smtp) || {};
   writeSettings({
     smtp: {
@@ -43,6 +45,7 @@ router.patch('/smtp', requireAuth, requireAdmin, (req, res) => {
       from:   from   !== undefined ? from   : cur.from,
       testTo: testTo !== undefined ? testTo : cur.testTo,
       secure: secure !== undefined ? secure : (cur.secure ?? false),
+      starttls: starttls !== undefined ? starttls : (cur.starttls ?? false),
       // Ne pas écraser si l'UI renvoie les bullets masqués
       pass:   (pass && !pass.startsWith('•')) ? pass : cur.pass
     }
@@ -59,15 +62,20 @@ router.post('/smtp/test', requireAuth, requireAdmin, async (req, res, next) => {
   const pass = s.pass || config.smtp.pass;
   const from = s.from || config.smtp.from || 'noreply@maintenance.local';
   const to   = req.body.to || s.testTo || req.user.email;
+  const secure = s.secure ?? config.smtp.secure ?? false;
+  const starttls = s.starttls ?? config.smtp.starttls ?? false;
 
   if (!host) return res.status(400).json({ error: 'Serveur SMTP non configuré' });
 
   try {
-    const transporter = nodemailer.createTransport({
-      host, port: parseInt(port), secure: s.secure || false,
-      auth: user ? { user, pass } : undefined,
-      tls: { rejectUnauthorized: false }
-    });
+    const transporter = nodemailer.createTransport(buildSmtpTransportOptions({
+      host,
+      port: parseInt(port),
+      user,
+      pass,
+      secure,
+      starttls
+    }));
     await transporter.sendMail({
       from, to,
       subject: '[MaintenanceBoard] Test de configuration',

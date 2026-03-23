@@ -40,6 +40,8 @@ module.exports = {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
     from: process.env.SMTP_FROM || 'noreply@maintenance.local',
+    secure: process.env.SMTP_SECURE === 'true',
+    starttls: process.env.SMTP_STARTTLS === 'true',
   },
 
   agent: {

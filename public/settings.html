@@ -192,6 +192,11 @@
               <input id="smtp-secure" type="checkbox" class="w-4 h-4 rounded text-blue-600"/>
               Connexion sécurisée (SSL/TLS)
             </label>
+            <label class="flex items-center gap-2.5 text-sm text-slate-600 cursor-pointer select-none">
+              <input id="smtp-starttls" type="checkbox" class="w-4 h-4 rounded text-blue-600"/>
+              Forcer STARTTLS
+            </label>
+            <p class="text-xs text-slate-400 -mt-2">À utiliser en général avec le port 587. Si SSL/TLS est activé, STARTTLS est ignoré.</p>
             <div id="smtp-feedback" class="hidden rounded-lg px-4 py-3 text-sm"></div>
             <div class="flex flex-wrap gap-3 pt-1">
               <button type="submit"
@@ -989,6 +994,7 @@ async function loadSMTP() {
   document.getElementById('smtp-from').value      = d.from   || '';
   document.getElementById('smtp-test-to').value   = d.testTo || '';
   document.getElementById('smtp-secure').checked  = d.secure || false;
+  document.getElementById('smtp-starttls').checked = d.starttls || false;
 }
 
 async function saveSMTP(e) {
@@ -1006,7 +1012,8 @@ async function saveSMTP(e) {
       pass:   document.getElementById('smtp-pass').value,
       from:   document.getElementById('smtp-from').value,
       testTo: document.getElementById('smtp-test-to').value,
-      secure: document.getElementById('smtp-secure').checked
+      secure: document.getElementById('smtp-secure').checked,
+      starttls: document.getElementById('smtp-starttls').checked
     })
   });
   const json = await res.json();

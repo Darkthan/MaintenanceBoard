@@ -40,6 +40,12 @@ const prisma = require('../lib/prisma');
 const { containsFilter } = require('../lib/db-utils');
 const { createSmtpTransporter } = require('../utils/mail');
 const config = require('../config');
+const {
+  extractLowDiskMountFromTitle,
+  parseAgentAlertState,
+  serializeAgentAlertState,
+  suppressLowDiskAlert
+} = require('../utils/agentMonitoring');
 
 // SQLite stocke photos en JSON string — normaliser en tableau JS
 function parsePhotos(intervention) {
@@ -99,7 +105,11 @@ router.get('/', requireAuth, async (req, res, next) => {
     const { status, priority, roomId, equipmentId, techId, dateFrom, dateTo, search, source } = req.query;
 
     const where = { mergedIntoId: null };
-    if (status && VALID_STATUSES.includes(status)) where.status = status;
+    if (status) {
+      const statuses = (Array.isArray(status) ? status : [status]).filter(value => VALID_STATUSES.includes(value));
+      if (statuses.length === 1) where.status = statuses[0];
+      else if (statuses.length > 1) where.status = { in: statuses };
+    }
     if (priority && VALID_PRIORITIES.includes(priority)) where.priority = priority;
     if (roomId) where.roomId = roomId;
     if (equipmentId) where.equipmentId = equipmentId;
@@ -268,6 +278,22 @@ router.patch('/:id',
           where: { id: existing.equipmentId, status: 'REPAIR' },
           data: { status: 'ACTIVE' }
         });
+      }
+
+      const lowDiskMount = extractLowDiskMountFromTitle(existing.title);
+      if ((status === 'RESOLVED' || status === 'CLOSED') && existing.equipmentId && existing.source === 'INTERNAL' && lowDiskMount) {
+        const equipment = await prisma.equipment.findUnique({
+          where: { id: existing.equipmentId },
+          select: { id: true, agentAlertState: true }
+        });
+
+        if (equipment) {
+          const nextState = suppressLowDiskAlert(parseAgentAlertState(equipment.agentAlertState), lowDiskMount, existing.id);
+          await prisma.equipment.update({
+            where: { id: equipment.id },
+            data: { agentAlertState: serializeAgentAlertState(nextState) }
+          });
+        }
       }
 
       res.json(parsePhotos(intervention));

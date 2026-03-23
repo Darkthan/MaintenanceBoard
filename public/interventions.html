@@ -49,13 +49,16 @@
       <div data-mobile-filters="true" class="bg-white rounded-xl border border-slate-200 p-4 flex gap-3 flex-wrap">
         <input id="search-input" type="search" placeholder="Rechercher..."
           class="flex-1 min-w-48 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <select id="status-filter" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">Tous les statuts</option>
-          <option value="OPEN">Ouvert</option>
-          <option value="IN_PROGRESS">En cours</option>
-          <option value="RESOLVED">Résolu</option>
-          <option value="CLOSED">Fermé</option>
-        </select>
+        <div class="min-w-48">
+          <select id="status-filter" multiple size="4" aria-label="Filtrer par statuts"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="OPEN">Ouvert</option>
+            <option value="IN_PROGRESS">En cours</option>
+            <option value="RESOLVED">Résolu</option>
+            <option value="CLOSED">Fermé</option>
+          </select>
+          <p class="mt-1 text-xs text-slate-400">Plusieurs statuts possibles avec Ctrl/Cmd + clic.</p>
+        </div>
         <select id="priority-filter" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">Toutes priorités</option>
           <option value="LOW">Basse</option>
@@ -375,8 +378,19 @@ if (!user) throw new Error('Not logged in');
 renderNav('interventions');
 if (user.name) document.getElementById('user-avatar').textContent = user.name[0].toUpperCase();
 
-let currentPage = 1, currentSearch = '', currentStatus = '', currentPriority = '', currentSource = '';
+let currentPage = 1, currentSearch = '', currentStatuses = [], currentPriority = '', currentSource = '';
 const pageParams = new URLSearchParams(window.location.search);
+
+function getSelectedValues(select) {
+  return Array.from(select?.selectedOptions || []).map(option => option.value).filter(Boolean);
+}
+
+function setSelectedValues(select, values) {
+  const selected = new Set(Array.isArray(values) ? values : []);
+  Array.from(select?.options || []).forEach(option => {
+    option.selected = selected.has(option.value);
+  });
+}
 let detailInterventionId = null;
 let detailInterventionData = null;
 let mergeCandidates = [];
@@ -431,9 +445,10 @@ if (pageParams.get('search')) {
   currentSearch = pageParams.get('search');
   document.getElementById('search-input').value = currentSearch;
 }
-if (pageParams.get('status')) {
-  currentStatus = pageParams.get('status');
-  document.getElementById('status-filter').value = currentStatus;
+const statusParams = pageParams.getAll('status').filter(Boolean);
+if (statusParams.length) {
+  currentStatuses = statusParams.filter(status => ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'].includes(status));
+  setSelectedValues(document.getElementById('status-filter'), currentStatuses);
 }
 if (pageParams.get('priority')) {
   currentPriority = pageParams.get('priority');
@@ -446,7 +461,7 @@ async function loadInterventions() {
   try {
     const params = { page: currentPage, limit: 20 };
     if (currentSearch) params.search = currentSearch;
-    if (currentStatus) params.status = currentStatus;
+    if (currentStatuses.length) params.status = currentStatuses;
     if (currentPriority) params.priority = currentPriority;
     if (currentSource) params.source = currentSource;
 
@@ -848,7 +863,7 @@ async function updateLinkedOrder(orderId, form) {
 
 let searchTimeout;
 document.getElementById('search-input').addEventListener('input', e => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { currentSearch = e.target.value; currentPage = 1; loadInterventions(); }, 400); });
-document.getElementById('status-filter').addEventListener('change', e => { currentStatus = e.target.value; currentPage = 1; loadInterventions(); });
+document.getElementById('status-filter').addEventListener('change', e => { currentStatuses = getSelectedValues(e.target); currentPage = 1; loadInterventions(); });
 document.getElementById('priority-filter').addEventListener('change', e => { currentPriority = e.target.value; currentPage = 1; loadInterventions(); });
 document.getElementById('source-filter').addEventListener('change', e => { currentSource = e.target.value; currentPage = 1; loadInterventions(); });
 

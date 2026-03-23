@@ -6,6 +6,12 @@ const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
 const { agentAuth } = require('../middleware/agentAuth');
 const discoveryService = require('../services/discoveryService');
 const { readSettings } = require('../utils/settings');
+const {
+  LOW_DISK_TITLE_PREFIX,
+  isLowDiskSuppressed,
+  clearRecoveredLowDiskSuppressions,
+  serializeAgentAlertState
+} = require('../utils/agentMonitoring');
 
 const prisma = require('../lib/prisma');
 
@@ -30,10 +36,23 @@ async function maybeCreateLowDiskIntervention(equipment, agentInfo) {
 
   const disks = Array.isArray(agentInfo?.disks) ? agentInfo.disks : [];
   const lowDisks = disks.filter(disk => Number.isFinite(disk?.freeGb) && disk.freeGb < thresholdGb);
+  const lowMounts = new Set(lowDisks.map(disk => disk.mount || disk.label || 'disque'));
+  const { changed, state } = clearRecoveredLowDiskSuppressions(equipment.agentAlertState, lowMounts);
+
+  if (changed) {
+    const serializedState = serializeAgentAlertState(state);
+    await prisma.equipment.update({
+      where: { id: equipment.id },
+      data: { agentAlertState: serializedState }
+    });
+    equipment.agentAlertState = serializedState;
+  }
 
   for (const disk of lowDisks) {
     const mount = disk.mount || disk.label || 'disque';
-    const title = `Espace disque faible - ${mount}`;
+    const title = `${LOW_DISK_TITLE_PREFIX}${mount}`;
+
+    if (isLowDiskSuppressed(state, mount)) continue;
 
     const existing = await prisma.intervention.findFirst({
       where: {
