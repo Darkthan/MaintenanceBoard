@@ -1561,6 +1561,7 @@ function initAccountSettings() {
       await api.post('/auth/webauthn/register/finish', attResp);
       showToast('Passkey enregistrée avec succès', 'success');
     } catch (err) {
+      console.error('[Passkey registration]', err);
       showToast(err.message || 'Échec de l\'enregistrement', 'error');
     } finally {
       addBtn.disabled = false;
@@ -1678,7 +1679,7 @@ function showToast(message, type = 'success') {
   };
 
   const toast = document.createElement('div');
-  toast.className = `fixed bottom-4 right-4 z-[100] px-5 py-3 rounded-xl text-white shadow-lg text-sm font-medium
+  toast.className = `fixed bottom-4 right-4 z-[200] px-5 py-3 rounded-xl text-white shadow-lg text-sm font-medium
                      transform translate-y-2 opacity-0 transition-all duration-300 ${colors[type] || colors.info}`;
   toast.textContent = message;
   document.body.appendChild(toast);
