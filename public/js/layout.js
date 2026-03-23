@@ -189,7 +189,6 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined [data-mobile-modal-panel] {
         width: 100% !important;
-        max-height: calc(100vh - 1rem) !important;
         border-radius: 1rem !important;
       }
 
@@ -1311,8 +1310,8 @@ function ensureAccountSettingsModal() {
   modal.className = 'hidden fixed inset-0 z-[130]';
   modal.innerHTML = `
     <div id="account-settings-backdrop" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"></div>
-    <div class="relative z-10 min-h-full flex items-center justify-center p-4">
-      <div class="w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl" data-mobile-modal-panel="true">
+    <div class="relative z-10 flex min-h-full items-start justify-center overflow-y-auto p-4 sm:items-center">
+      <div class="my-auto w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl" data-mobile-modal-panel="true">
         <div class="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
           <div>
             <p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Utilisateur</p>
