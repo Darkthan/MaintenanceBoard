@@ -6,6 +6,7 @@ const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
 const { uploadImport } = require('../middleware/upload');
 const importService = require('../services/importService');
 const qrService = require('../services/qrService');
+const { readSettings, writeSettings } = require('../utils/settings');
 
 const prisma = require('../lib/prisma');
 
@@ -17,6 +18,21 @@ const validate = (req, res) => {
   }
   return true;
 };
+
+const BUILDING_SETTINGS_KEY = 'roomBuildings';
+
+function normalizeBuildingName(name) {
+  return String(name || '').trim();
+}
+
+function readBuildingSettings() {
+  const settings = readSettings()?.[BUILDING_SETTINGS_KEY];
+  return settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+}
+
+function writeBuildingSettings(settings) {
+  writeSettings({ [BUILDING_SETTINGS_KEY]: settings });
+}
 
 // GET /api/rooms - Liste avec filtres et pagination
 router.get('/', requireAuth, async (req, res, next) => {
@@ -70,6 +86,71 @@ router.get('/by-token/:token', async (req, res, next) => {
     res.json(room);
   } catch (err) { next(err); }
 });
+
+// GET /api/rooms/buildings - Liste des bâtiments avec métadonnées
+router.get('/buildings', requireAuth, async (_req, res, next) => {
+  try {
+    const rooms = await prisma.room.findMany({
+      where: { building: { not: null } },
+      select: { building: true }
+    });
+
+    const settings = readBuildingSettings();
+    const roomCounts = new Map();
+
+    rooms.forEach(room => {
+      const name = normalizeBuildingName(room.building);
+      if (!name) return;
+      roomCounts.set(name, (roomCounts.get(name) || 0) + 1);
+    });
+
+    const buildingNames = [...new Set([
+      ...roomCounts.keys(),
+      ...Object.keys(settings).map(normalizeBuildingName)
+    ].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+
+    res.json(buildingNames.map(name => ({
+      name,
+      roomCount: roomCounts.get(name) || 0,
+      floorsCount: Number.isInteger(settings[name]?.floorsCount) ? settings[name].floorsCount : null
+    })));
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/rooms/buildings - Mettre à jour les métadonnées d'un bâtiment
+router.patch('/buildings',
+  requireAuth, requireAdmin,
+  [
+    body('name').trim().isLength({ min: 1, max: 100 }),
+    body('floorsCount').optional({ nullable: true }).custom(value => (
+      value === null ||
+      value === '' ||
+      (Number.isInteger(value) && value >= 0 && value <= 200) ||
+      (/^\d+$/.test(String(value)) && Number(value) >= 0 && Number(value) <= 200)
+    ))
+  ],
+  (req, res) => {
+    if (!validate(req, res)) return;
+
+    const name = normalizeBuildingName(req.body.name);
+    const floorsCount = req.body.floorsCount === null || req.body.floorsCount === ''
+      ? null
+      : parseInt(req.body.floorsCount, 10);
+
+    const settings = readBuildingSettings();
+    if (floorsCount === null) {
+      delete settings[name];
+    } else {
+      settings[name] = {
+        ...(settings[name] || {}),
+        floorsCount
+      };
+    }
+
+    writeBuildingSettings(settings);
+    res.json({ name, floorsCount });
+  }
+);
 
 // GET /api/rooms/:id - Détail d'une salle
 router.get('/:id', requireAuth, async (req, res, next) => {
