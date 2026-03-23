@@ -46,31 +46,52 @@
 
     <div class="flex-1 p-6 space-y-4">
       <!-- Filtres -->
-      <div data-mobile-filters="true" class="bg-white rounded-xl border border-slate-200 p-4 flex gap-3 flex-wrap">
-        <input id="search-input" type="search" placeholder="Rechercher..."
-          class="flex-1 min-w-48 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <div class="min-w-48">
-          <select id="status-filter" multiple size="4" aria-label="Filtrer par statuts"
-            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-            <option value="OPEN">Ouvert</option>
-            <option value="IN_PROGRESS">En cours</option>
-            <option value="RESOLVED">Résolu</option>
-            <option value="CLOSED">Fermé</option>
-          </select>
-          <p class="mt-1 text-xs text-slate-400">Plusieurs statuts possibles avec Ctrl/Cmd + clic.</p>
+      <div data-mobile-filters="true" class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="px-4 py-3 flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-slate-700">Filtres</p>
+            <p id="filters-counter" class="text-xs text-slate-400">0/4 actifs</p>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button id="clear-filters-btn" type="button"
+              class="hidden px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+              Réinitialiser
+            </button>
+            <button id="toggle-filters-btn" type="button"
+              class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+              <span id="toggle-filters-label">Afficher</span>
+              <svg id="toggle-filters-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 9-7 7-7-7"/>
+              </svg>
+            </button>
+          </div>
         </div>
-        <select id="priority-filter" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">Toutes priorités</option>
-          <option value="LOW">Basse</option>
-          <option value="NORMAL">Normale</option>
-          <option value="HIGH">Haute</option>
-          <option value="CRITICAL">Critique</option>
-        </select>
-        <select id="source-filter" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">Toutes sources</option>
-          <option value="INTERNAL">Internes</option>
-          <option value="PUBLIC">Publiques</option>
-        </select>
+        <div id="filters-panel" class="hidden border-t border-slate-200 p-4 flex gap-3 flex-wrap">
+          <input id="search-input" type="search" placeholder="Rechercher..."
+            class="flex-1 min-w-48 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div class="min-w-48">
+            <select id="status-filter" multiple size="4" aria-label="Filtrer par statuts"
+              class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="OPEN">Ouvert</option>
+              <option value="IN_PROGRESS">En cours</option>
+              <option value="RESOLVED">Résolu</option>
+              <option value="CLOSED">Fermé</option>
+            </select>
+            <p class="mt-1 text-xs text-slate-400">Plusieurs statuts possibles avec Ctrl/Cmd + clic.</p>
+          </div>
+          <select id="priority-filter" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Toutes priorités</option>
+            <option value="LOW">Basse</option>
+            <option value="NORMAL">Normale</option>
+            <option value="HIGH">Haute</option>
+            <option value="CRITICAL">Critique</option>
+          </select>
+          <select id="source-filter" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Toutes sources</option>
+            <option value="INTERNAL">Internes</option>
+            <option value="PUBLIC">Publiques</option>
+          </select>
+        </div>
       </div>
 
       <!-- Liste -->
@@ -380,6 +401,8 @@ if (user.name) document.getElementById('user-avatar').textContent = user.name[0]
 
 let currentPage = 1, currentSearch = '', currentStatuses = [], currentPriority = '', currentSource = '';
 const pageParams = new URLSearchParams(window.location.search);
+const TOTAL_FILTER_SLOTS = 4;
+let filtersExpanded = false;
 
 function getSelectedValues(select) {
   return Array.from(select?.selectedOptions || []).map(option => option.value).filter(Boolean);
@@ -390,6 +413,62 @@ function setSelectedValues(select, values) {
   Array.from(select?.options || []).forEach(option => {
     option.selected = selected.has(option.value);
   });
+}
+
+function countActiveFilters() {
+  let count = 0;
+  if (currentSearch.trim()) count++;
+  if (currentStatuses.length) count++;
+  if (currentPriority) count++;
+  if (currentSource) count++;
+  return count;
+}
+
+function syncFiltersToUrl() {
+  const params = new URLSearchParams(window.location.search);
+  params.delete('search');
+  params.delete('status');
+  params.delete('priority');
+  params.delete('source');
+  params.delete('page');
+
+  if (currentSearch.trim()) params.set('search', currentSearch.trim());
+  currentStatuses.forEach(status => params.append('status', status));
+  if (currentPriority) params.set('priority', currentPriority);
+  if (currentSource) params.set('source', currentSource);
+  if (currentPage > 1) params.set('page', String(currentPage));
+
+  const nextQuery = params.toString();
+  const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
+  window.history.replaceState({}, '', nextUrl);
+}
+
+function setFiltersExpanded(expanded) {
+  filtersExpanded = !!expanded;
+  document.getElementById('filters-panel').classList.toggle('hidden', !filtersExpanded);
+  document.getElementById('toggle-filters-label').textContent = filtersExpanded ? 'Masquer' : 'Afficher';
+  document.getElementById('toggle-filters-icon').classList.toggle('rotate-180', filtersExpanded);
+}
+
+function updateFilterSummary() {
+  const activeCount = countActiveFilters();
+  document.getElementById('filters-counter').textContent = `${activeCount}/${TOTAL_FILTER_SLOTS} actif${activeCount > 1 ? 's' : ''}`;
+  document.getElementById('clear-filters-btn').classList.toggle('hidden', activeCount === 0);
+}
+
+function resetFilters() {
+  currentSearch = '';
+  currentStatuses = [];
+  currentPriority = '';
+  currentSource = '';
+  currentPage = 1;
+  document.getElementById('search-input').value = '';
+  setSelectedValues(document.getElementById('status-filter'), []);
+  document.getElementById('priority-filter').value = '';
+  document.getElementById('source-filter').value = '';
+  updateFilterSummary();
+  syncFiltersToUrl();
+  loadInterventions();
 }
 let detailInterventionId = null;
 let detailInterventionData = null;
@@ -454,10 +533,17 @@ if (pageParams.get('priority')) {
   currentPriority = pageParams.get('priority');
   document.getElementById('priority-filter').value = currentPriority;
 }
+if (pageParams.get('source')) {
+  currentSource = pageParams.get('source');
+  document.getElementById('source-filter').value = currentSource;
+}
+updateFilterSummary();
 
 async function loadInterventions() {
   const container = document.getElementById('interventions-container');
   container.innerHTML = '<p class="text-slate-400 text-center py-8">Chargement...</p>';
+  updateFilterSummary();
+  syncFiltersToUrl();
   try {
     const params = { page: currentPage, limit: 20 };
     if (currentSearch) params.search = currentSearch;
@@ -866,6 +952,8 @@ document.getElementById('search-input').addEventListener('input', e => { clearTi
 document.getElementById('status-filter').addEventListener('change', e => { currentStatuses = getSelectedValues(e.target); currentPage = 1; loadInterventions(); });
 document.getElementById('priority-filter').addEventListener('change', e => { currentPriority = e.target.value; currentPage = 1; loadInterventions(); });
 document.getElementById('source-filter').addEventListener('change', e => { currentSource = e.target.value; currentPage = 1; loadInterventions(); });
+document.getElementById('toggle-filters-btn').addEventListener('click', () => setFiltersExpanded(!filtersExpanded));
+document.getElementById('clear-filters-btn').addEventListener('click', resetFilters);
 
 async function loadSelects(roomId, equipId) {
   try {
