@@ -197,8 +197,8 @@ router.post('/',
     body('title').trim().isLength({ min: 3, max: 300 }),
     body('status').optional().isIn(VALID_STATUSES),
     body('priority').optional().isIn(VALID_PRIORITIES),
-    body('roomId').optional().isUUID(),
-    body('equipmentId').optional().isUUID()
+    body('roomId').optional({ nullable: true }).isUUID(),
+    body('equipmentId').optional({ nullable: true }).isUUID()
   ],
   async (req, res, next) => {
     try {
