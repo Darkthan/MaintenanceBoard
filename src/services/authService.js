@@ -8,8 +8,18 @@ const {
   verifyAuthenticationResponse
 } = require('@simplewebauthn/server');
 const config = require('../config');
+const { readSettings } = require('../utils/settings');
 
 const prisma = require('../lib/prisma');
+
+function getWebAuthnConfig() {
+  const s = readSettings().webauthn || {};
+  return {
+    rpName: s.rpName || getWebAuthnConfig().rpName,
+    rpId:   s.rpId   || getWebAuthnConfig().rpId,
+    origin: s.origin || getWebAuthnConfig().origin
+  };
+}
 
 // SQLite stocke les tableaux en JSON string — helper de désérialisation
 function parseJsonField(value) {
@@ -108,8 +118,8 @@ async function beginPasskeyRegistration(user) {
   });
 
   const options = await generateRegistrationOptions({
-    rpName: config.webauthn.rpName,
-    rpID: config.webauthn.rpId,
+    rpName: getWebAuthnConfig().rpName,
+    rpID: getWebAuthnConfig().rpId,
     userID: user.id,
     userName: user.email,
     userDisplayName: user.name,
@@ -135,8 +145,8 @@ async function finishPasskeyRegistration(user, response, challenge, passkeyName)
     verification = await verifyRegistrationResponse({
       response,
       expectedChallenge: challenge,
-      expectedOrigin: config.webauthn.origin,
-      expectedRPID: config.webauthn.rpId,
+      expectedOrigin: getWebAuthnConfig().origin,
+      expectedRPID: getWebAuthnConfig().rpId,
       requireUserVerification: false
     });
   } catch (err) {
@@ -185,7 +195,7 @@ async function beginPasskeyLogin(email) {
   }
 
   const options = await generateAuthenticationOptions({
-    rpID: config.webauthn.rpId,
+    rpID: getWebAuthnConfig().rpId,
     userVerification: 'preferred',
     allowCredentials
   });
@@ -214,8 +224,8 @@ async function finishPasskeyLogin(response, challenge, userId) {
     verification = await verifyAuthenticationResponse({
       response,
       expectedChallenge: challenge,
-      expectedOrigin: config.webauthn.origin,
-      expectedRPID: config.webauthn.rpId,
+      expectedOrigin: getWebAuthnConfig().origin,
+      expectedRPID: getWebAuthnConfig().rpId,
       credential: {
         id: Buffer.from(passkey.credentialId, 'base64url'),
         publicKey: passkey.publicKey,

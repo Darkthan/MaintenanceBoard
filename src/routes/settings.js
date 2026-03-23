@@ -110,6 +110,32 @@ router.patch('/agent-monitoring', requireAuth, requireAdmin, (req, res) => {
   res.json({ message: 'Surveillance des agents enregistrée', settings: next });
 });
 
+// ── WebAuthn ────────────────────────────────────────────────────────────────
+
+// GET /api/settings/webauthn
+router.get('/webauthn', requireAuth, requireAdmin, (req, res) => {
+  const s = readSettings().webauthn || {};
+  res.json({
+    rpName:  s.rpName  ?? config.webauthn.rpName  ?? 'MaintenanceBoard',
+    rpId:    s.rpId    ?? config.webauthn.rpId    ?? '',
+    origin:  s.origin  ?? config.webauthn.origin  ?? ''
+  });
+});
+
+// PATCH /api/settings/webauthn
+router.patch('/webauthn', requireAuth, requireAdmin, (req, res) => {
+  const { rpName, rpId, origin } = req.body;
+  const cur = readSettings().webauthn || {};
+  writeSettings({
+    webauthn: {
+      rpName: rpName !== undefined ? String(rpName).trim() : cur.rpName,
+      rpId:   rpId   !== undefined ? String(rpId).trim()   : cur.rpId,
+      origin: origin !== undefined ? String(origin).trim() : cur.origin
+    }
+  });
+  res.json({ message: 'Configuration WebAuthn enregistrée' });
+});
+
 // ── Export ─────────────────────────────────────────────────────────────────
 
 // GET /api/settings/export
