@@ -25,7 +25,27 @@
 
       <section class="rounded-[2rem] border border-slate-200 bg-white p-8 text-slate-900 shadow-2xl shadow-slate-950/20">
         <div id="loading" class="text-sm text-slate-500">Chargement du lien...</div>
+        <div id="auth-step" class="hidden space-y-4">
+          <div class="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            Le formulaire est protégé par un lien de connexion envoyé par email.
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium text-slate-700">Nom complet</label>
+            <input id="auth-requester-name" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium text-slate-700">Email</label>
+            <input id="auth-requester-email" type="email" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+          </div>
+          <div id="auth-feedback" class="hidden rounded-xl px-4 py-3 text-sm"></div>
+          <button id="send-auth-link-btn" type="button" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700">
+            Envoyer le lien de connexion
+          </button>
+        </div>
         <form id="request-form" class="hidden space-y-4">
+          <div class="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            Connecté en tant que <strong id="authenticated-email"></strong>
+          </div>
           <div>
             <label class="mb-1 block text-sm font-medium text-slate-700">Ressource</label>
             <select id="resource-id" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></select>
@@ -38,7 +58,7 @@
             </div>
             <div>
               <label class="mb-1 block text-sm font-medium text-slate-700">Email</label>
-              <input id="requester-email" type="email" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+              <input id="requester-email" type="email" readonly class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500" />
             </div>
           </div>
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -51,14 +71,24 @@
               <input id="requester-organization" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
             </div>
           </div>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label class="mb-1 block text-sm font-medium text-slate-700">Début</label>
-              <input id="start-at" type="datetime-local" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+              <label class="mb-1 block text-sm font-medium text-slate-700">Date de début</label>
+              <input id="start-date" type="date" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-slate-700">Fin</label>
-              <input id="end-at" type="datetime-local" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+              <label class="mb-1 block text-sm font-medium text-slate-700">Heure de début</label>
+              <input id="start-time" type="time" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+            </div>
+          </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label class="mb-1 block text-sm font-medium text-slate-700">Date de fin</label>
+              <input id="end-date" type="date" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium text-slate-700">Heure de fin</label>
+              <input id="end-time" type="time" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
             </div>
             <div>
               <label class="mb-1 block text-sm font-medium text-slate-700">Quantité souhaitée</label>
@@ -84,10 +114,37 @@
 
 <script>
 let currentToken = null;
+let currentAccessToken = null;
 let resources = [];
 
 function getToken() {
   return new URLSearchParams(window.location.search).get('token');
+}
+
+function getAccessToken() {
+  return new URLSearchParams(window.location.search).get('access');
+}
+
+function combineLocalDateTime(dateValue, timeValue) {
+  if (!dateValue || !timeValue) throw new Error('La date et l’heure sont requises.');
+  const localValue = `${dateValue}T${timeValue}`;
+  const date = new Date(localValue);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error('Date ou heure invalide.');
+  }
+  return date.toISOString();
+}
+
+function setFeedback(elementId, tone, message) {
+  const element = document.getElementById(elementId);
+  const styles = {
+    success: 'rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700',
+    error: 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700',
+    info: 'rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700'
+  };
+  element.className = styles[tone] || styles.info;
+  element.textContent = message;
+  element.classList.remove('hidden');
 }
 
 function renderResourceSummary() {
@@ -108,13 +165,17 @@ function renderResourceSummary() {
 
 async function loadLink() {
   currentToken = getToken();
+  currentAccessToken = getAccessToken();
   if (!currentToken) {
     document.getElementById('loading').textContent = 'Lien de demande manquant.';
     return;
   }
 
   try {
-    const data = await fetch(`/api/loan-request/${encodeURIComponent(currentToken)}`).then(async res => {
+    const url = new URL(`/api/loan-request/${encodeURIComponent(currentToken)}`, window.location.origin);
+    if (currentAccessToken) url.searchParams.set('access', currentAccessToken);
+
+    const data = await fetch(url).then(async res => {
       if (!res.ok) {
         const payload = await res.json().catch(() => ({ error: 'Lien invalide' }));
         throw new Error(payload.error || 'Lien invalide');
@@ -122,14 +183,24 @@ async function loadLink() {
       return res.json();
     });
 
-    resources = Array.isArray(data.resources) ? data.resources : [];
     document.getElementById('page-title').textContent = data.title || 'Demande de prêt de matériel';
+    document.getElementById('loading').classList.add('hidden');
+    if (!data.authenticated) {
+      document.getElementById('auth-step').classList.remove('hidden');
+      return;
+    }
+
+    resources = Array.isArray(data.resources) ? data.resources : [];
+    currentAccessToken = data.accessToken || currentAccessToken;
+    document.getElementById('requester-email').value = data.requesterEmail || '';
+    document.getElementById('requester-name').value = data.requesterName || '';
+    document.getElementById('authenticated-email').textContent = data.requesterEmail || 'email inconnu';
+
     const select = document.getElementById('resource-id');
     select.innerHTML = resources.map(resource => `<option value="${resource.id}">${resource.name}</option>`).join('');
     if (data.resourceId) select.value = data.resourceId;
     renderResourceSummary();
 
-    document.getElementById('loading').classList.add('hidden');
     document.getElementById('request-form').classList.remove('hidden');
   } catch (err) {
     document.getElementById('loading').textContent = err.message;
@@ -138,23 +209,53 @@ async function loadLink() {
 
 document.getElementById('resource-id').addEventListener('change', renderResourceSummary);
 
+document.getElementById('send-auth-link-btn').addEventListener('click', async () => {
+  const requesterEmail = document.getElementById('auth-requester-email').value.trim();
+  const requesterName = document.getElementById('auth-requester-name').value.trim();
+  try {
+    const res = await fetch(`/api/loan-request/${encodeURIComponent(currentToken)}/access-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requesterEmail,
+        requesterName
+      })
+    });
+
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.error || payload.errors?.[0]?.msg || 'Erreur lors de l’envoi du lien');
+    setFeedback('auth-feedback', 'success', payload.message || 'Un lien de connexion a été envoyé.');
+  } catch (err) {
+    setFeedback('auth-feedback', 'error', err.message);
+  }
+});
+
 document.getElementById('request-form').addEventListener('submit', async event => {
   event.preventDefault();
   const feedback = document.getElementById('feedback');
   feedback.classList.add('hidden');
 
   try {
+    const startAt = combineLocalDateTime(
+      document.getElementById('start-date').value,
+      document.getElementById('start-time').value
+    );
+    const endAt = combineLocalDateTime(
+      document.getElementById('end-date').value,
+      document.getElementById('end-time').value
+    );
+
     const res = await fetch(`/api/loan-request/${encodeURIComponent(currentToken)}/requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        accessToken: currentAccessToken,
         resourceId: document.getElementById('resource-id').value,
         requesterName: document.getElementById('requester-name').value.trim(),
-        requesterEmail: document.getElementById('requester-email').value.trim(),
         requesterPhone: document.getElementById('requester-phone').value.trim(),
         requesterOrganization: document.getElementById('requester-organization').value.trim(),
-        startAt: new Date(document.getElementById('start-at').value).toISOString(),
-        endAt: new Date(document.getElementById('end-at').value).toISOString(),
+        startAt,
+        endAt,
         requestedUnits: parseInt(document.getElementById('requested-units').value, 10),
         additionalNeeds: document.getElementById('additional-needs').value.trim(),
         notes: document.getElementById('notes').value.trim()
@@ -168,6 +269,7 @@ document.getElementById('request-form').addEventListener('submit', async event =
     feedback.textContent = payload.message || 'Demande envoyée.';
     feedback.classList.remove('hidden');
     event.target.reset();
+    document.getElementById('requester-email').value = document.getElementById('authenticated-email').textContent;
     renderResourceSummary();
   } catch (err) {
     feedback.className = 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700';

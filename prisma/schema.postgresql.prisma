@@ -478,9 +478,26 @@ model LoanMagicLink {
   resource    LoanResource?      @relation(fields: [resourceId], references: [id], onDelete: SetNull)
   createdBy   User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
   requests    LoanReservation[]
+  accessLinks LoanRequestAccessLink[]
 
   @@index([resourceId])
   @@map("loan_magic_links")
+}
+
+model LoanRequestAccessLink {
+  id            String   @id @default(uuid())
+  requestLinkId String
+  email         String
+  requesterName String?
+  token         String   @unique @default(uuid())
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  requestLink LoanMagicLink @relation(fields: [requestLinkId], references: [id], onDelete: Cascade)
+
+  @@index([requestLinkId, email])
+  @@index([expiresAt])
+  @@map("loan_request_access_links")
 }
 
 model LoanReservation {

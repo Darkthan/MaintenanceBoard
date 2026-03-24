@@ -1,8 +1,10 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { body, query, validationResult } = require('express-validator');
 const prisma = require('../lib/prisma');
 const config = require('../config');
 const { requireAuth } = require('../middleware/auth');
+const { createSmtpTransporter } = require('../utils/mail');
 const {
   ACTIVE_LOAN_STATUSES,
   getBundleInfo,
@@ -15,6 +17,15 @@ const {
 
 const loansRouter = express.Router();
 const loanPublicRouter = express.Router();
+const loanAccessLinkLimiter = process.env.NODE_ENV !== 'test'
+  ? rateLimit({
+      windowMs: 60 * 60 * 1000,
+      max: 5,
+      keyGenerator: req => (req.body?.requesterEmail || '').trim().toLowerCase() || req.ip,
+      message: { error: 'Trop de demandes de lien pour cet email, réessayez dans une heure.' },
+      skip: req => !req.body?.requesterEmail
+    })
+  : (_req, _res, next) => next();
 
 function validate(req, res) {
   const errors = validationResult(req);
@@ -31,6 +42,61 @@ function mapResource(resource) {
     ...resource,
     ...bundle
   };
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getLoanRequestUrl(requestToken, accessToken) {
+  const url = new URL('/loan-request.html', config.appUrl);
+  url.searchParams.set('token', requestToken);
+  url.searchParams.set('access', accessToken);
+  return url.toString();
+}
+
+async function findValidRequestLink(token) {
+  const link = await prisma.loanMagicLink.findUnique({
+    where: { token },
+    include: { resource: true }
+  });
+
+  if (!link || !link.isActive || (link.expiresAt && link.expiresAt < new Date())) {
+    throw Object.assign(new Error('Lien de demande de prêt invalide ou expiré'), { status: 404 });
+  }
+
+  return link;
+}
+
+async function findValidAccessLink(requestToken, accessToken) {
+  if (!accessToken) return null;
+
+  const accessLink = await prisma.loanRequestAccessLink.findUnique({
+    where: { token: accessToken },
+    include: {
+      requestLink: {
+        include: { resource: true }
+      }
+    }
+  });
+
+  if (!accessLink) return null;
+  if (accessLink.expiresAt < new Date()) return null;
+  if (!accessLink.requestLink || accessLink.requestLink.token !== requestToken) return null;
+  if (!accessLink.requestLink.isActive || (accessLink.requestLink.expiresAt && accessLink.requestLink.expiresAt < new Date())) return null;
+
+  return accessLink;
+}
+
+async function getRequestResources(link) {
+  const resources = await prisma.loanResource.findMany({
+    where: {
+      isActive: true,
+      ...(link.resourceId ? { id: link.resourceId } : {})
+    },
+    orderBy: [{ category: 'asc' }, { name: 'asc' }]
+  });
+  return resources.map(mapResource);
 }
 
 function ensureValidDates(startAt, endAt) {
@@ -132,40 +198,88 @@ async function getCalendarEvents(startAt, endAt) {
 
 loanPublicRouter.get('/:token', async (req, res, next) => {
   try {
-    const link = await prisma.loanMagicLink.findUnique({
-      where: { token: req.params.token },
-      include: { resource: true }
-    });
-
-    if (!link || !link.isActive || (link.expiresAt && link.expiresAt < new Date())) {
-      return res.status(404).json({ error: 'Lien de demande de prêt invalide ou expiré' });
-    }
-
-    const resources = await prisma.loanResource.findMany({
-      where: {
-        isActive: true,
-        ...(link.resourceId ? { id: link.resourceId } : {})
-      },
-      orderBy: [{ category: 'asc' }, { name: 'asc' }]
-    });
+    const link = await findValidRequestLink(req.params.token);
+    const accessLink = await findValidAccessLink(req.params.token, req.query.access);
 
     res.json({
       token: link.token,
       title: link.title || 'Demande de prêt de matériel',
       resourceId: link.resourceId || null,
       expiresAt: link.expiresAt,
-      resources: resources.map(mapResource)
+      authenticated: !!accessLink,
+      requesterEmail: accessLink?.email || null,
+      requesterName: accessLink?.requesterName || null,
+      accessToken: accessLink?.token || null,
+      resources: accessLink ? await getRequestResources(link) : []
     });
   } catch (err) {
     next(err);
   }
 });
 
+loanPublicRouter.post('/:token/access-link',
+  loanAccessLinkLimiter,
+  [
+    body('requesterEmail').isEmail().normalizeEmail(),
+    body('requesterName').optional({ values: 'falsy' }).trim().isLength({ max: 200 })
+  ],
+  async (req, res, next) => {
+    try {
+      if (!validate(req, res)) return;
+
+      const link = await findValidRequestLink(req.params.token);
+      const requesterEmail = normalizeEmail(req.body.requesterEmail);
+      const requesterName = (req.body.requesterName || '').trim() || null;
+
+      const accessLink = await prisma.loanRequestAccessLink.create({
+        data: {
+          requestLinkId: link.id,
+          email: requesterEmail,
+          requesterName,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        }
+      });
+
+      const { transporter, from } = createSmtpTransporter();
+      if (!transporter) {
+        return res.status(503).json({ error: 'La configuration SMTP est requise pour envoyer un lien de connexion.' });
+      }
+
+      const accessUrl = getLoanRequestUrl(link.token, accessLink.token);
+
+      await transporter.sendMail({
+        from,
+        to: requesterEmail,
+        subject: `Accès à votre demande de prêt${link.title ? ` – ${link.title}` : ''}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
+            <h2 style="color:#0f172a;">Connexion à votre demande de prêt</h2>
+            <p>Bonjour${requesterName ? ` ${requesterName}` : ''},</p>
+            <p>Cliquez sur le lien ci-dessous pour ouvrir le formulaire de prêt sécurisé :</p>
+            <p style="margin:24px 0;">
+              <a href="${accessUrl}" style="background:#0284c7;color:white;padding:12px 24px;text-decoration:none;border-radius:10px;font-weight:600;display:inline-block;">Ouvrir le formulaire</a>
+            </p>
+            <p style="color:#475569;font-size:14px;">Ce lien est valable 24 heures et est lié à cette adresse email.</p>
+            <p style="color:#94a3b8;font-size:12px;word-break:break-all;">Lien direct : <a href="${accessUrl}">${accessUrl}</a></p>
+          </div>
+        `
+      });
+
+      res.json({
+        success: true,
+        message: 'Un lien de connexion a été envoyé à cette adresse email.'
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 loanPublicRouter.post('/:token/requests',
   [
+    body('accessToken').isString().isLength({ min: 10, max: 200 }),
     body('resourceId').isString(),
     body('requesterName').trim().isLength({ min: 2, max: 200 }),
-    body('requesterEmail').isEmail().normalizeEmail(),
     body('requesterPhone').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
     body('requesterOrganization').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
     body('startAt').isISO8601(),
@@ -178,12 +292,10 @@ loanPublicRouter.post('/:token/requests',
     try {
       if (!validate(req, res)) return;
 
-      const link = await prisma.loanMagicLink.findUnique({
-        where: { token: req.params.token }
-      });
-
-      if (!link || !link.isActive || (link.expiresAt && link.expiresAt < new Date())) {
-        return res.status(404).json({ error: 'Lien de demande de prêt invalide ou expiré' });
+      const link = await findValidRequestLink(req.params.token);
+      const accessLink = await findValidAccessLink(req.params.token, req.body.accessToken);
+      if (!accessLink) {
+        return res.status(403).json({ error: 'Lien de connexion invalide ou expiré. Demandez un nouveau lien.' });
       }
 
       if (link.resourceId && link.resourceId !== req.body.resourceId) {
@@ -198,7 +310,7 @@ loanPublicRouter.post('/:token/requests',
           resourceId: availability.resource.id,
           requestLinkId: link.id,
           requesterName: req.body.requesterName,
-          requesterEmail: req.body.requesterEmail,
+          requesterEmail: accessLink.email,
           requesterPhone: req.body.requesterPhone || null,
           requesterOrganization: req.body.requesterOrganization || null,
           startAt: start,

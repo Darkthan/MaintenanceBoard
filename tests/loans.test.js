@@ -12,6 +12,13 @@ jest.mock('../src/config', () => ({
   appUrl: 'https://maintenanceboard.test'
 }));
 
+jest.mock('../src/utils/mail', () => ({
+  createSmtpTransporter: jest.fn(() => ({
+    transporter: { sendMail: jest.fn().mockResolvedValue({}) },
+    from: 'noreply@test.local'
+  }))
+}));
+
 jest.mock('../src/lib/prisma', () => ({
   loanResource: {
     findUnique: jest.fn(),
@@ -24,6 +31,10 @@ jest.mock('../src/lib/prisma', () => ({
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn()
+  },
+  loanRequestAccessLink: {
+    create: jest.fn(),
+    findUnique: jest.fn()
   },
   loanReservation: {
     findMany: jest.fn(),
@@ -52,6 +63,38 @@ describe('loan requests', () => {
     jest.clearAllMocks();
   });
 
+  it('envoie un lien de connexion par email pour acceder au formulaire', async () => {
+    prisma.loanMagicLink.findUnique.mockResolvedValue({
+      id: 'link-1',
+      token: 'magic-1',
+      isActive: true,
+      expiresAt: null,
+      resourceId: 'resource-1'
+    });
+    prisma.loanRequestAccessLink.create.mockResolvedValue({
+      id: 'access-1',
+      token: 'access-token-1',
+      email: 'jean@example.com',
+      requesterName: 'Jean Dupont',
+      expiresAt: new Date('2026-03-26T12:00:00.000Z')
+    });
+
+    const res = await request(buildApp())
+      .post('/api/loan-request/magic-1/access-link')
+      .send({
+        requesterEmail: 'jean@example.com',
+        requesterName: 'Jean Dupont'
+      });
+
+    expect(res.status).toBe(200);
+    expect(prisma.loanRequestAccessLink.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        requestLinkId: 'link-1',
+        email: 'jean@example.com'
+      })
+    }));
+  });
+
   it('verrouille un lot complet meme pour une demande partielle', async () => {
     prisma.loanMagicLink.findUnique.mockResolvedValue({
       id: 'link-1',
@@ -66,6 +109,21 @@ describe('loan requests', () => {
       totalUnits: 10,
       bundleSize: 10,
       isActive: true
+    });
+    prisma.loanRequestAccessLink.findUnique.mockResolvedValue({
+      id: 'access-1',
+      token: 'access-token-1',
+      email: 'jean@example.com',
+      requesterName: 'Jean Dupont',
+      expiresAt: new Date('2026-03-26T12:00:00.000Z'),
+      requestLink: {
+        id: 'link-1',
+        token: 'magic-1',
+        isActive: true,
+        expiresAt: null,
+        resourceId: 'resource-1',
+        resource: null
+      }
     });
     prisma.loanReservation.findMany.mockResolvedValue([]);
     prisma.loanReservation.create.mockImplementation(async ({ data }) => ({
@@ -84,9 +142,9 @@ describe('loan requests', () => {
     const res = await request(buildApp())
       .post('/api/loan-request/magic-1/requests')
       .send({
+        accessToken: 'access-token-1',
         resourceId: 'resource-1',
         requesterName: 'Jean Dupont',
-        requesterEmail: 'jean@example.com',
         startAt: '2026-03-25T08:00:00.000Z',
         endAt: '2026-03-25T12:00:00.000Z',
         requestedUnits: 3,
@@ -97,7 +155,8 @@ describe('loan requests', () => {
     expect(prisma.loanReservation.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         requestedUnits: 3,
-        reservedSlots: 1
+        reservedSlots: 1,
+        requesterEmail: 'jean@example.com'
       })
     }));
   });
@@ -117,6 +176,21 @@ describe('loan requests', () => {
       bundleSize: 10,
       isActive: true
     });
+    prisma.loanRequestAccessLink.findUnique.mockResolvedValue({
+      id: 'access-1',
+      token: 'access-token-1',
+      email: 'marie@example.com',
+      requesterName: 'Marie Martin',
+      expiresAt: new Date('2026-03-26T12:00:00.000Z'),
+      requestLink: {
+        id: 'link-1',
+        token: 'magic-1',
+        isActive: true,
+        expiresAt: null,
+        resourceId: 'resource-1',
+        resource: null
+      }
+    });
     prisma.loanReservation.findMany.mockResolvedValue([
       {
         id: 'reservation-existing',
@@ -130,9 +204,9 @@ describe('loan requests', () => {
     const res = await request(buildApp())
       .post('/api/loan-request/magic-1/requests')
       .send({
+        accessToken: 'access-token-1',
         resourceId: 'resource-1',
         requesterName: 'Marie Martin',
-        requesterEmail: 'marie@example.com',
         startAt: '2026-03-25T09:00:00.000Z',
         endAt: '2026-03-25T11:00:00.000Z',
         requestedUnits: 1
@@ -141,5 +215,30 @@ describe('loan requests', () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/Disponibilite insuffisante|Disponibilité insuffisante/i);
     expect(prisma.loanReservation.create).not.toHaveBeenCalled();
+  });
+
+  it('refuse une demande sans lien de connexion valide', async () => {
+    prisma.loanMagicLink.findUnique.mockResolvedValue({
+      id: 'link-1',
+      token: 'magic-1',
+      isActive: true,
+      expiresAt: null,
+      resourceId: 'resource-1'
+    });
+    prisma.loanRequestAccessLink.findUnique.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .post('/api/loan-request/magic-1/requests')
+      .send({
+        accessToken: 'bad-token-123',
+        resourceId: 'resource-1',
+        requesterName: 'Jean Dupont',
+        startAt: '2026-03-25T08:00:00.000Z',
+        endAt: '2026-03-25T12:00:00.000Z',
+        requestedUnits: 1
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Lien de connexion invalide|nouveau lien/i);
   });
 });
