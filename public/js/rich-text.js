@@ -43,6 +43,19 @@
     return html;
   }
 
+  function renderListItemContent(text) {
+    const task = String(text || '').match(/^\[( |x|X)\]\s+([\s\S]+)$/);
+    if (!task) return renderInline(text);
+
+    const checked = /[xX]/.test(task[1]);
+    return `
+      <label class="inline-flex items-start gap-2">
+        <input type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" ${checked ? 'checked' : ''} disabled>
+        <span class="${checked ? 'line-through text-slate-500' : ''}">${renderInline(task[2])}</span>
+      </label>
+    `;
+  }
+
   function renderRichText(value) {
     const text = String(value || '').replace(/\r\n/g, '\n').trim();
     if (!text) return '';
@@ -94,7 +107,7 @@
         const ordered = /^\d+\./.test(line);
         const items = [];
         while (index < lines.length && /^(\-|\*|\d+\.)\s+/.test(lines[index].trim())) {
-          items.push(`<li>${renderInline(lines[index].trim().replace(/^(\-|\*|\d+\.)\s+/, ''))}</li>`);
+          items.push(`<li>${renderListItemContent(lines[index].trim().replace(/^(\-|\*|\d+\.)\s+/, ''))}</li>`);
           index += 1;
         }
         html.push(`<${ordered ? 'ol' : 'ul'} class="${ordered ? 'list-decimal' : 'list-disc'} pl-5 space-y-1">${items.join('')}</${ordered ? 'ol' : 'ul'}>`);
@@ -126,6 +139,7 @@
       .replace(/^#{1,6}\s+/gm, '')
       .replace(/^>\s?/gm, '')
       .replace(/^(\-|\*|\d+\.)\s+/gm, '')
+      .replace(/^\[( |x|X)\]\s+/gm, '')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }
