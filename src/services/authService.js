@@ -219,7 +219,7 @@ async function beginPasskeyLogin(email) {
 
     if (user) {
       allowCredentials = user.passkeys.map(pk => ({
-        id: Buffer.from(pk.credentialId, 'base64url'),
+        id: pk.credentialId,
         type: 'public-key',
         transports: parseJsonField(pk.transports)
       }));
@@ -260,7 +260,7 @@ async function finishPasskeyLogin(response, challenge, userId) {
       expectedOrigin: webauthn.origin,
       expectedRPID: webauthn.rpId,
       credential: {
-        id: Buffer.from(passkey.credentialId, 'base64url'),
+        id: passkey.credentialId,
         publicKey: passkey.publicKey,
         counter: Number(passkey.counter),
         transports: parseJsonField(passkey.transports)

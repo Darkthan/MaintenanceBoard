@@ -1377,15 +1377,27 @@ function ensureAccountSettingsModal() {
               <p class="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">Le mot de passe doit contenir au moins 8 caractères avec une majuscule, une minuscule et un chiffre.</p>
               <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4" data-mobile-modal-footer="true">
                 <p id="account-password-feedback" class="text-sm text-slate-500"></p>
-                <div class="flex items-center gap-2">
-                  <button type="button" id="account-add-passkey-btn"
-                    class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                    Passkey
-                  </button>
-                  <button type="submit" id="account-password-submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">Changer le mot de passe</button>
-                </div>
+                <button type="submit" id="account-password-submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">Changer le mot de passe</button>
               </div>
             </form>
+
+            <!-- Passkeys -->
+            <div class="border-t border-slate-200 px-6 py-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-semibold text-slate-900">Passkeys enregistrées</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Empreinte, Face ID ou clé matérielle.</p>
+                </div>
+                <button type="button" id="account-add-passkey-btn"
+                  class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                  Ajouter
+                </button>
+              </div>
+              <ul id="account-passkeys-list" class="space-y-2 text-sm text-slate-500 italic">
+                <li>Chargement...</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
@@ -1403,6 +1415,47 @@ function fillAccountSettingsForm(profile) {
   document.getElementById('account-contact-email').value = profile?.contactEmail || '';
   document.getElementById('account-profile-feedback').textContent = '';
   document.getElementById('account-password-feedback').textContent = '';
+  renderPasskeyList(profile?.passkeys || []);
+}
+
+function renderPasskeyList(passkeys) {
+  const list = document.getElementById('account-passkeys-list');
+  if (!list) return;
+  if (!passkeys.length) {
+    list.innerHTML = '<li class="text-slate-400">Aucune passkey enregistrée.</li>';
+    return;
+  }
+  list.innerHTML = passkeys.map(pk => `
+    <li class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 not-italic">
+      <div class="flex items-center gap-2 min-w-0">
+        <svg class="w-4 h-4 text-sky-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        <div class="min-w-0">
+          <p class="font-medium text-slate-800 text-sm truncate">${escapeHtml(pk.name)}</p>
+          <p class="text-xs text-slate-400">${pk.lastUsedAt ? 'Utilisée le ' + new Date(pk.lastUsedAt).toLocaleDateString('fr-FR') : 'Jamais utilisée'}</p>
+        </div>
+      </div>
+      <button type="button" onclick="deletePasskey('${pk.id}')"
+        class="flex-shrink-0 text-slate-400 hover:text-red-500 transition p-1 rounded-lg hover:bg-red-50">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </li>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function deletePasskey(passkeyId) {
+  if (!confirm('Supprimer cette passkey ?')) return;
+  try {
+    await api.delete(`/auth/passkeys/${passkeyId}`);
+    const profile = await api.get('/auth/me');
+    renderPasskeyList(profile.passkeys || []);
+    showToast('Passkey supprimée', 'success');
+  } catch (err) {
+    showToast(err.message || 'Erreur lors de la suppression', 'error');
+  }
 }
 
 async function ensureWebAuthnClientLoaded() {
@@ -1565,6 +1618,8 @@ function initAccountSettings() {
 
       attResp.name = name.trim() || 'Ma passkey';
       await api.post('/auth/webauthn/register/finish', attResp);
+      const updated = await api.get('/auth/me');
+      renderPasskeyList(updated.passkeys || []);
       showToast('Passkey enregistrée avec succès', 'success');
     } catch (err) {
       console.error('[Passkey registration]', err);
