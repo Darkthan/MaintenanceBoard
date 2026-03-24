@@ -33,6 +33,9 @@ model User {
   orderAttachments     OrderAttachment[]
   signatureRequests    SignatureRequest[]
   stockMovements       StockMovement[]
+  createdLoanLinks     LoanMagicLink[]
+  createdLoanRequests  LoanReservation[] @relation("LoanCreatedBy")
+  approvedLoanRequests LoanReservation[] @relation("LoanApprovedBy")
 
   @@map("users")
 }
@@ -416,4 +419,73 @@ model StockMovement {
   @@index([stockItemId])
   @@index([createdAt])
   @@map("stock_movements")
+}
+
+model LoanResource {
+  id           String   @id @default(uuid())
+  name         String
+  category     String?
+  description  String?
+  totalUnits   Int      @default(1)
+  bundleSize   Int      @default(1)
+  location     String?
+  instructions String?
+  color        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reservations LoanReservation[]
+  magicLinks   LoanMagicLink[]
+
+  @@map("loan_resources")
+}
+
+model LoanMagicLink {
+  id          String    @id @default(uuid())
+  token       String    @unique @default(uuid())
+  title       String?
+  resourceId  String?
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  resource    LoanResource?      @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  createdBy   User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  requests    LoanReservation[]
+
+  @@index([resourceId])
+  @@map("loan_magic_links")
+}
+
+model LoanReservation {
+  id                    String    @id @default(uuid())
+  resourceId            String
+  requestLinkId         String?
+  status                String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED | RETURNED
+  requesterName         String
+  requesterEmail        String
+  requesterPhone        String?
+  requesterOrganization String?
+  startAt               DateTime
+  endAt                 DateTime
+  requestedUnits        Int
+  reservedSlots         Int
+  additionalNeeds       String?
+  notes                 String?
+  internalNotes         String?
+  createdById           String?
+  approvedById          String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  resource    LoanResource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  requestLink LoanMagicLink? @relation(fields: [requestLinkId], references: [id], onDelete: SetNull)
+  createdBy   User?         @relation("LoanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy  User?         @relation("LoanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([resourceId, startAt, endAt])
+  @@index([status])
+  @@map("loan_reservations")
 }

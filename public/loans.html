@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prêt de matériel – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+        </svg>
+      </div>
+      <div><p class="text-white font-bold text-sm">MaintenanceBoard</p><p class="text-slate-400 text-xs">Parc informatique</p></div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <span id="user-avatar">?</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 lg:ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <div>
+          <h1 class="text-xl font-semibold text-slate-800">Prêt de matériel</h1>
+          <p class="text-sm text-slate-500">Catalogue de prêt, demandes externes, lots et agenda de réservation.</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="create-link-btn" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5m5.656-5.656a4 4 0 015.656 5.656l-1.5 1.5m-4.242 4.242l-4.242-4.242"/></svg>
+          Magic link
+        </button>
+        <button id="create-resource-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Ressource
+        </button>
+      </div>
+    </header>
+
+    <div class="flex-1 p-6 space-y-6">
+      <div class="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
+        <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="font-semibold text-slate-800">Catalogue de prêt</h2>
+              <p class="text-sm text-slate-500">Définis les ressources, leur capacité totale et la taille des lots verrouillés.</p>
+            </div>
+            <span id="resource-count" class="text-xs font-medium text-slate-400">0 ressource</span>
+          </div>
+          <div id="resources-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </section>
+
+        <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="font-semibold text-slate-800">Flux calendrier</h2>
+              <p class="text-sm text-slate-500">Agenda des prêts pour intégration externe.</p>
+            </div>
+            <button id="refresh-calendar-feed-btn" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <p class="text-sm text-slate-600">Lien iCal</p>
+            <textarea id="calendar-feed-url" rows="3" readonly class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"></textarea>
+            <button id="copy-calendar-feed-btn" class="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+              Copier le lien iCal
+            </button>
+          </div>
+          <div>
+            <h3 class="font-medium text-slate-800 mb-3">Magic links actifs</h3>
+            <div id="magic-links-list" class="space-y-3"></div>
+          </div>
+        </section>
+      </div>
+
+      <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="font-semibold text-slate-800">Agenda des prêts</h2>
+            <p class="text-sm text-slate-500">Vue des demandes en attente et approuvées sur les 21 prochains jours.</p>
+          </div>
+          <button id="refresh-calendar-btn" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+        </div>
+        <div id="calendar-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </section>
+
+      <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="font-semibold text-slate-800">Demandes de prêt</h2>
+            <p class="text-sm text-slate-500">Valide, refuse ou clôture les réservations internes et externes.</p>
+          </div>
+          <button id="refresh-reservations-btn" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+        </div>
+        <div id="reservations-list" class="space-y-4"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div id="resource-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 id="resource-modal-title" class="font-semibold text-slate-800">Nouvelle ressource</h3>
+      <button type="button" onclick="closeResourceModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="resource-form" class="p-6 space-y-4">
+      <input type="hidden" id="resource-id" />
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Nom *</label>
+          <input id="resource-name" type="text" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Catégorie</label>
+          <input id="resource-category" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+        <textarea id="resource-description" rows="2" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></textarea>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Capacité totale *</label>
+          <input id="resource-total-units" type="number" min="1" value="1" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Taille d’un lot</label>
+          <input id="resource-bundle-size" type="number" min="1" value="1" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Couleur</label>
+          <input id="resource-color" type="text" placeholder="#2563eb" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Emplacement</label>
+        <input id="resource-location" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Consignes / besoins préparatoires</label>
+        <textarea id="resource-instructions" rows="3" placeholder="Ex : installer l’application X sur le menu des tablettes." class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></textarea>
+      </div>
+      <label class="flex items-center gap-3 text-sm text-slate-700">
+        <input id="resource-active" type="checkbox" class="h-4 w-4 rounded text-blue-600" checked />
+        Ressource active
+      </label>
+      <div id="resource-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeResourceModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="link-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800">Créer un magic link</h3>
+      <button type="button" onclick="closeLinkModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="link-form" class="p-6 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Titre</label>
+        <input id="link-title" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Ressource liée</label>
+        <select id="link-resource-id" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+          <option value="">Toutes les ressources actives</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Expiration</label>
+        <input id="link-expires-at" type="datetime-local" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+      </div>
+      <div id="link-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeLinkModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Créer le lien</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+let currentUser;
+let loanResources = [];
+let loanLinks = [];
+let loanReservations = [];
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatStatus(status) {
+  return {
+    PENDING: '<span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">En attente</span>',
+    APPROVED: '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Approuvé</span>',
+    REJECTED: '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Refusé</span>',
+    CANCELLED: '<span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Annulé</span>',
+    RETURNED: '<span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Restitué</span>'
+  }[status] || status;
+}
+
+function closeResourceModal() {
+  document.getElementById('resource-modal').classList.add('hidden');
+}
+
+function closeLinkModal() {
+  document.getElementById('link-modal').classList.add('hidden');
+}
+
+function openResourceModal(resource = null) {
+  document.getElementById('resource-form').reset();
+  document.getElementById('resource-error').classList.add('hidden');
+  document.getElementById('resource-id').value = resource?.id || '';
+  document.getElementById('resource-modal-title').textContent = resource ? 'Modifier la ressource' : 'Nouvelle ressource';
+  document.getElementById('resource-name').value = resource?.name || '';
+  document.getElementById('resource-category').value = resource?.category || '';
+  document.getElementById('resource-description').value = resource?.description || '';
+  document.getElementById('resource-total-units').value = resource?.totalUnits || 1;
+  document.getElementById('resource-bundle-size').value = resource?.bundleSize || 1;
+  document.getElementById('resource-location').value = resource?.location || '';
+  document.getElementById('resource-instructions').value = resource?.instructions || '';
+  document.getElementById('resource-color').value = resource?.color || '';
+  document.getElementById('resource-active').checked = resource?.isActive ?? true;
+  document.getElementById('resource-modal').classList.remove('hidden');
+}
+
+function openLinkModal() {
+  document.getElementById('link-form').reset();
+  document.getElementById('link-error').classList.add('hidden');
+  document.getElementById('link-resource-id').innerHTML = '<option value="">Toutes les ressources actives</option>' +
+    loanResources.filter(resource => resource.isActive).map(resource => `<option value="${resource.id}">${resource.name}</option>`).join('');
+  document.getElementById('link-modal').classList.remove('hidden');
+}
+
+function renderResources() {
+  document.getElementById('resource-count').textContent = `${loanResources.length} ressource${loanResources.length > 1 ? 's' : ''}`;
+  document.getElementById('resources-list').innerHTML = loanResources.map(resource => `
+    <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="font-semibold text-slate-800">${resource.name}</h3>
+            ${resource.isActive ? '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Active</span>' : '<span class="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">Inactive</span>'}
+          </div>
+          <p class="text-sm text-slate-500 mt-1">${resource.category || 'Sans catégorie'}${resource.location ? ` · ${resource.location}` : ''}</p>
+        </div>
+        <button type="button" onclick="openResourceModal(loanResources.find(resource => resource.id === '${resource.id}'))" class="text-sm text-blue-600 hover:text-blue-700 transition">Modifier</button>
+      </div>
+      <p class="text-sm text-slate-600">${resource.description || 'Aucune description.'}</p>
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        <div class="rounded-xl bg-white px-3 py-2 border border-slate-200">
+          <p class="text-slate-400 text-xs uppercase tracking-wide">Capacité</p>
+          <p class="mt-1 font-medium text-slate-800">${resource.totalUnits} unité(s)</p>
+        </div>
+        <div class="rounded-xl bg-white px-3 py-2 border border-slate-200">
+          <p class="text-slate-400 text-xs uppercase tracking-wide">Lot verrouillé</p>
+          <p class="mt-1 font-medium text-slate-800">${resource.bundleSize} unité(s) · ${resource.totalSlots} lot(s)</p>
+        </div>
+      </div>
+      <div class="rounded-xl bg-white px-3 py-3 border border-slate-200">
+        <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Consignes</p>
+        <p class="mt-1 text-sm text-slate-600">${resource.instructions || 'Aucune consigne préparatoire.'}</p>
+      </div>
+    </article>
+  `).join('');
+}
+
+function renderMagicLinks() {
+  document.getElementById('magic-links-list').innerHTML = loanLinks.length
+    ? loanLinks.map(link => `
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="font-medium text-slate-800">${link.title || 'Lien sans titre'}</p>
+            <p class="text-sm text-slate-500">${link.resource?.name || 'Toutes les ressources'} · ${link._count?.requests || 0} demande(s)</p>
+          </div>
+          <button type="button" onclick="toggleLink('${link.id}', ${link.isActive ? 'false' : 'true'})" class="text-sm ${link.isActive ? 'text-red-600 hover:text-red-700' : 'text-emerald-600 hover:text-emerald-700'} transition">
+            ${link.isActive ? 'Désactiver' : 'Réactiver'}
+          </button>
+        </div>
+        <div class="flex flex-wrap gap-2 text-xs text-slate-500">
+          <span>${link.isActive ? 'Actif' : 'Inactif'}</span>
+          <span>Créé le ${formatDateTime(link.createdAt)}</span>
+          ${link.expiresAt ? `<span>Expire le ${formatDateTime(link.expiresAt)}</span>` : '<span>Sans expiration</span>'}
+        </div>
+        <div class="flex gap-2">
+          <input type="text" readonly value="${link.url}" class="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-600" />
+          <button type="button" onclick="copyText('${link.url.replace(/'/g, "\\'")}')" class="px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition">Copier</button>
+        </div>
+      </div>
+    `).join('')
+    : '<p class="text-sm text-slate-400">Aucun magic link créé.</p>';
+}
+
+function renderCalendar() {
+  const days = {};
+  for (let i = 0; i < 21; i += 1) {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + i);
+    const key = date.toISOString().slice(0, 10);
+    days[key] = [];
+  }
+
+  loanReservations.filter(item => ['PENDING', 'APPROVED'].includes(item.status)).forEach(item => {
+    Object.keys(days).forEach(dayKey => {
+      const dayStart = new Date(`${dayKey}T00:00:00`);
+      const dayEnd = new Date(`${dayKey}T23:59:59`);
+      if (new Date(item.startAt) <= dayEnd && new Date(item.endAt) >= dayStart) {
+        days[dayKey].push(item);
+      }
+    });
+  });
+
+  document.getElementById('calendar-grid').innerHTML = Object.entries(days).map(([dayKey, items]) => `
+    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <h3 class="font-medium text-slate-800">${new Date(`${dayKey}T00:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
+        <span class="text-xs text-slate-400">${items.length}</span>
+      </div>
+      ${items.length ? `<div class="space-y-2">
+        ${items.map(item => `
+          <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+            <div class="flex items-center justify-between gap-2">
+              <p class="font-medium text-slate-800">${item.resource.name}</p>
+              ${formatStatus(item.status)}
+            </div>
+            <p class="text-sm text-slate-500 mt-1">${item.requesterName} · ${item.requestedUnits} unité(s)</p>
+            <p class="text-xs text-slate-400 mt-1">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)}</p>
+          </div>
+        `).join('')}
+      </div>` : '<p class="text-sm text-slate-400">Aucune réservation.</p>'}
+    </div>
+  `).join('');
+}
+
+function renderReservations() {
+  document.getElementById('reservations-list').innerHTML = loanReservations.length
+    ? loanReservations.map(item => `
+      <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div class="space-y-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="font-semibold text-slate-800">${item.resource.name}</h3>
+              ${formatStatus(item.status)}
+            </div>
+            <p class="text-sm text-slate-500">${item.requesterName} · ${item.requesterEmail}${item.requesterOrganization ? ` · ${item.requesterOrganization}` : ''}</p>
+            <p class="text-xs text-slate-400">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)} · ${item.requestedUnits} unité(s) · ${item.reservedSlots} lot(s) verrouillé(s)</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            ${item.status !== 'APPROVED' ? `<button type="button" onclick="updateReservationStatus('${item.id}', 'APPROVED')" class="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs hover:bg-emerald-700 transition">Approuver</button>` : ''}
+            ${item.status !== 'REJECTED' ? `<button type="button" onclick="updateReservationStatus('${item.id}', 'REJECTED')" class="px-3 py-2 border border-red-300 text-red-700 rounded-lg text-xs hover:bg-red-50 transition">Refuser</button>` : ''}
+            ${item.status !== 'RETURNED' ? `<button type="button" onclick="updateReservationStatus('${item.id}', 'RETURNED')" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Restitué</button>` : ''}
+            ${item.status !== 'CANCELLED' ? `<button type="button" onclick="updateReservationStatus('${item.id}', 'CANCELLED')" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Annuler</button>` : ''}
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Besoins complémentaires</p>
+            <p class="mt-1 text-slate-600">${item.additionalNeeds || 'Aucun besoin spécifique.'}</p>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Notes</p>
+            <p class="mt-1 text-slate-600">${item.notes || 'Aucune note.'}</p>
+          </div>
+        </div>
+      </article>
+    `).join('')
+    : '<p class="text-sm text-slate-400">Aucune demande sur la période.</p>';
+}
+
+async function copyText(text) {
+  await navigator.clipboard.writeText(text);
+  showToast('Lien copié', 'success');
+}
+
+async function loadResources() {
+  loanResources = await api.get('/loans/resources');
+  renderResources();
+}
+
+async function loadMagicLinks() {
+  const links = await api.get('/loans/magic-links');
+  loanLinks = links.map(link => ({
+    ...link,
+    url: `${window.location.origin}/loan-request.html?token=${encodeURIComponent(link.token)}`
+  }));
+  renderMagicLinks();
+}
+
+async function loadReservations() {
+  const start = new Date();
+  start.setDate(start.getDate() - 7);
+  const end = new Date();
+  end.setDate(end.getDate() + 21);
+  loanReservations = await api.get('/loans/reservations', {
+    start: start.toISOString(),
+    end: end.toISOString()
+  });
+  renderReservations();
+  renderCalendar();
+}
+
+async function loadCalendarFeed() {
+  const feed = await api.get('/loans/calendar-feed');
+  document.getElementById('calendar-feed-url').value = feed.url;
+}
+
+async function toggleLink(id, nextState) {
+  await api.patch(`/loans/magic-links/${id}`, { isActive: nextState });
+  await loadMagicLinks();
+}
+
+async function updateReservationStatus(id, status) {
+  try {
+    await api.patch(`/loans/reservations/${id}`, { status });
+    await loadReservations();
+    showToast('Réservation mise à jour', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+document.getElementById('create-resource-btn').addEventListener('click', () => openResourceModal());
+document.getElementById('create-link-btn').addEventListener('click', openLinkModal);
+document.getElementById('refresh-reservations-btn').addEventListener('click', loadReservations);
+document.getElementById('refresh-calendar-btn').addEventListener('click', loadReservations);
+document.getElementById('refresh-calendar-feed-btn').addEventListener('click', loadCalendarFeed);
+document.getElementById('copy-calendar-feed-btn').addEventListener('click', () => copyText(document.getElementById('calendar-feed-url').value));
+
+document.getElementById('resource-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const errorEl = document.getElementById('resource-error');
+  errorEl.classList.add('hidden');
+  const payload = {
+    name: document.getElementById('resource-name').value.trim(),
+    category: document.getElementById('resource-category').value.trim() || null,
+    description: document.getElementById('resource-description').value.trim() || null,
+    totalUnits: parseInt(document.getElementById('resource-total-units').value, 10),
+    bundleSize: parseInt(document.getElementById('resource-bundle-size').value, 10),
+    location: document.getElementById('resource-location').value.trim() || null,
+    instructions: document.getElementById('resource-instructions').value.trim() || null,
+    color: document.getElementById('resource-color').value.trim() || null,
+    isActive: document.getElementById('resource-active').checked
+  };
+  const id = document.getElementById('resource-id').value;
+
+  try {
+    if (id) {
+      await api.patch(`/loans/resources/${id}`, payload);
+    } else {
+      await api.post('/loans/resources', payload);
+    }
+    closeResourceModal();
+    await loadResources();
+    showToast('Ressource enregistrée', 'success');
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  }
+});
+
+document.getElementById('link-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const errorEl = document.getElementById('link-error');
+  errorEl.classList.add('hidden');
+  try {
+    const link = await api.post('/loans/magic-links', {
+      title: document.getElementById('link-title').value.trim() || null,
+      resourceId: document.getElementById('link-resource-id').value || null,
+      expiresAt: document.getElementById('link-expires-at').value || null
+    });
+    closeLinkModal();
+    await loadMagicLinks();
+    await copyText(link.url);
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  }
+});
+
+requireLogin().then(async user => {
+  currentUser = user;
+  renderNav('loans');
+  await loadResources();
+  await loadMagicLinks();
+  await loadReservations();
+  await loadCalendarFeed();
+});
+</script>
+</body>
+</html>

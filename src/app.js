@@ -123,6 +123,9 @@ app.use('/api/agents', require('./routes/agents'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/stock', require('./routes/stock'));
+const { loansRouter, loanPublicRouter } = require('./routes/loans');
+app.use('/api/loans', loansRouter);
+app.use('/api/loan-request', loanPublicRouter);
 
 // ── Tickets publics (sans auth, rate limit IP strict) ─────────────────────────
 const ticketLimiter = rateLimit({
@@ -164,6 +167,7 @@ app.get('/health', (req, res) => {
 // ── Routes sans extension ─────────────────────────────────────────────────────
 app.get('/scan',   (req, res) => res.sendFile(path.join(__dirname, '../public/scan.html')));
 app.get('/report', (req, res) => res.sendFile(path.join(__dirname, '../public/report.html')));
+app.get('/loan-request', (req, res) => res.sendFile(path.join(__dirname, '../public/loan-request.html')));
 
 // ── SPA fallback (pages HTML) ─────────────────────────────────────────────────
 app.get('*path', (req, res) => {
