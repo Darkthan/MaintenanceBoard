@@ -1524,7 +1524,11 @@ async function saveWebAuthn() {
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────
-requireLogin().then(() => showTab('users'));
+requireLogin().then(() => {
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  const allowedTabs = new Set(['users', 'email', 'database', 'po', 'security']);
+  showTab(allowedTabs.has(tab) ? tab : 'users');
+});
 </script>
 </body>
 </html>

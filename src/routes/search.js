@@ -199,10 +199,70 @@ const ACTIONS = [
     }
   },
   {
+    id: 'action:settings-users',
+    title: 'Parametres - Utilisateurs',
+    subtitle: 'Gerer les comptes et les acces',
+    href: '/settings.html?tab=users',
+    keywords: ['parametres', 'utilisateur', 'utilisateurs', 'compte', 'acces', 'role', 'admin', 'tech'],
+    roles: ['ADMIN'],
+    preview: {
+      title: 'Onglet utilisateurs',
+      description: 'Ouvre les parametres sur la gestion des comptes utilisateurs.'
+    }
+  },
+  {
+    id: 'action:settings-email',
+    title: 'Parametres - Emails',
+    subtitle: 'Configurer SMTP, SSL/TLS et STARTTLS',
+    href: '/settings.html?tab=email',
+    keywords: ['parametres', 'email', 'emails', 'smtp', 'starttls', 'ssl', 'tls', 'expediteur', 'notification'],
+    roles: ['ADMIN'],
+    preview: {
+      title: 'Onglet emails',
+      description: 'Ouvre la configuration SMTP et le test d envoi.'
+    }
+  },
+  {
+    id: 'action:settings-database',
+    title: 'Parametres - Base de donnees',
+    subtitle: 'Export et import des donnees',
+    href: '/settings.html?tab=database',
+    keywords: ['parametres', 'base de donnees', 'database', 'export', 'import', 'sauvegarde', 'restauration'],
+    roles: ['ADMIN'],
+    preview: {
+      title: 'Onglet base de donnees',
+      description: 'Ouvre les outils d export, d import et les statistiques de donnees.'
+    }
+  },
+  {
+    id: 'action:settings-po',
+    title: 'Parametres - Bon de commande',
+    subtitle: 'Configurer le modele et les emails compta',
+    href: '/settings.html?tab=po',
+    keywords: ['parametres', 'bon de commande', 'commande', 'po', 'modele', 'compta', 'facture', 'devis'],
+    roles: ['ADMIN'],
+    preview: {
+      title: 'Onglet bon de commande',
+      description: 'Ouvre la configuration du modele de bon de commande et des documents comptables.'
+    }
+  },
+  {
+    id: 'action:settings-security',
+    title: 'Parametres - Securite',
+    subtitle: 'WebAuthn, passkeys et fail2ban',
+    href: '/settings.html?tab=security',
+    keywords: ['parametres', 'securite', 'webauthn', 'passkey', 'passkeys', 'fail2ban', 'ip', 'liste blanche', 'liste noire'],
+    roles: ['ADMIN'],
+    preview: {
+      title: 'Onglet securite',
+      description: 'Ouvre les parametres WebAuthn et la protection fail2ban.'
+    }
+  },
+  {
     id: 'action:users',
     title: 'Utilisateurs',
     subtitle: 'Gerer les comptes et les acces',
-    href: '/users.html',
+    href: '/settings.html?tab=users',
     keywords: ['utilisateur', 'utilisateurs', 'compte', 'acces', 'role', 'admin', 'tech'],
     roles: ['ADMIN'],
     preview: {
@@ -244,6 +304,90 @@ const ACTIONS = [
     preview: {
       title: 'Creation rapide',
       description: 'Ouvre le formulaire de creation d un fournisseur.'
+    }
+  },
+  {
+    id: 'action:report',
+    title: 'Signaler un incident',
+    subtitle: 'Ouvrir le formulaire public de signalement',
+    href: '/report.html',
+    keywords: ['signalement', 'incident', 'ticket', 'declarer', 'formulaire', 'report'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Formulaire public',
+      description: 'Ouvre le formulaire public de signalement d incident.'
+    }
+  },
+  {
+    id: 'action:my-tickets',
+    title: 'Mes signalements',
+    subtitle: 'Suivre les tickets publics par lien magique',
+    href: '/my-tickets.html',
+    keywords: ['tickets', 'ticket', 'signalements', 'suivi', 'public', 'mes tickets'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Suivi public',
+      description: 'Ouvre la page de suivi des tickets publics.'
+    }
+  },
+  {
+    id: 'action:api-docs',
+    title: 'Documentation API',
+    subtitle: 'Consulter Swagger et les routes disponibles',
+    href: '/api-docs',
+    keywords: ['api', 'swagger', 'documentation', 'docs', 'routes', 'integration'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'API Docs',
+      description: 'Ouvre la documentation Swagger de l application.'
+    }
+  },
+  {
+    id: 'action:export-suppliers',
+    title: 'Export fournisseurs',
+    subtitle: 'Telecharger les donnees fournisseurs',
+    href: '/downloads/export/suppliers',
+    keywords: ['export', 'fichier', 'csv', 'excel', 'download', 'telecharger', 'fournisseurs'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Fichier export',
+      description: 'Telecharge l export des fournisseurs.'
+    }
+  },
+  {
+    id: 'action:export-stock',
+    title: 'Export stock',
+    subtitle: 'Telecharger les articles de stock',
+    href: '/downloads/export/stock',
+    keywords: ['export', 'fichier', 'csv', 'excel', 'download', 'telecharger', 'stock', 'articles'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Fichier export',
+      description: 'Telecharge l export du stock.'
+    }
+  },
+  {
+    id: 'action:export-stock-movements',
+    title: 'Export mouvements de stock',
+    subtitle: 'Telecharger l historique de stock',
+    href: '/downloads/export/stock-movements',
+    keywords: ['export', 'fichier', 'csv', 'excel', 'download', 'telecharger', 'stock', 'mouvements', 'historique'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Fichier export',
+      description: 'Telecharge l historique des mouvements de stock.'
+    }
+  },
+  {
+    id: 'action:export-equipment',
+    title: 'Export equipements',
+    subtitle: 'Telecharger l inventaire materiel',
+    href: '/downloads/export/equipment',
+    keywords: ['export', 'fichier', 'csv', 'excel', 'download', 'telecharger', 'equipements', 'inventaire'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Fichier export',
+      description: 'Telecharge l export des equipements.'
     }
   }
 ];
@@ -431,7 +575,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const techRestriction = req.user.role === 'TECH' ? { techId: req.user.id } : {};
     const signatureWhereBase = req.user.role === 'ADMIN' ? { orderId: null } : { orderId: null, createdBy: req.user.id };
 
-    const [rooms, equipment, interventions, orders, attachments, signatureDocuments, suppliers, stockItems] = await Promise.all([
+    const [rooms, equipment, interventions, orders, attachments, signatureDocuments, suppliers, stockItems, users] = await Promise.all([
       prisma.room.findMany({
         where: {
           OR: [
@@ -609,7 +753,24 @@ router.get('/', requireAuth, async (req, res, next) => {
         include: {
           supplier: { select: { id: true, name: true } }
         }
-      })
+      }),
+      req.user.role === 'ADMIN'
+        ? prisma.user.findMany({
+            where: {
+              OR: [
+                { name: containsFilter(rawQuery) },
+                { email: containsFilter(rawQuery) },
+                { contactEmail: containsFilter(rawQuery) },
+                { role: containsFilter(rawQuery) }
+              ]
+            },
+            take: limit + 2,
+            orderBy: { name: 'asc' },
+            include: {
+              _count: { select: { interventions: true, passkeys: true } }
+            }
+          })
+        : Promise.resolve([])
     ]);
 
     const roomResults = filterAndRank(rooms.map(room => ({
@@ -877,6 +1038,31 @@ router.get('/', requireAuth, async (req, res, next) => {
       searchText: [item.name, item.reference, item.category, item.description, item.location, item.supplier?.name].filter(Boolean).join(' ')
     })), query, limit);
 
+    const userResults = req.user.role === 'ADMIN'
+      ? filterAndRank(users.map(user => ({
+          id: `user:${user.id}`,
+          type: 'action',
+          group: 'Utilisateurs',
+          title: user.name,
+          subtitle: [user.email, user.role === 'ADMIN' ? 'Administrateur' : 'Technicien'].join(' · '),
+          href: '/settings.html?tab=users',
+          openMode: 'preview',
+          preview: {
+            title: user.name,
+            description: 'Ouvre l onglet utilisateurs des parametres pour gerer ce compte.',
+            lines: [
+              `Email : ${user.email}`,
+              user.contactEmail ? `Email de contact : ${user.contactEmail}` : null,
+              `Role : ${user.role === 'ADMIN' ? 'Administrateur' : 'Technicien'}`,
+              user.isActive ? 'Compte actif' : 'Compte desactive',
+              `${user._count.interventions} intervention(s) · ${user._count.passkeys} passkey(s)`
+            ].filter(Boolean),
+            badges: [user.role === 'ADMIN' ? 'Admin' : 'Tech', user.isActive ? 'Actif' : 'Inactif']
+          },
+          searchText: [user.name, user.email, user.contactEmail, user.role].filter(Boolean).join(' ')
+        })), query, limit)
+      : [];
+
     res.json({
       query,
       results: [
@@ -889,7 +1075,8 @@ router.get('/', requireAuth, async (req, res, next) => {
         ...interventionResults,
         ...orderResults,
         ...supplierResults,
-        ...stockResults
+        ...stockResults,
+        ...userResults
       ]
     });
   } catch (err) {

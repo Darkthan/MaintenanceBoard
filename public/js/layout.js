@@ -464,6 +464,12 @@ function ensureSpotlightStyles() {
       background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,250,252,0.84));
     }
 
+    .spotlight-topbar__row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
     .spotlight-searchbar {
       display: flex;
       align-items: center;
@@ -512,6 +518,26 @@ function ensureSpotlightStyles() {
       background: rgba(241, 245, 249, 0.8);
       font-weight: 700;
       color: #334155;
+    }
+
+    .spotlight-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.75rem;
+      height: 2.75rem;
+      flex-shrink: 0;
+      border-radius: 1rem;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      background: rgba(255,255,255,0.82);
+      color: #334155;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    }
+
+    .spotlight-close:hover {
+      background: rgba(248,250,252,0.96);
+      border-color: rgba(14, 165, 233, 0.26);
+      color: #0f172a;
     }
 
     .spotlight-body {
@@ -794,6 +820,19 @@ function ensureSpotlightStyles() {
       .spotlight-trigger__label {
         font-size: 0.82rem;
       }
+
+      .spotlight-topbar {
+        padding: 0.9rem;
+      }
+
+      .spotlight-topbar__row {
+        align-items: stretch;
+      }
+
+      .spotlight-close {
+        width: 3rem;
+        height: 3rem;
+      }
     }
 
     @media (min-width: 768px) {
@@ -836,16 +875,23 @@ function ensureSpotlightMarkup() {
     <div class="spotlight-backdrop" data-spotlight-close="true"></div>
     <section class="spotlight-panel" role="dialog" aria-modal="true" aria-labelledby="spotlight-input">
       <div class="spotlight-topbar">
-        <div class="spotlight-searchbar">
-          <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
-          </svg>
-          <input id="spotlight-input" class="spotlight-input" type="search" autocomplete="off" spellcheck="false"
-            placeholder="Rechercher une salle, un equipement, un agent, un fournisseur, un document ou une action..." />
-          <div class="spotlight-searchbar__meta">
-            <span id="spotlight-spinner" class="spotlight-spinner" aria-hidden="true"></span>
-            <span class="spotlight-searchbar__pill">Esc</span>
+        <div class="spotlight-topbar__row">
+          <div class="spotlight-searchbar">
+            <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
+            </svg>
+            <input id="spotlight-input" class="spotlight-input" type="search" autocomplete="off" spellcheck="false"
+              placeholder="Rechercher une salle, un equipement, un agent, un fournisseur, un document, un fichier ou un reglage..." />
+            <div class="spotlight-searchbar__meta">
+              <span id="spotlight-spinner" class="spotlight-spinner" aria-hidden="true"></span>
+              <span class="spotlight-searchbar__pill">Esc</span>
+            </div>
           </div>
+          <button type="button" class="spotlight-close" data-spotlight-close="true" aria-label="Fermer la recherche globale" title="Fermer">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/>
+            </svg>
+          </button>
         </div>
       </div>
       <div class="spotlight-body">
@@ -954,7 +1000,7 @@ function ensureSpotlightTrigger() {
       </span>
       <span class="spotlight-trigger__text">
         <span class="spotlight-trigger__label">Recherche globale</span>
-        <span class="spotlight-trigger__hint">Salles, equipements, agents, fournisseurs, documents, actions</span>
+        <span class="spotlight-trigger__hint">Donnees, fichiers, parametres, documents, actions</span>
       </span>
       <span class="spotlight-trigger__kbd">${getShortcutLabel()}</span>
     `;
@@ -1007,12 +1053,12 @@ function renderSpotlightPreview() {
       <div class="spotlight-preview__eyebrow">Spotlight</div>
       <div class="spotlight-preview__title">Recherche transversale</div>
       <p class="spotlight-preview__description">
-        Tape pour filtrer les objets de gestion et les actions rapides. Les fleches changent la selection, Entree ouvre la cible.
+        Tape pour filtrer les donnees, fichiers, reglages et actions rapides. Les fleches changent la selection, Entree ouvre la cible.
       </p>
       <div class="spotlight-preview__list">
-        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Commence par une salle, un numero de serie, un agent, un fournisseur ou un mot-cle.</span></div>
-        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Les actions rapides ouvrent directement la page cible.</span></div>
-        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Les entites affichent un apercu avant ouverture.</span></div>
+        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Commence par une salle, une commande, un fournisseur, un utilisateur, un fichier ou un mot-cle de configuration.</span></div>
+        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Les actions rapides ouvrent directement les onglets de parametres, exports et pages utiles.</span></div>
+        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Le bouton fermer permet de quitter le menu aussi sur mobile.</span></div>
       </div>
       <div class="spotlight-preview__footer">
         <span class="spotlight-preview__key">${getShortcutLabel()}</span><span>ouvrir</span>
@@ -1067,7 +1113,7 @@ function renderSpotlightResults() {
     results.innerHTML = `
       <div class="spotlight-empty">
         <div class="spotlight-empty__title">Aucun resultat</div>
-        <p>Essaie un nom de salle, un numero de serie, un agent, un fournisseur ou une action rapide.</p>
+        <p>Essaie un nom de salle, un utilisateur, un fournisseur, un fichier export, un reglage ou une action rapide.</p>
       </div>
     `;
     renderSpotlightPreview();
