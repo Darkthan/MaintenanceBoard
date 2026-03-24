@@ -120,7 +120,9 @@
     });
 
     wrapper.querySelectorAll('li').forEach(node => decorateTaskNode(node, options, state));
-    wrapper.querySelectorAll(':scope > p').forEach(node => decorateTaskNode(node, options, state));
+    Array.from(wrapper.children)
+      .filter(node => node.tagName === 'P')
+      .forEach(node => decorateTaskNode(node, options, state));
 
     return wrapper.innerHTML;
   }
