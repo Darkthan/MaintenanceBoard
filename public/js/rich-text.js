@@ -109,6 +109,16 @@
         continue;
       }
 
+      if (/^\[( |x|X)\]\s+/.test(line)) {
+        const items = [];
+        while (index < lines.length && /^\[( |x|X)\]\s+/.test(lines[index].trim())) {
+          items.push(`<li class="list-none">${renderListItemContent(lines[index].trim(), renderOptions, taskState)}</li>`);
+          index += 1;
+        }
+        html.push(`<ul class="pl-0 space-y-1">${items.join('')}</ul>`);
+        continue;
+      }
+
       if (/^(\-|\*|\d+\.)\s+/.test(line)) {
         const ordered = /^\d+\./.test(line);
         const items = [];
@@ -153,7 +163,7 @@
   function toggleRichTextTask(value, taskIndex, checked) {
     let seen = 0;
     return String(value || '').replace(
-      /^(\s*(?:\-|\*|\d+\.)\s+)\[( |x|X)\](\s+.*)$/gm,
+      /^(\s*(?:(?:\-|\*|\d+\.)\s+)?)\[( |x|X)\](\s+.*)$/gm,
       (match, prefix, _mark, suffix) => {
         if (seen !== taskIndex) {
           seen += 1;
