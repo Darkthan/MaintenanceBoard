@@ -18,7 +18,7 @@ jest.mock('../src/lib/prisma', () => ({
   supplier: { findMany: jest.fn() },
   stockItem: { findMany: jest.fn() },
   stockMovement: { findMany: jest.fn() },
-  user: { findUnique: jest.fn() }
+  user: { findUnique: jest.fn(), findMany: jest.fn() }
 }));
 
 jest.mock('@prisma/client', () => {
@@ -41,6 +41,7 @@ function setupEmptyMocks() {
   prisma.signatureRequest.findMany.mockResolvedValue([]);
   prisma.supplier.findMany.mockResolvedValue([]);
   prisma.stockItem.findMany.mockResolvedValue([]);
+  prisma.user.findMany.mockResolvedValue([]);
 }
 
 describe('GET /api/search', () => {
