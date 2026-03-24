@@ -431,7 +431,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const techRestriction = req.user.role === 'TECH' ? { techId: req.user.id } : {};
     const signatureWhereBase = req.user.role === 'ADMIN' ? { orderId: null } : { orderId: null, createdBy: req.user.id };
 
-    const [rooms, equipment, interventions, orders, attachments, signatureDocuments] = await Promise.all([
+    const [rooms, equipment, interventions, orders, attachments, signatureDocuments, suppliers, stockItems] = await Promise.all([
       prisma.room.findMany({
         where: {
           OR: [
@@ -575,7 +575,41 @@ router.get('/', requireAuth, async (req, res, next) => {
               creator: { select: { name: true } }
             }
           }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
-        : Promise.resolve([])
+        : Promise.resolve([]),
+      prisma.supplier.findMany({
+        where: {
+          OR: [
+            { name: containsFilter(rawQuery) },
+            { contact: containsFilter(rawQuery) },
+            { email: containsFilter(rawQuery) },
+            { phone: containsFilter(rawQuery) },
+            { address: containsFilter(rawQuery) },
+            { notes: containsFilter(rawQuery) }
+          ]
+        },
+        take: limit + 2,
+        orderBy: { name: 'asc' },
+        include: {
+          _count: { select: { orders: true, equipment: true } }
+        }
+      }),
+      prisma.stockItem.findMany({
+        where: {
+          OR: [
+            { name: containsFilter(rawQuery) },
+            { reference: containsFilter(rawQuery) },
+            { category: containsFilter(rawQuery) },
+            { description: containsFilter(rawQuery) },
+            { location: containsFilter(rawQuery) },
+            { supplier: { is: { name: containsFilter(rawQuery) } } }
+          ]
+        },
+        take: limit + 2,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          supplier: { select: { id: true, name: true } }
+        }
+      })
     ]);
 
     const roomResults = filterAndRank(rooms.map(room => ({
@@ -798,6 +832,51 @@ router.get('/', requireAuth, async (req, res, next) => {
       });
     }), query, limit);
 
+    const supplierResults = filterAndRank(suppliers.map(s => ({
+      id: `supplier:${s.id}`,
+      type: 'supplier',
+      group: 'Fournisseurs',
+      title: s.name,
+      subtitle: [s.contact, s.email].filter(Boolean).join(' · ') || 'Fournisseur',
+      href: `/suppliers.html?focus=${encodeURIComponent(s.id)}`,
+      openMode: 'preview',
+      preview: {
+        title: s.name,
+        description: s.notes || 'Consulter la fiche fournisseur.',
+        lines: [
+          s.contact ? `Contact : ${s.contact}` : null,
+          s.email ? `Email : ${s.email}` : null,
+          s.phone ? `Tel : ${s.phone}` : null,
+          s.website ? `Web : ${s.website}` : null,
+          `${s._count.orders} commande(s) · ${s._count.equipment} equipement(s)`
+        ].filter(Boolean)
+      },
+      searchText: [s.name, s.contact, s.email, s.phone, s.address, s.notes].filter(Boolean).join(' ')
+    })), query, limit);
+
+    const stockResults = filterAndRank(stockItems.map(item => ({
+      id: `stock:${item.id}`,
+      type: 'stock',
+      group: 'Stock',
+      title: item.name,
+      subtitle: [item.category, item.reference, item.supplier?.name].filter(Boolean).join(' · ') || 'Article',
+      href: `/stock.html?focus=${encodeURIComponent(item.id)}`,
+      openMode: 'preview',
+      preview: {
+        title: item.name,
+        description: item.description || 'Consulter la fiche stock.',
+        lines: [
+          item.reference ? `Reference : ${item.reference}` : null,
+          item.category ? `Categorie : ${item.category}` : null,
+          `Quantite : ${item.quantity}${item.minQuantity > 0 ? ` (min. ${item.minQuantity})` : ''}`,
+          item.location ? `Emplacement : ${item.location}` : null,
+          item.supplier?.name ? `Fournisseur : ${item.supplier.name}` : null
+        ].filter(Boolean),
+        badges: item.quantity <= item.minQuantity && item.minQuantity > 0 ? ['Alerte stock'] : []
+      },
+      searchText: [item.name, item.reference, item.category, item.description, item.location, item.supplier?.name].filter(Boolean).join(' ')
+    })), query, limit);
+
     res.json({
       query,
       results: [
@@ -808,7 +887,9 @@ router.get('/', requireAuth, async (req, res, next) => {
         ...roomResults,
         ...equipmentResults,
         ...interventionResults,
-        ...orderResults
+        ...orderResults,
+        ...supplierResults,
+        ...stockResults
       ]
     });
   } catch (err) {
