@@ -39,6 +39,8 @@ function setupEmptyMocks() {
   prisma.order.findMany.mockResolvedValue([]);
   prisma.orderAttachment.findMany.mockResolvedValue([]);
   prisma.signatureRequest.findMany.mockResolvedValue([]);
+  prisma.supplier.findMany.mockResolvedValue([]);
+  prisma.stockItem.findMany.mockResolvedValue([]);
 }
 
 describe('GET /api/search', () => {
