@@ -5,6 +5,14 @@ const router = express.Router();
 const authService = require('../services/authService');
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
+const { readSettings, writeSettings } = require('../utils/settings');
+const {
+  extractPublicIp,
+  getFail2banState,
+  getBlockStatus,
+  registerFailedAttempt,
+  clearFailures
+} = require('../utils/fail2ban');
 
 const prisma = require('../lib/prisma');
 
@@ -33,6 +41,47 @@ const validate = (req, res) => {
   }
   return true;
 };
+
+function blockResponsePayload(block) {
+  if (block.reason === 'blacklist') {
+    return {
+      status: 403,
+      error: `Connexion refusée pour l'IP publique ${block.ip}. Cette adresse est dans la liste noire.`
+    };
+  }
+
+  return {
+    status: 429,
+    error: `Trop de tentatives depuis l'IP publique ${block.ip}. Réessayez après ${new Date(block.blockedUntil).toLocaleString('fr-FR')}.`
+  };
+}
+
+function enforceFail2ban(req, res) {
+  const ip = extractPublicIp(req);
+  if (!ip) return null;
+
+  const state = getFail2banState(readSettings().fail2ban);
+  const block = getBlockStatus(state, ip);
+  if (!block.blocked) return { ip, state };
+
+  const payload = blockResponsePayload(block);
+  res.status(payload.status).json({ error: payload.error });
+  return false;
+}
+
+function recordFailedLoginAttempt(ip) {
+  if (!ip) return;
+  const state = getFail2banState(readSettings().fail2ban);
+  registerFailedAttempt(state, ip);
+  writeSettings({ fail2ban: state });
+}
+
+function clearFailedLoginAttempts(ip) {
+  if (!ip) return;
+  const state = getFail2banState(readSettings().fail2ban);
+  clearFailures(state, ip);
+  writeSettings({ fail2ban: state });
+}
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────
 router.post('/register',
@@ -76,9 +125,12 @@ router.post('/login',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
+      const fail2ban = enforceFail2ban(req, res);
+      if (fail2ban === false) return;
 
       const { email, password } = req.body;
       const { user, accessToken, refreshToken } = await authService.loginWithPassword(email, password);
+      clearFailedLoginAttempts(fail2ban?.ip);
 
       authService.setAuthCookies(res, accessToken, refreshToken);
 
@@ -94,7 +146,10 @@ router.post('/login',
 
       res.json({ user, accessToken });
     } catch (err) {
-      if (err.status === 401) return res.status(401).json({ error: err.message });
+      if (err.status === 401) {
+        recordFailedLoginAttempt(extractPublicIp(req));
+        return res.status(401).json({ error: err.message });
+      }
       next(err);
     }
   }
@@ -261,6 +316,9 @@ router.post('/webauthn/register/finish', requireAuth, async (req, res, next) => 
 
 router.post('/webauthn/login/begin', async (req, res, next) => {
   try {
+    const fail2ban = enforceFail2ban(req, res);
+    if (fail2ban === false) return;
+
     const { email } = req.body;
     const { options, userId } = await authService.beginPasskeyLogin(email);
     req.session.webauthnChallenge = options.challenge;
@@ -274,6 +332,9 @@ router.post('/webauthn/login/begin', async (req, res, next) => {
 
 router.post('/webauthn/login/finish', async (req, res, next) => {
   try {
+    const fail2ban = enforceFail2ban(req, res);
+    if (fail2ban === false) return;
+
     const challenge = req.session.webauthnChallenge;
     const userId = req.session.webauthnUserId;
 
@@ -288,6 +349,7 @@ router.post('/webauthn/login/finish', async (req, res, next) => {
     const { user, accessToken, refreshToken } = await authService.finishPasskeyLogin(
       req.body, challenge, userId
     );
+    clearFailedLoginAttempts(fail2ban?.ip);
 
     authService.setAuthCookies(res, accessToken, refreshToken);
 
@@ -303,7 +365,10 @@ router.post('/webauthn/login/finish', async (req, res, next) => {
 
     res.json({ user, accessToken });
   } catch (err) {
-    if (err.status === 401) return res.status(401).json({ error: err.message });
+    if (err.status === 401) {
+      recordFailedLoginAttempt(extractPublicIp(req));
+      return res.status(401).json({ error: err.message });
+    }
     next(err);
   }
 });

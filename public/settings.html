@@ -612,6 +612,90 @@
           </div>
         </div>
 
+        <div class="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+          <div>
+            <h3 class="font-semibold text-slate-800">Fail2ban applicatif</h3>
+            <p class="text-sm text-slate-500 mt-1">Bloque temporairement les tentatives de connexion répétées par IP publique. Les IP privées et locales sont ignorées.</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-slate-400">IP bloquées</p>
+              <p id="f2b-stat-blocked" class="mt-1 text-2xl font-semibold text-slate-800">0</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Liste blanche</p>
+              <p id="f2b-stat-whitelist" class="mt-1 text-2xl font-semibold text-slate-800">0</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Liste noire</p>
+              <p id="f2b-stat-blacklist" class="mt-1 text-2xl font-semibold text-slate-800">0</p>
+            </div>
+          </div>
+
+          <label class="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+            <input id="f2b-enabled" type="checkbox" class="h-4 w-4 rounded text-blue-600" />
+            Activer le blocage automatique après plusieurs échecs
+          </label>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <label class="block text-sm">
+              <span class="font-medium text-slate-700 mb-1 block">Tentatives max</span>
+              <input id="f2b-max-attempts" type="number" min="1" max="50"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+            </label>
+            <label class="block text-sm">
+              <span class="font-medium text-slate-700 mb-1 block">Fenêtre (minutes)</span>
+              <input id="f2b-window-minutes" type="number" min="1" max="1440"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+            </label>
+            <label class="block text-sm">
+              <span class="font-medium text-slate-700 mb-1 block">Blocage (minutes)</span>
+              <input id="f2b-block-minutes" type="number" min="1" max="10080"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="block text-sm">
+              <span class="font-medium text-slate-700 mb-1 block">Liste blanche</span>
+              <textarea id="f2b-whitelist" rows="5" placeholder="8.8.8.8&#10;1.1.1.1"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-y"></textarea>
+              <span class="text-xs text-slate-400 mt-1 block">Une IP publique par ligne. Jamais bloquée.</span>
+            </label>
+            <label class="block text-sm">
+              <span class="font-medium text-slate-700 mb-1 block">Liste noire</span>
+              <textarea id="f2b-blacklist" rows="5" placeholder="203.0.113.10"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-y"></textarea>
+              <span class="text-xs text-slate-400 mt-1 block">Une IP publique par ligne. Blocage immédiat.</span>
+            </label>
+          </div>
+
+          <div class="rounded-xl border border-slate-200">
+            <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <div>
+                <h4 class="font-medium text-slate-800">IP publiques bloquées</h4>
+                <p class="text-xs text-slate-400 mt-0.5">Blocages temporaires actifs et adresses mises en liste noire.</p>
+              </div>
+              <button type="button" onclick="loadFail2ban()"
+                class="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
+                Rafraîchir
+              </button>
+            </div>
+            <div id="f2b-blocked-list" class="divide-y divide-slate-100">
+              <p class="px-4 py-4 text-sm text-slate-400">Chargement...</p>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
+            <span id="fail2ban-feedback" class="text-sm text-slate-500"></span>
+            <button onclick="saveFail2ban()"
+              class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
+              Enregistrer
+            </button>
+          </div>
+        </div>
+
       </div><!-- /tab-security -->
 
     </div><!-- /contenu -->
@@ -826,7 +910,10 @@ function showTab(name) {
   if (name === 'email') loadSMTP();
   if (name === 'database') loadDbStats();
   if (name === 'po') loadPOTemplate();
-  if (name === 'security') loadWebAuthn();
+  if (name === 'security') {
+    loadWebAuthn();
+    loadFail2ban();
+  }
 }
 
 // ─── Utilisateurs ──────────────────────────────────────────────────────────
@@ -1305,6 +1392,95 @@ async function loadWebAuthn() {
     }
   } catch (err) {
     showToast('Erreur chargement WebAuthn : ' + err.message, 'error');
+  }
+}
+
+function setFail2banFeedback(message, tone = 'neutral') {
+  const feedback = document.getElementById('fail2ban-feedback');
+  feedback.textContent = message || '';
+  feedback.className = 'text-sm ' + (
+    tone === 'error' ? 'text-red-600'
+      : tone === 'success' ? 'text-emerald-600'
+        : 'text-slate-500'
+  );
+}
+
+function renderBlockedIps(blockedIps) {
+  const container = document.getElementById('f2b-blocked-list');
+  if (!blockedIps.length) {
+    container.innerHTML = '<p class="px-4 py-4 text-sm text-slate-400">Aucune IP publique bloquée actuellement.</p>';
+    return;
+  }
+
+  container.innerHTML = blockedIps.map(entry => `
+    <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-mono text-sm text-slate-800">${entry.ip}</span>
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${entry.reason === 'blacklist' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}">
+            ${entry.reason === 'blacklist' ? 'Liste noire' : 'Temporaire'}
+          </span>
+        </div>
+        <p class="mt-1 text-xs text-slate-400">
+          ${entry.reason === 'blacklist'
+            ? 'Blocage manuel actif'
+            : `Bloquée jusqu’au ${new Date(entry.blockedUntil).toLocaleString('fr-FR')}`}
+        </p>
+      </div>
+      <button type="button" onclick="unblockFail2banIp('${entry.ip}')"
+        class="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
+        Débloquer
+      </button>
+    </div>
+  `).join('');
+}
+
+async function loadFail2ban() {
+  try {
+    const data = await api.get('/settings/fail2ban');
+    document.getElementById('f2b-enabled').checked = !!data.enabled;
+    document.getElementById('f2b-max-attempts').value = data.maxAttempts ?? 5;
+    document.getElementById('f2b-window-minutes').value = data.windowMinutes ?? 15;
+    document.getElementById('f2b-block-minutes').value = data.blockMinutes ?? 60;
+    document.getElementById('f2b-whitelist').value = (data.whitelist || []).join('\n');
+    document.getElementById('f2b-blacklist').value = (data.blacklist || []).join('\n');
+    document.getElementById('f2b-stat-blocked').textContent = data.stats?.blockedCount ?? 0;
+    document.getElementById('f2b-stat-whitelist').textContent = data.stats?.whitelistCount ?? 0;
+    document.getElementById('f2b-stat-blacklist').textContent = data.stats?.blacklistCount ?? 0;
+    renderBlockedIps(data.blockedIps || []);
+    setFail2banFeedback('');
+  } catch (err) {
+    renderBlockedIps([]);
+    setFail2banFeedback(err.message, 'error');
+  }
+}
+
+async function saveFail2ban() {
+  setFail2banFeedback('Enregistrement...');
+  try {
+    const response = await api.patch('/settings/fail2ban', {
+      enabled: document.getElementById('f2b-enabled').checked,
+      maxAttempts: parseInt(document.getElementById('f2b-max-attempts').value, 10),
+      windowMinutes: parseInt(document.getElementById('f2b-window-minutes').value, 10),
+      blockMinutes: parseInt(document.getElementById('f2b-block-minutes').value, 10),
+      whitelist: document.getElementById('f2b-whitelist').value,
+      blacklist: document.getElementById('f2b-blacklist').value
+    });
+    setFail2banFeedback(response.message || 'Configuration enregistrée.', 'success');
+    await loadFail2ban();
+    showToast('Configuration fail2ban enregistrée', 'success');
+  } catch (err) {
+    setFail2banFeedback(err.message, 'error');
+  }
+}
+
+async function unblockFail2banIp(ip) {
+  try {
+    await api.post('/settings/fail2ban/unblock', { ip });
+    await loadFail2ban();
+    setFail2banFeedback(`IP ${ip} débloquée.`, 'success');
+  } catch (err) {
+    setFail2banFeedback(err.message, 'error');
   }
 }
 

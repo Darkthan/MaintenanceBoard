@@ -7,6 +7,12 @@ const { requireAdmin } = require('../middleware/roles');
 const config = require('../config');
 const { readSettings, writeSettings } = require('../utils/settings');
 const { buildSmtpTransportOptions } = require('../utils/mail');
+const {
+  normalizePublicIpList,
+  getFail2banState,
+  unblockIp,
+  serializeFail2banForClient
+} = require('../utils/fail2ban');
 
 const prisma = require('../lib/prisma');
 
@@ -14,6 +20,82 @@ const AGENT_MONITORING_DEFAULTS = {
   lowDiskAlertsEnabled: false,
   lowDiskThresholdGb: 20
 };
+
+// ── Fail2ban ────────────────────────────────────────────────────────────────
+
+router.get('/fail2ban', requireAuth, requireAdmin, (_req, res) => {
+  res.json(serializeFail2banForClient(readSettings().fail2ban));
+});
+
+router.patch('/fail2ban', requireAuth, requireAdmin, (req, res) => {
+  const current = getFail2banState(readSettings().fail2ban);
+  const next = {
+    ...current
+  };
+
+  if (req.body.enabled !== undefined) {
+    next.enabled = !!req.body.enabled;
+  }
+
+  for (const [field, min, max, label] of [
+    ['maxAttempts', 1, 50, 'Le nombre maximal de tentatives'],
+    ['windowMinutes', 1, 1440, 'La fenêtre de surveillance'],
+    ['blockMinutes', 1, 10080, 'La durée de blocage']
+  ]) {
+    if (req.body[field] === undefined) continue;
+    const value = Number(req.body[field]);
+    if (!Number.isFinite(value) || value < min || value > max) {
+      return res.status(400).json({ error: `${label} doit être compris entre ${min} et ${max}.` });
+    }
+    next[field] = Math.round(value);
+  }
+
+  for (const [field, label] of [['whitelist', 'liste blanche'], ['blacklist', 'liste noire']]) {
+    if (req.body[field] === undefined) continue;
+    const parsed = normalizePublicIpList(req.body[field]);
+    if (parsed.invalid.length) {
+      return res.status(400).json({ error: `Les entrées suivantes ne sont pas des IP publiques valides pour la ${label} : ${parsed.invalid.join(', ')}` });
+    }
+    next[field] = parsed.valid;
+  }
+
+  next.blockedIps = (next.blockedIps || []).filter(entry => !next.whitelist.includes(entry.ip));
+  for (const ip of next.whitelist) {
+    delete next.failures[ip];
+  }
+
+  for (const ip of next.blacklist) {
+    next.blockedIps = next.blockedIps.filter(entry => entry.ip !== ip);
+    next.blockedIps.push({
+      ip,
+      reason: 'blacklist',
+      createdAt: new Date().toISOString(),
+      blockedUntil: '9999-12-31T23:59:59.999Z'
+    });
+  }
+
+  next.blockedIps = next.blockedIps.filter(entry => {
+    if (entry.reason === 'blacklist') return next.blacklist.includes(entry.ip);
+    return !next.whitelist.includes(entry.ip);
+  });
+
+  writeSettings({ fail2ban: next });
+  res.json({ message: 'Protection fail2ban enregistrée', fail2ban: serializeFail2banForClient(next) });
+});
+
+router.post('/fail2ban/unblock', requireAuth, requireAdmin, (req, res) => {
+  const parsed = normalizePublicIpList([req.body.ip]);
+  if (!parsed.valid.length) {
+    return res.status(400).json({ error: 'IP publique invalide' });
+  }
+
+  const current = getFail2banState(readSettings().fail2ban);
+  unblockIp(current, parsed.valid[0]);
+  current.blacklist = current.blacklist.filter(ip => ip !== parsed.valid[0]);
+  writeSettings({ fail2ban: current });
+
+  res.json({ message: 'IP débloquée', fail2ban: serializeFail2banForClient(current) });
+});
 
 // ── SMTP ───────────────────────────────────────────────────────────────────
 
