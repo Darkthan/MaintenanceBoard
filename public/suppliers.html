@@ -93,6 +93,19 @@
   </main>
 </div>
 
+<button
+  id="floating-add-supplier-btn"
+  type="button"
+  onclick="openCreateModal()"
+  class="hidden fixed right-6 bottom-6 z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+  aria-label="Nouveau fournisseur"
+  title="Nouveau fournisseur"
+>
+  <svg class="mx-auto h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+  </svg>
+</button>
+
 <!-- Modal Nouveau fournisseur / Modifier -->
 <div id="supplier-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -178,6 +191,7 @@ let supplierToDelete = null;
 // Cacher actions admin pour TECH
 if (user?.role !== 'ADMIN') {
   document.getElementById('admin-actions').style.display = 'none';
+  document.getElementById('floating-add-supplier-btn').classList.add('hidden');
 }
 
 function escapeHtml(str) {
@@ -346,6 +360,9 @@ requireLogin().then(async u => {
   renderNav('suppliers');
   if (user.role !== 'ADMIN') {
     document.getElementById('admin-actions').style.display = 'none';
+    document.getElementById('floating-add-supplier-btn').classList.add('hidden');
+  } else {
+    document.getElementById('floating-add-supplier-btn').classList.remove('hidden');
   }
   await fetchSuppliers();
 });
