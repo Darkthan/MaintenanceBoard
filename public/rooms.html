@@ -62,10 +62,6 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           Assigner les salles
         </a>
-        <button id="add-room-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          Nouvelle salle
-        </button>
       </div>
     </header>
 
@@ -236,6 +232,14 @@
   </div>
 </div>
 
+<button id="add-room-btn" type="button"
+  class="fixed right-6 bottom-6 z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+  aria-label="Nouvelle salle" title="Nouvelle salle">
+  <svg class="mx-auto h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+  </svg>
+</button>
+
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
@@ -251,6 +255,7 @@ const pageParams = new URLSearchParams(window.location.search);
 // Cacher actions admin pour TECH
 if (user?.role !== 'ADMIN') {
   document.getElementById('admin-actions').style.display = 'none';
+  document.getElementById('add-room-btn').classList.add('hidden');
 }
 
 if (pageParams.get('search')) {
@@ -658,6 +663,7 @@ requireLogin().then(async u => {
   renderNav('rooms');
   if (user.role !== 'ADMIN') {
     document.getElementById('admin-actions').style.display = 'none';
+  document.getElementById('add-room-btn').classList.add('hidden');
   }
   await loadBuildings();
   await loadRooms();

@@ -38,10 +38,6 @@
         </button>
         <h1 class="text-xl font-semibold text-slate-800">Interventions</h1>
       </div>
-      <button id="add-intervention-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Nouvelle intervention
-      </button>
     </header>
 
     <div class="flex-1 p-6 space-y-4">
@@ -403,6 +399,14 @@
     </div>
   </div>
 </div>
+
+<button id="add-intervention-btn" type="button"
+  class="fixed right-6 bottom-6 z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+  aria-label="Nouvelle intervention" title="Nouvelle intervention">
+  <svg class="mx-auto h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+  </svg>
+</button>
 
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>

@@ -52,10 +52,6 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           Assigner les salles
         </a>
-        <button id="add-equip-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          Nouvel équipement
-        </button>
       </div>
     </header>
 
@@ -471,6 +467,38 @@
   </div>
 </div>
 
+<!-- FAB équipements — admin uniquement -->
+<div id="admin-fab">
+  <div class="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3">
+    <!-- Sous-menu -->
+    <div id="fab-equip-menu"
+      class="flex flex-col items-end gap-2.5 transition-all duration-200 ease-out opacity-0 scale-95 pointer-events-none origin-bottom-right">
+      <div class="flex items-center gap-2.5">
+        <span class="bg-slate-800 text-white text-sm font-medium px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap">Découverte agent</span>
+        <button type="button" onclick="window.location.href='/agents.html'"
+          class="h-12 w-12 rounded-full bg-slate-700 text-white shadow-md transition hover:bg-slate-800 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-slate-300">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        </button>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <span class="bg-slate-800 text-white text-sm font-medium px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap">Via formulaire</span>
+        <button type="button" id="fab-equip-form"
+          class="h-12 w-12 rounded-full bg-blue-600 text-white shadow-md transition hover:bg-blue-700 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-blue-200">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Bouton principal -->
+    <button id="fab-equip-main" type="button"
+      class="h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+      aria-label="Ajouter un équipement" title="Ajouter un équipement">
+      <svg id="fab-equip-icon" class="mx-auto h-6 w-6 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
@@ -614,7 +642,7 @@ async function loadSuppliersForSelect(selectedId) {
 }
 
 const modal = document.getElementById('equip-modal');
-document.getElementById('add-equip-btn')?.addEventListener('click', () => {
+function openEquipCreateModal() {
   document.getElementById('modal-title').textContent = 'Nouvel équipement';
   document.getElementById('equip-id').value = '';
   document.getElementById('equip-form').reset();
@@ -622,7 +650,21 @@ document.getElementById('add-equip-btn')?.addEventListener('click', () => {
   loadRoomsForSelect(null);
   loadSuppliersForSelect(null);
   modal.classList.remove('hidden');
-});
+}
+
+// FAB multi-actions
+let fabEquipOpen = false;
+function toggleFabEquip() {
+  fabEquipOpen = !fabEquipOpen;
+  const menu = document.getElementById('fab-equip-menu');
+  const icon = document.getElementById('fab-equip-icon');
+  menu.classList.toggle('opacity-0', !fabEquipOpen);
+  menu.classList.toggle('scale-95', !fabEquipOpen);
+  menu.classList.toggle('pointer-events-none', !fabEquipOpen);
+  icon.style.transform = fabEquipOpen ? 'rotate(45deg)' : '';
+}
+document.getElementById('fab-equip-main').addEventListener('click', toggleFabEquip);
+document.getElementById('fab-equip-form').addEventListener('click', () => { toggleFabEquip(); openEquipCreateModal(); });
 document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
 document.getElementById('cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
 
@@ -1275,7 +1317,7 @@ requireLogin().then(async u => {
   if (user.role !== 'ADMIN') document.getElementById('admin-actions').style.display = 'none';
   loadEquipment();
   if (urlParams.get('action') === 'create' && user?.role === 'ADMIN') {
-    setTimeout(() => document.getElementById('add-equip-btn')?.click(), 50);
+    setTimeout(() => openEquipCreateModal(), 50);
   }
 });
 if (urlParams.get('focus')) {
