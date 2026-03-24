@@ -123,7 +123,13 @@
             </button>
           </div>
           <div class="grid grid-cols-7 mb-1">
-            ${['L','M','M','J','V','S','D'].map(d => `<div class="text-center text-xs font-medium text-slate-400 py-1">${d}</div>`).join('')}
+            <div class="text-center text-xs font-medium text-slate-400 py-1">L</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">M</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">M</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">J</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">V</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">S</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">D</div>
           </div>
           <div id="calendar-grid" class="grid grid-cols-7 gap-px bg-slate-100 rounded-xl overflow-hidden border border-slate-100"></div>
           <!-- Popup détail jour -->
@@ -148,31 +154,28 @@
   </main>
 </div>
 
-<div class="fixed bottom-6 right-6 z-30">
-  <div id="loan-create-menu" class="mb-3 hidden w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/10">
-    <button type="button" onclick="openCreateMenuAction('resource')" class="flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-slate-50">
-      <span class="mt-0.5 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-      </span>
-      <span class="min-w-0">
-        <span class="block text-sm font-medium text-slate-800">Nouvelle ressource</span>
-        <span class="mt-0.5 block text-xs text-slate-500">Créer un lot, une valise ou un matériel prêtable.</span>
-      </span>
-    </button>
-    <button type="button" onclick="openCreateMenuAction('link')" class="flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-slate-50">
-      <span class="mt-0.5 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5m5.656-5.656a4 4 0 015.656 5.656l-1.5 1.5m-4.242 4.242l-4.242-4.242"/></svg>
-      </span>
-      <span class="min-w-0">
-        <span class="block text-sm font-medium text-slate-800">Nouveau lien de demande</span>
-        <span class="mt-0.5 block text-xs text-slate-500">Générer un lien personnalisé vers le formulaire de prêt.</span>
-      </span>
-    </button>
+<div class="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3">
+  <div id="loan-create-menu"
+    class="flex flex-col items-end gap-2.5 transition-all duration-200 ease-out opacity-0 scale-95 pointer-events-none origin-bottom-right">
+    <div class="flex items-center gap-3">
+      <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Nouveau lien de demande</span>
+      <button type="button" onclick="openCreateMenuAction('link')"
+        class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5m5.656-5.656a4 4 0 015.656 5.656l-1.5 1.5m-4.242 4.242l-4.242-4.242"/></svg>
+      </button>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Nouvelle ressource</span>
+      <button type="button" onclick="openCreateMenuAction('resource')"
+        class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      </button>
+    </div>
   </div>
   <button id="loan-create-btn" type="button" onclick="toggleCreateMenu()"
     class="h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
     aria-label="Créer un prêt" title="Créer un prêt">
-    <svg id="loan-create-icon" class="mx-auto h-6 w-6 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg id="loan-create-icon" class="mx-auto h-6 w-6 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
     </svg>
   </button>
@@ -389,8 +392,12 @@ function renderMagicLinks() {
 }
 
 function setCreateMenuOpen(isOpen) {
-  document.getElementById('loan-create-menu').classList.toggle('hidden', !isOpen);
-  document.getElementById('loan-create-icon').classList.toggle('rotate-45', isOpen);
+  const menu = document.getElementById('loan-create-menu');
+  const icon = document.getElementById('loan-create-icon');
+  menu.classList.toggle('opacity-0', !isOpen);
+  menu.classList.toggle('scale-95', !isOpen);
+  menu.classList.toggle('pointer-events-none', !isOpen);
+  icon.style.transform = isOpen ? 'rotate(45deg)' : '';
 }
 
 function toggleCreateMenu() {
