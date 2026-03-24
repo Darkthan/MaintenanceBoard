@@ -113,4 +113,22 @@ describe('GET /api/search', () => {
     expect(res.status).toBe(200);
     expect(res.body.results.some(r => r.type === 'room')).toBe(true);
   });
+
+  it('retrouve une salle meme si la requete ne contient pas les accents', async () => {
+    prisma.room.findMany.mockResolvedValue([
+      {
+        id: 'room-3',
+        name: 'Salle Étude',
+        number: '303',
+        building: 'Bâtiment C',
+        floor: 3,
+        description: 'Salle dédiée aux révisions',
+        _count: { equipment: 1, interventions: 0 }
+      }
+    ]);
+
+    const res = await request(app).get('/api/search?q=etude');
+    expect(res.status).toBe(200);
+    expect(res.body.results.some(r => r.type === 'room' && r.title === 'Salle Étude')).toBe(true);
+  });
 });

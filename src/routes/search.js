@@ -4,7 +4,6 @@ const { readSettings } = require('../utils/settings');
 
 const router = express.Router();
 const prisma = require('../lib/prisma');
-const { containsFilter } = require('../lib/db-utils');
 const orderAttachmentModel = prisma.orderAttachment;
 const signatureRequestModel = prisma.signatureRequest;
 
@@ -565,6 +564,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const orderSearchTerm = strippedQuery || rawQuery;
     const broadDocumentMode = documentIntent && !strippedQuery;
     const attachmentCategoryFilter = getAttachmentCategoryFilter(documentStateIntent);
+    const candidateLimit = Math.min(160, Math.max(limit * 12, 72));
 
     const actions = buildActions(query, req.user.role, actionLimit);
 
@@ -577,36 +577,14 @@ router.get('/', requireAuth, async (req, res, next) => {
 
     const [rooms, equipment, interventions, orders, attachments, signatureDocuments, suppliers, stockItems, users] = await Promise.all([
       prisma.room.findMany({
-        where: {
-          OR: [
-            { name: containsFilter(rawQuery) },
-            { number: containsFilter(rawQuery) },
-            { building: containsFilter(rawQuery) },
-            ...(Number.isInteger(floorQuery) ? [{ floor: floorQuery }] : []),
-            { description: containsFilter(rawQuery) }
-          ]
-        },
-        take: limit + 2,
+        take: candidateLimit,
         orderBy: [{ building: 'asc' }, { number: 'asc' }],
         include: {
           _count: { select: { equipment: true, interventions: true } }
         }
       }),
       prisma.equipment.findMany({
-        where: {
-          OR: [
-            { name: containsFilter(rawQuery) },
-            { serialNumber: containsFilter(rawQuery) },
-            { brand: containsFilter(rawQuery) },
-            { model: containsFilter(rawQuery) },
-            { type: containsFilter(rawQuery) },
-            { agentHostname: containsFilter(rawQuery) },
-            { room: { is: { name: containsFilter(rawQuery) } } },
-            { room: { is: { number: containsFilter(rawQuery) } } },
-            { room: { is: { building: containsFilter(rawQuery) } } }
-          ]
-        },
-        take: limit + 2,
+        take: candidateLimit,
         orderBy: { updatedAt: 'desc' },
         include: {
           room: { select: { id: true, name: true, number: true } },
@@ -614,20 +592,8 @@ router.get('/', requireAuth, async (req, res, next) => {
         }
       }),
       prisma.intervention.findMany({
-        where: {
-          ...techRestriction,
-          OR: [
-            { title: containsFilter(rawQuery) },
-            { description: containsFilter(rawQuery) },
-            { room: { is: { name: containsFilter(rawQuery) } } },
-            { room: { is: { number: containsFilter(rawQuery) } } },
-            { room: { is: { building: containsFilter(rawQuery) } } },
-            { equipment: { is: { name: containsFilter(rawQuery) } } },
-            { equipment: { is: { serialNumber: containsFilter(rawQuery) } } },
-            { tech: { is: { name: containsFilter(rawQuery) } } }
-          ]
-        },
-        take: limit + 2,
+        where: techRestriction,
+        take: candidateLimit,
         orderBy: { createdAt: 'desc' },
         include: {
           room: { select: { id: true, name: true, number: true } },
@@ -636,18 +602,8 @@ router.get('/', requireAuth, async (req, res, next) => {
         }
       }),
       prisma.order.findMany({
-        where: broadDocumentMode
-          ? {}
-          : {
-              OR: [
-                { title: containsFilter(orderSearchTerm) },
-                { supplier: containsFilter(orderSearchTerm) },
-                { description: containsFilter(orderSearchTerm) },
-                { deploymentTags: containsFilter(orderSearchTerm) },
-                ...(orderIdHint ? [{ id: containsFilter(orderIdHint) }] : [])
-              ]
-            },
-        take: documentIntent ? limit + 6 : limit + 2,
+        where: {},
+        take: Math.max(candidateLimit, documentIntent ? limit + 12 : limit + 6),
         orderBy: { createdAt: 'desc' },
         include: {
           requester: { select: { id: true, name: true } },
@@ -656,21 +612,10 @@ router.get('/', requireAuth, async (req, res, next) => {
       }),
       orderAttachmentModel
         ? orderAttachmentModel.findMany({
-            where: broadDocumentMode
-              ? {
-                  ...(attachmentCategoryFilter ? { category: { in: attachmentCategoryFilter } } : {})
-                }
-              : {
-                  ...(attachmentCategoryFilter ? { category: { in: attachmentCategoryFilter } } : {}),
-                  OR: [
-                    { filename: containsFilter(orderSearchTerm) },
-                    { category: containsFilter(orderSearchTerm) },
-                    { order: { is: { title: containsFilter(orderSearchTerm) } } },
-                    { order: { is: { supplier: containsFilter(orderSearchTerm) } } },
-                    ...(orderIdHint ? [{ order: { is: { id: containsFilter(orderIdHint) } } }] : [])
-                  ]
-                },
-            take: documentIntent ? limit + 10 : limit + 4,
+            where: {
+              ...(attachmentCategoryFilter ? { category: { in: attachmentCategoryFilter } } : {})
+            },
+            take: Math.max(candidateLimit, documentIntent ? limit + 16 : limit + 8),
             orderBy: { createdAt: 'desc' },
             include: {
               order: {
@@ -688,32 +633,15 @@ router.get('/', requireAuth, async (req, res, next) => {
         : Promise.resolve([]),
       signatureRequestModel
         ? signatureRequestModel.findMany({
-            where: broadDocumentMode
-              ? {
-                  ...signatureWhereBase,
-                  ...(documentStateIntent === 'signed'
-                    ? { status: 'SIGNED' }
-                    : documentStateIntent === 'unsigned'
-                      ? { status: { in: ['PENDING', 'EXPIRED', 'CANCELLED'] } }
-                      : {})
-                }
-              : {
-                  ...signatureWhereBase,
-                  ...(documentStateIntent === 'signed'
-                    ? { status: 'SIGNED' }
-                    : documentStateIntent === 'unsigned'
-                      ? { status: { in: ['PENDING', 'EXPIRED', 'CANCELLED'] } }
-                      : {}),
-                  OR: [
-                    { documentTitle: containsFilter(orderSearchTerm) },
-                    { documentNotes: containsFilter(orderSearchTerm) },
-                    { recipientName: containsFilter(orderSearchTerm) },
-                    { recipientEmail: containsFilter(orderSearchTerm) },
-                    { sourceFilename: containsFilter(orderSearchTerm) },
-                    ...(orderIdHint ? [{ signatureId: containsFilter(orderIdHint) }] : [])
-                  ]
-                },
-            take: documentIntent ? limit + 10 : limit + 4,
+            where: {
+              ...signatureWhereBase,
+              ...(documentStateIntent === 'signed'
+                ? { status: 'SIGNED' }
+                : documentStateIntent === 'unsigned'
+                  ? { status: { in: ['PENDING', 'EXPIRED', 'CANCELLED'] } }
+                  : {})
+            },
+            take: Math.max(candidateLimit, documentIntent ? limit + 16 : limit + 8),
             orderBy: { createdAt: 'desc' },
             include: {
               creator: { select: { name: true } }
@@ -721,34 +649,14 @@ router.get('/', requireAuth, async (req, res, next) => {
           }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
         : Promise.resolve([]),
       prisma.supplier.findMany({
-        where: {
-          OR: [
-            { name: containsFilter(rawQuery) },
-            { contact: containsFilter(rawQuery) },
-            { email: containsFilter(rawQuery) },
-            { phone: containsFilter(rawQuery) },
-            { address: containsFilter(rawQuery) },
-            { notes: containsFilter(rawQuery) }
-          ]
-        },
-        take: limit + 2,
+        take: candidateLimit,
         orderBy: { name: 'asc' },
         include: {
           _count: { select: { orders: true, equipment: true } }
         }
       }),
       prisma.stockItem.findMany({
-        where: {
-          OR: [
-            { name: containsFilter(rawQuery) },
-            { reference: containsFilter(rawQuery) },
-            { category: containsFilter(rawQuery) },
-            { description: containsFilter(rawQuery) },
-            { location: containsFilter(rawQuery) },
-            { supplier: { is: { name: containsFilter(rawQuery) } } }
-          ]
-        },
-        take: limit + 2,
+        take: candidateLimit,
         orderBy: { updatedAt: 'desc' },
         include: {
           supplier: { select: { id: true, name: true } }
@@ -756,15 +664,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       }),
       req.user.role === 'ADMIN'
         ? prisma.user.findMany({
-            where: {
-              OR: [
-                { name: containsFilter(rawQuery) },
-                { email: containsFilter(rawQuery) },
-                { contactEmail: containsFilter(rawQuery) },
-                { role: containsFilter(rawQuery) }
-              ]
-            },
-            take: limit + 2,
+            take: candidateLimit,
             orderBy: { name: 'asc' },
             include: {
               _count: { select: { interventions: true, passkeys: true } }
