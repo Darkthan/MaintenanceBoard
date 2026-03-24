@@ -50,16 +50,6 @@
           <p class="text-sm text-slate-500">Catalogue de prêt, demandes externes, lots et agenda de réservation.</p>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <button id="create-link-btn" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5m5.656-5.656a4 4 0 015.656 5.656l-1.5 1.5m-4.242 4.242l-4.242-4.242"/></svg>
-          Magic link
-        </button>
-        <button id="create-resource-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          Ressource
-        </button>
-      </div>
     </header>
 
     <div class="flex-1 p-6 space-y-6">
@@ -79,7 +69,7 @@
           <div class="flex items-center justify-between gap-3">
             <div>
               <h2 class="font-semibold text-slate-800">Flux calendrier</h2>
-              <p class="text-sm text-slate-500">Agenda des prêts pour intégration externe.</p>
+              <p class="text-sm text-slate-500">Agenda des prêts pour intégration externe et liens personnalisés de demande.</p>
             </div>
             <button id="refresh-calendar-feed-btn" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
           </div>
@@ -91,21 +81,57 @@
             </button>
           </div>
           <div>
-            <h3 class="font-medium text-slate-800 mb-3">Magic links actifs</h3>
+            <h3 class="font-medium text-slate-800 mb-1">Liens de demande actifs</h3>
+            <p class="mb-3 text-xs text-slate-500">Ces liens ouvrent directement le formulaire de prêt. Ils sont distincts de l’authentification du back-office.</p>
             <div id="magic-links-list" class="space-y-3"></div>
           </div>
         </section>
       </div>
 
       <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-        <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 class="font-semibold text-slate-800">Agenda des prêts</h2>
-            <p class="text-sm text-slate-500">Vue des demandes en attente et approuvées sur les 21 prochains jours.</p>
+            <p class="text-sm text-slate-500">Réservations en attente et approuvées.</p>
           </div>
-          <button id="refresh-calendar-btn" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+          <div class="flex items-center gap-3">
+            <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <button id="view-calendar-btn" onclick="setCalendarView('calendar')"
+                class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition bg-white text-slate-800 shadow-sm">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                Agenda
+              </button>
+              <button id="view-list-btn" onclick="setCalendarView('list')"
+                class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition text-slate-500 hover:text-slate-700">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                Liste
+              </button>
+            </div>
+            <button id="refresh-calendar-btn" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+          </div>
         </div>
-        <div id="calendar-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+
+        <!-- Vue calendrier -->
+        <div id="calendar-view">
+          <div class="flex items-center justify-between mb-4">
+            <button id="cal-prev" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-600">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <h3 id="cal-month-label" class="text-sm font-semibold text-slate-800 capitalize"></h3>
+            <button id="cal-next" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-600">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+          <div class="grid grid-cols-7 mb-1">
+            ${['L','M','M','J','V','S','D'].map(d => `<div class="text-center text-xs font-medium text-slate-400 py-1">${d}</div>`).join('')}
+          </div>
+          <div id="calendar-grid" class="grid grid-cols-7 gap-px bg-slate-100 rounded-xl overflow-hidden border border-slate-100"></div>
+          <!-- Popup détail jour -->
+          <div id="cal-day-detail" class="hidden mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2"></div>
+        </div>
+
+        <!-- Vue liste -->
+        <div id="calendar-list-view" class="hidden space-y-2"></div>
       </section>
 
       <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
@@ -120,6 +146,36 @@
       </section>
     </div>
   </main>
+</div>
+
+<div class="fixed bottom-6 right-6 z-30">
+  <div id="loan-create-menu" class="mb-3 hidden w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/10">
+    <button type="button" onclick="openCreateMenuAction('resource')" class="flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-slate-50">
+      <span class="mt-0.5 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      </span>
+      <span class="min-w-0">
+        <span class="block text-sm font-medium text-slate-800">Nouvelle ressource</span>
+        <span class="mt-0.5 block text-xs text-slate-500">Créer un lot, une valise ou un matériel prêtable.</span>
+      </span>
+    </button>
+    <button type="button" onclick="openCreateMenuAction('link')" class="flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-slate-50">
+      <span class="mt-0.5 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5m5.656-5.656a4 4 0 015.656 5.656l-1.5 1.5m-4.242 4.242l-4.242-4.242"/></svg>
+      </span>
+      <span class="min-w-0">
+        <span class="block text-sm font-medium text-slate-800">Nouveau lien de demande</span>
+        <span class="mt-0.5 block text-xs text-slate-500">Générer un lien personnalisé vers le formulaire de prêt.</span>
+      </span>
+    </button>
+  </div>
+  <button id="loan-create-btn" type="button" onclick="toggleCreateMenu()"
+    class="h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+    aria-label="Créer un prêt" title="Créer un prêt">
+    <svg id="loan-create-icon" class="mx-auto h-6 w-6 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+  </button>
 </div>
 
 <div id="resource-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -184,7 +240,7 @@
 <div id="link-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-      <h3 class="font-semibold text-slate-800">Créer un magic link</h3>
+      <h3 class="font-semibold text-slate-800">Créer un lien de demande</h3>
       <button type="button" onclick="closeLinkModal()" class="text-slate-400 hover:text-slate-600">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
@@ -327,49 +383,184 @@ function renderMagicLinks() {
         </div>
       </div>
     `).join('')
-    : '<p class="text-sm text-slate-400">Aucun magic link créé.</p>';
+    : '<p class="text-sm text-slate-400">Aucun lien de demande créé.</p>';
+}
+
+function setCreateMenuOpen(isOpen) {
+  document.getElementById('loan-create-menu').classList.toggle('hidden', !isOpen);
+  document.getElementById('loan-create-icon').classList.toggle('rotate-45', isOpen);
+}
+
+function toggleCreateMenu() {
+  const isHidden = document.getElementById('loan-create-menu').classList.contains('hidden');
+  setCreateMenuOpen(isHidden);
+}
+
+function closeCreateMenu() {
+  setCreateMenuOpen(false);
+}
+
+function openCreateMenuAction(type) {
+  closeCreateMenu();
+  if (type === 'resource') {
+    openResourceModal();
+    return;
+  }
+  openLinkModal();
+}
+
+// ── Agenda ───────────────────────────────────────────────────
+let calendarViewMode = 'calendar';
+let calendarMonth = new Date(); // mois courant affiché
+calendarMonth.setDate(1);
+calendarMonth.setHours(0, 0, 0, 0);
+
+function setCalendarView(mode) {
+  calendarViewMode = mode;
+  document.getElementById('calendar-view').classList.toggle('hidden', mode !== 'calendar');
+  document.getElementById('calendar-list-view').classList.toggle('hidden', mode !== 'list');
+  const calBtn = document.getElementById('view-calendar-btn');
+  const listBtn = document.getElementById('view-list-btn');
+  if (mode === 'calendar') {
+    calBtn.classList.add('bg-white', 'text-slate-800', 'shadow-sm');
+    calBtn.classList.remove('text-slate-500');
+    listBtn.classList.remove('bg-white', 'text-slate-800', 'shadow-sm');
+    listBtn.classList.add('text-slate-500');
+  } else {
+    listBtn.classList.add('bg-white', 'text-slate-800', 'shadow-sm');
+    listBtn.classList.remove('text-slate-500');
+    calBtn.classList.remove('bg-white', 'text-slate-800', 'shadow-sm');
+    calBtn.classList.add('text-slate-500');
+  }
+  renderCalendar();
+}
+
+function getReservationsForDay(dayKey) {
+  const dayStart = new Date(`${dayKey}T00:00:00`);
+  const dayEnd = new Date(`${dayKey}T23:59:59`);
+  return loanReservations.filter(item =>
+    ['PENDING', 'APPROVED'].includes(item.status) &&
+    new Date(item.startAt) <= dayEnd && new Date(item.endAt) >= dayStart
+  );
 }
 
 function renderCalendar() {
-  const days = {};
-  for (let i = 0; i < 21; i += 1) {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() + i);
+  if (calendarViewMode === 'list') { renderCalendarList(); return; }
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+
+  document.getElementById('cal-month-label').textContent =
+    calendarMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+  // Premier jour de la semaine du mois (lundi=0)
+  const firstDay = new Date(year, month, 1);
+  let startDow = firstDay.getDay(); // 0=dim
+  startDow = startDow === 0 ? 6 : startDow - 1; // lundi=0
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+
+  // Cases vides avant le 1er
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+
+  // Compléter à un multiple de 7
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const gridEl = document.getElementById('calendar-grid');
+  gridEl.innerHTML = cells.map(date => {
+    if (!date) return `<div class="bg-slate-50 min-h-[72px]"></div>`;
     const key = date.toISOString().slice(0, 10);
-    days[key] = [];
-  }
+    const items = getReservationsForDay(key);
+    const isToday = date.getTime() === today.getTime();
+    const isPast = date < today;
+    return `
+      <div onclick="showDayDetail('${key}')"
+        class="bg-white min-h-[72px] p-2 cursor-pointer hover:bg-blue-50 transition group ${isPast ? 'opacity-60' : ''}">
+        <div class="flex justify-between items-start">
+          <span class="text-xs font-medium ${isToday ? 'inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white' : 'text-slate-500 group-hover:text-slate-800'}">${date.getDate()}</span>
+          ${items.length ? `<span class="text-xs font-medium text-blue-600">${items.length}</span>` : ''}
+        </div>
+        <div class="mt-1 space-y-0.5">
+          ${items.slice(0, 2).map(item => {
+            const color = item.status === 'APPROVED' ? 'bg-emerald-500' : 'bg-amber-400';
+            return `<div class="truncate rounded text-white text-xs px-1 py-0.5 ${color}">${item.resource.name}</div>`;
+          }).join('')}
+          ${items.length > 2 ? `<div class="text-xs text-slate-400 pl-1">+${items.length - 2}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
 
-  loanReservations.filter(item => ['PENDING', 'APPROVED'].includes(item.status)).forEach(item => {
-    Object.keys(days).forEach(dayKey => {
-      const dayStart = new Date(`${dayKey}T00:00:00`);
-      const dayEnd = new Date(`${dayKey}T23:59:59`);
-      if (new Date(item.startAt) <= dayEnd && new Date(item.endAt) >= dayStart) {
-        days[dayKey].push(item);
-      }
-    });
-  });
+  document.getElementById('cal-day-detail').classList.add('hidden');
+}
 
-  document.getElementById('calendar-grid').innerHTML = Object.entries(days).map(([dayKey, items]) => `
-    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <div class="flex items-center justify-between gap-2 mb-3">
-        <h3 class="font-medium text-slate-800">${new Date(`${dayKey}T00:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
-        <span class="text-xs text-slate-400">${items.length}</span>
-      </div>
-      ${items.length ? `<div class="space-y-2">
+function showDayDetail(dayKey) {
+  const items = getReservationsForDay(dayKey);
+  const el = document.getElementById('cal-day-detail');
+  const label = new Date(`${dayKey}T00:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  if (!items.length) {
+    el.innerHTML = `<p class="text-sm text-slate-400">Aucune réservation le ${label}.</p>`;
+  } else {
+    el.innerHTML = `
+      <h4 class="text-sm font-semibold text-slate-700 capitalize">${label}</h4>
+      <div class="space-y-2 mt-2">
         ${items.map(item => `
           <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
             <div class="flex items-center justify-between gap-2">
-              <p class="font-medium text-slate-800">${item.resource.name}</p>
+              <p class="font-medium text-slate-800 text-sm">${item.resource.name}</p>
               ${formatStatus(item.status)}
             </div>
             <p class="text-sm text-slate-500 mt-1">${item.requesterName} · ${item.requestedUnits} unité(s)</p>
             <p class="text-xs text-slate-400 mt-1">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)}</p>
-          </div>
-        `).join('')}
-      </div>` : '<p class="text-sm text-slate-400">Aucune réservation.</p>'}
-    </div>
-  `).join('');
+          </div>`).join('')}
+      </div>`;
+  }
+  el.classList.remove('hidden');
+}
+
+function renderCalendarList() {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const upcoming = loanReservations
+    .filter(item => ['PENDING', 'APPROVED'].includes(item.status) && new Date(item.endAt) >= now)
+    .sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
+
+  const el = document.getElementById('calendar-list-view');
+  if (!upcoming.length) {
+    el.innerHTML = '<p class="text-sm text-slate-400">Aucune réservation à venir.</p>';
+    return;
+  }
+
+  // Grouper par date de début
+  const groups = {};
+  upcoming.forEach(item => {
+    const key = new Date(item.startAt).toISOString().slice(0, 10);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  });
+
+  el.innerHTML = Object.entries(groups).map(([key, items]) => {
+    const label = new Date(`${key}T00:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return `
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 px-1 mb-1 capitalize">${label}</p>
+        <div class="space-y-1.5">
+          ${items.map(item => `
+            <div class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <div class="mt-1 h-2 w-2 flex-shrink-0 rounded-full ${item.status === 'APPROVED' ? 'bg-emerald-500' : 'bg-amber-400'}"></div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-medium text-slate-800 text-sm">${item.resource.name}</span>
+                  ${formatStatus(item.status)}
+                </div>
+                <p class="text-sm text-slate-500 mt-0.5">${item.requesterName}${item.requesterOrganization ? ` · ${item.requesterOrganization}` : ''} · ${item.requestedUnits} unité(s)</p>
+                <p class="text-xs text-slate-400 mt-0.5">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)}</p>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function renderReservations() {
@@ -428,9 +619,9 @@ async function loadMagicLinks() {
 
 async function loadReservations() {
   const start = new Date();
-  start.setDate(start.getDate() - 7);
+  start.setDate(start.getDate() - 14);
   const end = new Date();
-  end.setDate(end.getDate() + 21);
+  end.setDate(end.getDate() + 90);
   loanReservations = await api.get('/loans/reservations', {
     start: start.toISOString(),
     end: end.toISOString()
@@ -459,12 +650,31 @@ async function updateReservationStatus(id, status) {
   }
 }
 
-document.getElementById('create-resource-btn').addEventListener('click', () => openResourceModal());
-document.getElementById('create-link-btn').addEventListener('click', openLinkModal);
+document.getElementById('cal-prev').addEventListener('click', () => {
+  calendarMonth.setMonth(calendarMonth.getMonth() - 1);
+  renderCalendar();
+});
+document.getElementById('cal-next').addEventListener('click', () => {
+  calendarMonth.setMonth(calendarMonth.getMonth() + 1);
+  renderCalendar();
+});
+
 document.getElementById('refresh-reservations-btn').addEventListener('click', loadReservations);
 document.getElementById('refresh-calendar-btn').addEventListener('click', loadReservations);
 document.getElementById('refresh-calendar-feed-btn').addEventListener('click', loadCalendarFeed);
 document.getElementById('copy-calendar-feed-btn').addEventListener('click', () => copyText(document.getElementById('calendar-feed-url').value));
+
+document.addEventListener('click', event => {
+  const menu = document.getElementById('loan-create-menu');
+  const button = document.getElementById('loan-create-btn');
+  if (menu.classList.contains('hidden')) return;
+  if (menu.contains(event.target) || button.contains(event.target)) return;
+  closeCreateMenu();
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeCreateMenu();
+});
 
 document.getElementById('resource-form').addEventListener('submit', async event => {
   event.preventDefault();
