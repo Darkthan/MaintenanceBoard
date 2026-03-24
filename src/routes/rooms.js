@@ -194,7 +194,7 @@ router.post('/',
   requireAuth, requireAdmin,
   [
     body('name').trim().isLength({ min: 1, max: 200 }),
-    body('floor').optional().isInt(),
+    body('floor').optional({ nullable: true }).custom(v => v === null || Number.isInteger(Number(v))),
     body('building').optional().trim().isLength({ max: 100 }),
     body('number').optional().trim().isLength({ max: 50 }),
     body('description').optional().trim()
@@ -207,7 +207,7 @@ router.post('/',
         data: {
           name,
           building: building || null,
-          floor: floor !== undefined ? parseInt(floor) : null,
+          floor: floor != null ? parseInt(floor) : null,
           number: number || null,
           description: description || null
         }
@@ -222,7 +222,7 @@ router.patch('/:id',
   requireAuth, requireAdmin,
   [
     body('name').optional().trim().isLength({ min: 1, max: 200 }),
-    body('floor').optional().isInt(),
+    body('floor').optional({ nullable: true }).custom(v => v === null || Number.isInteger(Number(v))),
     body('building').optional().trim(),
     body('number').optional().trim(),
     body('description').optional().trim()
