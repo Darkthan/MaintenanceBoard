@@ -1944,3 +1944,93 @@ if (document.readyState === 'loading') {
 } else {
   enhanceResponsiveLayout();
 }
+
+// ── Pull-to-refresh PWA ───────────────────────────────────────────────────────
+(function () {
+  if (!('ontouchstart' in window)) return; // desktop : no-op
+
+  const THRESHOLD = 80;
+  let startY = 0, pulling = false, pullDist = 0, refreshing = false;
+
+  // Keyframe spinner
+  const style = document.createElement('style');
+  style.textContent = '@keyframes ptr-spin{to{transform:rotate(360deg)}}';
+  document.head.appendChild(style);
+
+  // Barre indicateur
+  const bar = document.createElement('div');
+  bar.style.cssText = [
+    'position:fixed;top:0;left:0;right:0;z-index:99999',
+    'height:56px;display:flex;align-items:center;justify-content:center;gap:10px',
+    'background:#eff6ff;border-bottom:1px solid #bfdbfe',
+    'transform:translateY(-100%);transition:transform .25s ease',
+    'pointer-events:none;will-change:transform',
+  ].join(';');
+
+  const spinner = document.createElement('div');
+  spinner.style.cssText = 'width:20px;height:20px;border:2px solid #93c5fd;border-top-color:#2563eb;border-radius:50%';
+
+  const label = document.createElement('span');
+  label.style.cssText = 'font-size:13px;font-weight:500;color:#1d4ed8;font-family:system-ui,sans-serif';
+  label.textContent = 'Tirez pour actualiser';
+
+  bar.append(spinner, label);
+  document.body.appendChild(bar);
+
+  function show(px) {
+    bar.style.transition = 'none';
+    bar.style.transform = `translateY(${px - 56}px)`;
+  }
+  function hide() {
+    bar.style.transition = 'transform .3s ease';
+    bar.style.transform = 'translateY(-100%)';
+  }
+  function showLoading() {
+    bar.style.transition = 'transform .2s ease';
+    bar.style.transform = 'translateY(0)';
+    spinner.style.animation = 'ptr-spin .7s linear infinite';
+    label.textContent = 'Mise à jour…';
+  }
+
+  document.addEventListener('touchstart', e => {
+    if (refreshing || window.scrollY > 0) return;
+    startY = e.touches[0].clientY;
+    pulling = true;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (!pulling || refreshing) return;
+    pullDist = Math.max(0, e.touches[0].clientY - startY);
+    if (pullDist < 8) return;
+    const progress = Math.min(pullDist / THRESHOLD, 1);
+    show(Math.min(pullDist * 0.45, 56));
+    spinner.style.transform = `rotate(${progress * 320}deg)`;
+    label.textContent = pullDist >= THRESHOLD ? 'Relâchez pour actualiser' : 'Tirez pour actualiser';
+  }, { passive: true });
+
+  document.addEventListener('touchend', async () => {
+    if (!pulling || refreshing) return;
+    pulling = false;
+    const dist = pullDist;
+    pullDist = 0;
+    if (dist < THRESHOLD) { hide(); return; }
+
+    refreshing = true;
+    showLoading();
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.update();
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            await new Promise(r => setTimeout(r, 400));
+          }
+        }
+      }
+    } catch (_) {}
+
+    window.location.reload();
+  }, { passive: true });
+})();
