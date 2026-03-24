@@ -875,7 +875,7 @@ function generatePOHtml(order, tpl) {
                 <td>
                   <strong>${esc(item.name)}</strong>
                   ${item.notes ? `<div class="subtitle">${esc(item.notes)}</div>` : ''}
-                  ${item.productUrl ? `<a href="${esc(item.productUrl)}">${esc(shortUrl(item.productUrl))}</a>` : ''}
+                  ${item.productUrl ? `<div class="subtitle"><a href="${esc(item.productUrl)}">${esc(shortUrl(item.productUrl))}</a></div>` : ''}
                 </td>
                 <td class="subtitle">${esc(item.reference || '—')}</td>
                 <td class="c">${qty}</td>
