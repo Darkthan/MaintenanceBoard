@@ -632,7 +632,7 @@ async function openCreateOrderModal(interventionId = '') {
   modal.classList.remove('hidden');
 }
 
-function addItemRow({ name = '', qty = 1, price = '', priceType = 'TTC', ref = '', productUrl = '', assetTag = '' } = {}) {
+function addItemRow({ name = '', qty = 1, price = '', priceType = 'TTC', ref = '', productUrl = '' } = {}) {
   itemCount++;
   const id = `item-${itemCount}`;
   const div = document.createElement('div');
@@ -660,12 +660,8 @@ function addItemRow({ name = '', qty = 1, price = '', priceType = 'TTC', ref = '
       <input type="text" placeholder="Réf." value="${escapeHtml(ref)}"
         class="sm:col-span-5 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" name="item-ref-${itemCount}" />
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-      <input type="url" placeholder="Lien produit (https://...)" value="${escapeHtml(productUrl)}"
-        class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" name="item-url-${itemCount}" />
-      <input type="text" placeholder="N° immobilisation" value="${escapeHtml(assetTag)}"
-        class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" name="item-asset-${itemCount}" />
-    </div>`;
+    <input type="url" placeholder="Lien produit (https://...)" value="${escapeHtml(productUrl)}"
+      class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" name="item-url-${itemCount}" />`;
   document.getElementById('items-container').appendChild(div);
 }
 
@@ -701,8 +697,7 @@ async function editOrder(orderSummary) {
         price: item.unitPrice ?? '',
         priceType: item.priceType || 'TTC',
         ref: item.reference || '',
-        productUrl: item.productUrl || '',
-        assetTag: item.assetTag || ''
+        productUrl: item.productUrl || ''
       }));
     } else {
       addItemRow();
@@ -761,9 +756,8 @@ async function openDetail(id) {
       const recv = item.received ? `<span class="text-emerald-600 text-xs"> · ${item.received} reçu(s)</span>` : '';
       return `<div class="flex items-start justify-between gap-2 py-2 border-b border-slate-100 last:border-0 text-sm">
         <div class="flex-1">
-          <span class="font-medium text-slate-700">${item.name}</span>${ref}${recv}
-          ${item.assetTag ? `<br><span class="text-xs text-slate-400">Immob. : <span class="font-mono text-slate-600">${escapeHtml(item.assetTag)}</span></span>` : ''}
-          ${item.productUrl ? `<br><a href="${item.productUrl}" target="_blank" class="text-xs text-blue-500 hover:underline">${escapeHtml(shortUrl(item.productUrl))}</a>` : ''}
+          <div><span class="font-medium text-slate-700">${item.name}</span>${ref}${recv}</div>
+          ${item.productUrl ? `<a href="${item.productUrl}" target="_blank" class="text-xs text-blue-500 hover:underline block mt-0.5">${escapeHtml(shortUrl(item.productUrl))}</a>` : ''}
         </div>
         <div class="text-right flex-shrink-0">
           <div class="font-semibold text-slate-800">×${item.quantity}</div>
@@ -1103,7 +1097,6 @@ document.getElementById('order-form').addEventListener('submit', async e => {
     const priceType = row.querySelector('[name^="item-price-type-"]').value;
     const ref = row.querySelector('[name^="item-ref-"]').value.trim();
     const productUrl = row.querySelector('[name^="item-url-"]').value.trim();
-    const assetTag = row.querySelector('[name^="item-asset-"]').value.trim();
 
     if (name && qty > 0) {
       items.push({
@@ -1112,8 +1105,7 @@ document.getElementById('order-form').addEventListener('submit', async e => {
         unitPrice: price || null,
         priceType,
         reference: ref || null,
-        productUrl: productUrl || null,
-        assetTag: assetTag || null
+        productUrl: productUrl || null
       });
     }
   }

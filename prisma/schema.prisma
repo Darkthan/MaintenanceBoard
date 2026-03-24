@@ -287,7 +287,6 @@ model OrderItem {
   priceType String   @default("TTC") // TTC | HT
   reference String?
   productUrl String?
-  assetTag  String?
   received  Int      @default(0)
   notes     String?
   createdAt DateTime @default(now())
