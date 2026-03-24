@@ -47,7 +47,7 @@
         </button>
         <div>
           <h1 class="text-xl font-semibold text-slate-800">Prêt de matériel</h1>
-          <p class="text-sm text-slate-500">Catalogue de prêt, demandes externes, lots et agenda de réservation.</p>
+          <p class="text-sm text-slate-500">Catalogue de prêt, liens de demande personnalisés, lots et agenda de réservation.</p>
         </div>
       </div>
     </header>
@@ -302,6 +302,7 @@ function closeLinkModal() {
 }
 
 function openResourceModal(resource = null) {
+  closeCreateMenu();
   document.getElementById('resource-form').reset();
   document.getElementById('resource-error').classList.add('hidden');
   document.getElementById('resource-id').value = resource?.id || '';
@@ -319,6 +320,7 @@ function openResourceModal(resource = null) {
 }
 
 function openLinkModal() {
+  closeCreateMenu();
   document.getElementById('link-form').reset();
   document.getElementById('link-error').classList.add('hidden');
   document.getElementById('link-resource-id').innerHTML = '<option value="">Toutes les ressources actives</option>' +
