@@ -73,6 +73,7 @@ function toItemData(item) {
     priceType: VALID_PRICE_TYPES.includes(item.priceType) ? item.priceType : 'TTC',
     reference: item.reference || null,
     productUrl: item.productUrl || null,
+    assetTag: item.assetTag || null,
     notes: item.notes || null
   };
 }
@@ -385,7 +386,7 @@ router.post('/:id/items',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { name, quantity, unitPrice, reference, notes } = req.body;
+      const { name, quantity, unitPrice, reference, notes, assetTag } = req.body;
 
       const item = await prisma.orderItem.create({
         data: {
@@ -396,6 +397,7 @@ router.post('/:id/items',
           priceType: VALID_PRICE_TYPES.includes(req.body.priceType) ? req.body.priceType : 'TTC',
           reference: reference || null,
           productUrl: req.body.productUrl || null,
+          assetTag: assetTag || null,
           notes: notes || null
         }
       });
@@ -410,7 +412,7 @@ router.post('/:id/items',
 // PATCH /api/orders/:orderId/items/:itemId - Modifier une ligne (réception partielle)
 router.patch('/:orderId/items/:itemId', requireAuth, async (req, res, next) => {
   try {
-    const { received, quantity, unitPrice, notes, priceType, productUrl, reference } = req.body;
+    const { received, quantity, unitPrice, notes, priceType, productUrl, reference, assetTag } = req.body;
     const data = {};
     if (received !== undefined) data.received = parseInt(received);
     if (quantity !== undefined) data.quantity = parseInt(quantity);
@@ -419,6 +421,7 @@ router.patch('/:orderId/items/:itemId', requireAuth, async (req, res, next) => {
     if (priceType !== undefined) data.priceType = VALID_PRICE_TYPES.includes(priceType) ? priceType : 'TTC';
     if (productUrl !== undefined) data.productUrl = productUrl || null;
     if (reference !== undefined) data.reference = reference || null;
+    if (assetTag !== undefined) data.assetTag = assetTag || null;
 
     const item = await prisma.orderItem.update({
       where: { id: req.params.itemId },
@@ -667,6 +670,14 @@ function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function shortUrl(url) {
+  try {
+    const u = new URL(url);
+    const path = u.pathname + (u.search || '');
+    return u.hostname + (path.length > 32 ? path.slice(0, 32) + '…' : path);
+  } catch { return url.length > 40 ? url.slice(0, 40) + '…' : url; }
+}
+
 function fmtDate(d) {
   if (!d) return '-';
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -867,7 +878,8 @@ function generatePOHtml(order, tpl) {
                 <td>
                   <strong>${esc(item.name)}</strong>
                   ${item.notes ? `<div class="subtitle">${esc(item.notes)}</div>` : ''}
-                  ${item.productUrl ? `<a href="${esc(item.productUrl)}">${esc(item.productUrl)}</a>` : ''}
+                  ${item.assetTag ? `<div class="subtitle">Immob. : ${esc(item.assetTag)}</div>` : ''}
+                  ${item.productUrl ? `<a href="${esc(item.productUrl)}">${esc(shortUrl(item.productUrl))}</a>` : ''}
                 </td>
                 <td class="subtitle">${esc(item.reference || '—')}</td>
                 <td class="c">${qty}</td>
