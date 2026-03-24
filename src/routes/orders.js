@@ -766,14 +766,13 @@ function generatePOHtml(order, tpl) {
     .items-table tbody td:last-child{white-space:nowrap}
     .items-table th.r,.items-table td.r{text-align:right}
     .items-table th.c,.items-table td.c{text-align:center}
-    .totals-grid{display:flex;justify-content:flex-end}
+    .totals-sig-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
     .totals-card{border-radius:18px;padding:18px 24px;background:#111827;color:#fff;min-width:260px;box-shadow:0 20px 40px rgba(15,23,42,.25)}
     .totals-row{display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;opacity:.9}
     .totals-row strong{font-size:13px}
     .totals-row.total strong{font-size:15px;letter-spacing:.5px}
     .payments{border:1px solid #e0e7ff;border-radius:18px;padding:16px;background:#f9fafb;font-size:11px;line-height:1.6;color:#475569}
     .payments strong{color:#0f172a}
-    .signature-area{display:flex;justify-content:flex-start;gap:18px}
     .signature-card{border:1px dashed #c7d2fe;border-radius:16px;padding:20px 22px;background:#f5f7ff;min-width:260px;min-height:120px;box-shadow:0 10px 30px rgba(15,23,42,.08)}
     .signature-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#4f46e5;font-weight:700;margin-bottom:14px}
     .signature-line{height:1px;background:#c7d2fe;margin:26px 0 8px}
@@ -888,28 +887,25 @@ function generatePOHtml(order, tpl) {
           </table>
         </section>
 
-        ${hasPrice ? `
-        <div class="totals-grid">
+        <div class="totals-sig-row">
+          <div class="signature-card">
+            <div class="signature-title">Signature validation</div>
+            <div class="signature-line"></div>
+            <p class="signature-note">&nbsp;</p>
+          </div>
+          ${hasPrice ? `
           <div class="totals-card">
             <div class="totals-row"><span>Total HT</span><strong>${fmtCurrency(totalHT, currency)}</strong></div>
             <div class="totals-row"><span>TVA ${tvaRate}%</span><strong>${fmtCurrency(tva, currency)}</strong></div>
             <div class="totals-row total"><span>Total TTC</span><strong>${fmtCurrency(totalTTC, currency)}</strong></div>
-          </div>
-        </div>` : ''}
+          </div>` : ''}
+        </div>
 
         ${tpl.paymentTerms ? `
         <section class="payments">
           <strong>Conditions de paiement :</strong><br>
           ${esc(tpl.paymentTerms)}
         </section>` : ''}
-
-        <div class="signature-area">
-          <div class="signature-card">
-            <div class="signature-title">Signature validation</div>
-            <div class="signature-line"></div>
-            <p class="signature-note">&nbsp;</p>
-          </div>
-        </div>
 
         <div class="footer">
           ${tpl.footerNote ? `<p>${esc(tpl.footerNote)}</p>` : ''}
