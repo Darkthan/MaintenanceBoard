@@ -1063,7 +1063,9 @@ async function openInterventionModal(id) {
     const setBlock = (wrapId, contentId, value) => {
       const wrap = document.getElementById(wrapId);
       if (value) {
-        document.getElementById(contentId).textContent = value;
+        document.getElementById(contentId).innerHTML = typeof renderRichText === 'function'
+          ? renderRichText(value, { interactiveTasks: true })
+          : esc(value);
         wrap.classList.remove('hidden');
       } else {
         wrap.classList.add('hidden');

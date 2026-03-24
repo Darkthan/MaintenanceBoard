@@ -907,13 +907,17 @@ async function openInterventionDetail(id) {
     const descriptionWrap = document.getElementById('detail-description-wrap');
     const resolutionWrap = document.getElementById('detail-resolution-wrap');
     if (intervention.description) {
-      document.getElementById('detail-description').textContent = intervention.description;
+      document.getElementById('detail-description').innerHTML = typeof renderRichText === 'function'
+        ? renderRichText(intervention.description, { interactiveTasks: true })
+        : escapeHtml(intervention.description);
       descriptionWrap.classList.remove('hidden');
     } else {
       descriptionWrap.classList.add('hidden');
     }
     if (intervention.resolution) {
-      document.getElementById('detail-resolution').textContent = intervention.resolution;
+      document.getElementById('detail-resolution').innerHTML = typeof renderRichText === 'function'
+        ? renderRichText(intervention.resolution, { interactiveTasks: true })
+        : escapeHtml(intervention.resolution);
       resolutionWrap.classList.remove('hidden');
     } else {
       resolutionWrap.classList.add('hidden');
