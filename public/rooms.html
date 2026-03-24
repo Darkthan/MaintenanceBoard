@@ -54,10 +54,6 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
           Importer CSV
         </button>
-        <button id="manage-buildings-btn" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/></svg>
-          Bâtiments
-        </button>
         <a href="/assign-rooms.html" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           Assigner les salles
@@ -232,13 +228,34 @@
   </div>
 </div>
 
-<button id="add-room-btn" type="button"
-  class="fixed right-6 bottom-6 z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
-  aria-label="Nouvelle salle" title="Nouvelle salle">
-  <svg class="mx-auto h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-  </svg>
-</button>
+<div id="admin-fab">
+  <div class="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3">
+    <div id="fab-room-menu"
+      class="flex flex-col items-end gap-2.5 transition-all duration-200 ease-out opacity-0 scale-95 pointer-events-none origin-bottom-right">
+      <div class="flex items-center gap-3">
+        <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Gérer les bâtiments</span>
+        <button type="button" id="fab-room-buildings"
+          class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/></svg>
+        </button>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Nouvelle salle</span>
+        <button type="button" id="fab-room-form"
+          class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        </button>
+      </div>
+    </div>
+    <button id="fab-room-main" type="button"
+      class="h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+      aria-label="Actions salles" title="Actions salles">
+      <svg id="fab-room-icon" class="mx-auto h-6 w-6 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+    </button>
+  </div>
+</div>
 
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
@@ -251,12 +268,6 @@ let currentSearch = '';
 let currentBuilding = '';
 let buildingsCatalog = [];
 const pageParams = new URLSearchParams(window.location.search);
-
-// Cacher actions admin pour TECH
-if (user?.role !== 'ADMIN') {
-  document.getElementById('admin-actions').style.display = 'none';
-  document.getElementById('add-room-btn').classList.add('hidden');
-}
 
 if (pageParams.get('search')) {
   currentSearch = pageParams.get('search');
@@ -394,13 +405,28 @@ document.getElementById('room-building').addEventListener('input', updateRoomBui
 
 // Modal
 const modal = document.getElementById('room-modal');
-document.getElementById('add-room-btn')?.addEventListener('click', () => {
+function openAddRoomModal() {
   document.getElementById('modal-title').textContent = 'Nouvelle salle';
   document.getElementById('room-id').value = '';
   document.getElementById('room-form').reset();
   document.getElementById('form-error').classList.add('hidden');
   modal.classList.remove('hidden');
-});
+}
+
+// FAB multi-action
+let fabRoomOpen = false;
+function toggleFabRoom() {
+  fabRoomOpen = !fabRoomOpen;
+  const menu = document.getElementById('fab-room-menu');
+  const icon = document.getElementById('fab-room-icon');
+  menu.classList.toggle('opacity-0', !fabRoomOpen);
+  menu.classList.toggle('scale-95', !fabRoomOpen);
+  menu.classList.toggle('pointer-events-none', !fabRoomOpen);
+  icon.style.transform = fabRoomOpen ? 'rotate(45deg)' : '';
+}
+document.getElementById('fab-room-main').addEventListener('click', toggleFabRoom);
+document.getElementById('fab-room-buildings').addEventListener('click', () => { toggleFabRoom(); openBuildingsModal(); });
+document.getElementById('fab-room-form').addEventListener('click', () => { toggleFabRoom(); openAddRoomModal(); });
 document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
 document.getElementById('cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
 modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
@@ -663,14 +689,14 @@ requireLogin().then(async u => {
   renderNav('rooms');
   if (user.role !== 'ADMIN') {
     document.getElementById('admin-actions').style.display = 'none';
-  document.getElementById('add-room-btn').classList.add('hidden');
+    document.getElementById('admin-fab').style.display = 'none';
   }
   await loadBuildings();
   await loadRooms();
   const createIntent = pageParams.get('action');
   const focusIntent = pageParams.get('focus');
   if (createIntent === 'create' && user.role === 'ADMIN') {
-    setTimeout(() => document.getElementById('add-room-btn')?.click(), 50);
+    setTimeout(() => openAddRoomModal(), 50);
   }
   if (focusIntent) {
     setTimeout(() => openRoomDetail(focusIntent), 200);

@@ -272,11 +272,6 @@ let currentLowStock = false;
 let itemToDelete = null;
 let currentDetailItem = null;
 
-// Cacher actions admin pour TECH
-if (user?.role !== 'ADMIN') {
-  document.getElementById('admin-actions').style.display = 'none';
-}
-
 function escapeHtml(str) {
   return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
 }
