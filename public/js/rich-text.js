@@ -43,26 +43,32 @@
     return html;
   }
 
-  function renderListItemContent(text) {
+  function renderListItemContent(text, options, taskState) {
     const task = String(text || '').match(/^\[( |x|X)\]\s+([\s\S]+)$/);
     if (!task) return renderInline(text);
 
     const checked = /[xX]/.test(task[1]);
+    const taskIndex = taskState.index++;
     return `
       <label class="inline-flex items-start gap-2">
-        <input type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" ${checked ? 'checked' : ''} disabled>
+        <input type="checkbox" data-rt-task-index="${taskIndex}" class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 ${options.interactiveTasks ? 'cursor-pointer' : ''}" ${checked ? 'checked' : ''} ${options.interactiveTasks ? '' : 'disabled'}>
         <span class="${checked ? 'line-through text-slate-500' : ''}">${renderInline(task[2])}</span>
       </label>
     `;
   }
 
-  function renderRichText(value) {
+  function renderRichText(value, options = {}) {
+    const renderOptions = {
+      interactiveTasks: false,
+      ...options,
+    };
     const text = String(value || '').replace(/\r\n/g, '\n').trim();
     if (!text) return '';
 
     const lines = text.split('\n');
     const html = [];
     let index = 0;
+    const taskState = { index: 0 };
 
     while (index < lines.length) {
       const rawLine = lines[index];
@@ -107,7 +113,7 @@
         const ordered = /^\d+\./.test(line);
         const items = [];
         while (index < lines.length && /^(\-|\*|\d+\.)\s+/.test(lines[index].trim())) {
-          items.push(`<li>${renderListItemContent(lines[index].trim().replace(/^(\-|\*|\d+\.)\s+/, ''))}</li>`);
+          items.push(`<li>${renderListItemContent(lines[index].trim().replace(/^(\-|\*|\d+\.)\s+/, ''), renderOptions, taskState)}</li>`);
           index += 1;
         }
         html.push(`<${ordered ? 'ol' : 'ul'} class="${ordered ? 'list-decimal' : 'list-disc'} pl-5 space-y-1">${items.join('')}</${ordered ? 'ol' : 'ul'}>`);
@@ -144,6 +150,22 @@
       .trim();
   }
 
+  function toggleRichTextTask(value, taskIndex, checked) {
+    let seen = 0;
+    return String(value || '').replace(
+      /^(\s*(?:\-|\*|\d+\.)\s+)\[( |x|X)\](\s+.*)$/gm,
+      (match, prefix, _mark, suffix) => {
+        if (seen !== taskIndex) {
+          seen += 1;
+          return match;
+        }
+        seen += 1;
+        return `${prefix}[${checked ? 'x' : ' '}]${suffix}`;
+      }
+    );
+  }
+
   window.renderRichText = renderRichText;
   window.richTextToPlainText = richTextToPlainText;
+  window.toggleRichTextTask = toggleRichTextTask;
 })();

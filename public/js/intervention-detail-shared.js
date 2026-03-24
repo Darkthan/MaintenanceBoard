@@ -52,9 +52,25 @@
       return document.getElementById(config.ids[key]);
     }
 
-    function renderRichContent(value) {
-      if (typeof window.renderRichText === 'function') return window.renderRichText(value);
+    function renderRichContent(value, options = {}) {
+      if (typeof window.renderRichText === 'function') return window.renderRichText(value, options);
       return config.escapeHtml(String(value || '')).replace(/\n/g, '<br>');
+    }
+
+    function bindTaskToggles(container, getValue, onToggle) {
+      if (!container || typeof window.toggleRichTextTask !== 'function') return;
+      container.querySelectorAll('input[data-rt-task-index]').forEach(input => {
+        if (input.dataset.rtTaskBound) return;
+        input.dataset.rtTaskBound = 'true';
+        input.disabled = false;
+        input.addEventListener('change', async event => {
+          const taskIndex = Number(event.currentTarget.dataset.rtTaskIndex);
+          const current = String(getValue() || '');
+          const nextValue = window.toggleRichTextTask(current, taskIndex, event.currentTarget.checked);
+          if (nextValue === current) return;
+          await onToggle(nextValue);
+        });
+      });
     }
 
     function refreshNotesPreview(value) {
@@ -66,7 +82,18 @@
         preview.innerHTML = '';
         return;
       }
-      preview.innerHTML = renderRichContent(content);
+      preview.innerHTML = renderRichContent(content, { interactiveTasks: true });
+      bindTaskToggles(preview, () => el('notesInput')?.value || '', async nextValue => {
+        if (el('notesInput')) el('notesInput').value = nextValue;
+        if (state.currentData) state.currentData.notes = nextValue;
+        preview.innerHTML = renderRichContent(nextValue, { interactiveTasks: true });
+        bindTaskToggles(preview, () => el('notesInput')?.value || '', async newerValue => {
+          if (el('notesInput')) el('notesInput').value = newerValue;
+          if (state.currentData) state.currentData.notes = newerValue;
+          await saveNotes();
+        });
+        await saveNotes();
+      });
       preview.classList.remove('hidden');
     }
 
@@ -224,7 +251,29 @@
           const wrap = el(wrapKey);
           if (!wrap) return;
           if (value) {
-            el(contentKey).innerHTML = renderRichContent(value);
+            const target = el(contentKey);
+            const field = contentKey === 'description' ? 'description'
+              : contentKey === 'resolution' ? 'resolution'
+              : null;
+            target.innerHTML = renderRichContent(value, { interactiveTasks: Boolean(field) });
+            if (field) {
+              bindTaskToggles(target, () => {
+                const inputId = config.attributeIds[field]?.input;
+                return inputId ? document.getElementById(inputId)?.value || state.currentData?.[field] || '' : '';
+              }, async nextValue => {
+                const inputId = config.attributeIds[field]?.input;
+                const input = inputId ? document.getElementById(inputId) : null;
+                if (input) input.value = nextValue;
+                if (state.currentData) state.currentData[field] = nextValue;
+                target.innerHTML = renderRichContent(nextValue, { interactiveTasks: true });
+                bindTaskToggles(target, () => input?.value || state.currentData?.[field] || '', async newerValue => {
+                  if (input) input.value = newerValue;
+                  if (state.currentData) state.currentData[field] = newerValue;
+                  await saveAttribute(field);
+                });
+                await saveAttribute(field);
+              });
+            }
             wrap.classList.remove('hidden');
           } else {
             wrap.classList.add('hidden');
