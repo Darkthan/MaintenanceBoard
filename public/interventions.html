@@ -103,9 +103,9 @@
   </main>
 </div>
 
-<div id="detail-backdrop" class="hidden fixed inset-0 z-40 bg-black/40" onclick="closeInterventionDetail()"></div>
 <aside id="detail-panel"
-  class="fixed top-0 right-0 bottom-0 z-50 w-full max-w-2xl bg-white shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out">
+  class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onclick="closeInterventionDetail()">
+  <div class="w-full max-w-2xl bg-white shadow-2xl flex flex-col rounded-xl max-h-[90vh] overflow-hidden" onclick="event.stopPropagation()">
   <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 flex-shrink-0">
     <div class="flex-1 min-w-0">
       <p id="detail-meta" class="text-xs text-slate-400 mb-0.5"></p>
@@ -281,6 +281,7 @@
       </div>
       <p id="detail-message-error" class="hidden text-xs text-red-500"></p>
     </div>
+  </div>
   </div>
 </aside>
 
@@ -857,7 +858,6 @@ async function openInterventionDetail(id) {
     const intervention = await api.get(`/interventions/${id}`);
     detailInterventionData = intervention;
     const panel = document.getElementById('detail-panel');
-    const backdrop = document.getElementById('detail-backdrop');
 
     document.getElementById('detail-title').textContent = intervention.title;
     document.getElementById('detail-meta').textContent = `Intervention #${intervention.id.slice(-6).toUpperCase()}`;
@@ -939,8 +939,7 @@ async function openInterventionDetail(id) {
       messagesSection.classList.add('hidden');
     }
 
-    backdrop.classList.remove('hidden');
-    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+    panel.classList.remove('hidden');
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -948,9 +947,7 @@ async function openInterventionDetail(id) {
 
 function closeInterventionDetail() {
   const panel = document.getElementById('detail-panel');
-  const backdrop = document.getElementById('detail-backdrop');
-  panel.classList.add('translate-x-full');
-  setTimeout(() => backdrop.classList.add('hidden'), 300);
+  panel.classList.add('hidden');
   detailInterventionId = null;
   detailInterventionData = null;
   document.getElementById('detail-reporters-section').classList.add('hidden');
@@ -1390,16 +1387,12 @@ const sharedDetailController = createInterventionDetailController({
     detailInterventionId = intervention.id;
     detailInterventionData = intervention;
     const panel = document.getElementById('detail-panel');
-    const backdrop = document.getElementById('detail-backdrop');
-    backdrop.classList.remove('hidden');
-    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+    panel.classList.remove('hidden');
   },
   onOpenError: error => showToast(error.message, 'error'),
   onClose: () => {
     const panel = document.getElementById('detail-panel');
-    const backdrop = document.getElementById('detail-backdrop');
-    panel.classList.add('translate-x-full');
-    setTimeout(() => backdrop.classList.add('hidden'), 300);
+    panel.classList.add('hidden');
     detailInterventionId = null;
     detailInterventionData = null;
   },

@@ -506,10 +506,9 @@
 <!-- ═══════════════════════════════════════════════════════════
      PANNEAU SLIDE-OVER — Fiche utilisateur
 ═══════════════════════════════════════════════════════════ -->
-<div id="panel-backdrop" class="hidden fixed inset-0 z-40 bg-black/40" onclick="closePanel()"></div>
-
 <aside id="user-panel"
-  class="fixed top-0 right-0 bottom-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out">
+  class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onclick="closePanel()">
+  <div class="w-full max-w-md bg-white shadow-2xl flex flex-col rounded-xl max-h-[90vh] overflow-hidden" onclick="event.stopPropagation()">
 
   <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-4 flex-shrink-0">
     <div id="panel-initials" class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">?</div>
@@ -620,6 +619,7 @@
       <div id="logs-body"></div>
     </div>
 
+  </div>
   </div>
 </aside>
 
@@ -819,13 +819,11 @@ function openPanel(uid) {
   document.getElementById('logs-count').textContent = '';
 
   panelTab('edit');
-  document.getElementById('panel-backdrop').classList.remove('hidden');
-  requestAnimationFrame(() => document.getElementById('user-panel').classList.remove('translate-x-full'));
+  document.getElementById('user-panel').classList.remove('hidden');
 }
 
 function closePanel() {
-  document.getElementById('user-panel').classList.add('translate-x-full');
-  document.getElementById('panel-backdrop').classList.add('hidden');
+  document.getElementById('user-panel').classList.add('hidden');
   currentUser = null;
 }
 

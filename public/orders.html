@@ -73,9 +73,9 @@
 </div>
 
 <!-- Panneau détail commande (slide-over) -->
-<div id="detail-backdrop" class="hidden fixed inset-0 z-40 bg-black/40" onclick="closeDetail()"></div>
 <aside id="detail-panel"
-  class="fixed top-0 right-0 bottom-0 z-50 w-full max-w-lg bg-white shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out">
+  class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onclick="closeDetail()">
+  <div class="w-full max-w-lg bg-white shadow-2xl flex flex-col rounded-xl max-h-[90vh] overflow-hidden" onclick="event.stopPropagation()">
 
   <!-- Header -->
   <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 flex-shrink-0">
@@ -195,6 +195,7 @@
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
       Modifier
     </button>
+  </div>
   </div>
 </aside>
 
@@ -701,7 +702,6 @@ async function openDetail(id) {
   try {
     const o = await api.get(`/orders/${id}`);
     const panel = document.getElementById('detail-panel');
-    const backdrop = document.getElementById('detail-backdrop');
 
     // Remplir les infos
     document.getElementById('dp-title').textContent = o.title;
@@ -759,8 +759,7 @@ async function openDetail(id) {
     document.getElementById('dp-edit-btn').onclick = () => { closeDetail(); editOrder(o); };
 
     // Ouvrir le panel
-    backdrop.classList.remove('hidden');
-    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+    panel.classList.remove('hidden');
 
     // Charger les demandes de signature et les pièces jointes
     loadSignatureRequests();
@@ -770,9 +769,7 @@ async function openDetail(id) {
 
 function closeDetail() {
   const panel = document.getElementById('detail-panel');
-  const backdrop = document.getElementById('detail-backdrop');
-  panel.classList.add('translate-x-full');
-  setTimeout(() => backdrop.classList.add('hidden'), 300);
+  panel.classList.add('hidden');
   detailOrderId = null;
 }
 
