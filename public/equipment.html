@@ -481,6 +481,13 @@
         </button>
       </div>
       <div class="flex items-center gap-2.5">
+        <span class="bg-slate-800 text-white text-sm font-medium px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap">Importer CSV</span>
+        <button type="button" id="fab-equip-import"
+          class="h-12 w-12 rounded-full bg-blue-600 text-white shadow-md transition hover:bg-blue-700 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-blue-200">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+        </button>
+      </div>
+      <div class="flex items-center gap-2.5">
         <span class="bg-slate-800 text-white text-sm font-medium px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap">Via formulaire</span>
         <button type="button" id="fab-equip-form"
           class="h-12 w-12 rounded-full bg-blue-600 text-white shadow-md transition hover:bg-blue-700 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-blue-200">
@@ -662,6 +669,7 @@ function toggleFabEquip() {
   icon.style.transform = fabEquipOpen ? 'rotate(45deg)' : '';
 }
 document.getElementById('fab-equip-main').addEventListener('click', toggleFabEquip);
+document.getElementById('fab-equip-import').addEventListener('click', () => { toggleFabEquip(); importModal.classList.remove('hidden'); });
 document.getElementById('fab-equip-form').addEventListener('click', () => { toggleFabEquip(); openEquipCreateModal(); });
 document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
 document.getElementById('cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
