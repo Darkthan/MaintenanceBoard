@@ -781,35 +781,51 @@ async function copyText(text) {
 }
 
 async function loadResources() {
-  loanResources = await api.get('/loans/resources');
-  renderResources();
+  try {
+    loanResources = await api.get('/loans/resources');
+    renderResources();
+  } catch (err) {
+    document.getElementById('resources-list').innerHTML = `<p class="col-span-2 text-sm text-red-600">Erreur lors du chargement des ressources : ${err.message}</p>`;
+  }
 }
 
 async function loadMagicLinks() {
-  const links = await api.get('/loans/magic-links');
-  loanLinks = links.map(link => ({
-    ...link,
-    url: `${window.location.origin}/loan-request.html?token=${encodeURIComponent(link.token)}`
-  }));
-  renderMagicLinks();
+  try {
+    const links = await api.get('/loans/magic-links');
+    loanLinks = links.map(link => ({
+      ...link,
+      url: `${window.location.origin}/loan-request.html?token=${encodeURIComponent(link.token)}`
+    }));
+    renderMagicLinks();
+  } catch (err) {
+    console.error('loadMagicLinks:', err);
+  }
 }
 
 async function loadReservations() {
-  const start = new Date();
-  start.setDate(start.getDate() - 14);
-  const end = new Date();
-  end.setDate(end.getDate() + 90);
-  loanReservations = await api.get('/loans/reservations', {
-    start: start.toISOString(),
-    end: end.toISOString()
-  });
-  renderReservations();
-  renderCalendar();
+  try {
+    const start = new Date();
+    start.setDate(start.getDate() - 14);
+    const end = new Date();
+    end.setDate(end.getDate() + 90);
+    loanReservations = await api.get('/loans/reservations', {
+      start: start.toISOString(),
+      end: end.toISOString()
+    });
+    renderReservations();
+    renderCalendar();
+  } catch (err) {
+    console.error('loadReservations:', err);
+  }
 }
 
 async function loadCalendarFeed() {
-  const feed = await api.get('/loans/calendar-feed');
-  document.getElementById('calendar-feed-url').value = feed.url;
+  try {
+    const feed = await api.get('/loans/calendar-feed');
+    document.getElementById('calendar-feed-url').value = feed.url;
+  } catch (err) {
+    console.error('loadCalendarFeed:', err);
+  }
 }
 
 async function toggleLink(id, nextState) {
