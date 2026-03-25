@@ -508,6 +508,49 @@ loansRouter.post('/resources',
   }
 );
 
+loansRouter.post('/resources/bulk',
+  [body('equipmentIds').isArray({ min: 1, max: 200 })],
+  async (req, res, next) => {
+    try {
+      if (!validate(req, res)) return;
+      const { equipmentIds } = req.body;
+
+      // Récupérer les équipements valides
+      const equipments = await prisma.equipment.findMany({
+        where: { id: { in: equipmentIds } },
+        select: { id: true, name: true, type: true, location: true }
+      });
+
+      // Filtrer ceux qui ont déjà une ressource de prêt liée
+      const alreadyLinked = await prisma.loanResource.findMany({
+        where: { equipmentId: { in: equipmentIds } },
+        select: { equipmentId: true }
+      });
+      const linkedIds = new Set(alreadyLinked.map(r => r.equipmentId));
+      const toCreate = equipments.filter(e => !linkedIds.has(e.id));
+
+      const created = await prisma.$transaction(
+        toCreate.map(e => prisma.loanResource.create({
+          data: {
+            name: e.name,
+            totalUnits: 1,
+            bundleSize: 1,
+            equipmentId: e.id
+          }
+        }))
+      );
+
+      res.status(201).json({
+        created: created.length,
+        skipped: equipmentIds.length - toCreate.length,
+        message: `${created.length} ressource(s) créée(s), ${equipmentIds.length - toCreate.length} déjà liée(s) ignorée(s).`
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 loansRouter.patch('/resources/:id',
   [
     body('name').optional().trim().isLength({ min: 2, max: 200 }),

@@ -158,6 +158,13 @@
   <div id="loan-create-menu"
     class="flex flex-col items-end gap-2.5 transition-all duration-200 ease-out opacity-0 scale-95 pointer-events-none origin-bottom-right">
     <div class="flex items-center gap-3">
+      <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Depuis équipements</span>
+      <button type="button" onclick="openCreateMenuAction('bulk')"
+        class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+      </button>
+    </div>
+    <div class="flex items-center gap-3">
       <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Nouveau lien de demande</span>
       <button type="button" onclick="openCreateMenuAction('link')"
         class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
@@ -390,6 +397,40 @@
   </div>
 </div>
 
+<!-- Modale sélection en masse depuis équipements -->
+<div id="bulk-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <div>
+        <h3 class="font-semibold text-slate-800">Créer des ressources depuis les équipements</h3>
+        <p class="text-xs text-slate-500 mt-0.5">Seuls les équipements sans ressource de prêt liée sont affichés.</p>
+      </div>
+      <button type="button" onclick="closeBulkModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 pt-4 pb-2 border-b border-slate-100 space-y-3">
+      <input id="bulk-search" type="text" placeholder="Rechercher un équipement…"
+        class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" oninput="filterBulkList()" />
+      <div class="flex items-center gap-3">
+        <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+          <input id="bulk-select-all" type="checkbox" class="rounded" onchange="toggleBulkSelectAll()" />
+          Tout sélectionner
+        </label>
+        <span id="bulk-selected-count" class="text-xs text-slate-400">0 sélectionné(s)</span>
+      </div>
+    </div>
+    <div id="bulk-list" class="flex-1 overflow-y-auto px-6 py-3 space-y-1"></div>
+    <div class="px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-3">
+      <div id="bulk-result" class="text-sm text-slate-600 hidden"></div>
+      <div class="flex gap-3 ml-auto">
+        <button type="button" onclick="closeBulkModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button type="button" id="bulk-submit-btn" onclick="submitBulk()" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Créer les ressources</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
@@ -583,7 +624,94 @@ function openCreateMenuAction(type) {
   closeCreateMenu();
   if (type === 'resource') { openResourceModal(); return; }
   if (type === 'reservation') { openReservationModal(); return; }
+  if (type === 'bulk') { openBulkModal(); return; }
   openLinkModal();
+}
+
+// ── Modale sélection en masse ──────────────────────────────────────────────
+let bulkEquipments = [];
+
+async function openBulkModal() {
+  document.getElementById('bulk-result').classList.add('hidden');
+  document.getElementById('bulk-search').value = '';
+  document.getElementById('bulk-select-all').checked = false;
+  document.getElementById('bulk-selected-count').textContent = '0 sélectionné(s)';
+  document.getElementById('bulk-list').innerHTML = '<p class="text-sm text-slate-400 py-4 text-center">Chargement…</p>';
+  document.getElementById('bulk-modal').classList.remove('hidden');
+  try {
+    const [equipData, resources] = await Promise.all([
+      api.get('/equipment', { limit: 500 }),
+      api.get('/loans/resources')
+    ]);
+    const linkedIds = new Set(resources.filter(r => r.equipmentId).map(r => r.equipmentId));
+    const all = (equipData.items || equipData).filter(e => !linkedIds.has(e.id));
+    bulkEquipments = all;
+    renderBulkList(all);
+  } catch (err) {
+    document.getElementById('bulk-list').innerHTML = `<p class="text-sm text-red-500 py-4 text-center">${err.message}</p>`;
+  }
+}
+
+function renderBulkList(items) {
+  const list = document.getElementById('bulk-list');
+  if (!items.length) {
+    list.innerHTML = '<p class="text-sm text-slate-400 py-4 text-center">Tous les équipements ont déjà une ressource de prêt liée.</p>';
+    return;
+  }
+  list.innerHTML = items.map(e => `
+    <label class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+      <input type="checkbox" class="bulk-cb rounded" value="${e.id}" onchange="updateBulkCount()" />
+      <div class="min-w-0">
+        <p class="text-sm font-medium text-slate-800 truncate">${e.name}</p>
+        <p class="text-xs text-slate-500">${e.type}${e.brand ? ' · ' + e.brand : ''}${e.serialNumber ? ' · ' + e.serialNumber : ''}</p>
+      </div>
+    </label>
+  `).join('');
+  updateBulkCount();
+}
+
+function filterBulkList() {
+  const q = document.getElementById('bulk-search').value.toLowerCase();
+  const filtered = q
+    ? bulkEquipments.filter(e => (e.name + e.type + (e.brand || '') + (e.serialNumber || '')).toLowerCase().includes(q))
+    : bulkEquipments;
+  renderBulkList(filtered);
+}
+
+function updateBulkCount() {
+  const checked = document.querySelectorAll('.bulk-cb:checked').length;
+  document.getElementById('bulk-selected-count').textContent = `${checked} sélectionné(s)`;
+  document.getElementById('bulk-select-all').checked = checked > 0 && checked === document.querySelectorAll('.bulk-cb').length;
+}
+
+function toggleBulkSelectAll() {
+  const all = document.getElementById('bulk-select-all').checked;
+  document.querySelectorAll('.bulk-cb').forEach(cb => { cb.checked = all; });
+  updateBulkCount();
+}
+
+async function submitBulk() {
+  const ids = [...document.querySelectorAll('.bulk-cb:checked')].map(cb => cb.value);
+  if (!ids.length) { showToast('Sélectionnez au moins un équipement', 'error'); return; }
+  const btn = document.getElementById('bulk-submit-btn');
+  btn.disabled = true;
+  try {
+    const result = await api.post('/loans/resources/bulk', { equipmentIds: ids });
+    const resultEl = document.getElementById('bulk-result');
+    resultEl.textContent = result.message;
+    resultEl.classList.remove('hidden');
+    await loadResources();
+    showToast(`${result.created} ressource(s) créée(s)`, 'success');
+    setTimeout(() => closeBulkModal(), 1500);
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function closeBulkModal() {
+  document.getElementById('bulk-modal').classList.add('hidden');
 }
 
 // ── Agenda ───────────────────────────────────────────────────
@@ -868,7 +996,7 @@ document.addEventListener('click', event => {
 });
 
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') { closeCreateMenu(); closeReservationModal(); }
+  if (event.key === 'Escape') { closeCreateMenu(); closeReservationModal(); closeBulkModal(); }
 });
 
 document.getElementById('resource-form').addEventListener('submit', async event => {
