@@ -254,9 +254,28 @@
         <input id="link-title" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
       </div>
       <div>
+        <label class="block text-sm font-medium text-slate-700 mb-2">Portée du lien</label>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input id="link-scope-all" type="radio" name="link-scope" value="all" checked class="mt-0.5 h-4 w-4 text-blue-600" />
+            <span>
+              <span class="block font-medium text-slate-800">Lien générique</span>
+              <span class="mt-0.5 block text-xs text-slate-500">Le demandeur choisira librement parmi toutes les ressources actives.</span>
+            </span>
+          </label>
+          <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700">
+            <input id="link-scope-resource" type="radio" name="link-scope" value="resource" class="mt-0.5 h-4 w-4 text-blue-600" />
+            <span>
+              <span class="block font-medium text-slate-800">Ressource précise</span>
+              <span class="mt-0.5 block text-xs text-slate-500">Le lien sera limité à une seule ressource ou un seul lot.</span>
+            </span>
+          </label>
+        </div>
+      </div>
+      <div id="link-resource-picker" class="hidden">
         <label class="block text-sm font-medium text-slate-700 mb-1">Ressource liée</label>
         <select id="link-resource-id" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
-          <option value="">Toutes les ressources actives</option>
+          <option value="">Choisir une ressource active</option>
         </select>
       </div>
       <div>
@@ -326,9 +345,18 @@ function openLinkModal() {
   closeCreateMenu();
   document.getElementById('link-form').reset();
   document.getElementById('link-error').classList.add('hidden');
-  document.getElementById('link-resource-id').innerHTML = '<option value="">Toutes les ressources actives</option>' +
+  document.getElementById('link-resource-id').innerHTML = '<option value="">Choisir une ressource active</option>' +
     loanResources.filter(resource => resource.isActive).map(resource => `<option value="${resource.id}">${resource.name}</option>`).join('');
+  updateLinkScope();
   document.getElementById('link-modal').classList.remove('hidden');
+}
+
+function updateLinkScope() {
+  const isGeneric = document.getElementById('link-scope-all').checked;
+  document.getElementById('link-resource-picker').classList.toggle('hidden', isGeneric);
+  if (isGeneric) {
+    document.getElementById('link-resource-id').value = '';
+  }
 }
 
 function renderResources() {
@@ -378,6 +406,7 @@ function renderMagicLinks() {
           </button>
         </div>
         <div class="flex flex-wrap gap-2 text-xs text-slate-500">
+          <span class="${link.resource ? 'text-slate-500' : 'font-medium text-blue-700'}">${link.resource ? 'Ressource ciblée' : 'Lien générique'}</span>
           <span>${link.isActive ? 'Actif' : 'Inactif'}</span>
           <span>Créé le ${formatDateTime(link.createdAt)}</span>
           ${link.expiresAt ? `<span>Expire le ${formatDateTime(link.expiresAt)}</span>` : '<span>Sans expiration</span>'}
@@ -672,6 +701,8 @@ document.getElementById('refresh-reservations-btn').addEventListener('click', lo
 document.getElementById('refresh-calendar-btn').addEventListener('click', loadReservations);
 document.getElementById('refresh-calendar-feed-btn').addEventListener('click', loadCalendarFeed);
 document.getElementById('copy-calendar-feed-btn').addEventListener('click', () => copyText(document.getElementById('calendar-feed-url').value));
+document.getElementById('link-scope-all').addEventListener('change', updateLinkScope);
+document.getElementById('link-scope-resource').addEventListener('change', updateLinkScope);
 
 document.addEventListener('click', event => {
   const menu = document.getElementById('loan-create-menu');
@@ -722,9 +753,14 @@ document.getElementById('link-form').addEventListener('submit', async event => {
   const errorEl = document.getElementById('link-error');
   errorEl.classList.add('hidden');
   try {
+    const selectedResourceId = document.getElementById('link-resource-id').value || null;
+    if (document.getElementById('link-scope-resource').checked && !selectedResourceId) {
+      throw new Error('Choisis une ressource pour créer un lien ciblé.');
+    }
+
     const link = await api.post('/loans/magic-links', {
       title: document.getElementById('link-title').value.trim() || null,
-      resourceId: document.getElementById('link-resource-id').value || null,
+      resourceId: document.getElementById('link-scope-resource').checked ? selectedResourceId : null,
       expiresAt: document.getElementById('link-expires-at').value || null
     });
     closeLinkModal();
