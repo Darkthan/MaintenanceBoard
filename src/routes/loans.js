@@ -38,10 +38,25 @@ function validate(req, res) {
 
 function mapResource(resource) {
   const bundle = getBundleInfo(resource);
-  return {
-    ...resource,
-    ...bundle
-  };
+  return { ...resource, ...bundle };
+}
+
+function computeOccurrences(startAt, endAt, recurrence) {
+  const occurrences = [{ startAt: new Date(startAt), endAt: new Date(endAt) }];
+  if (!recurrence?.type || recurrence.type === 'none') return occurrences;
+  const duration = new Date(endAt) - new Date(startAt);
+  const until = new Date(recurrence.until);
+  let cur = new Date(startAt);
+  for (let i = 0; i < 365; i++) {
+    if (recurrence.type === 'daily')     cur.setDate(cur.getDate() + 1);
+    else if (recurrence.type === 'weekly')    cur.setDate(cur.getDate() + 7);
+    else if (recurrence.type === 'biweekly')  cur.setDate(cur.getDate() + 14);
+    else if (recurrence.type === 'monthly')   cur.setMonth(cur.getMonth() + 1);
+    else break;
+    if (cur > until) break;
+    occurrences.push({ startAt: new Date(cur), endAt: new Date(cur.getTime() + duration) });
+  }
+  return occurrences;
 }
 
 function normalizeEmail(value) {
@@ -443,7 +458,8 @@ loansRouter.get('/resources', async (_req, res, next) => {
     const resources = await prisma.loanResource.findMany({
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
       include: {
-        _count: { select: { reservations: true, magicLinks: true } }
+        _count: { select: { reservations: true, magicLinks: true } },
+        equipment: { select: { id: true, name: true, serialNumber: true } }
       }
     });
     res.json(resources.map(resource => ({ ...mapResource(resource) })));
@@ -461,7 +477,8 @@ loansRouter.post('/resources',
     body('bundleSize').optional().isInt({ min: 1, max: 500 }),
     body('location').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
     body('instructions').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
-    body('color').optional({ values: 'falsy' }).trim().isLength({ max: 20 })
+    body('color').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
+    body('equipmentId').optional({ values: 'falsy' }).isString()
   ],
   async (req, res, next) => {
     try {
@@ -478,8 +495,10 @@ loansRouter.post('/resources',
           bundleSize,
           location: req.body.location || null,
           instructions: req.body.instructions || null,
-          color: req.body.color || null
-        }
+          color: req.body.color || null,
+          equipmentId: req.body.equipmentId || null
+        },
+        include: { equipment: { select: { id: true, name: true, serialNumber: true } } }
       });
 
       res.status(201).json(mapResource(resource));
@@ -499,7 +518,8 @@ loansRouter.patch('/resources/:id',
     body('location').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
     body('instructions').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('color').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
-    body('isActive').optional().isBoolean()
+    body('isActive').optional().isBoolean(),
+    body('equipmentId').optional({ values: 'falsy' }).isString()
   ],
   async (req, res, next) => {
     try {
@@ -522,8 +542,10 @@ loansRouter.patch('/resources/:id',
           ...(req.body.location !== undefined ? { location: req.body.location || null } : {}),
           ...(req.body.instructions !== undefined ? { instructions: req.body.instructions || null } : {}),
           ...(req.body.color !== undefined ? { color: req.body.color || null } : {}),
-          ...(req.body.isActive !== undefined ? { isActive: !!req.body.isActive } : {})
-        }
+          ...(req.body.isActive !== undefined ? { isActive: !!req.body.isActive } : {}),
+          ...(req.body.equipmentId !== undefined ? { equipmentId: req.body.equipmentId || null } : {})
+        },
+        include: { equipment: { select: { id: true, name: true, serialNumber: true } } }
       });
 
       res.json(mapResource(updated));
@@ -662,6 +684,62 @@ loansRouter.get('/calendar', async (req, res, next) => {
     next(err);
   }
 });
+
+loansRouter.post('/reservations',
+  [
+    body('resourceId').isString(),
+    body('requesterName').trim().isLength({ min: 2, max: 200 }),
+    body('requesterEmail').isEmail().normalizeEmail(),
+    body('requesterPhone').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
+    body('requesterOrganization').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
+    body('startAt').isISO8601(),
+    body('endAt').isISO8601(),
+    body('requestedUnits').isInt({ min: 1, max: 500 }),
+    body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
+    body('internalNotes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
+    body('status').optional().isIn(['PENDING', 'APPROVED']),
+    body('recurrence.type').optional().isIn(['none', 'daily', 'weekly', 'biweekly', 'monthly']),
+    body('recurrence.until').optional().isISO8601()
+  ],
+  async (req, res, next) => {
+    try {
+      if (!validate(req, res)) return;
+      const { start, end } = ensureValidDates(req.body.startAt, req.body.endAt);
+      const occurrences = computeOccurrences(start, end, req.body.recurrence);
+
+      const created = [];
+      for (const occ of occurrences) {
+        const availability = await ensureAvailable(req.body.resourceId, occ.startAt, occ.endAt, req.body.requestedUnits);
+        const reservation = await prisma.loanReservation.create({
+          data: {
+            resourceId: availability.resource.id,
+            requesterName: req.body.requesterName,
+            requesterEmail: normalizeEmail(req.body.requesterEmail),
+            requesterPhone: req.body.requesterPhone || null,
+            requesterOrganization: req.body.requesterOrganization || null,
+            startAt: occ.startAt,
+            endAt: occ.endAt,
+            requestedUnits: availability.requestedUnits,
+            reservedSlots: availability.reservedSlots,
+            notes: req.body.notes || null,
+            internalNotes: req.body.internalNotes || null,
+            status: req.body.status || 'APPROVED',
+            createdById: req.user.id
+          },
+          include: { resource: true }
+        });
+        created.push(reservation);
+      }
+
+      res.status(201).json({
+        count: created.length,
+        reservations: created.map(r => ({ ...r, resource: mapResource(r.resource) }))
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 loansRouter.patch('/reservations/:id',
   [
