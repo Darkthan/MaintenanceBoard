@@ -48,6 +48,76 @@ function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function fmtLoanDate(d) {
+  return new Date(d).toLocaleString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+async function sendLoanConfirmationEmail(reservation) {
+  try {
+    const { transporter, from } = createSmtpTransporter();
+    if (!transporter) return;
+    const r = reservation.resource;
+    await transporter.sendMail({
+      from,
+      to: reservation.requesterEmail,
+      subject: `Demande de prêt enregistrée – ${r.name}`,
+      html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
+        <h2 style="color:#0f172a;">Demande de prêt enregistrée</h2>
+        <p>Bonjour ${reservation.requesterName},</p>
+        <p>Votre demande a bien été reçue. Elle est en attente de validation.</p>
+        <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+          <tr><td style="padding:8px 0;color:#475569;border-bottom:1px solid #e2e8f0;">Ressource</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #e2e8f0;">${r.name}</td></tr>
+          <tr><td style="padding:8px 0;color:#475569;border-bottom:1px solid #e2e8f0;">Début</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${fmtLoanDate(reservation.startAt)}</td></tr>
+          <tr><td style="padding:8px 0;color:#475569;border-bottom:1px solid #e2e8f0;">Fin</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${fmtLoanDate(reservation.endAt)}</td></tr>
+          <tr><td style="padding:8px 0;color:#475569;">Quantité</td><td style="padding:8px 0;">${reservation.requestedUnits} unité(s)</td></tr>
+        </table>
+        <p style="color:#64748b;font-size:13px;">Vous recevrez un email dès que votre demande sera traitée.</p>
+      </div>`
+    });
+  } catch (err) {
+    console.error('[loans] sendLoanConfirmationEmail:', err.message);
+  }
+}
+
+async function sendLoanStatusEmail(reservation, newStatus) {
+  if (!['APPROVED', 'REJECTED'].includes(newStatus)) return;
+  try {
+    const { transporter, from } = createSmtpTransporter();
+    if (!transporter) return;
+    const r = reservation.resource;
+    const ok = newStatus === 'APPROVED';
+    await transporter.sendMail({
+      from,
+      to: reservation.requesterEmail,
+      subject: `${ok ? 'Prêt confirmé' : 'Demande non retenue'} – ${r.name}`,
+      html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
+        <div style="background:${ok ? '#f0fdf4' : '#fff1f2'};border-radius:12px;padding:18px 22px;margin-bottom:20px;">
+          <h2 style="color:${ok ? '#166534' : '#9f1239'};margin:0 0 6px;">
+            ${ok ? '&#10003; Prêt confirmé' : '&#10007; Demande non retenue'}
+          </h2>
+          <p style="color:${ok ? '#166534' : '#9f1239'};margin:0;font-size:14px;">
+            ${ok ? 'Votre demande de prêt a été approuvée.' : "Votre demande de prêt n'a pas pu être accordée."}
+          </p>
+        </div>
+        <p>Bonjour ${reservation.requesterName},</p>
+        <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+          <tr><td style="padding:8px 0;color:#475569;border-bottom:1px solid #e2e8f0;">Ressource</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #e2e8f0;">${r.name}</td></tr>
+          <tr><td style="padding:8px 0;color:#475569;border-bottom:1px solid #e2e8f0;">Début</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${fmtLoanDate(reservation.startAt)}</td></tr>
+          <tr><td style="padding:8px 0;color:#475569;border-bottom:1px solid #e2e8f0;">Fin</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${fmtLoanDate(reservation.endAt)}</td></tr>
+          <tr><td style="padding:8px 0;color:#475569;">Quantité</td><td style="padding:8px 0;">${reservation.requestedUnits} unité(s)</td></tr>
+        </table>
+        ${!ok && reservation.internalNotes ? `<p style="background:#f8fafc;border-left:3px solid #cbd5e1;padding:10px 14px;border-radius:6px;color:#475569;font-size:13px;">${reservation.internalNotes}</p>` : ''}
+        <p style="color:#64748b;font-size:13px;">${ok ? 'Merci de vous présenter au lieu de retrait à la date convenue.' : "N'hésitez pas à reformuler votre demande à une autre date."}</p>
+      </div>`
+    });
+  } catch (err) {
+    console.error('[loans] sendLoanStatusEmail:', err.message);
+  }
+}
+
 function getLoanRequestUrl(requestToken, accessToken) {
   const url = new URL('/loan-request.html', config.appUrl);
   url.searchParams.set('token', requestToken);
@@ -324,6 +394,9 @@ loanPublicRouter.post('/:token/requests',
           resource: true
         }
       });
+
+      // Email de confirmation en arrière-plan (ne bloque pas la réponse)
+      sendLoanConfirmationEmail(reservation).catch(() => {});
 
       res.status(201).json({
         message: 'Demande de prêt enregistrée',
@@ -624,6 +697,11 @@ loansRouter.patch('/reservations/:id',
           approvedBy: { select: { id: true, name: true } }
         }
       });
+
+      // Email si statut changé vers APPROVED ou REJECTED
+      if (req.body.status && req.body.status !== existing.status) {
+        sendLoanStatusEmail(reservation, req.body.status).catch(() => {});
+      }
 
       res.json({
         ...reservation,
