@@ -509,8 +509,6 @@ let user;
 
 let currentPage = 1, currentSearch = '', currentStatus = '', currentType = '', currentSource = '', currentDiscovery = '';
 
-if (user?.role !== 'ADMIN') document.getElementById('admin-actions').style.display = 'none';
-
 // Préremplir filtres depuis URL
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('search')) {
