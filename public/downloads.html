@@ -55,6 +55,24 @@
             <button onclick="copy('ps-oneliner')" class="text-slate-400 hover:text-white text-xs px-2 py-1 rounded border border-slate-600">Copier</button>
           </div>
         </div>
+        <div class="mt-3 bg-slate-800 rounded-lg p-3">
+          <p class="text-xs text-slate-400 mb-1">Source NuGet / Serveur Chocolatey :</p>
+          <div class="flex items-center gap-2 mb-2">
+            <code id="nuget-source-url" class="flex-1 text-yellow-300 text-xs font-mono break-all"></code>
+            <button onclick="copy('nuget-source-url')" class="text-slate-400 hover:text-white text-xs px-2 py-1 rounded border border-slate-600">Copier</button>
+          </div>
+          <div class="space-y-1">
+            <p class="text-xs text-slate-400">Ajouter comme source :</p>
+            <div class="flex items-center gap-2">
+              <code id="choco-source-cmd" class="flex-1 text-green-400 text-xs font-mono break-all"></code>
+              <button onclick="copy('choco-source-cmd')" class="text-slate-400 hover:text-white text-xs px-2 py-1 rounded border border-slate-600">Copier</button>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Installer :</p>
+            <div class="flex items-center gap-2">
+              <code class="flex-1 text-green-400 text-xs font-mono">choco install maintenance-agent -y</code>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Linux -->
@@ -165,15 +183,18 @@ tokenInput.addEventListener('input', () => {
 
   if (!token) { buttons.classList.add('hidden'); hint.classList.remove('hidden'); return; }
 
-  const ps1Url   = `${serverUrl}/downloads/install.ps1?enrollmentToken=${encodeURIComponent(token)}`;
-  const nupkgUrl = `${serverUrl}/downloads/windows?enrollmentToken=${encodeURIComponent(token)}`;
-  const shUrl    = `${serverUrl}/downloads/linux?enrollmentToken=${encodeURIComponent(token)}`;
+  const ps1Url      = `${serverUrl}/downloads/install.ps1?enrollmentToken=${encodeURIComponent(token)}`;
+  const nupkgUrl    = `${serverUrl}/downloads/windows?enrollmentToken=${encodeURIComponent(token)}`;
+  const shUrl       = `${serverUrl}/downloads/linux?enrollmentToken=${encodeURIComponent(token)}`;
+  const nugetSource = `${serverUrl}/api/nuget/${encodeURIComponent(token)}`;
 
   document.getElementById('dl-ps1').href = ps1Url;
   document.getElementById('dl-nupkg').href = nupkgUrl;
   document.getElementById('dl-sh').href = shUrl;
   document.getElementById('ps-oneliner').textContent = `irm "${ps1Url}" | iex`;
   document.getElementById('sh-oneliner').textContent = `curl -s "${shUrl}" | sudo bash`;
+  document.getElementById('nuget-source-url').textContent = nugetSource;
+  document.getElementById('choco-source-cmd').textContent = `choco source add -n="MaintenanceBoard" -s="${nugetSource}"  -y`;
 
   buttons.classList.remove('hidden');
   hint.classList.add('hidden');

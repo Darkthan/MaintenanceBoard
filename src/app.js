@@ -126,6 +126,7 @@ app.use('/api/stock', require('./routes/stock'));
 const { loansRouter, loanPublicRouter } = require('./routes/loans');
 app.use('/api/loans', loansRouter);
 app.use('/api/loan-request', loanPublicRouter);
+app.use('/api/nuget', require('./routes/nuget'));
 
 // ── Tickets publics (sans auth, rate limit IP strict) ─────────────────────────
 const ticketLimiter = rateLimit({
