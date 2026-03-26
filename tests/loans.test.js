@@ -76,7 +76,7 @@ describe('loan requests', () => {
       token: 'access-token-1',
       email: 'jean@example.com',
       requesterName: 'Jean Dupont',
-      expiresAt: new Date('2026-03-26T12:00:00.000Z')
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
 
     const res = await request(buildApp())
@@ -115,7 +115,7 @@ describe('loan requests', () => {
       token: 'access-token-1',
       email: 'jean@example.com',
       requesterName: 'Jean Dupont',
-      expiresAt: new Date('2026-03-26T12:00:00.000Z'),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       requestLink: {
         id: 'link-1',
         token: 'magic-1',
@@ -181,7 +181,7 @@ describe('loan requests', () => {
       token: 'access-token-1',
       email: 'marie@example.com',
       requesterName: 'Marie Martin',
-      expiresAt: new Date('2026-03-26T12:00:00.000Z'),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       requestLink: {
         id: 'link-1',
         token: 'magic-1',
