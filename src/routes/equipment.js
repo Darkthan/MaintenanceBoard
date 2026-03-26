@@ -120,6 +120,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
           orderBy: { createdAt: 'desc' },
           include: { tech: { select: { id: true, name: true } } }
         },
+        loanResources: { select: { id: true, name: true, isActive: true } },
         _count: { select: { interventions: true } }
       }
     });

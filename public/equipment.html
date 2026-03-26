@@ -158,6 +158,25 @@
             <dl id="detail-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm"></dl>
           </div>
 
+          <!-- Prêt de matériel -->
+          <div id="detail-loan-section" class="px-6 py-4 border-t border-slate-100">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Prêt de matériel</h4>
+              <button id="detail-loan-link-btn" type="button" onclick="openLoanLinkPanel()" class="hidden text-xs text-blue-600 hover:text-blue-700 transition">Lier une ressource</button>
+            </div>
+            <div id="detail-loan-resources" class="space-y-2 text-sm"></div>
+            <!-- Panneau de liaison (caché par défaut) -->
+            <div id="detail-loan-link-panel" class="hidden mt-3 space-y-2">
+              <select id="detail-loan-resource-select" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                <option value="">Choisir une ressource du catalogue…</option>
+              </select>
+              <div class="flex gap-2">
+                <button type="button" onclick="confirmLoanLink()" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 transition">Lier</button>
+                <button type="button" onclick="closeLoanLinkPanel()" class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition">Annuler</button>
+              </div>
+            </div>
+          </div>
+
           <!-- Infos agent (masqué si non agent) -->
           <div id="detail-agent-section" class="hidden px-6 py-4">
             <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Informations agent</h4>
@@ -1131,6 +1150,11 @@ async function openEquipDetail(equipId) {
       agentSection.classList.add('hidden');
     }
 
+    // Prêt de matériel
+    renderDetailLoanResources(e);
+    document.getElementById('detail-loan-link-btn').classList.toggle('hidden', user?.role !== 'ADMIN');
+    closeLoanLinkPanel();
+
     // Interventions
     const interventions = e.interventions || [];
     document.getElementById('detail-interv-count').textContent = interventions.length || '';
@@ -1166,6 +1190,73 @@ async function openEquipDetail(equipId) {
 
   } catch (err) {
     document.getElementById('detail-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+// ── Section prêt de matériel ─────────────────────────────────────────────────
+function renderDetailLoanResources(e) {
+  const el = document.getElementById('detail-loan-resources');
+  const resources = e.loanResources || [];
+  if (!resources.length) {
+    el.innerHTML = '<p class="text-sm text-slate-400 italic">Aucune ressource de prêt liée.</p>';
+    return;
+  }
+  el.innerHTML = resources.map(r => `
+    <div class="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+      <div class="min-w-0">
+        <p class="text-sm font-medium text-slate-800 truncate">${r.name}</p>
+        <p class="text-xs text-slate-400">${r.isActive ? 'Active' : 'Inactive'}</p>
+      </div>
+      ${user?.role === 'ADMIN' ? `<button type="button" onclick="unlinkLoanResource('${r.id}')" class="text-xs text-red-500 hover:text-red-700 transition flex-shrink-0">Délier</button>` : ''}
+    </div>
+  `).join('');
+}
+
+async function openLoanLinkPanel() {
+  const panel = document.getElementById('detail-loan-link-panel');
+  const sel = document.getElementById('detail-loan-resource-select');
+  sel.innerHTML = '<option value="">Chargement…</option>';
+  panel.classList.remove('hidden');
+  try {
+    const resources = await api.get('/loans/resources');
+    const linkedIds = new Set((detailCurrentEquip?.loanResources || []).map(r => r.id));
+    const available = resources.filter(r => !linkedIds.has(r.id));
+    sel.innerHTML = '<option value="">Choisir une ressource du catalogue…</option>' +
+      available.map(r => `<option value="${r.id}">${r.name}${r.isActive ? '' : ' (inactive)'}</option>`).join('');
+  } catch (err) {
+    sel.innerHTML = '<option value="">Erreur de chargement</option>';
+  }
+}
+
+function closeLoanLinkPanel() {
+  document.getElementById('detail-loan-link-panel').classList.add('hidden');
+}
+
+async function confirmLoanLink() {
+  const resourceId = document.getElementById('detail-loan-resource-select').value;
+  if (!resourceId || !detailCurrentEquip) return;
+  try {
+    await api.patch(`/loans/resources/${resourceId}`, { equipmentId: detailCurrentEquip.id });
+    const refreshed = await api.get(`/equipment/${detailCurrentEquip.id}`);
+    detailCurrentEquip = refreshed;
+    renderDetailLoanResources(refreshed);
+    closeLoanLinkPanel();
+    showToast('Ressource liée avec succès', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function unlinkLoanResource(resourceId) {
+  if (!confirm('Délier cette ressource de prêt de l\'équipement ?')) return;
+  try {
+    await api.patch(`/loans/resources/${resourceId}`, { equipmentId: '' });
+    const refreshed = await api.get(`/equipment/${detailCurrentEquip.id}`);
+    detailCurrentEquip = refreshed;
+    renderDetailLoanResources(refreshed);
+    showToast('Ressource déliée', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
   }
 }
 
