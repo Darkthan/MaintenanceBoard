@@ -7,7 +7,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const router = express.Router({ mergeParams: false });
+const router = express.Router();
 const prisma = require('../lib/prisma');
 const config = require('../config');
 
@@ -25,11 +25,11 @@ async function validateToken(token) {
   return !!(record && record.isActive);
 }
 
-function feedBase(req, token) {
+function feedBase(token) {
   return `${config.appUrl}/api/nuget/${encodeURIComponent(token)}`;
 }
 
-function buildEntry(base, token) {
+function buildEntry(base) {
   const downloadUrl = `${base}/package/${PACKAGE_ID}/${VERSION}`;
   const now = new Date().toISOString();
   return `<entry>
@@ -46,7 +46,7 @@ function buildEntry(base, token) {
       <d:Version>${VERSION}</d:Version>
       <d:NormalizedVersion>${VERSION}</d:NormalizedVersion>
       <d:Title>MaintenanceBoard Agent</d:Title>
-      <d:Description>Agent de remontee d inventaire MaintenanceBoard. Serveur : ${config.appUrl}</d:Description>
+      <d:Description>MaintenanceBoard inventory agent. Server: ${config.appUrl}</d:Description>
       <d:Tags>maintenance inventory agent</d:Tags>
       <d:Authors>MaintenanceBoard</d:Authors>
       <d:IsLatestVersion m:type="Edm.Boolean">true</d:IsLatestVersion>
@@ -66,35 +66,43 @@ function buildEntry(base, token) {
   </entry>`;
 }
 
-function buildFeed(base, token, title = 'Packages') {
+function atomFeed(base, title, includeEntry) {
   const now = new Date().toISOString();
   return `<?xml version="1.0" encoding="utf-8"?>
 <feed xml:base="${base}/" xmlns="http://www.w3.org/2005/Atom"
   xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices"
   xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">
-  <id>${base}/Packages</id>
+  <id>${base}/${title}</id>
   <title type="text">${title}</title>
   <updated>${now}</updated>
-  <link rel="self" title="Packages" href="${base}/Packages"/>
-  ${buildEntry(base, token)}
+  <link rel="self" title="${title}" href="${base}/${title}"/>
+  ${includeEntry ? buildEntry(base) : ''}
 </feed>`;
 }
 
-// Middleware : valider le token dans :token
-router.use('/:token', async (req, res, next) => {
-  try {
-    if (!await validateToken(req.params.token)) {
-      return res.status(403).send('Token d\'enrollment invalide ou désactivé');
-    }
-    next();
-  } catch (err) { next(err); }
-});
+// ── Route principale : /:token et /:token/* ───────────────────────────────────
+// On utilise un seul handler catch-all pour éviter les problèmes avec les
+// parenthèses dans les paths OData (FindPackagesById(), Search(), Packages())
+// qui sont interprétées comme des groupes regex par path-to-regexp (Express 5).
 
-// GET /api/nuget/:token  — racine du service OData
-router.get('/:token', (req, res) => {
-  const base = feedBase(req, req.params.token);
-  res.set('Content-Type', 'application/xml; charset=utf-8');
-  res.send(`<?xml version="1.0" encoding="utf-8"?>
+router.all('/:token', handleNuget);
+router.all('/:token/*path', handleNuget);
+
+async function handleNuget(req, res, next) {
+  try {
+    const token = req.params.token;
+    if (!await validateToken(token)) {
+      return res.status(403).send('Token enrollment invalide ou desactive');
+    }
+
+    const base = feedBase(token);
+    // Sous-chemin après /:token/
+    const sub = (req.params.path || '').replace(/^\/+/, '');
+
+    // ── Racine du service OData ───────────────────────────────────────────────
+    if (!sub) {
+      res.set('Content-Type', 'application/atomsvc+xml; charset=utf-8');
+      return res.send(`<?xml version="1.0" encoding="utf-8"?>
 <service xml:base="${base}/" xmlns="http://www.w3.org/2007/app" xmlns:atom="http://www.w3.org/2005/Atom">
   <workspace>
     <atom:title type="text">Default</atom:title>
@@ -103,12 +111,12 @@ router.get('/:token', (req, res) => {
     </collection>
   </workspace>
 </service>`);
-});
+    }
 
-// GET /api/nuget/:token/$metadata  — métadonnées OData (minimal)
-router.get('/:token/$metadata', (req, res) => {
-  res.set('Content-Type', 'application/xml; charset=utf-8');
-  res.send(`<?xml version="1.0" encoding="utf-8"?>
+    // ── $metadata ─────────────────────────────────────────────────────────────
+    if (sub === '$metadata') {
+      res.set('Content-Type', 'application/xml; charset=utf-8');
+      return res.send(`<?xml version="1.0" encoding="utf-8"?>
 <edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx">
   <edmx:DataServices m:DataServiceVersion="2.0"
     xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">
@@ -145,77 +153,66 @@ router.get('/:token/$metadata', (req, res) => {
     </Schema>
   </edmx:DataServices>
 </edmx:Edmx>`);
-});
+    }
 
-// GET /api/nuget/:token/Packages()
-router.get('/:token/Packages()', (req, res) => {
-  const base = feedBase(req, req.params.token);
-  res.set('Content-Type', 'application/atom+xml; charset=utf-8');
-  res.send(buildFeed(base, req.params.token));
-});
+    // ── Téléchargement .nupkg ─────────────────────────────────────────────────
+    // path: package/maintenance-agent/1.0.0
+    if (sub.startsWith('package/')) {
+      const serverUrl = config.appUrl;
+      const configJson = JSON.stringify({ serverUrl, enrollmentToken: token }, null, 2);
+      const nuspecContent = readTemplate('agent.nuspec.template')
+        .replace(/\{\{VERSION\}\}/g, VERSION)
+        .replace(/\{\{SERVER_URL\}\}/g, serverUrl);
+      const agentPs1 = readTemplate('agent.ps1');
+      const chocoInstall = readTemplate('chocolateyInstall.ps1');
 
-// GET /api/nuget/:token/FindPackagesById()?id='maintenance-agent'
-router.get('/:token/FindPackagesById()', (req, res) => {
-  const id = (req.query.id || '').replace(/'/g, '');
-  const base = feedBase(req, req.params.token);
-  res.set('Content-Type', 'application/atom+xml; charset=utf-8');
-  if (id && id.toLowerCase() !== PACKAGE_ID) {
-    // Package non trouvé — flux vide
-    res.send(`<?xml version="1.0" encoding="utf-8"?>
-<feed xml:base="${base}/" xmlns="http://www.w3.org/2005/Atom"
-  xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices"
-  xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">
-  <id>${base}/FindPackagesById</id>
-  <title type="text">FindPackagesById</title>
-  <updated>${new Date().toISOString()}</updated>
-</feed>`);
-    return;
-  }
-  res.send(buildFeed(base, req.params.token, 'FindPackagesById'));
-});
+      const JSZip = require('jszip');
+      const zip = new JSZip();
+      zip.file(`${PACKAGE_ID}.nuspec`, nuspecContent);
+      zip.folder('tools').file('agent.ps1', agentPs1);
+      zip.folder('tools').file('chocolateyInstall.ps1', chocoInstall);
+      zip.folder('tools').file('config.json', configJson);
 
-// GET /api/nuget/:token/Search()?searchTerm='...'
-router.get('/:token/Search()', (req, res) => {
-  const term = (req.query.searchTerm || '').replace(/'/g, '').toLowerCase();
-  const base = feedBase(req, req.params.token);
-  res.set('Content-Type', 'application/atom+xml; charset=utf-8');
-  if (term && !PACKAGE_ID.includes(term) && !'maintenanceboard'.includes(term)) {
-    res.send(`<?xml version="1.0" encoding="utf-8"?>
-<feed xml:base="${base}/" xmlns="http://www.w3.org/2005/Atom"
-  xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices"
-  xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">
-  <id>${base}/Search</id><title type="text">Search</title>
-  <updated>${new Date().toISOString()}</updated>
-</feed>`);
-    return;
-  }
-  res.send(buildFeed(base, req.params.token, 'Search'));
-});
+      const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+      res.set('Content-Type', 'application/octet-stream');
+      res.set('Content-Disposition', `attachment; filename="${PACKAGE_ID}.${VERSION}.nupkg"`);
+      return res.send(buffer);
+    }
 
-// GET /api/nuget/:token/package/:id/:version  — téléchargement du .nupkg
-router.get('/:token/package/:id/:version', async (req, res, next) => {
-  try {
-    const { token } = req.params;
-    const serverUrl = config.appUrl;
-    const configJson = JSON.stringify({ serverUrl, enrollmentToken: token }, null, 2);
-    const nuspecContent = readTemplate('agent.nuspec.template')
-      .replace(/\{\{VERSION\}\}/g, VERSION)
-      .replace(/\{\{SERVER_URL\}\}/g, serverUrl);
-    const agentPs1 = readTemplate('agent.ps1');
-    const chocoInstall = readTemplate('chocolateyInstall.ps1');
+    // ── OData : Packages, FindPackagesById, Search ────────────────────────────
+    res.set('Content-Type', 'application/atom+xml; charset=utf-8');
 
-    const JSZip = require('jszip');
-    const zip = new JSZip();
-    zip.file(`${PACKAGE_ID}.nuspec`, nuspecContent);
-    zip.folder('tools').file('agent.ps1', agentPs1);
-    zip.folder('tools').file('chocolateyInstall.ps1', chocoInstall);
-    zip.folder('tools').file('config.json', configJson);
+    // Packages(Id='...', Version='...') — entrée unique
+    const pkgByIdVer = /^Packages\(Id='([^']+)',\s*Version='([^']+)'\)$/i;
+    if (pkgByIdVer.test(sub)) {
+      const m = sub.match(pkgByIdVer);
+      if (m[1].toLowerCase() === PACKAGE_ID) return res.send(atomFeed(base, 'Packages', true));
+      return res.send(atomFeed(base, 'Packages', false));
+    }
 
-    const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
-    res.set('Content-Type', 'application/zip');
-    res.set('Content-Disposition', `attachment; filename="${PACKAGE_ID}.${VERSION}.nupkg"`);
-    res.send(buffer);
+    // FindPackagesById — le plus utilisé par Chocolatey
+    if (sub.startsWith('FindPackagesById')) {
+      const id = (req.query.id || '').replace(/'/g, '');
+      const match = !id || id.toLowerCase() === PACKAGE_ID;
+      return res.send(atomFeed(base, 'FindPackagesById', match));
+    }
+
+    // Search
+    if (sub.startsWith('Search')) {
+      const term = (req.query.searchTerm || req.query.q || '').replace(/'/g, '').toLowerCase();
+      const match = !term || PACKAGE_ID.includes(term) || 'maintenanceboard'.includes(term);
+      return res.send(atomFeed(base, 'Search', match));
+    }
+
+    // Packages() — liste complète
+    if (sub.startsWith('Packages')) {
+      return res.send(atomFeed(base, 'Packages', true));
+    }
+
+    // Fallback : flux vide
+    res.send(atomFeed(base, sub, false));
+
   } catch (err) { next(err); }
-});
+}
 
 module.exports = router;

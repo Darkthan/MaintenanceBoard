@@ -5,7 +5,7 @@
     <version>{{VERSION}}</version>
     <title>MaintenanceBoard Agent</title>
     <authors>MaintenanceBoard</authors>
-    <description>Agent de remontée d'inventaire pour MaintenanceBoard. Serveur : {{SERVER_URL}}</description>
+    <description>MaintenanceBoard inventory agent. Server: {{SERVER_URL}}</description>
     <tags>maintenance inventory agent</tags>
     <projectUrl>{{SERVER_URL}}</projectUrl>
   </metadata>
