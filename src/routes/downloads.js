@@ -84,28 +84,11 @@ router.get('/windows', async (req, res, next) => {
     const agentPs1 = readTemplate('agent.ps1');
     const chocoInstall = readTemplate('chocolateyInstall.ps1');
 
-    // Essayer JSZip, sinon construire un ZIP manuel minimaliste
-    let JSZip;
-    try { JSZip = require('jszip'); } catch { JSZip = null; }
-
-    if (JSZip) {
-      const zip = new JSZip();
-      zip.file('maintenance-agent.nuspec', nuspecContent);
-      zip.folder('tools').file('agent.ps1', agentPs1);
-      zip.folder('tools').file('chocolateyInstall.ps1', chocoInstall);
-      zip.folder('tools').file('config.json', configJson);
-
-      const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
-      res.set('Content-Type', 'application/zip');
-      res.set('Content-Disposition', 'attachment; filename="maintenance-agent.nupkg"');
-      res.send(buffer);
-    } else {
-      // Fallback : envoyer config.json seul + instructions
-      res.status(503).json({
-        error: 'jszip non installé. Installez jszip (npm install jszip) pour générer le .nupkg.',
-        hint: 'Utilisez /downloads/install.ps1 à la place (script PowerShell standalone).'
-      });
-    }
+    const { buildNupkg, PACKAGE_ID, VERSION } = require('../utils/buildNupkg');
+    const buffer = await buildNupkg(nuspecContent, agentPs1, chocoInstall, configJson);
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('Content-Disposition', `attachment; filename="${PACKAGE_ID}.${VERSION}.nupkg"`);
+    res.send(buffer);
   } catch (err) { next(err); }
 });
 

@@ -158,22 +158,16 @@ async function handleNuget(req, res, next) {
     // ── Téléchargement .nupkg ─────────────────────────────────────────────────
     // path: package/maintenance-agent/1.0.0
     if (sub.startsWith('package/')) {
+      const { buildNupkg } = require('../utils/buildNupkg');
       const serverUrl = config.appUrl;
       const configJson = JSON.stringify({ serverUrl, enrollmentToken: token }, null, 2);
       const nuspecContent = readTemplate('agent.nuspec.template')
         .replace(/\{\{VERSION\}\}/g, VERSION)
         .replace(/\{\{SERVER_URL\}\}/g, serverUrl);
-      const agentPs1 = readTemplate('agent.ps1');
+      const agentPs1    = readTemplate('agent.ps1');
       const chocoInstall = readTemplate('chocolateyInstall.ps1');
 
-      const JSZip = require('jszip');
-      const zip = new JSZip();
-      zip.file(`${PACKAGE_ID}.nuspec`, nuspecContent);
-      zip.folder('tools').file('agent.ps1', agentPs1);
-      zip.folder('tools').file('chocolateyInstall.ps1', chocoInstall);
-      zip.folder('tools').file('config.json', configJson);
-
-      const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+      const buffer = await buildNupkg(nuspecContent, agentPs1, chocoInstall, configJson);
       res.set('Content-Type', 'application/octet-stream');
       res.set('Content-Disposition', `attachment; filename="${PACKAGE_ID}.${VERSION}.nupkg"`);
       return res.send(buffer);
