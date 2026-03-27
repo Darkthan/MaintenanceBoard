@@ -12,11 +12,33 @@ const { readSettings } = require('../utils/settings');
 
 const prisma = require('../lib/prisma');
 
-function getWebAuthnConfig() {
+function normalizeRpId(value) {
+  return String(value || '').trim().toLowerCase().replace(/\.$/, '');
+}
+
+function parseOrigin(value) {
+  try {
+    return new URL(String(value || '').trim());
+  } catch {
+    return null;
+  }
+}
+
+function isLocalHostname(hostname) {
+  const value = normalizeRpId(hostname);
+  return value === 'localhost'
+    || value === '127.0.0.1'
+    || value === '::1'
+    || value.endsWith('.localhost');
+}
+
+function getConfiguredWebAuthnConfig() {
   const s = readSettings().webauthn || {};
   const rpName = String(s.rpName || config.webauthn?.rpName || 'MaintenanceBoard').trim() || 'MaintenanceBoard';
-  const rpId = String(s.rpId || config.webauthn?.rpId || '').trim().toLowerCase();
-  const origin = String(s.origin || config.webauthn?.origin || '').trim();
+  const configuredOrigin = String(s.origin || config.webauthn?.origin || '').trim();
+  const parsedOrigin = parseOrigin(configuredOrigin);
+  const rpId = normalizeRpId(s.rpId || config.webauthn?.rpId || parsedOrigin?.hostname || '');
+  const origin = parsedOrigin?.origin || configuredOrigin;
   return {
     rpName,
     rpId,
@@ -24,8 +46,56 @@ function getWebAuthnConfig() {
   };
 }
 
-function assertWebAuthnConfig() {
-  const webauthn = getWebAuthnConfig();
+function getRequestWebAuthnConfig(req, rpName) {
+  if (!req) return null;
+
+  const forwardedProto = String(req.headers?.['x-forwarded-proto'] || '').split(',')[0].trim();
+  const forwardedHost = String(req.headers?.['x-forwarded-host'] || '').split(',')[0].trim();
+  const protocol = forwardedProto || req.protocol || 'http';
+  const host = forwardedHost || req.get?.('host') || '';
+
+  if (!host) return null;
+
+  const parsedOrigin = parseOrigin(`${protocol}://${host}`);
+  if (!parsedOrigin) return null;
+
+  return {
+    rpName,
+    rpId: normalizeRpId(parsedOrigin.hostname),
+    origin: parsedOrigin.origin
+  };
+}
+
+function shouldPreferRequestWebAuthnConfig(configured, requestBased) {
+  if (!requestBased) return false;
+  if (!configured.origin || !configured.rpId) return true;
+
+  const configuredOrigin = parseOrigin(configured.origin);
+  const requestOrigin = parseOrigin(requestBased.origin);
+  if (!configuredOrigin || !requestOrigin) return true;
+
+  if (isLocalHostname(configured.rpId) && !isLocalHostname(requestBased.rpId)) {
+    return true;
+  }
+
+  return configuredOrigin.hostname === requestOrigin.hostname
+    && configuredOrigin.protocol === 'http:'
+    && requestOrigin.protocol === 'https:';
+}
+
+function getWebAuthnConfig(req = null) {
+  const configured = getConfiguredWebAuthnConfig();
+  const requestBased = getRequestWebAuthnConfig(req, configured.rpName);
+
+  if (shouldPreferRequestWebAuthnConfig(configured, requestBased)) {
+    return requestBased;
+  }
+
+  return configured;
+}
+
+function assertWebAuthnConfig(req = null) {
+  const webauthn = getWebAuthnConfig(req);
   if (!webauthn.rpId || !webauthn.origin) {
     throw Object.assign(new Error('Configuration WebAuthn incomplète: rpId et origin sont requis'), { status: 400 });
   }
@@ -135,8 +205,8 @@ async function refreshAccessToken(refreshTokenValue) {
 
 // ── WebAuthn / Passkeys ───────────────────────────────────────────────────────
 
-async function beginPasskeyRegistration(user) {
-  const webauthn = assertWebAuthnConfig();
+async function beginPasskeyRegistration(user, req = null) {
+  const webauthn = assertWebAuthnConfig(req);
   const existingPasskeys = await prisma.passkey.findMany({
     where: { userId: user.id }
   });
@@ -163,8 +233,8 @@ async function beginPasskeyRegistration(user) {
   return options;
 }
 
-async function finishPasskeyRegistration(user, response, challenge, passkeyName) {
-  const webauthn = assertWebAuthnConfig();
+async function finishPasskeyRegistration(user, response, challenge, passkeyName, req = null) {
+  const webauthn = assertWebAuthnConfig(req);
   let verification;
   try {
     verification = await verifyRegistrationResponse({
@@ -206,8 +276,8 @@ async function finishPasskeyRegistration(user, response, challenge, passkeyName)
   return passkey;
 }
 
-async function beginPasskeyLogin(email) {
-  const webauthn = assertWebAuthnConfig();
+async function beginPasskeyLogin(email, req = null) {
+  const webauthn = assertWebAuthnConfig(req);
   let user = null;
   let allowCredentials = [];
 
@@ -235,8 +305,8 @@ async function beginPasskeyLogin(email) {
   return { options, userId: user?.id };
 }
 
-async function finishPasskeyLogin(response, challenge, userId) {
-  const webauthn = assertWebAuthnConfig();
+async function finishPasskeyLogin(response, challenge, userId, req = null) {
+  const webauthn = assertWebAuthnConfig(req);
   // Trouver la passkey par credentialId
   const credentialId = toBase64Url(response.id);
   const passkey = await prisma.passkey.findUnique({

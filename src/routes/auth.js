@@ -276,7 +276,7 @@ router.post('/change-password',
 
 router.post('/webauthn/register/begin', requireAuth, async (req, res, next) => {
   try {
-    const options = await authService.beginPasskeyRegistration(req.user);
+    const options = await authService.beginPasskeyRegistration(req.user, req);
     req.session.webauthnChallenge = options.challenge;
     await new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
     res.json(options);
@@ -299,7 +299,8 @@ router.post('/webauthn/register/finish', requireAuth, async (req, res, next) => 
       req.user,
       req.body,
       challenge,
-      req.body.name
+      req.body.name,
+      req
     );
 
     res.json({
@@ -320,7 +321,7 @@ router.post('/webauthn/login/begin', async (req, res, next) => {
     if (fail2ban === false) return;
 
     const { email } = req.body;
-    const { options, userId } = await authService.beginPasskeyLogin(email);
+    const { options, userId } = await authService.beginPasskeyLogin(email, req);
     req.session.webauthnChallenge = options.challenge;
     req.session.webauthnUserId = userId;
     await new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
@@ -347,7 +348,7 @@ router.post('/webauthn/login/finish', async (req, res, next) => {
     await new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
 
     const { user, accessToken, refreshToken } = await authService.finishPasskeyLogin(
-      req.body, challenge, userId
+      req.body, challenge, userId, req
     );
     clearFailedLoginAttempts(fail2ban?.ip);
 

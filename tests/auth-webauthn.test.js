@@ -32,12 +32,25 @@ jest.mock('jsonwebtoken', () => ({
 }));
 
 const prisma = require('../src/lib/prisma');
+const { readSettings } = require('../src/utils/settings');
 const {
   generateRegistrationOptions,
+  generateAuthenticationOptions,
   verifyRegistrationResponse,
   verifyAuthenticationResponse,
 } = require('@simplewebauthn/server');
 const authService = require('../src/services/authService');
+
+function buildReverseProxyRequest() {
+  return {
+    headers: {
+      'x-forwarded-proto': 'https',
+      'x-forwarded-host': 'maintenanceboard.beaupeyrat.com',
+    },
+    protocol: 'http',
+    get: jest.fn(() => 'localhost:3000'),
+  };
+}
 
 describe('authService WebAuthn', () => {
   beforeEach(() => {
@@ -135,5 +148,48 @@ describe('authService WebAuthn', () => {
       where: { credentialId: 'AQIDBA' },
       include: { user: true },
     });
+  });
+
+  it('préfère l’origine publique du reverse proxy quand la config par défaut pointe vers localhost', async () => {
+    readSettings.mockReturnValue({});
+    generateAuthenticationOptions.mockResolvedValue({ challenge: 'challenge-1' });
+    prisma.passkey.findUnique.mockResolvedValue({
+      id: 'pk-1',
+      credentialId: 'AQIDBA',
+      publicKey: Buffer.from([5, 6, 7, 8]),
+      counter: BigInt(10),
+      transports: JSON.stringify(['internal']),
+      user: {
+        id: 'user-1',
+        email: 'admin@test.local',
+        name: 'Admin',
+        role: 'ADMIN',
+        isActive: true,
+      },
+    });
+    prisma.refreshToken.create.mockResolvedValue({});
+    prisma.passkey.update.mockResolvedValue({});
+    verifyAuthenticationResponse.mockResolvedValue({
+      verified: true,
+      authenticationInfo: { newCounter: 11 },
+    });
+
+    const req = buildReverseProxyRequest();
+
+    await authService.beginPasskeyLogin('', req);
+    await authService.finishPasskeyLogin(
+      { id: 'AQIDBA==' },
+      'challenge-1',
+      'user-1',
+      req
+    );
+
+    expect(generateAuthenticationOptions).toHaveBeenCalledWith(expect.objectContaining({
+      rpID: 'maintenanceboard.beaupeyrat.com',
+    }));
+    expect(verifyAuthenticationResponse).toHaveBeenCalledWith(expect.objectContaining({
+      expectedOrigin: 'https://maintenanceboard.beaupeyrat.com',
+      expectedRPID: 'maintenanceboard.beaupeyrat.com',
+    }));
   });
 });
