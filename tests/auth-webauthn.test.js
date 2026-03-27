@@ -31,6 +31,7 @@ jest.mock('jsonwebtoken', () => ({
   sign: jest.fn(() => 'signed-jwt'),
 }));
 
+const config = require('../src/config');
 const prisma = require('../src/lib/prisma');
 const { readSettings } = require('../src/utils/settings');
 const {
@@ -53,8 +54,11 @@ function buildReverseProxyRequest() {
 }
 
 describe('authService WebAuthn', () => {
+  const originalDatabaseUrl = config.database.url;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    config.database.url = originalDatabaseUrl;
   });
 
   it('génère des options d’enregistrement avec un user.id en base64url', async () => {
@@ -112,6 +116,43 @@ describe('authService WebAuthn', () => {
         backedUp: false,
         transports: JSON.stringify(['internal']),
         name: 'Ma passkey',
+      }),
+    });
+  });
+
+  it('stocke transports comme tableau avec PostgreSQL', async () => {
+    config.database.url = 'postgresql://maintenance_user:maintenance_pass@db:5432/maintenance_db';
+
+    const credentialID = Uint8Array.from([1, 2, 3, 4]);
+    const credentialPublicKey = Uint8Array.from([5, 6, 7, 8]);
+
+    verifyRegistrationResponse.mockResolvedValue({
+      verified: true,
+      registrationInfo: {
+        credentialID,
+        credentialPublicKey,
+        counter: 42,
+        credentialDeviceType: 'multiDevice',
+        credentialBackedUp: true,
+      },
+    });
+
+    prisma.passkey.create.mockResolvedValue({
+      id: 'pk-2',
+      name: 'Bitwarden',
+      createdAt: new Date('2026-03-27T10:00:00.000Z'),
+    });
+
+    await authService.finishPasskeyRegistration(
+      { id: 'user-1', email: 'admin@test.local', name: 'Admin' },
+      { response: { transports: ['internal', 'hybrid'] } },
+      'challenge-1',
+      'Bitwarden'
+    );
+
+    expect(prisma.passkey.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        transports: ['internal', 'hybrid'],
       }),
     });
   });

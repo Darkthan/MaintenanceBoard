@@ -120,6 +120,18 @@ function parseJsonField(value) {
   try { return JSON.parse(value || '[]'); } catch { return []; }
 }
 
+function isSqliteDatabase() {
+  return String(config.database?.url || '').startsWith('file:');
+}
+
+function normalizeTransportsForStorage(value) {
+  const transports = Array.isArray(value)
+    ? value.filter(item => typeof item === 'string' && item.trim())
+    : [];
+
+  return isSqliteDatabase() ? JSON.stringify(transports) : transports;
+}
+
 // ── Helpers JWT ──────────────────────────────────────────────────────────────
 
 function generateAccessToken(user) {
@@ -196,7 +208,7 @@ async function refreshAccessToken(refreshTokenValue) {
   }
 
   // Rotation du refresh token
-  await prisma.refreshToken.delete({ where: { id: record.id } });
+  await prisma.refreshToken.deleteMany({ where: { id: record.id } });
   const newRefreshToken = await generateRefreshToken(record.userId);
   const accessToken = generateAccessToken(record.user);
 
@@ -268,7 +280,7 @@ async function finishPasskeyRegistration(user, response, challenge, passkeyName,
       counter: BigInt(counter),
       deviceType: credentialDeviceType,
       backedUp: credentialBackedUp,
-      transports: JSON.stringify(response.response?.transports || []),
+      transports: normalizeTransportsForStorage(response.response?.transports),
       name: passkeyName || `Clé ${new Date().toLocaleDateString('fr-FR')}`
     }
   });
