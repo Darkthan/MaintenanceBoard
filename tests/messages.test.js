@@ -24,6 +24,7 @@ jest.mock('../src/lib/prisma', () => ({
   internalConversation: {
     findMany: jest.fn(),
     upsert: jest.fn(),
+    create: jest.fn(),
     update: jest.fn()
   },
   internalConversationParticipant: {
@@ -84,7 +85,7 @@ describe('internal messages routes', () => {
   });
 
   it('ouvre une conversation directe entre deux utilisateurs', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 'user-2', isActive: true });
+    prisma.user.findMany.mockResolvedValue([{ id: 'user-2' }]);
     prisma.internalConversation.upsert.mockResolvedValue({
       id: 'conv-1',
       type: 'DIRECT',
@@ -106,6 +107,8 @@ describe('internal messages routes', () => {
     expect(res.body).toEqual(expect.objectContaining({
       id: 'conv-1',
       unreadCount: 0,
+      isGroup: false,
+      displayName: 'Bob Durand',
       otherParticipant: expect.objectContaining({ id: 'user-2', name: 'Bob Durand' })
     }));
     expect(prisma.internalConversation.upsert).toHaveBeenCalledWith(expect.objectContaining({
@@ -115,6 +118,51 @@ describe('internal messages routes', () => {
           create: [
             { userId: 'user-1' },
             { userId: 'user-2' }
+          ]
+        }
+      })
+    }));
+  });
+
+  it('ouvre une conversation de groupe quand plusieurs destinataires sont sélectionnés', async () => {
+    prisma.user.findMany
+      .mockResolvedValueOnce([{ id: 'user-2' }, { id: 'user-3' }]);
+    prisma.internalConversation.create.mockResolvedValue({
+      id: 'conv-group-1',
+      type: 'GROUP',
+      createdAt: new Date('2026-03-27T09:30:00.000Z'),
+      updatedAt: new Date('2026-03-27T09:30:00.000Z'),
+      participants: [
+        { userId: 'user-1', lastReadAt: null, user: { id: 'user-1', name: 'Alice Martin', email: 'alice@test.local', role: 'TECH' } },
+        { userId: 'user-2', lastReadAt: null, user: { id: 'user-2', name: 'Bob Durand', email: 'bob@test.local', role: 'ADMIN' } },
+        { userId: 'user-3', lastReadAt: null, user: { id: 'user-3', name: 'Claire Petit', email: 'claire@test.local', role: 'TECH' } }
+      ],
+      messages: []
+    });
+    prisma.internalMessage.count.mockResolvedValue(0);
+
+    const res = await request(buildApp())
+      .post('/api/messages/conversations')
+      .send({ recipientIds: ['user-2', 'user-3'] });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual(expect.objectContaining({
+      id: 'conv-group-1',
+      isGroup: true,
+      displayName: 'Bob Durand, Claire Petit',
+      participants: [
+        expect.objectContaining({ id: 'user-2', name: 'Bob Durand' }),
+        expect.objectContaining({ id: 'user-3', name: 'Claire Petit' })
+      ]
+    }));
+    expect(prisma.internalConversation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        type: 'GROUP',
+        participants: {
+          create: [
+            { userId: 'user-1' },
+            { userId: 'user-2' },
+            { userId: 'user-3' }
           ]
         }
       })
@@ -157,6 +205,7 @@ describe('internal messages routes', () => {
     expect(res.body[0]).toEqual(expect.objectContaining({
       id: 'conv-1',
       unreadCount: 2,
+      displayName: 'Bob Durand',
       lastMessage: expect.objectContaining({
         id: 'msg-1',
         attachmentUrl: null

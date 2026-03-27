@@ -53,16 +53,7 @@
           <p class="text-sm text-slate-500">Retrouve tes conversations puis crée un nouveau fil avec le bouton +.</p>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="new-conversation-btn" type="button"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm transition hover:bg-blue-700"
-          aria-label="Nouvelle conversation" title="Nouvelle conversation">
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-        <button id="refresh-btn" type="button" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
-      </div>
+      <button id="refresh-btn" type="button" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
     </header>
 
     <div class="flex-1 p-6">
@@ -82,6 +73,14 @@
   </main>
 </div>
 
+<button id="new-conversation-btn" type="button"
+  class="fixed bottom-6 right-6 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+  aria-label="Nouvelle conversation" title="Nouvelle conversation">
+  <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+  </svg>
+</button>
+
 <div id="new-conversation-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/50 p-4">
   <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
     <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
@@ -97,9 +96,7 @@
     </div>
     <div class="px-6 py-5 space-y-4">
       <p id="contacts-count" class="text-sm text-slate-500">0 contact disponible</p>
-      <select id="recipient-select" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value="">Sélectionner un utilisateur</option>
-      </select>
+      <div id="selected-recipients" class="hidden flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"></div>
       <div id="contacts-list" class="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-3">
         <p class="text-sm text-slate-400 text-center py-6">Chargement...</p>
       </div>
@@ -121,11 +118,12 @@
 <script>
 let recipients = [];
 let conversations = [];
+const selectedRecipientIds = new Set();
 
-const recipientSelect = document.getElementById('recipient-select');
 const newConversationModalEl = document.getElementById('new-conversation-modal');
 const contactsListEl = document.getElementById('contacts-list');
 const contactsCountEl = document.getElementById('contacts-count');
+const selectedRecipientsEl = document.getElementById('selected-recipients');
 const conversationListEl = document.getElementById('conversation-list');
 const conversationCountEl = document.getElementById('conversation-count');
 
@@ -164,14 +162,36 @@ function threadUrl(conversationId) {
   return `/messages-thread.html?conversation=${encodeURIComponent(conversationId)}`;
 }
 
+function renderSelectedRecipients() {
+  const selectedUsers = recipients.filter(user => selectedRecipientIds.has(user.id));
+  if (!selectedUsers.length) {
+    selectedRecipientsEl.classList.add('hidden');
+    selectedRecipientsEl.innerHTML = '';
+    return;
+  }
+
+  selectedRecipientsEl.classList.remove('hidden');
+  selectedRecipientsEl.classList.add('flex');
+  selectedRecipientsEl.innerHTML = selectedUsers.map(user => `
+    <button type="button" data-remove-recipient-id="${user.id}"
+      class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 hover:border-red-200 hover:text-red-600 transition">
+      <span>${escapeHtml(user.name)}</span>
+      <span>✕</span>
+    </button>
+  `).join('');
+
+  selectedRecipientsEl.querySelectorAll('[data-remove-recipient-id]').forEach(button => {
+    button.addEventListener('click', () => {
+      selectedRecipientIds.delete(button.dataset.removeRecipientId);
+      renderSelectedRecipients();
+      renderRecipients();
+    });
+  });
+}
+
 function renderRecipients() {
   contactsCountEl.textContent = `${recipients.length} contact${recipients.length > 1 ? 's' : ''}`;
-  recipientSelect.innerHTML = `
-    <option value="">Sélectionner un utilisateur</option>
-    ${recipients.map(user => `
-      <option value="${user.id}">${escapeHtml(user.name)}${user.email ? ` (${escapeHtml(user.email)})` : ''}</option>
-    `).join('')}
-  `;
+  renderSelectedRecipients();
 
   if (!recipients.length) {
     contactsListEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-6">Aucun contact disponible.</p>';
@@ -180,20 +200,31 @@ function renderRecipients() {
 
   contactsListEl.innerHTML = recipients.map(user => `
     <button type="button" data-recipient-id="${user.id}"
-      class="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-blue-200 hover:bg-blue-50">
+      class="w-full rounded-2xl border p-4 text-left transition ${
+        selectedRecipientIds.has(user.id)
+          ? 'border-blue-200 bg-blue-50'
+          : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50'
+      }">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(user.name)}</p>
           <p class="mt-1 text-xs uppercase tracking-wide text-slate-400">${escapeHtml(user.role || '')}</p>
           <p class="mt-2 text-xs text-slate-500 truncate">${escapeHtml(user.email || '')}</p>
         </div>
-        <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-blue-700 border border-slate-200">Ouvrir</span>
+        <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium ${selectedRecipientIds.has(user.id) ? 'text-blue-700 border border-blue-200' : 'text-slate-600 border border-slate-200'}">
+          ${selectedRecipientIds.has(user.id) ? 'Sélectionné' : 'Ajouter'}
+        </span>
       </div>
     </button>
   `).join('');
 
   contactsListEl.querySelectorAll('[data-recipient-id]').forEach(button => {
-    button.addEventListener('click', () => openConversationForRecipient(button.dataset.recipientId));
+    button.addEventListener('click', () => {
+      const recipientId = button.dataset.recipientId;
+      if (selectedRecipientIds.has(recipientId)) selectedRecipientIds.delete(recipientId);
+      else selectedRecipientIds.add(recipientId);
+      renderRecipients();
+    });
   });
 }
 
@@ -206,11 +237,14 @@ function renderConversations() {
   }
 
   conversationListEl.innerHTML = conversations.map(conversation => {
-    const name = conversation.otherParticipant?.name || 'Conversation';
+    const name = conversation.displayName || conversation.otherParticipant?.name || 'Conversation';
     const preview = conversation.lastMessage?.content || conversation.lastMessage?.attachmentName || 'Aucun message';
     const unreadBadge = conversation.unreadCount
       ? `<span class="inline-flex min-w-6 justify-center rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">${conversation.unreadCount}</span>`
       : '';
+    const meta = conversation.isGroup
+      ? `${conversation.participants?.length || 0} participant${(conversation.participants?.length || 0) > 1 ? 's' : ''}`
+      : (conversation.otherParticipant?.email || '');
 
     return `
       <a href="${threadUrl(conversation.id)}"
@@ -221,6 +255,7 @@ function renderConversations() {
               <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(name)}</p>
               ${unreadBadge}
             </div>
+            <p class="mt-1 text-[11px] text-slate-400 truncate">${escapeHtml(meta)}</p>
             <p class="mt-1 text-xs text-slate-500 truncate">${escapeHtml(preview)}</p>
           </div>
           <span class="text-[11px] text-slate-400 whitespace-nowrap">${escapeHtml(formatRelative(conversation.lastMessage?.createdAt || conversation.updatedAt))}</span>
@@ -240,17 +275,24 @@ async function loadConversations() {
   renderConversations();
 }
 
-async function openConversationForRecipient(recipientId) {
-  if (!recipientId) {
-    showToast('Sélectionnez un utilisateur', 'error');
+async function openConversationForSelection() {
+  const recipientIds = [...selectedRecipientIds];
+  if (!recipientIds.length) {
+    showToast('Sélectionnez au moins un utilisateur', 'error');
     return;
   }
 
-  const conversation = await api.post('/messages/conversations', { recipientId });
+  const payload = recipientIds.length === 1
+    ? { recipientId: recipientIds[0] }
+    : { recipientIds };
+
+  const conversation = await api.post('/messages/conversations', payload);
   window.location.href = threadUrl(conversation.id);
 }
 
 function openNewConversationModal() {
+  selectedRecipientIds.clear();
+  renderRecipients();
   newConversationModalEl.classList.remove('hidden');
   newConversationModalEl.classList.add('flex');
 }
@@ -258,12 +300,13 @@ function openNewConversationModal() {
 function closeNewConversationModal() {
   newConversationModalEl.classList.add('hidden');
   newConversationModalEl.classList.remove('flex');
-  recipientSelect.value = '';
+  selectedRecipientIds.clear();
+  renderRecipients();
 }
 
 document.getElementById('open-conversation-btn').addEventListener('click', async () => {
   try {
-    await openConversationForRecipient(recipientSelect.value);
+    await openConversationForSelection();
   } catch (error) {
     showToast(error.message || 'Ouverture impossible', 'error');
   }

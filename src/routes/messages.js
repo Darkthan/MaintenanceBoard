@@ -91,7 +91,12 @@ async function ensureConversationParticipant(conversationId, userId) {
 async function buildConversationSummary(conversation, currentUserId) {
   const participants = Array.isArray(conversation.participants) ? conversation.participants : [];
   const currentParticipant = participants.find(participant => participant.userId === currentUserId) || null;
-  const otherParticipant = participants.find(participant => participant.userId !== currentUserId)?.user || null;
+  const otherParticipants = participants
+    .filter(participant => participant.userId !== currentUserId)
+    .map(participant => participant.user)
+    .filter(Boolean);
+  const isGroup = conversation.type === 'GROUP' || otherParticipants.length > 1;
+  const otherParticipant = otherParticipants[0] || null;
   const lastMessage = Array.isArray(conversation.messages) ? conversation.messages[0] || null : null;
 
   const unreadCount = await prisma.internalMessage.count({
@@ -107,6 +112,11 @@ async function buildConversationSummary(conversation, currentUserId) {
     type: conversation.type,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
+    isGroup,
+    displayName: isGroup
+      ? (otherParticipants.map(user => user.name).join(', ') || 'Conversation de groupe')
+      : (otherParticipant?.name || 'Conversation'),
+    participants: otherParticipants,
     otherParticipant,
     unreadCount,
     lastReadAt: currentParticipant?.lastReadAt || null,
@@ -170,54 +180,90 @@ router.get('/conversations', requireAuth, async (req, res, next) => {
 
 router.post('/conversations', requireAuth, async (req, res, next) => {
   try {
-    const recipientId = String(req.body?.recipientId || '').trim();
+    const rawRecipientIds = Array.isArray(req.body?.recipientIds)
+      ? req.body.recipientIds
+      : (req.body?.recipientId ? [req.body.recipientId] : []);
+    const recipientIds = [...new Set(rawRecipientIds.map(value => String(value || '').trim()).filter(Boolean))];
 
-    if (!recipientId) {
+    if (!recipientIds.length) {
       return res.status(400).json({ error: 'Destinataire requis' });
     }
-    if (recipientId === req.user.id) {
+    if (recipientIds.includes(req.user.id)) {
       return res.status(400).json({ error: 'Vous ne pouvez pas vous écrire à vous-même' });
     }
 
-    const recipient = await prisma.user.findUnique({
-      where: { id: recipientId },
-      select: { id: true, isActive: true }
+    const recipients = await prisma.user.findMany({
+      where: {
+        id: { in: recipientIds },
+        isActive: true
+      },
+      select: { id: true }
     });
 
-    if (!recipient || !recipient.isActive) {
+    if (recipients.length !== recipientIds.length) {
       return res.status(404).json({ error: 'Destinataire introuvable' });
     }
 
-    const directKey = buildDirectKey(req.user.id, recipientId);
+    let conversation;
 
-    const conversation = await prisma.internalConversation.upsert({
-      where: { directKey },
-      update: {},
-      create: {
-        type: 'DIRECT',
-        directKey,
-        participants: {
-          create: [
-            { userId: req.user.id },
-            { userId: recipientId }
-          ]
-        }
-      },
-      include: {
-        participants: {
-          include: { user: { select: USER_SELECT } }
+    if (recipientIds.length === 1) {
+      const directKey = buildDirectKey(req.user.id, recipientIds[0]);
+
+      conversation = await prisma.internalConversation.upsert({
+        where: { directKey },
+        update: {},
+        create: {
+          type: 'DIRECT',
+          directKey,
+          participants: {
+            create: [
+              { userId: req.user.id },
+              { userId: recipientIds[0] }
+            ]
+          }
         },
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          include: {
-            sender: {
-              select: { id: true, name: true, email: true }
+        include: {
+          participants: {
+            include: { user: { select: USER_SELECT } }
+          },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              sender: {
+                select: { id: true, name: true, email: true }
+              }
             }
           }
         }
-      }
-    });
+      });
+    } else {
+      conversation = await prisma.internalConversation.create({
+        data: {
+          type: 'GROUP',
+          participants: {
+            create: [
+              { userId: req.user.id },
+              ...recipientIds.map(userId => ({ userId }))
+            ]
+          }
+        },
+        include: {
+          participants: {
+            include: { user: { select: USER_SELECT } }
+          },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              sender: {
+                select: { id: true, name: true, email: true }
+              }
+            }
+          }
+        }
+      });
+    }
 
     res.status(201).json(await buildConversationSummary(conversation, req.user.id));
   } catch (err) {

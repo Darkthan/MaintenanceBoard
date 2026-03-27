@@ -25,6 +25,7 @@ describe('messages pages', () => {
     expect(res.text).toContain('Boîte de réception');
     expect(res.text).toContain('new-conversation-btn');
     expect(res.text).toContain('Choisir un contact');
+    expect(res.text).toContain('fixed bottom-6 right-6');
     expect(res.text).not.toContain('Aucune conversation sélectionnée');
   });
 

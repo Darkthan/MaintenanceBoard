@@ -207,9 +207,11 @@ function buildAttachmentMarkup(message) {
 
 function renderThreadHeader() {
   if (!conversationSummary) return;
-  threadParticipantRoleEl.textContent = conversationSummary.otherParticipant?.role || '';
-  threadParticipantNameEl.textContent = conversationSummary.otherParticipant?.name || 'Conversation';
-  threadParticipantEmailEl.textContent = conversationSummary.otherParticipant?.email || '';
+  threadParticipantRoleEl.textContent = conversationSummary.isGroup ? 'Groupe' : (conversationSummary.otherParticipant?.role || '');
+  threadParticipantNameEl.textContent = conversationSummary.displayName || conversationSummary.otherParticipant?.name || 'Conversation';
+  threadParticipantEmailEl.textContent = conversationSummary.isGroup
+    ? (conversationSummary.participants || []).map(user => user.email || user.name).join(' · ')
+    : (conversationSummary.otherParticipant?.email || '');
   threadUpdatedAtEl.textContent = conversationSummary.updatedAt ? `Mis à jour ${formatRelative(conversationSummary.updatedAt)}` : '';
 }
 
