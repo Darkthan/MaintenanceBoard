@@ -341,9 +341,9 @@ async function finishPasskeyLogin(response, challenge, userId, req = null) {
       expectedChallenge: challenge,
       expectedOrigin: webauthn.origin,
       expectedRPID: webauthn.rpId,
-      credential: {
-        id: passkey.credentialId,
-        publicKey: passkey.publicKey,
+      authenticator: {
+        credentialID: passkey.credentialId,
+        credentialPublicKey: passkey.publicKey,
         counter: Number(passkey.counter),
         transports: parseJsonField(passkey.transports)
       },

@@ -189,6 +189,14 @@ describe('authService WebAuthn', () => {
       where: { credentialId: 'AQIDBA' },
       include: { user: true },
     });
+    expect(verifyAuthenticationResponse).toHaveBeenCalledWith(expect.objectContaining({
+      authenticator: expect.objectContaining({
+        credentialID: 'AQIDBA',
+        credentialPublicKey: Buffer.from([5, 6, 7, 8]),
+        counter: 10,
+        transports: ['internal'],
+      }),
+    }));
   });
 
   it('préfère l’origine publique du reverse proxy quand la config par défaut pointe vers localhost', async () => {
