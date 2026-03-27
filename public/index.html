@@ -123,6 +123,25 @@
         </p>
       </div>
 
+      <!-- Réservations à venir -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="font-semibold text-slate-800">Réservations à venir</h2>
+            <p class="text-sm text-slate-500">Prochains prêts prévus sur les 14 prochains jours.</p>
+          </div>
+          <a href="/loans.html" class="text-sm text-blue-600 hover:underline">Voir tout</a>
+        </div>
+        <div class="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-4">
+          <div id="upcoming-loans-overview" class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p class="text-sm text-slate-400">Chargement...</p>
+          </div>
+          <div id="upcoming-loans-list" class="space-y-3">
+            <p class="text-slate-400 text-sm">Chargement...</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Commandes en attente -->
       <div class="bg-white rounded-xl border border-slate-200 p-5">
         <div class="flex items-center justify-between mb-4">
@@ -141,6 +160,71 @@
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
 <script>
+function formatLoanStatus(status) {
+  return {
+    PENDING: '<span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">En attente</span>',
+    APPROVED: '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Approuvé</span>',
+    REJECTED: '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Refusé</span>',
+    CANCELLED: '<span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Annulé</span>',
+    RETURNED: '<span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Restitué</span>'
+  }[status] || statusBadge(status);
+}
+
+function formatLoanDateTime(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function renderUpcomingLoans(reservations) {
+  const overviewEl = document.getElementById('upcoming-loans-overview');
+  const listEl = document.getElementById('upcoming-loans-list');
+  const pendingCount = reservations.filter(item => item.status === 'PENDING').length;
+  const approvedCount = reservations.filter(item => item.status === 'APPROVED').length;
+
+  overviewEl.innerHTML = `
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Fenêtre glissante</p>
+    <p class="mt-2 text-3xl font-bold text-slate-800">${reservations.length}</p>
+    <p class="text-sm text-slate-500">réservation${reservations.length > 1 ? 's' : ''} planifiée${reservations.length > 1 ? 's' : ''}</p>
+    <div class="mt-4 space-y-2">
+      <div class="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-200">
+        <span class="text-sm text-slate-600">En attente</span>
+        <span class="text-sm font-semibold text-amber-700">${pendingCount}</span>
+      </div>
+      <div class="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-200">
+        <span class="text-sm text-slate-600">Approuvées</span>
+        <span class="text-sm font-semibold text-emerald-700">${approvedCount}</span>
+      </div>
+    </div>
+  `;
+
+  if (!reservations.length) {
+    listEl.innerHTML = '<p class="text-slate-400 text-sm text-center py-8">Aucune réservation à venir sur les 14 prochains jours.</p>';
+    return;
+  }
+
+  listEl.innerHTML = reservations.slice(0, 5).map(item => `
+    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-800 truncate">${item.resource?.name || 'Ressource'}</p>
+          <p class="mt-1 text-xs text-slate-500 truncate">${item.requesterName}${item.requesterOrganization ? ` · ${item.requesterOrganization}` : ''}</p>
+        </div>
+        ${formatLoanStatus(item.status)}
+      </div>
+      <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+        <span>Début: ${formatLoanDateTime(item.startAt)}</span>
+        <span>Fin: ${formatLoanDateTime(item.endAt)}</span>
+        <span>Quantité: ${item.requestedUnits}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
 requireLogin().then(user => {
   renderNav('dashboard');
 
@@ -151,12 +235,19 @@ requireLogin().then(user => {
   // Charger les statistiques
   async function loadDashboard() {
     try {
-      const [rooms, equipment, interventions, orders, pendingAgents] = await Promise.all([
+      const now = new Date();
+      const upcomingEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+      const [rooms, equipment, interventions, orders, pendingAgents, loanReservations] = await Promise.all([
         api.get('/rooms', { limit: 1 }),
         api.get('/equipment', { limit: 1 }),
         api.get('/interventions', { limit: 5, status: 'OPEN' }),
         api.get('/orders', { limit: 3 }),
-        api.get('/equipment', { limit: 1, discoveryStatus: 'PENDING' })
+        api.get('/equipment', { limit: 1, discoveryStatus: 'PENDING' }),
+        api.get('/loans/reservations', {
+          start: now.toISOString(),
+          end: upcomingEnd.toISOString()
+        })
       ]);
 
       // Widget agents en attente
@@ -166,6 +257,10 @@ requireLogin().then(user => {
       }
 
       const equipRepair = await api.get('/equipment', { status: 'REPAIR', limit: 5 });
+      const upcomingReservations = loanReservations.filter(item =>
+        ['PENDING', 'APPROVED'].includes(item.status) &&
+        new Date(item.startAt) >= now
+      );
 
       // Stats
       document.getElementById('stats-grid').innerHTML = `
@@ -299,6 +394,8 @@ requireLogin().then(user => {
           </div>
         `;
       }
+
+      renderUpcomingLoans(upcomingReservations);
     } catch (err) {
       console.error('Erreur dashboard:', err);
       showToast('Erreur lors du chargement du tableau de bord', 'error');
