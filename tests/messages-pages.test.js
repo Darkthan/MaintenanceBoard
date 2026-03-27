@@ -18,12 +18,13 @@ jest.mock('../src/middleware/auth', () => ({
 const app = require('../src/app');
 
 describe('messages pages', () => {
-  it('sert la boîte de réception avec sélection de contact', async () => {
+  it('sert la boîte de réception avec liste des conversations et bouton plus', async () => {
     const res = await request(app).get('/messages.html');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('Sélection du contact');
-    expect(res.text).toContain('Conversations récentes');
+    expect(res.text).toContain('Boîte de réception');
+    expect(res.text).toContain('new-conversation-btn');
+    expect(res.text).toContain('Choisir un contact');
     expect(res.text).not.toContain('Aucune conversation sélectionnée');
   });
 
