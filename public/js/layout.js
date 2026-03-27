@@ -1695,6 +1695,7 @@ function renderNav(activePage) {
     { href: '/rooms.html', label: 'Salles', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', id: 'rooms' },
     { href: '/equipment.html', label: 'Équipements', icon: EQUIPMENT_ICON_PATH, id: 'equipment' },
     { href: '/interventions.html', label: 'Interventions', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', id: 'interventions' },
+    { href: '/messages.html', label: 'Messagerie', icon: 'M3 8l7.89 4.945a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z', id: 'messages' },
     { href: '/loans.html', label: 'Prêt de matériel', icon: 'M8 7V5a4 4 0 118 0v2m-8 0h8m-8 0a2 2 0 00-2 2v8a3 3 0 003 3h6a3 3 0 003-3V9a2 2 0 00-2-2m-8 0v2m8-2v2', id: 'loans' },
     { href: '/orders.html', label: 'Commandes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', id: 'orders' },
     { href: '/signatures.html', label: 'Signatures', icon: 'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z', id: 'signatures' },

@@ -114,6 +114,7 @@ app.use('/api/search', require('./routes/search'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/interventions', require('./routes/interventions'));
+app.use('/api/messages', require('./routes/messages'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/qrcode', require('./routes/qrcode'));
 app.use('/api/users', require('./routes/users'));
