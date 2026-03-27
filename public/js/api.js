@@ -19,6 +19,24 @@ function ensureNativeMobileViewport() {
 
   viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
 
+  document.documentElement.style.touchAction = 'manipulation';
+  let lastTouchEnd = 0;
+
+  document.addEventListener('touchmove', event => {
+    if (event.touches?.length > 1) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', event => {
+    const now = Date.now();
+    if (event.touches?.length) return;
+    if (now - lastTouchEnd <= 300) {
+      event.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
   document.addEventListener('gesturestart', event => {
     event.preventDefault();
   }, { passive: false });

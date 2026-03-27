@@ -1,4 +1,6 @@
 const request = require('supertest');
+const fs = require('fs');
+const path = require('path');
 
 jest.mock('../src/lib/prisma', () => ({ user: { findUnique: jest.fn() } }));
 
@@ -26,5 +28,17 @@ describe('mobile viewport lock', () => {
     expect(res.text).toContain('user-scalable=no');
     expect(res.text).toContain('maximum-scale=1');
     expect(res.text).toContain('gesturestart');
+    expect(res.text).toContain('touchmove');
+    expect(res.text).toContain('touchend');
+  });
+
+  it('expose un viewport verrouillé sur toutes les pages HTML publiques', () => {
+    const htmlFiles = fs.readdirSync(path.join(process.cwd(), 'public'))
+      .filter(file => file.endsWith('.html'));
+
+    htmlFiles.forEach(file => {
+      const content = fs.readFileSync(path.join(process.cwd(), 'public', file), 'utf8');
+      expect(content).toContain('<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />');
+    });
   });
 });
