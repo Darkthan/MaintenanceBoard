@@ -3,6 +3,29 @@
  */
 const API_BASE = '/api';
 
+function ensureNativeMobileViewport() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+  const isTouchDevice = navigator.maxTouchPoints > 0 || window.matchMedia?.('(pointer: coarse)')?.matches;
+  const isMobileWidth = window.matchMedia?.('(max-width: 767px)')?.matches;
+  if (!isTouchDevice || !isMobileWidth) return;
+
+  let viewport = document.querySelector('meta[name="viewport"]');
+  if (!viewport) {
+    viewport = document.createElement('meta');
+    viewport.name = 'viewport';
+    document.head.appendChild(viewport);
+  }
+
+  viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+
+  document.addEventListener('gesturestart', event => {
+    event.preventDefault();
+  }, { passive: false });
+}
+
+ensureNativeMobileViewport();
+
 // Cache en mémoire de l'utilisateur courant (pas de localStorage)
 let _currentUser = null;
 
