@@ -50,99 +50,55 @@
         </button>
         <div>
           <h1 class="text-xl font-semibold text-slate-800">Messagerie interne</h1>
-          <p class="text-sm text-slate-500">Échanges directs entre utilisateurs avec pièces jointes.</p>
+          <p class="text-sm text-slate-500">Choisis un contact, puis ouvre la conversation sur une page dédiée.</p>
         </div>
       </div>
       <button id="refresh-btn" type="button" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
     </header>
 
-    <div class="flex-1 p-6">
-      <div class="grid grid-cols-1 xl:grid-cols-[340px_minmax(0,1fr)] gap-6 h-full">
-        <section class="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col min-h-[520px]">
-          <div class="space-y-4">
-            <div>
-              <h2 class="font-semibold text-slate-800">Nouvelle conversation</h2>
-              <p class="text-sm text-slate-500">Choisis un utilisateur de la plateforme pour ouvrir un fil direct.</p>
-            </div>
-            <div class="flex gap-2">
-              <select id="recipient-select" class="flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">Sélectionner un utilisateur</option>
-              </select>
-              <button id="open-conversation-btn" type="button" class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition">
-                Ouvrir
-              </button>
-            </div>
+    <div class="flex-1 p-6 space-y-6">
+      <section class="bg-white rounded-2xl border border-slate-200 p-5">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Nouveau message</p>
+            <h2 class="text-lg font-semibold text-slate-800">Sélection du contact</h2>
+            <p class="text-sm text-slate-500">Sélectionne un utilisateur puis accède au fil de discussion.</p>
           </div>
-
-          <div class="mt-6 flex items-center justify-between gap-3">
-            <div>
-              <h2 class="font-semibold text-slate-800">Conversations</h2>
-              <p id="conversation-count" class="text-xs text-slate-400">0 conversation</p>
-            </div>
+          <div class="flex w-full flex-col gap-2 sm:flex-row lg:max-w-2xl">
+            <select id="recipient-select" class="flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Sélectionner un utilisateur</option>
+            </select>
+            <button id="open-conversation-btn" type="button" class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition">
+              Accéder à la conversation
+            </button>
           </div>
+        </div>
+      </section>
 
-          <div id="conversation-list" class="mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
-            <p class="text-sm text-slate-400 text-center py-10">Chargement...</p>
+      <div class="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-6">
+        <section class="bg-white rounded-2xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Contacts</p>
+              <h2 class="text-lg font-semibold text-slate-800">Utilisateurs disponibles</h2>
+            </div>
+            <span id="contacts-count" class="text-xs text-slate-400">0 contact</span>
+          </div>
+          <div id="contacts-list" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <p class="col-span-full text-sm text-slate-400 text-center py-10">Chargement...</p>
           </div>
         </section>
 
-        <section class="bg-white rounded-2xl border border-slate-200 min-h-[520px] flex flex-col overflow-hidden">
-          <div id="thread-empty" class="flex-1 flex items-center justify-center p-8">
-            <div class="max-w-md text-center">
-              <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-                <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 8l8 6 8-6M4 16h16" />
-                </svg>
-              </div>
-              <h2 class="text-lg font-semibold text-slate-800">Aucune conversation sélectionnée</h2>
-              <p class="mt-2 text-sm text-slate-500">Ouvre un fil depuis la colonne de gauche pour commencer à échanger.</p>
+        <section class="bg-white rounded-2xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Boîte de réception</p>
+              <h2 class="text-lg font-semibold text-slate-800">Conversations récentes</h2>
             </div>
+            <span id="conversation-count" class="text-xs text-slate-400">0 conversation</span>
           </div>
-
-          <div id="thread-panel" class="hidden flex-1 flex-col min-h-0">
-            <div class="border-b border-slate-200 px-5 py-4 bg-slate-50">
-              <p id="thread-participant-role" class="text-xs uppercase tracking-wide text-slate-400"></p>
-              <div class="flex items-center justify-between gap-3">
-                <div class="min-w-0">
-                  <h2 id="thread-participant-name" class="text-lg font-semibold text-slate-800 truncate"></h2>
-                  <p id="thread-participant-email" class="text-sm text-slate-500 truncate"></p>
-                </div>
-                <span id="thread-updated-at" class="text-xs text-slate-400 whitespace-nowrap"></span>
-              </div>
-            </div>
-
-            <div id="message-list" class="flex-1 overflow-y-auto bg-slate-50 px-5 py-5 space-y-3">
-              <p class="text-sm text-slate-400 text-center py-10">Chargement...</p>
-            </div>
-
-            <form id="message-form" class="border-t border-slate-200 px-5 py-4 bg-white space-y-3">
-              <div id="attachment-preview" class="hidden items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-600">
-                <svg class="h-4 w-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
-                <span id="attachment-preview-name" class="flex-1 truncate"></span>
-                <button id="clear-attachment-btn" type="button" class="text-slate-400 hover:text-red-500 transition">✕</button>
-              </div>
-
-              <textarea id="message-input" rows="3" placeholder="Écrire un message..."
-                class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
-
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div class="flex items-center gap-2">
-                  <input id="attachment-input" type="file" class="hidden" />
-                  <button id="pick-attachment-btn" type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                    Joindre un fichier
-                  </button>
-                  <p class="text-xs text-slate-400">Images, PDF, Office, texte, ZIP. 20 Mo max.</p>
-                </div>
-                <button id="send-message-btn" type="submit" class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition">
-                  Envoyer
-                </button>
-              </div>
-            </form>
+          <div id="conversation-list" class="mt-4 space-y-3">
+            <p class="text-sm text-slate-400 text-center py-10">Chargement...</p>
           </div>
         </section>
       </div>
@@ -154,32 +110,14 @@
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
 <script>
-const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-
-let currentUser = null;
 let recipients = [];
 let conversations = [];
-let selectedConversationId = null;
-let selectedConversation = null;
-let selectedAttachment = null;
-let refreshTimer = null;
 
 const recipientSelect = document.getElementById('recipient-select');
+const contactsListEl = document.getElementById('contacts-list');
+const contactsCountEl = document.getElementById('contacts-count');
 const conversationListEl = document.getElementById('conversation-list');
 const conversationCountEl = document.getElementById('conversation-count');
-const threadEmptyEl = document.getElementById('thread-empty');
-const threadPanelEl = document.getElementById('thread-panel');
-const threadParticipantRoleEl = document.getElementById('thread-participant-role');
-const threadParticipantNameEl = document.getElementById('thread-participant-name');
-const threadParticipantEmailEl = document.getElementById('thread-participant-email');
-const threadUpdatedAtEl = document.getElementById('thread-updated-at');
-const messageListEl = document.getElementById('message-list');
-const messageFormEl = document.getElementById('message-form');
-const messageInputEl = document.getElementById('message-input');
-const attachmentInputEl = document.getElementById('attachment-input');
-const attachmentPreviewEl = document.getElementById('attachment-preview');
-const attachmentPreviewNameEl = document.getElementById('attachment-preview-name');
-const sendMessageBtnEl = document.getElementById('send-message-btn');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -212,24 +150,44 @@ function formatRelative(value) {
   return formatDateTime(value);
 }
 
-function formatFileSize(bytes) {
-  const size = Number(bytes || 0);
-  if (!size) return '';
-  if (size < 1024) return `${size} o`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} Ko`;
-  return `${(size / (1024 * 1024)).toFixed(1)} Mo`;
+function threadUrl(conversationId) {
+  return `/messages-thread.html?conversation=${encodeURIComponent(conversationId)}`;
 }
 
 function renderRecipients() {
+  contactsCountEl.textContent = `${recipients.length} contact${recipients.length > 1 ? 's' : ''}`;
   recipientSelect.innerHTML = `
     <option value="">Sélectionner un utilisateur</option>
     ${recipients.map(user => `
       <option value="${user.id}">${escapeHtml(user.name)}${user.email ? ` (${escapeHtml(user.email)})` : ''}</option>
     `).join('')}
   `;
+
+  if (!recipients.length) {
+    contactsListEl.innerHTML = '<p class="col-span-full text-sm text-slate-400 text-center py-10">Aucun contact disponible.</p>';
+    return;
+  }
+
+  contactsListEl.innerHTML = recipients.map(user => `
+    <button type="button" data-recipient-id="${user.id}"
+      class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-blue-200 hover:bg-blue-50">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(user.name)}</p>
+          <p class="mt-1 text-xs uppercase tracking-wide text-slate-400">${escapeHtml(user.role || '')}</p>
+          <p class="mt-2 text-xs text-slate-500 truncate">${escapeHtml(user.email || '')}</p>
+        </div>
+        <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-blue-700 border border-slate-200">Ouvrir</span>
+      </div>
+    </button>
+  `).join('');
+
+  contactsListEl.querySelectorAll('[data-recipient-id]').forEach(button => {
+    button.addEventListener('click', () => openConversationForRecipient(button.dataset.recipientId));
+  });
 }
 
-function renderConversationList() {
+function renderConversations() {
   conversationCountEl.textContent = `${conversations.length} conversation${conversations.length > 1 ? 's' : ''}`;
 
   if (!conversations.length) {
@@ -238,121 +196,28 @@ function renderConversationList() {
   }
 
   conversationListEl.innerHTML = conversations.map(conversation => {
-    const isActive = conversation.id === selectedConversationId;
     const name = conversation.otherParticipant?.name || 'Conversation';
-    const subtitle = conversation.lastMessage
-      ? (conversation.lastMessage.content || conversation.lastMessage.attachmentName || 'Pièce jointe')
-      : 'Aucun message';
+    const preview = conversation.lastMessage?.content || conversation.lastMessage?.attachmentName || 'Aucun message';
     const unreadBadge = conversation.unreadCount
-      ? `<span class="ml-2 inline-flex min-w-6 justify-center rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">${conversation.unreadCount}</span>`
+      ? `<span class="inline-flex min-w-6 justify-center rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">${conversation.unreadCount}</span>`
       : '';
 
     return `
-      <button type="button" data-conversation-id="${conversation.id}"
-        class="w-full text-left rounded-2xl border px-4 py-3 transition ${
-          isActive
-            ? 'border-blue-200 bg-blue-50 shadow-sm'
-            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-        }">
+      <a href="${threadUrl(conversation.id)}"
+        class="block rounded-2xl border border-slate-200 bg-white px-4 py-4 transition hover:border-slate-300 hover:bg-slate-50">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <div class="flex items-center text-sm font-medium text-slate-800">
-              <span class="truncate">${escapeHtml(name)}</span>
+            <div class="flex items-center gap-2">
+              <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(name)}</p>
               ${unreadBadge}
             </div>
-            <p class="mt-1 truncate text-xs text-slate-500">${escapeHtml(subtitle)}</p>
+            <p class="mt-1 text-xs text-slate-500 truncate">${escapeHtml(preview)}</p>
           </div>
           <span class="text-[11px] text-slate-400 whitespace-nowrap">${escapeHtml(formatRelative(conversation.lastMessage?.createdAt || conversation.updatedAt))}</span>
         </div>
-      </button>
-    `;
-  }).join('');
-
-  conversationListEl.querySelectorAll('[data-conversation-id]').forEach(button => {
-    button.addEventListener('click', () => openConversation(button.dataset.conversationId));
-  });
-}
-
-function renderThreadHeader() {
-  if (!selectedConversation) return;
-  threadParticipantRoleEl.textContent = selectedConversation.otherParticipant?.role || '';
-  threadParticipantNameEl.textContent = selectedConversation.otherParticipant?.name || 'Conversation';
-  threadParticipantEmailEl.textContent = selectedConversation.otherParticipant?.email || '';
-  threadUpdatedAtEl.textContent = selectedConversation.updatedAt ? `Mis à jour ${formatRelative(selectedConversation.updatedAt)}` : '';
-}
-
-function buildAttachmentMarkup(message) {
-  if (!message.attachmentUrl) return '';
-  const name = escapeHtml(message.attachmentName || 'Fichier joint');
-  const size = message.attachmentSize ? ` · ${escapeHtml(formatFileSize(message.attachmentSize))}` : '';
-
-  if (IMAGE_MIMES.includes(message.attachmentMime || '')) {
-    return `
-      <a href="${message.attachmentUrl}" target="_blank" class="mt-2 block">
-        <img src="${message.attachmentUrl}" alt="${name}" class="max-h-56 max-w-full rounded-xl object-cover border border-black/10" loading="lazy" />
-      </a>
-      <a href="${message.attachmentUrl}" target="_blank" class="mt-2 inline-flex items-center gap-2 text-xs font-medium text-blue-700 hover:text-blue-800">
-        ${name}${size}
       </a>
     `;
-  }
-
-  return `
-    <a href="${message.attachmentUrl}" target="_blank" class="mt-2 inline-flex items-center gap-2 rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-white">
-      <svg class="h-4 w-4 flex-shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-      <span class="truncate">${name}${size}</span>
-    </a>
-  `;
-}
-
-function renderMessages(messages) {
-  if (!messages.length) {
-    messageListEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-10">Aucun message dans cette conversation.</p>';
-    return;
-  }
-
-  messageListEl.innerHTML = messages.map(message => {
-    const isMine = message.senderId === currentUser.id;
-    const bubbleClass = isMine
-      ? 'bg-blue-600 text-white ml-auto'
-      : 'bg-white text-slate-800 mr-auto border border-slate-200';
-    const metaClass = isMine ? 'text-blue-100' : 'text-slate-400';
-    const content = message.content
-      ? `<p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(message.content)}</p>`
-      : '';
-
-    return `
-      <div class="flex ${isMine ? 'justify-end' : 'justify-start'}">
-        <div class="max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${bubbleClass}">
-          <div class="flex items-center justify-between gap-4">
-            <p class="text-xs font-semibold ${metaClass}">${escapeHtml(message.sender?.name || 'Utilisateur')}</p>
-            <p class="text-[11px] ${metaClass} whitespace-nowrap">${escapeHtml(formatDateTime(message.createdAt))}</p>
-          </div>
-          ${content}
-          ${buildAttachmentMarkup(message)}
-        </div>
-      </div>
-    `;
   }).join('');
-
-  messageListEl.scrollTop = messageListEl.scrollHeight;
-}
-
-function setAttachment(file) {
-  selectedAttachment = file || null;
-  if (!selectedAttachment) {
-    attachmentPreviewEl.classList.add('hidden');
-    attachmentPreviewEl.classList.remove('flex');
-    attachmentPreviewNameEl.textContent = '';
-    attachmentInputEl.value = '';
-    return;
-  }
-
-  attachmentPreviewNameEl.textContent = `${selectedAttachment.name} · ${formatFileSize(selectedAttachment.size)}`;
-  attachmentPreviewEl.classList.remove('hidden');
-  attachmentPreviewEl.classList.add('flex');
 }
 
 async function loadRecipients() {
@@ -360,149 +225,41 @@ async function loadRecipients() {
   renderRecipients();
 }
 
-async function loadConversations(options = {}) {
-  const { preserveSelection = true } = options;
+async function loadConversations() {
   conversations = await api.get('/messages/conversations');
-  renderConversationList();
-
-  if (!conversations.length) {
-    selectedConversationId = null;
-    selectedConversation = null;
-    threadPanelEl.classList.add('hidden');
-    threadEmptyEl.classList.remove('hidden');
-    return;
-  }
-
-  const hasSelection = preserveSelection && selectedConversationId && conversations.some(item => item.id === selectedConversationId);
-  if (!hasSelection) {
-    selectedConversationId = conversations[0].id;
-  }
-
-  selectedConversation = conversations.find(item => item.id === selectedConversationId) || null;
-  renderThreadHeader();
+  renderConversations();
 }
 
-async function openConversation(conversationId) {
-  selectedConversationId = conversationId;
-  selectedConversation = conversations.find(item => item.id === conversationId) || null;
-  renderConversationList();
-  renderThreadHeader();
-  threadEmptyEl.classList.add('hidden');
-  threadPanelEl.classList.remove('hidden');
-  messageListEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-10">Chargement...</p>';
-
-  const messages = await api.get(`/messages/conversations/${conversationId}/messages`);
-  renderMessages(messages);
-  await loadConversations({ preserveSelection: true });
-  selectedConversation = conversations.find(item => item.id === selectedConversationId) || selectedConversation;
-  renderConversationList();
-  renderThreadHeader();
-}
-
-async function openSelectedRecipientConversation() {
-  const recipientId = recipientSelect.value;
+async function openConversationForRecipient(recipientId) {
   if (!recipientId) {
     showToast('Sélectionnez un utilisateur', 'error');
     return;
   }
 
   const conversation = await api.post('/messages/conversations', { recipientId });
-  recipientSelect.value = '';
-  await loadConversations({ preserveSelection: false });
-  selectedConversationId = conversation.id;
-  selectedConversation = conversations.find(item => item.id === conversation.id) || conversation;
-  renderConversationList();
-  await openConversation(conversation.id);
+  window.location.href = threadUrl(conversation.id);
 }
-
-async function handleMessageSubmit(event) {
-  event.preventDefault();
-
-  if (!selectedConversationId) {
-    showToast('Sélectionnez une conversation', 'error');
-    return;
-  }
-
-  const content = messageInputEl.value.trim();
-  if (!content && !selectedAttachment) {
-    showToast('Ajoutez un message ou un fichier', 'error');
-    return;
-  }
-
-  sendMessageBtnEl.disabled = true;
-  sendMessageBtnEl.classList.add('opacity-60', 'cursor-not-allowed');
-
-  try {
-    const formData = new FormData();
-    formData.append('content', content);
-    if (selectedAttachment) formData.append('attachment', selectedAttachment);
-
-    await api.upload(`/messages/conversations/${selectedConversationId}/messages`, formData);
-
-    messageInputEl.value = '';
-    setAttachment(null);
-    await openConversation(selectedConversationId);
-  } catch (error) {
-    showToast(error.message || 'Envoi impossible', 'error');
-  } finally {
-    sendMessageBtnEl.disabled = false;
-    sendMessageBtnEl.classList.remove('opacity-60', 'cursor-not-allowed');
-  }
-}
-
-function startAutoRefresh() {
-  clearInterval(refreshTimer);
-  refreshTimer = setInterval(async () => {
-    try {
-      await loadConversations({ preserveSelection: true });
-      if (selectedConversationId) {
-        const messages = await api.get(`/messages/conversations/${selectedConversationId}/messages`);
-        renderMessages(messages);
-        selectedConversation = conversations.find(item => item.id === selectedConversationId) || selectedConversation;
-        renderConversationList();
-        renderThreadHeader();
-      }
-    } catch (error) {
-      console.error('[messages] refresh failed', error);
-    }
-  }, 15000);
-}
-
-document.getElementById('refresh-btn').addEventListener('click', async () => {
-  try {
-    await loadConversations({ preserveSelection: true });
-    if (selectedConversationId) {
-      await openConversation(selectedConversationId);
-    }
-  } catch (error) {
-    showToast(error.message || 'Rafraîchissement impossible', 'error');
-  }
-});
 
 document.getElementById('open-conversation-btn').addEventListener('click', async () => {
   try {
-    await openSelectedRecipientConversation();
+    await openConversationForRecipient(recipientSelect.value);
   } catch (error) {
     showToast(error.message || 'Ouverture impossible', 'error');
   }
 });
 
-document.getElementById('pick-attachment-btn').addEventListener('click', () => attachmentInputEl.click());
-document.getElementById('clear-attachment-btn').addEventListener('click', () => setAttachment(null));
-attachmentInputEl.addEventListener('change', event => setAttachment(event.target.files?.[0] || null));
-messageFormEl.addEventListener('submit', handleMessageSubmit);
+document.getElementById('refresh-btn').addEventListener('click', async () => {
+  try {
+    await Promise.all([loadRecipients(), loadConversations()]);
+  } catch (error) {
+    showToast(error.message || 'Rafraîchissement impossible', 'error');
+  }
+});
 
 requireLogin().then(async user => {
-  currentUser = user;
   renderNav('messages');
-
   try {
-    await loadRecipients();
-    await loadConversations({ preserveSelection: false });
-    if (selectedConversationId) {
-      await openConversation(selectedConversationId);
-    }
-    startAutoRefresh();
+    await Promise.all([loadRecipients(), loadConversations()]);
   } catch (error) {
     showToast(error.message || 'Erreur lors du chargement de la messagerie', 'error');
   }
