@@ -3,7 +3,7 @@
 
   function renderAttachment(message, escapeHtml) {
     if (!message.attachmentPath) return '';
-    const url = `/uploads/${message.attachmentPath}`;
+    const url = message.attachmentUrl || message.attachmentPath;
     const name = escapeHtml(message.attachmentName || 'Fichier joint');
     const mime = message.attachmentMime || '';
     const size = message.attachmentSize ? ` (${(message.attachmentSize / 1024).toFixed(0)} Ko)` : '';

@@ -52,7 +52,7 @@
       </div>
     </header>
 
-    <div class="flex-1 p-6 space-y-6">
+    <div class="flex-1 p-6 pb-28 md:pb-6 space-y-6">
       <div class="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
         <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
           <div class="flex items-center justify-between gap-3">
@@ -96,12 +96,12 @@
           </div>
           <div class="flex items-center gap-3">
             <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-              <button id="view-calendar-btn" onclick="setCalendarView('calendar')"
+              <button id="view-calendar-btn" type="button" data-action="calendar-view" data-view="calendar"
                 class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition bg-white text-slate-800 shadow-sm">
                 <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                 Agenda
               </button>
-              <button id="view-list-btn" onclick="setCalendarView('list')"
+              <button id="view-list-btn" type="button" data-action="calendar-view" data-view="list"
                 class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition text-slate-500 hover:text-slate-700">
                 <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
                 Liste
@@ -735,6 +735,9 @@ let calendarViewMode = 'calendar';
 let calendarMonth = new Date(); // mois courant affiché
 calendarMonth.setDate(1);
 calendarMonth.setHours(0, 0, 0, 0);
+let loansPageInitPromise = null;
+let loansPageEventsBound = false;
+const reservationUpdatesInFlight = new Set();
 
 function setCalendarView(mode) {
   calendarViewMode = mode;
@@ -897,7 +900,7 @@ function renderReservations() {
             <p class="text-sm text-slate-500">${item.requesterName} · ${item.requesterEmail}${item.requesterOrganization ? ` · ${item.requesterOrganization}` : ''}</p>
             <p class="text-xs text-slate-400">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)} · ${item.requestedUnits} unité(s) · ${item.reservedSlots} lot(s) verrouillé(s)</p>
           </div>
-          <div class="flex flex-wrap gap-2">
+          <div class="relative z-10 flex flex-wrap gap-2">
             ${item.status !== 'APPROVED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="APPROVED" class="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs hover:bg-emerald-700 transition">Approuver</button>` : ''}
             ${item.status !== 'REJECTED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="REJECTED" class="px-3 py-2 border border-red-300 text-red-700 rounded-lg text-xs hover:bg-red-50 transition">Refuser</button>` : ''}
             ${item.status !== 'RETURNED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="RETURNED" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Restitué</button>` : ''}
@@ -979,49 +982,80 @@ async function toggleLink(id, nextState) {
   await loadMagicLinks();
 }
 
-async function updateReservationStatus(id, status) {
+async function updateReservationStatus(id, status, triggerButton = null) {
+  const requestKey = `${id}:${status}`;
+  if (reservationUpdatesInFlight.has(requestKey)) return;
+  reservationUpdatesInFlight.add(requestKey);
+  if (triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.classList.add('opacity-60', 'cursor-not-allowed');
+  }
   try {
     await api.patch(`/loans/reservations/${id}`, { status });
     await loadReservations();
     showToast('Réservation mise à jour', 'success');
   } catch (err) {
     showToast(err.message, 'error');
+  } finally {
+    reservationUpdatesInFlight.delete(requestKey);
+    if (triggerButton && document.body.contains(triggerButton)) {
+      triggerButton.disabled = false;
+      triggerButton.classList.remove('opacity-60', 'cursor-not-allowed');
+    }
   }
 }
 
-document.getElementById('cal-prev').addEventListener('click', () => {
-  calendarMonth.setMonth(calendarMonth.getMonth() - 1);
-  renderCalendar();
-});
-document.getElementById('cal-next').addEventListener('click', () => {
-  calendarMonth.setMonth(calendarMonth.getMonth() + 1);
-  renderCalendar();
-});
+function bindLoansPageEvents() {
+  if (loansPageEventsBound) return;
+  loansPageEventsBound = true;
 
-document.getElementById('reservations-list').addEventListener('click', event => {
-  const btn = event.target.closest('[data-action="reservation-status"]');
-  if (!btn) return;
-  updateReservationStatus(btn.dataset.id, btn.dataset.status);
-});
+  document.getElementById('cal-prev').addEventListener('click', () => {
+    calendarMonth.setMonth(calendarMonth.getMonth() - 1);
+    renderCalendar();
+  });
+  document.getElementById('cal-next').addEventListener('click', () => {
+    calendarMonth.setMonth(calendarMonth.getMonth() + 1);
+    renderCalendar();
+  });
 
-document.getElementById('refresh-reservations-btn').addEventListener('click', loadReservations);
-document.getElementById('refresh-calendar-btn').addEventListener('click', loadReservations);
-document.getElementById('refresh-calendar-feed-btn').addEventListener('click', loadCalendarFeed);
-document.getElementById('copy-calendar-feed-btn').addEventListener('click', () => copyText(document.getElementById('calendar-feed-url').value));
-document.getElementById('link-scope-all').addEventListener('change', updateLinkScope);
-document.getElementById('link-scope-resource').addEventListener('change', updateLinkScope);
+  document.querySelectorAll('[data-action="calendar-view"]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      setCalendarView(button.dataset.view);
+    });
+  });
 
-document.addEventListener('click', event => {
-  if (!createMenuIsOpen) return;
-  const menu = document.getElementById('loan-create-menu');
-  const button = document.getElementById('loan-create-btn');
-  if (menu.contains(event.target) || button.contains(event.target)) return;
-  closeCreateMenu();
-});
+  document.getElementById('reservations-list').addEventListener('click', event => {
+    const btn = event.target.closest('[data-action="reservation-status"]');
+    if (!btn || btn.disabled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    updateReservationStatus(btn.dataset.id, btn.dataset.status, btn);
+  });
 
-document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') { closeCreateMenu(); closeReservationModal(); closeBulkModal(); }
-});
+  document.getElementById('refresh-reservations-btn').addEventListener('click', loadReservations);
+  document.getElementById('refresh-calendar-btn').addEventListener('click', loadReservations);
+  document.getElementById('refresh-calendar-feed-btn').addEventListener('click', loadCalendarFeed);
+  document.getElementById('copy-calendar-feed-btn').addEventListener('click', () => copyText(document.getElementById('calendar-feed-url').value));
+  document.getElementById('link-scope-all').addEventListener('change', updateLinkScope);
+  document.getElementById('link-scope-resource').addEventListener('change', updateLinkScope);
+
+  document.addEventListener('click', event => {
+    if (!createMenuIsOpen) return;
+    const menu = document.getElementById('loan-create-menu');
+    const button = document.getElementById('loan-create-btn');
+    if (menu.contains(event.target) || button.contains(event.target)) return;
+    closeCreateMenu();
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      closeCreateMenu();
+      closeReservationModal();
+      closeBulkModal();
+    }
+  });
+}
 
 document.getElementById('resource-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -1112,13 +1146,49 @@ document.getElementById('link-form').addEventListener('submit', async event => {
   }
 });
 
-requireLogin().then(async user => {
-  currentUser = user;
-  renderNav('loans');
-  await loadResources();
-  await loadMagicLinks();
-  await loadReservations();
-  await loadCalendarFeed();
+async function initLoansPage({ forceReload = false } = {}) {
+  if (loansPageInitPromise && !forceReload) return loansPageInitPromise;
+
+  const initPromise = (async () => {
+    bindLoansPageEvents();
+
+    const user = await requireLogin();
+    currentUser = user;
+    renderNav('loans');
+
+    if (forceReload) {
+      reservationUpdatesInFlight.clear();
+      closeCreateMenu();
+      closeReservationModal();
+      closeBulkModal();
+    }
+
+    await loadResources();
+    await loadMagicLinks();
+    await loadReservations();
+    await loadCalendarFeed();
+  })();
+
+  loansPageInitPromise = initPromise;
+
+  try {
+    await initPromise;
+  } finally {
+    if (loansPageInitPromise === initPromise) {
+      loansPageInitPromise = null;
+    }
+  }
+}
+
+initLoansPage().catch(err => {
+  console.error('initLoansPage:', err);
+});
+
+window.addEventListener('pageshow', event => {
+  if (!event.persisted) return;
+  initLoansPage({ forceReload: true }).catch(err => {
+    console.error('initLoansPage pageshow:', err);
+  });
 });
 </script>
 </body>

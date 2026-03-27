@@ -6,6 +6,7 @@ const config = require('../config');
 const XLSX = require('xlsx');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
+const { isEnrollmentTokenUsable } = require('../utils/agentTokens');
 
 const TEMPLATES_DIR = path.join(__dirname, '../../downloads/templates');
 const VERSION = '1.0.0';
@@ -17,7 +18,7 @@ function readTemplate(name) {
 async function validateEnrollmentToken(token) {
   if (!token) return null;
   const record = await prisma.agentToken.findUnique({ where: { token } });
-  if (!record || !record.isActive) return null;
+  if (!isEnrollmentTokenUsable(record)) return null;
   return record;
 }
 

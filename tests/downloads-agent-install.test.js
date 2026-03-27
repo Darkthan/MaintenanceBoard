@@ -1,4 +1,5 @@
 const request = require('supertest');
+process.env.AGENT_ENROLLMENT_MAX_AGE = '3600000';
 
 jest.mock('../src/middleware/auth', () => ({
   requireAuth: (req, _res, next) => {
@@ -36,7 +37,7 @@ describe('public agent install downloads', () => {
   });
 
   it('autorise /downloads/install.ps1 avec un enrollmentToken valide sans session', async () => {
-    prisma.agentToken.findUnique.mockResolvedValue({ id: 'tok-1', token: 'abc', isActive: true });
+    prisma.agentToken.findUnique.mockResolvedValue({ id: 'tok-1', token: 'abc', isActive: true, createdAt: new Date() });
 
     const res = await request(app).get('/downloads/install.ps1?enrollmentToken=abc');
 
@@ -52,7 +53,7 @@ describe('public agent install downloads', () => {
   });
 
   it('autorise /downloads/agent.ps1 avec un enrollmentToken valide sans session', async () => {
-    prisma.agentToken.findUnique.mockResolvedValue({ id: 'tok-1', token: 'abc', isActive: true });
+    prisma.agentToken.findUnique.mockResolvedValue({ id: 'tok-1', token: 'abc', isActive: true, createdAt: new Date() });
 
     const res = await request(app).get('/downloads/agent.ps1?enrollmentToken=abc');
 
@@ -74,5 +75,18 @@ describe('public agent install downloads', () => {
     const res = await request(app).get('/downloads/agent.sh');
 
     expect(res.status).toBe(401);
+  });
+
+  it('refuse un enrollmentToken expiré', async () => {
+    prisma.agentToken.findUnique.mockResolvedValue({
+      id: 'tok-1',
+      token: 'expired',
+      isActive: true,
+      createdAt: new Date(Date.now() - (2 * 3600000))
+    });
+
+    const res = await request(app).get('/downloads/install.ps1?enrollmentToken=expired');
+
+    expect(res.status).toBe(403);
   });
 });

@@ -199,12 +199,12 @@
 <div id="sig-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="max-h-[100dvh] w-full overflow-y-auto bg-white shadow-2xl sm:max-w-md sm:rounded-2xl">
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-      <h3 class="font-semibold text-slate-800 flex items-center gap-2">
-        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-        </svg>
-        Demander une signature
-      </h3>
+        <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+          <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+          </svg>
+          <span id="sig-modal-title-text">Demander une signature</span>
+        </h3>
       <button onclick="closeSigModal()" class="text-slate-400 hover:text-slate-600">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
@@ -234,7 +234,7 @@
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
           </svg>
-          Envoyer le lien
+          <span id="sig-submit-label">Envoyer le lien</span>
         </button>
       </div>
     </form>
@@ -1228,6 +1228,8 @@ const SIG_STATUS = {
   CANCELLED: { label: 'Annulé',      color: '#64748b', bg: '#f1f5f9' },
 };
 
+let currentSigRequestId = null;
+
 async function loadSignatureRequests() {
   if (!detailOrderId) return;
   const container = document.getElementById('dp-signatures');
@@ -1242,6 +1244,13 @@ async function loadSignatureRequests() {
       const badge = `<span style="background:${st.bg};color:${st.color}" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold">${st.label}</span>`;
       const appUrl = window.location.origin;
       const signLink = `${appUrl}/sign.html?token=HIDDEN`;
+
+      const editPayload = encodeURIComponent(JSON.stringify({
+        id: r.id,
+        recipientName: r.recipientName,
+        recipientEmail: r.recipientEmail,
+        message: r.message || ''
+      }));
 
       return `
       <div class="border border-slate-200 rounded-lg p-3 bg-white">
@@ -1261,7 +1270,13 @@ async function loadSignatureRequests() {
             ` : ''}
           </div>
           <div class="flex items-center gap-1 flex-shrink-0">
-            ${r.status === 'PENDING' ? `
+            ${r.status === 'PENDING' && r.canManage ? `
+              <button onclick="openSignatureModalFromData(this)" data-request="${editPayload}"
+                class="p-1.5 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition" title="Modifier">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+              </button>
+            ` : ''}
+            ${r.status === 'PENDING' && r.canManage ? `
               <button onclick="cancelSigRequest('${r.id}')"
                 class="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition" title="Annuler">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -1283,16 +1298,26 @@ async function loadSignatureRequests() {
   }
 }
 
-function openSignatureModal() {
-  document.getElementById('sig-recipient-name').value = '';
-  document.getElementById('sig-recipient-email').value = '';
-  document.getElementById('sig-message').value = '';
+function openSignatureModal(request = null) {
+  currentSigRequestId = request?.id || null;
+  document.getElementById('sig-recipient-name').value = request?.recipientName || '';
+  document.getElementById('sig-recipient-email').value = request?.recipientEmail || '';
+  document.getElementById('sig-message').value = request?.message || '';
+  document.getElementById('sig-modal-title-text').textContent = currentSigRequestId ? 'Modifier la demande' : 'Demander une signature';
+  document.getElementById('sig-submit-label').textContent = currentSigRequestId ? 'Enregistrer' : 'Envoyer le lien';
   document.getElementById('sig-form-error').classList.add('hidden');
   document.getElementById('sig-modal').classList.remove('hidden');
   document.getElementById('sig-recipient-name').focus();
 }
 
+function openSignatureModalFromData(button) {
+  const payload = button?.dataset?.request;
+  if (!payload) return openSignatureModal();
+  openSignatureModal(JSON.parse(decodeURIComponent(payload)));
+}
+
 function closeSigModal() {
+  currentSigRequestId = null;
   document.getElementById('sig-modal').classList.add('hidden');
 }
 
@@ -1309,11 +1334,16 @@ document.getElementById('sig-form').addEventListener('submit', async e => {
   const btn = document.getElementById('sig-submit-btn');
   btn.disabled = true;
   document.getElementById('sig-form-error').classList.add('hidden');
+  const isEditing = !!currentSigRequestId;
 
   try {
-    await api.post(`/orders/${detailOrderId}/signature-requests`, data);
+    if (currentSigRequestId) {
+      await api.patch(`/orders/${detailOrderId}/signature-requests/${currentSigRequestId}`, data);
+    } else {
+      await api.post(`/orders/${detailOrderId}/signature-requests`, data);
+    }
     closeSigModal();
-    showToast('Lien de signature envoyé par email');
+    showToast(isEditing ? 'Demande mise à jour' : 'Lien de signature envoyé par email');
     loadSignatureRequests();
   } catch (err) {
     document.getElementById('sig-form-error').textContent = err.message;

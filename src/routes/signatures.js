@@ -44,6 +44,19 @@ function maskEmail(email) {
   return `${masked}@${domain}`;
 }
 
+function canManageSignatureRequest(user, sigReq) {
+  return !!(user && sigReq && (user.role === 'ADMIN' || sigReq.createdBy === user.id));
+}
+
+function serializeSignatureRequestForViewer(sigReq, user) {
+  const canManage = canManageSignatureRequest(user, sigReq);
+  return {
+    ...sigReq,
+    recipientEmail: canManage ? sigReq.recipientEmail : maskEmail(sigReq.recipientEmail),
+    canManage
+  };
+}
+
 function generateSignatureId() {
   const year = new Date().getFullYear();
   const hex = uuidv4().replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -165,6 +178,48 @@ ordersRouter.post('/:id/signature-requests', requireAuth, async (req, res, next)
   }
 });
 
+// PATCH /api/orders/:id/signature-requests/:reqId — Modifier une demande en attente
+ordersRouter.patch('/:id/signature-requests/:reqId', requireAuth, async (req, res, next) => {
+  try {
+    const sigReq = await prisma.signatureRequest.findUnique({ where: { id: req.params.reqId } });
+    if (!sigReq || sigReq.orderId !== req.params.id) {
+      return res.status(404).json({ error: 'Demande introuvable' });
+    }
+    if (!canManageSignatureRequest(req.user, sigReq)) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+    if (sigReq.status !== 'PENDING') {
+      return res.status(400).json({ error: 'Seules les demandes en attente peuvent être modifiées' });
+    }
+
+    const data = {};
+    if (req.body.recipientName !== undefined) {
+      const recipientName = String(req.body.recipientName || '').trim();
+      if (!recipientName) return res.status(400).json({ error: 'Nom du destinataire requis' });
+      data.recipientName = recipientName;
+    }
+    if (req.body.recipientEmail !== undefined) {
+      const recipientEmail = String(req.body.recipientEmail || '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+        return res.status(400).json({ error: 'Adresse email invalide' });
+      }
+      data.recipientEmail = recipientEmail;
+    }
+    if (req.body.message !== undefined) {
+      data.message = req.body.message ? String(req.body.message).trim() : null;
+    }
+    if (!Object.keys(data).length) {
+      return res.status(400).json({ error: 'Aucun champ à modifier' });
+    }
+
+    const updated = await prisma.signatureRequest.update({
+      where: { id: sigReq.id },
+      data
+    });
+    res.json(serializeSignatureRequestForViewer(updated, req.user));
+  } catch (err) { next(err); }
+});
+
 // POST /api/orders/:orderId/attachments/:attachId/request-signature — Signer un document joint
 ordersRouter.post('/:orderId/attachments/:attachId/request-signature', requireAuth, async (req, res, next) => {
   try {
@@ -276,11 +331,12 @@ ordersRouter.get('/:id/signature-requests', requireAuth, async (req, res, next) 
         expiresAt: true,
         message: true,
         createdAt: true,
-        attachmentId: true
+        attachmentId: true,
+        createdBy: true
       },
       orderBy: { createdAt: 'desc' }
     });
-    res.json(requests);
+    res.json(requests.map(sigReq => serializeSignatureRequestForViewer(sigReq, req.user)));
   } catch (err) { next(err); }
 });
 
@@ -290,6 +346,9 @@ ordersRouter.delete('/:id/signature-requests/:reqId', requireAuth, async (req, r
     const sigReq = await prisma.signatureRequest.findUnique({ where: { id: req.params.reqId } });
     if (!sigReq || sigReq.orderId !== req.params.id) {
       return res.status(404).json({ error: 'Demande introuvable' });
+    }
+    if (!canManageSignatureRequest(req.user, sigReq)) {
+      return res.status(403).json({ error: 'Accès refusé' });
     }
     if (sigReq.status !== 'PENDING') {
       return res.status(400).json({ error: 'Impossible d\'annuler une demande déjà traitée' });
@@ -635,7 +694,60 @@ signaturesRouter.get('/', requireAuth, async (req, res, next) => {
       },
       orderBy: { createdAt: 'desc' }
     });
-    res.json(requests);
+    res.json(requests.map(sigReq => serializeSignatureRequestForViewer(sigReq, req.user)));
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/signatures/:id — Modifier une demande standalone en attente
+signaturesRouter.patch('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const sigReq = await prisma.signatureRequest.findUnique({ where: { id: req.params.id } });
+    if (!sigReq || sigReq.orderId !== null) {
+      return res.status(404).json({ error: 'Demande introuvable' });
+    }
+    if (!canManageSignatureRequest(req.user, sigReq)) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+    if (sigReq.status !== 'PENDING') {
+      return res.status(400).json({ error: 'Seules les demandes en attente peuvent être modifiées' });
+    }
+
+    const data = {};
+    if (req.body.documentTitle !== undefined) {
+      const documentTitle = String(req.body.documentTitle || '').trim();
+      if (!documentTitle) return res.status(400).json({ error: 'Titre du document requis' });
+      data.documentTitle = documentTitle;
+    }
+    if (req.body.documentNotes !== undefined) data.documentNotes = req.body.documentNotes ? String(req.body.documentNotes) : null;
+    if (req.body.recipientName !== undefined) {
+      const recipientName = String(req.body.recipientName || '').trim();
+      if (!recipientName) return res.status(400).json({ error: 'Nom du destinataire requis' });
+      data.recipientName = recipientName;
+    }
+    if (req.body.recipientEmail !== undefined) {
+      const recipientEmail = String(req.body.recipientEmail || '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+        return res.status(400).json({ error: 'Adresse email invalide' });
+      }
+      data.recipientEmail = recipientEmail;
+    }
+    if (req.body.message !== undefined) data.message = req.body.message ? String(req.body.message).trim() : null;
+    for (const field of ['posX', 'posY', 'sigWidth', 'sigHeight']) {
+      if (req.body[field] !== undefined) {
+        const value = req.body[field];
+        data[field] = value == null || value === '' ? null : parseFloat(value);
+      }
+    }
+    if (!Object.keys(data).length) {
+      return res.status(400).json({ error: 'Aucun champ à modifier' });
+    }
+
+    const updated = await prisma.signatureRequest.update({
+      where: { id: sigReq.id },
+      data,
+      include: { creator: { select: { name: true } } }
+    });
+    res.json(serializeSignatureRequestForViewer(updated, req.user));
   } catch (err) { next(err); }
 });
 

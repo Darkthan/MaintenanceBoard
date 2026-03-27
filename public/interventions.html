@@ -1198,7 +1198,7 @@ function clearTechFile() {
 
 function renderTechAttachment(m, isReporter) {
   if (!m.attachmentPath) return '';
-  const url = `/uploads/${m.attachmentPath}`;
+  const url = m.attachmentUrl || m.attachmentPath;
   const name = escapeHtml(m.attachmentName || 'Fichier joint');
   const mime = m.attachmentMime || '';
   const size = m.attachmentSize ? ` (${(m.attachmentSize / 1024).toFixed(0)} Ko)` : '';

@@ -37,6 +37,13 @@ const validate = (req, res) => {
 const VALID_STATUSES = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED'];
 const tableMissing = err => err?.code === 'P2021';
 
+function serializeEquipmentAttachment(attachment) {
+  return {
+    ...attachment,
+    downloadUrl: `/api/equipment/${attachment.equipmentId}/attachments/${attachment.id}/download`
+  };
+}
+
 // GET /api/equipment - Liste avec filtres
 router.get('/', requireAuth, async (req, res, next) => {
   try {
@@ -376,7 +383,7 @@ router.get('/:id/attachments', requireAuth, async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
       include: { uploader: { select: { id: true, name: true } } }
     });
-    res.json(attachments);
+    res.json(attachments.map(serializeEquipmentAttachment));
   } catch (err) { next(err); }
 });
 
@@ -404,7 +411,28 @@ router.post('/:id/attachments', requireAuth, uploadEquipAttach.single('file'), a
       },
       include: { uploader: { select: { id: true, name: true } } }
     });
-    res.status(201).json(attachment);
+    res.status(201).json(serializeEquipmentAttachment(attachment));
+  } catch (err) { next(err); }
+});
+
+// GET /api/equipment/:id/attachments/:attachId/download - Télécharger une pièce jointe
+router.get('/:id/attachments/:attachId/download', requireAuth, async (req, res, next) => {
+  try {
+    const attachment = await prisma.equipmentAttachment.findUnique({
+      where: { id: req.params.attachId }
+    });
+    if (!attachment || attachment.equipmentId !== req.params.id) {
+      return res.status(404).json({ error: 'Pièce jointe introuvable' });
+    }
+
+    const filePath = path.join(process.cwd(), 'uploads', 'equipment', attachment.storedAs);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Fichier introuvable' });
+    }
+
+    res.setHeader('Content-Type', attachment.mimetype || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(attachment.filename || attachment.storedAs)}"`);
+    res.sendFile(filePath);
   } catch (err) { next(err); }
 });
 

@@ -51,7 +51,8 @@ const {
 function parsePhotos(intervention) {
   if (!intervention) return intervention;
   const p = intervention.photos;
-  intervention.photos = Array.isArray(p) ? p : (typeof p === 'string' ? JSON.parse(p || '[]') : []);
+  const photos = Array.isArray(p) ? p : (typeof p === 'string' ? JSON.parse(p || '[]') : []);
+  intervention.photos = photos.map(photo => toInterventionPhotoUrl(intervention.id, photo));
   return intervention;
 }
 
@@ -95,6 +96,31 @@ const interventionInclude = {
     select: { authorType: true }
   }
 };
+
+function canAccessIntervention(user, intervention) {
+  return !!intervention && (user.role !== 'TECH' || intervention.techId === user.id);
+}
+
+function toInterventionPhotoUrl(interventionId, rawPath) {
+  if (!rawPath) return rawPath;
+  const filename = path.basename(String(rawPath));
+  return `/api/interventions/${interventionId}/photos/${encodeURIComponent(filename)}`;
+}
+
+function toInterventionAttachmentUrl(interventionId, rawPath) {
+  if (!rawPath) return null;
+  const filename = path.basename(String(rawPath));
+  return `/api/interventions/${interventionId}/attachments/${encodeURIComponent(filename)}`;
+}
+
+function serializeInterventionMessage(message, interventionId) {
+  const attachmentUrl = toInterventionAttachmentUrl(interventionId, message.attachmentPath);
+  return {
+    ...message,
+    attachmentPath: attachmentUrl,
+    attachmentUrl
+  };
+}
 
 // GET /api/interventions - Liste avec filtres
 router.get('/', requireAuth, async (req, res, next) => {
@@ -183,10 +209,36 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     });
     if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
     // TECH ne peut voir que ses propres interventions
-    if (req.user.role === 'TECH' && intervention.techId !== req.user.id) {
+    if (!canAccessIntervention(req.user, intervention)) {
       return res.status(403).json({ error: 'Accès refusé' });
     }
     res.json(parsePhotos(intervention));
+  } catch (err) { next(err); }
+});
+
+// GET /api/interventions/:id/photos/:filename - Servir une photo avec auth
+router.get('/:id/photos/:filename', requireAuth, async (req, res, next) => {
+  try {
+    const intervention = await prisma.intervention.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, techId: true, photos: true }
+    });
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+    if (!canAccessIntervention(req.user, intervention)) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    const photos = Array.isArray(intervention.photos)
+      ? intervention.photos
+      : JSON.parse(intervention.photos || '[]');
+    const filename = path.basename(req.params.filename);
+    const allowed = photos.some(photo => path.basename(String(photo)) === filename);
+    if (!allowed) return res.status(404).json({ error: 'Photo introuvable' });
+
+    const filePath = path.join(process.cwd(), 'uploads', 'photos', filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Photo introuvable' });
+
+    res.sendFile(filePath);
   } catch (err) { next(err); }
 });
 
@@ -250,7 +302,7 @@ router.patch('/:id',
 
       const existing = await prisma.intervention.findUnique({ where: { id: req.params.id } });
       if (!existing) return res.status(404).json({ error: 'Intervention introuvable' });
-      if (req.user.role === 'TECH' && existing.techId !== req.user.id) {
+      if (!canAccessIntervention(req.user, existing)) {
         return res.status(403).json({ error: 'Accès refusé' });
       }
 
@@ -332,7 +384,7 @@ router.post('/:id/photos',
         return res.status(400).json({ error: 'Aucun fichier fourni' });
       }
 
-      const photoPaths = req.files.map(f => `/uploads/photos/${f.filename}`);
+      const photoPaths = req.files.map(f => `photos/${f.filename}`);
       const current = Array.isArray(existing.photos) ? existing.photos : JSON.parse(existing.photos || '[]');
       const merged = [...current, ...photoPaths];
       const intervention = await prisma.intervention.update({
@@ -439,7 +491,7 @@ router.get('/:id/messages', requireAuth, async (req, res, next) => {
       include: { reporters: true }
     });
     if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
-    if (req.user.role === 'TECH' && intervention.techId !== req.user.id) {
+    if (!canAccessIntervention(req.user, intervention)) {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
@@ -456,7 +508,36 @@ router.get('/:id/messages', requireAuth, async (req, res, next) => {
                 readAt: true, attachmentPath: true, attachmentName: true, attachmentMime: true, attachmentSize: true }
     });
 
-    res.json(messages);
+    res.json(messages.map(message => serializeInterventionMessage(message, intervention.id)));
+  } catch (err) { next(err); }
+});
+
+// GET /api/interventions/:id/attachments/:filename — Pièce jointe de conversation côté support
+router.get('/:id/attachments/:filename', requireAuth, async (req, res, next) => {
+  try {
+    const intervention = await prisma.intervention.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, techId: true }
+    });
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+    if (!canAccessIntervention(req.user, intervention)) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    const filename = path.basename(req.params.filename);
+    const attachmentPath = `ticket-messages/${filename}`;
+    const message = await prisma.ticketMessage.findFirst({
+      where: { interventionId: intervention.id, attachmentPath },
+      select: { attachmentName: true, attachmentMime: true }
+    });
+    if (!message) return res.status(404).json({ error: 'Pièce jointe introuvable' });
+
+    const filePath = path.join(process.cwd(), 'uploads', 'ticket-messages', filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Pièce jointe introuvable' });
+
+    res.setHeader('Content-Type', message.attachmentMime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(message.attachmentName || filename)}"`);
+    res.sendFile(filePath);
   } catch (err) { next(err); }
 });
 
@@ -483,7 +564,7 @@ router.post('/:id/messages', requireAuth, (req, res, next) => {
       if (req.file) fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'Intervention introuvable' });
     }
-    if (req.user.role === 'TECH' && intervention.techId !== req.user.id) {
+    if (!canAccessIntervention(req.user, intervention)) {
       if (req.file) fs.unlinkSync(req.file.path);
       return res.status(403).json({ error: 'Accès refusé' });
     }
@@ -539,7 +620,7 @@ router.post('/:id/messages', requireAuth, (req, res, next) => {
       }
     }
 
-    res.status(201).json(message);
+    res.status(201).json(serializeInterventionMessage(message, req.params.id));
   } catch (err) { next(err); }
 });
 

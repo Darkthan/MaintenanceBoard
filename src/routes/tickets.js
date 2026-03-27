@@ -84,6 +84,21 @@ const uploadChatFile = multer({
   }
 }).single('attachment');
 
+function toReporterAttachmentUrl(token, rawPath) {
+  if (!rawPath) return null;
+  const filename = path.basename(String(rawPath));
+  return `/api/tickets/${encodeURIComponent(token)}/attachments/${encodeURIComponent(filename)}`;
+}
+
+function serializeReporterMessage(message, token) {
+  const attachmentUrl = toReporterAttachmentUrl(token, message.attachmentPath);
+  return {
+    ...message,
+    attachmentPath: attachmentUrl,
+    attachmentUrl
+  };
+}
+
 // POST /api/tickets — Soumission publique de ticket
 router.post('/', (req, res, next) => {
   uploadChatFile(req, res, err => {
@@ -374,7 +389,36 @@ router.get('/:token/messages', async (req, res, next) => {
                 readAt: true, attachmentPath: true, attachmentName: true, attachmentMime: true, attachmentSize: true }
     });
 
-    return res.json(messages);
+    return res.json(messages.map(message => serializeReporterMessage(message, req.params.token)));
+  } catch (err) { next(err); }
+});
+
+// GET /api/tickets/:token/attachments/:filename — Pièce jointe publique via token reporter
+router.get('/:token/attachments/:filename', async (req, res, next) => {
+  try {
+    const access = await resolveReporterAccess(req.params.token);
+    if (!access) {
+      return res.status(404).json({ error: 'Ticket introuvable.' });
+    }
+
+    const filename = path.basename(req.params.filename);
+    const attachmentPath = `ticket-messages/${filename}`;
+    const message = await prisma.ticketMessage.findFirst({
+      where: { interventionId: access.intervention.id, attachmentPath },
+      select: { attachmentName: true, attachmentMime: true }
+    });
+    if (!message) {
+      return res.status(404).json({ error: 'Pièce jointe introuvable.' });
+    }
+
+    const filePath = path.join(process.cwd(), 'uploads', 'ticket-messages', filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Pièce jointe introuvable.' });
+    }
+
+    res.setHeader('Content-Type', message.attachmentMime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(message.attachmentName || filename)}"`);
+    return res.sendFile(filePath);
   } catch (err) { next(err); }
 });
 
@@ -480,7 +524,7 @@ router.post('/:token/messages', (req, res, next) => {
       // Fail silently
     }
 
-    return res.status(201).json(message);
+    return res.status(201).json(serializeReporterMessage(message, req.params.token));
   } catch (err) { next(err); }
 });
 

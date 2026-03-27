@@ -1,4 +1,5 @@
 const { isIpAllowed } = require('../utils/ipFilter');
+const { isEnrollmentTokenUsable } = require('../utils/agentTokens');
 
 const prisma = require('../lib/prisma');
 
@@ -36,8 +37,8 @@ async function agentAuth(req, res, next) {
     });
 
     if (enrollmentToken) {
-      if (!enrollmentToken.isActive) {
-        return res.status(401).json({ error: 'Token d\'enrollment désactivé' });
+      if (!isEnrollmentTokenUsable(enrollmentToken)) {
+        return res.status(401).json({ error: 'Token d\'enrollment désactivé ou expiré' });
       }
 
       // Filtrage IP

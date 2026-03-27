@@ -18,9 +18,21 @@ function deriveWebAuthnDefaults(urlValue) {
 }
 
 const webauthnDefaults = deriveWebAuthnDefaults(appUrl);
+const env = process.env.NODE_ENV || 'development';
+const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+const sessionSecret = process.env.SESSION_SECRET || 'fallback-session-secret';
+
+if (env === 'production') {
+  if (jwtSecret === 'fallback-secret-change-in-production') {
+    throw new Error('JWT_SECRET est obligatoire en production');
+  }
+  if (sessionSecret === 'fallback-session-secret') {
+    throw new Error('SESSION_SECRET est obligatoire en production');
+  }
+}
 
 module.exports = {
-  env: process.env.NODE_ENV || 'development',
+  env,
   port: parseInt(process.env.PORT) || 3000,
   appUrl,
   trustProxy: process.env.TRUST_PROXY !== undefined
@@ -28,13 +40,13 @@ module.exports = {
     : (process.env.NODE_ENV === 'production' ? 1 : false),
 
   jwt: {
-    secret: process.env.JWT_SECRET || 'fallback-secret-change-in-production',
+    secret: jwtSecret,
     accessExpires: process.env.JWT_ACCESS_EXPIRES || '15m',
     refreshExpires: process.env.JWT_REFRESH_EXPIRES || '7d',
   },
 
   session: {
-    secret: process.env.SESSION_SECRET || 'fallback-session-secret',
+    secret: sessionSecret,
     maxAge: parseInt(process.env.SESSION_MAX_AGE) || 86400000,
   },
 

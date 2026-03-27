@@ -10,6 +10,7 @@ const path = require('path');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const config = require('../config');
+const { isEnrollmentTokenUsable } = require('../utils/agentTokens');
 
 const TEMPLATES_DIR = path.join(__dirname, '../../downloads/templates');
 const PACKAGE_ID = 'maintenance-agent';
@@ -22,7 +23,7 @@ function readTemplate(name) {
 async function validateToken(token) {
   if (!token) return false;
   const record = await prisma.agentToken.findUnique({ where: { token } });
-  return !!(record && record.isActive);
+  return isEnrollmentTokenUsable(record);
 }
 
 function feedBase(token) {
