@@ -154,7 +154,7 @@
   </main>
 </div>
 
-<div class="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3">
+<div class="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3 pointer-events-none">
   <div id="loan-create-menu"
     class="flex flex-col items-end gap-2.5 transition-all duration-200 ease-out opacity-0 scale-95 pointer-events-none origin-bottom-right">
     <div class="flex items-center gap-3">
@@ -187,7 +187,7 @@
     </div>
   </div>
   <button id="loan-create-btn" type="button" onclick="toggleCreateMenu()"
-    class="h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+    class="pointer-events-auto h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
     aria-label="Créer un prêt" title="Créer un prêt">
     <svg id="loan-create-icon" class="mx-auto h-6 w-6 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -617,6 +617,7 @@ function setCreateMenuOpen(isOpen) {
   menu.classList.toggle('opacity-0', !isOpen);
   menu.classList.toggle('scale-95', !isOpen);
   menu.classList.toggle('pointer-events-none', !isOpen);
+  menu.style.pointerEvents = isOpen ? 'auto' : 'none';
   icon.style.transform = isOpen ? 'rotate(45deg)' : '';
 }
 
