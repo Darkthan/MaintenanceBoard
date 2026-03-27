@@ -2034,3 +2034,23 @@ if (document.readyState === 'loading') {
     window.location.reload();
   }, { passive: true });
 })();
+
+// ── Invalidation du cache au changement de version Docker ─────────────────────
+(async function checkAppVersion() {
+  try {
+    const res = await fetch('/api/version');
+    if (!res.ok) return;
+    const { version } = await res.json();
+    const stored = localStorage.getItem('app_build_id');
+    if (stored && stored !== version) {
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('app_build_id', version);
+      window.location.reload();
+      return;
+    }
+    localStorage.setItem('app_build_id', version);
+  } catch {
+    // Ne pas bloquer l'app en cas d'erreur réseau
+  }
+})();

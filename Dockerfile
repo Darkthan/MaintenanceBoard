@@ -29,6 +29,9 @@ COPY public ./public
 COPY downloads ./downloads
 COPY docker-entrypoint.sh ./
 
+# Identifiant unique de build (timestamp) — sert à invalider le cache navigateur
+RUN date +%s > /app/.build_id
+
 # Créer le dossier uploads + rendre le script exécutable
 RUN mkdir -p uploads && chmod +x docker-entrypoint.sh
 

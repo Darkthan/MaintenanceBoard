@@ -4,9 +4,16 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const path = require('path');
+const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const { swaggerUi, swaggerDocument } = require('./utils/swagger');
+
+// Identifiant de build — généré à chaque docker build via RUN date +%s > /app/.build_id
+const _buildId = (() => {
+  const file = path.join(__dirname, '../.build_id');
+  try { return fs.readFileSync(file, 'utf8').trim(); } catch { return 'dev'; }
+})();
 
 const app = express();
 
@@ -94,7 +101,6 @@ app.use(express.static(path.join(__dirname, '../public'), {
     }
   }
 }));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ── Documentation API ─────────────────────────────────────────────────────────
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
@@ -163,6 +169,11 @@ app.use('/api/signatures', signaturesRouter); // standalone signature requests
 // ── Healthcheck ───────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ── Version build (cache invalidation côté client) ────────────────────────────
+app.get('/api/version', (req, res) => {
+  res.json({ version: _buildId });
 });
 
 // ── Routes sans extension ─────────────────────────────────────────────────────
