@@ -834,4 +834,25 @@ loansRouter.patch('/reservations/:id',
   }
 );
 
+loansRouter.delete('/reservations/:id', async (req, res, next) => {
+  try {
+    const existing = await prisma.loanReservation.findUnique({
+      where: { id: req.params.id },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Réservation introuvable' });
+    }
+
+    await prisma.loanReservation.delete({
+      where: { id: req.params.id }
+    });
+
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = { loansRouter, loanPublicRouter };

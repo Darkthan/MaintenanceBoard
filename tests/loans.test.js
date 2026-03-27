@@ -40,7 +40,8 @@ jest.mock('../src/lib/prisma', () => ({
     findMany: jest.fn(),
     create: jest.fn(),
     findUnique: jest.fn(),
-    update: jest.fn()
+    update: jest.fn(),
+    delete: jest.fn()
   }
 }));
 
@@ -240,5 +241,18 @@ describe('loan requests', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toMatch(/Lien de connexion invalide|nouveau lien/i);
+  });
+
+  it('supprime une reservation existante', async () => {
+    prisma.loanReservation.findUnique.mockResolvedValue({ id: 'reservation-1' });
+    prisma.loanReservation.delete.mockResolvedValue({ id: 'reservation-1' });
+
+    const res = await request(buildApp())
+      .delete('/api/loans/reservations/reservation-1');
+
+    expect(res.status).toBe(204);
+    expect(prisma.loanReservation.delete).toHaveBeenCalledWith({
+      where: { id: 'reservation-1' }
+    });
   });
 });
