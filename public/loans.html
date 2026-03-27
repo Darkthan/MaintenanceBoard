@@ -960,6 +960,8 @@ async function loadReservations() {
     renderCalendar();
   } catch (err) {
     console.error('loadReservations:', err);
+    document.getElementById('reservations-list').innerHTML =
+      `<p class="text-sm text-red-600">Erreur lors du chargement des réservations : ${err.message}</p>`;
   }
 }
 
@@ -1004,9 +1006,9 @@ document.getElementById('link-scope-all').addEventListener('change', updateLinkS
 document.getElementById('link-scope-resource').addEventListener('change', updateLinkScope);
 
 document.addEventListener('click', event => {
+  if (!createMenuIsOpen) return;
   const menu = document.getElementById('loan-create-menu');
   const button = document.getElementById('loan-create-btn');
-  if (menu.classList.contains('hidden')) return;
   if (menu.contains(event.target) || button.contains(event.target)) return;
   closeCreateMenu();
 });
