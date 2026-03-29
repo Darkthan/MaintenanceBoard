@@ -43,8 +43,9 @@ function ensureResponsiveStyles() {
   style.textContent = `
     @media (max-width: 767px) {
       body.app-mobile-refined {
-        --mobile-bottom-clearance: calc(env(safe-area-inset-bottom, 0px) + 8.25rem);
-        --mobile-toast-clearance: calc(env(safe-area-inset-bottom, 0px) + 7.5rem);
+        --mobile-content-clearance: calc(env(safe-area-inset-bottom, 0px) + 7.75rem);
+        --mobile-fab-clearance: calc(env(safe-area-inset-bottom, 0px) + 6.85rem);
+        --mobile-toast-clearance: calc(env(safe-area-inset-bottom, 0px) + 6.35rem);
       }
 
       body.app-mobile-refined main > header[data-app-header] {
@@ -89,7 +90,7 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined main > .flex-1 {
         padding: 1rem;
-        padding-bottom: calc(var(--mobile-bottom-clearance) + 0.5rem);
+        padding-bottom: calc(var(--mobile-content-clearance) + 0.5rem);
       }
 
       body.app-mobile-refined #sidebar {
@@ -107,7 +108,7 @@ function ensureResponsiveStyles() {
       body.app-mobile-refined .fixed.right-6.bottom-6,
       body.app-mobile-refined .fixed.bottom-6.right-6,
       body.app-mobile-refined [data-mobile-fab="true"] {
-        bottom: var(--mobile-bottom-clearance) !important;
+        bottom: var(--mobile-fab-clearance) !important;
       }
 
       body.app-mobile-refined .fixed.bottom-4.right-4,

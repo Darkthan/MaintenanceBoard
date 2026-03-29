@@ -25,6 +25,7 @@ describe('settings mobile layout', () => {
     expect(res.text).toContain('#settings-content .inline-flex');
     expect(res.text).toContain('overflow-wrap: anywhere');
     expect(res.text).toContain('#header-action > *');
+    expect(res.text).toContain('padding-bottom: calc(var(--mobile-content-clearance, 7.75rem) + 1rem);');
     expect(res.text).toContain('flex flex-col items-start gap-2 px-6 py-4 border-b border-slate-100 sm:flex-row sm:items-center sm:justify-between');
     expect(res.text).toContain('flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between');
     expect(res.text).toContain('#panel-logs #logs-count');

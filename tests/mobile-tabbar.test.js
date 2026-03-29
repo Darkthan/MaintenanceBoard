@@ -27,7 +27,8 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain('mobile-tabbar-more-btn');
     expect(res.text).toContain('Plus d’actions');
     expect(res.text).toContain('button[onclick*="toggleSidebar"]');
-    expect(res.text).toContain('--mobile-bottom-clearance');
+    expect(res.text).toContain('--mobile-content-clearance');
+    expect(res.text).toContain('--mobile-fab-clearance');
     expect(res.text).toContain('[data-mobile-fab="true"]');
   });
 });
