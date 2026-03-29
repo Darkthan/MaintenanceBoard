@@ -8,6 +8,27 @@
   <script src="/js/pdf.min.js"></script>
   <style>
     #attach-placement-container { position: relative; overflow: hidden; cursor: crosshair; user-select: none; }
+    @media (max-width: 767px) {
+      #orders-container > div {
+        overflow: hidden;
+      }
+
+      #orders-container .flex.flex-wrap.items-center.gap-x-4.gap-y-1.text-xs.text-slate-500 span,
+      #orders-container .flex.flex-wrap.gap-1.mt-2 span {
+        min-width: 0;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+
+      #orders-container .flex.flex-wrap.items-center.gap-2.self-stretch {
+        width: 100%;
+        justify-content: flex-end;
+      }
+
+      #pagination > div {
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body class="overflow-x-hidden bg-slate-50">
@@ -63,7 +84,7 @@
       <div id="orders-container" class="space-y-3">
         <p class="text-slate-400 text-center py-8">Chargement...</p>
       </div>
-      <div id="pagination" class="flex flex-col gap-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between"></div>
+      <div id="pagination" data-mobile-pagination="true" class="flex flex-col gap-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between"></div>
     </div>
   </main>
 </div>

@@ -84,7 +84,7 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined main > .flex-1 {
         padding: 1rem;
-        padding-bottom: 6.5rem;
+        padding-bottom: 7.5rem;
       }
 
       body.app-mobile-refined #sidebar {
@@ -101,11 +101,11 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined .fixed.right-6.bottom-6,
       body.app-mobile-refined .fixed.bottom-6.right-6 {
-        bottom: 6rem !important;
+        bottom: 7rem !important;
       }
 
       body.app-mobile-refined .fixed.bottom-4.right-4 {
-        bottom: 5.5rem !important;
+        bottom: 6.5rem !important;
       }
 
       body.app-mobile-refined [data-mobile-filters] {
@@ -1818,8 +1818,8 @@ function renderMobileTabbar(navItems, activePage) {
   }
 
   shell.innerHTML = `
-    <div id="mobile-tabbar-overlay" class="hidden fixed inset-0 z-[70] bg-black/40"></div>
-    <div class="fixed inset-x-0 bottom-0 z-[80] lg:hidden px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-2">
+    <div id="mobile-tabbar-overlay" class="hidden fixed inset-0 z-[35] bg-black/40"></div>
+    <div class="fixed inset-x-0 bottom-0 z-[40] lg:hidden px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-2">
       <div class="rounded-[1.75rem] border border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10 backdrop-blur">
         <div class="grid grid-cols-5 gap-1 px-2 py-2">
           ${coreTabs.map(item => `
@@ -1849,7 +1849,7 @@ function renderMobileTabbar(navItems, activePage) {
         </div>
       </div>
     </div>
-    <div id="mobile-tabbar-sheet" class="hidden fixed inset-x-0 bottom-0 z-[90] rounded-t-[2rem] bg-white px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-5 shadow-2xl shadow-slate-900/20 lg:hidden">
+    <div id="mobile-tabbar-sheet" class="hidden fixed inset-x-0 bottom-0 z-[45] rounded-t-[2rem] bg-white px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-5 shadow-2xl shadow-slate-900/20 lg:hidden">
       <div class="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-200"></div>
       <div class="flex items-center justify-between gap-3">
         <div>
