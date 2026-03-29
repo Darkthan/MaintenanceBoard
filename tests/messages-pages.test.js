@@ -36,5 +36,7 @@ describe('messages pages', () => {
     expect(res.text).toContain('Retour aux conversations');
     expect(res.text).toContain('Chargement de la conversation');
     expect(res.text).toContain('message-form');
+    expect(res.text).toContain('thread-shell');
+    expect(res.text).toContain('sticky bottom-0 z-10');
   });
 });

@@ -5,6 +5,70 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Conversation – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      overflow: hidden;
+    }
+
+    .thread-shell {
+      flex: 1;
+      min-height: 0;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #thread-panel {
+      height: 100%;
+      min-height: 0;
+    }
+
+    #message-list {
+      min-height: 0;
+      scroll-behavior: smooth;
+      background:
+        radial-gradient(circle at top left, rgba(191, 219, 254, 0.35), transparent 26rem),
+        linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    }
+
+    #message-form {
+      position: sticky;
+      bottom: 0;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    @media (max-width: 767px) {
+      .thread-shell {
+        padding: 0;
+      }
+
+      #thread-loading,
+      #thread-error {
+        margin: 1rem;
+      }
+
+      #thread-panel {
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+        border-radius: 0;
+      }
+
+      #message-list {
+        padding: 1rem;
+      }
+
+      #message-form {
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+        padding: 0.875rem 1rem calc(env(safe-area-inset-bottom, 0px) + 0.875rem);
+      }
+    }
+  </style>
 </head>
 <body class="bg-slate-50">
 
@@ -63,7 +127,7 @@
       <span id="thread-updated-at" class="text-xs text-slate-400 hidden sm:block"></span>
     </header>
 
-    <div class="flex-1 p-6">
+    <div class="thread-shell">
       <div id="thread-loading" class="bg-white rounded-2xl border border-slate-200 p-10 text-center text-sm text-slate-400">
         Chargement de la conversation...
       </div>
@@ -75,12 +139,12 @@
         </a>
       </div>
 
-      <section id="thread-panel" class="hidden bg-white rounded-2xl border border-slate-200 overflow-hidden min-h-[620px] flex flex-col">
+      <section id="thread-panel" class="hidden bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col">
         <div id="message-list" class="flex-1 overflow-y-auto bg-slate-50 px-5 py-5 space-y-3">
           <p class="text-sm text-slate-400 text-center py-10">Chargement...</p>
         </div>
 
-        <form id="message-form" class="border-t border-slate-200 px-5 py-4 bg-white space-y-3">
+        <form id="message-form" class="sticky bottom-0 z-10 border-t border-slate-200 px-5 py-4 bg-white/95 space-y-3">
           <div id="attachment-preview" class="hidden items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-600">
             <svg class="h-4 w-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -89,7 +153,7 @@
             <button id="clear-attachment-btn" type="button" class="text-slate-400 hover:text-red-500 transition">✕</button>
           </div>
 
-          <textarea id="message-input" rows="3" placeholder="Écrire un message..."
+          <textarea id="message-input" rows="2" placeholder="Écrire un message..."
             class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
 
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
