@@ -72,6 +72,17 @@ const mockMovement = {
   user: { id: 'user-1', name: 'Admin' }
 };
 
+describe('GET /stock.html', () => {
+  it('sert la page stock avec un bouton dédié au filtre seuil bas', async () => {
+    const res = await request(app).get('/stock.html');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('id="low-stock-toggle"');
+    expect(res.text).toContain('id="low-stock-toggle-state"');
+    expect(res.text).toContain('function syncLowStockToggle()');
+    expect(res.text).toContain("button.setAttribute('aria-pressed'");
+  });
+});
+
 describe('GET /api/stock', () => {
   it('retourne la liste des articles', async () => {
     prisma.stockItem.findMany.mockResolvedValue([mockItem]);

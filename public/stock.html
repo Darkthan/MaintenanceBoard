@@ -76,10 +76,15 @@
             <option value="">Toutes catégories</option>
           </select>
         </div>
-        <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
-          <input id="low-stock-filter" type="checkbox" class="rounded border-slate-300 text-orange-500 focus:ring-orange-400" />
-          Seuil bas seulement
-        </label>
+        <input id="low-stock-filter" type="checkbox" class="sr-only" tabindex="-1" aria-hidden="true" />
+        <button id="low-stock-toggle" type="button" aria-pressed="false"
+          class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300">
+          <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+          <span id="low-stock-toggle-label">Seuil bas seulement</span>
+          <span id="low-stock-toggle-state" class="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-500">Off</span>
+        </button>
       </div>
 
       <!-- Table -->
@@ -281,6 +286,35 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function syncLowStockToggle() {
+  const checkbox = document.getElementById('low-stock-filter');
+  const button = document.getElementById('low-stock-toggle');
+  const state = document.getElementById('low-stock-toggle-state');
+  const label = document.getElementById('low-stock-toggle-label');
+  if (!checkbox || !button || !state || !label) return;
+
+  checkbox.checked = currentLowStock;
+  button.setAttribute('aria-pressed', currentLowStock ? 'true' : 'false');
+
+  if (currentLowStock) {
+    button.className = 'inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-100 px-3 py-2 text-sm font-medium text-orange-800 shadow-sm shadow-orange-100 transition hover:border-orange-400 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-300';
+    state.className = 'rounded-full bg-orange-200 px-2 py-0.5 text-xs font-semibold text-orange-800';
+    state.textContent = 'Actif';
+    label.textContent = 'Seuil bas actif';
+  } else {
+    button.className = 'inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
+    state.className = 'rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-500';
+    state.textContent = 'Off';
+    label.textContent = 'Seuil bas seulement';
+  }
+}
+
+function setLowStockFilter(enabled) {
+  currentLowStock = Boolean(enabled);
+  syncLowStockToggle();
+  fetchStock();
+}
+
 // ── Alertes ─────────────────────────────────────────────────────
 async function fetchAlerts() {
   try {
@@ -386,9 +420,7 @@ function renderStock(items) {
 }
 
 function filterLowStock() {
-  currentLowStock = true;
-  document.getElementById('low-stock-filter').checked = true;
-  fetchStock();
+  setLowStockFilter(true);
 }
 
 // ── Filtres ──────────────────────────────────────────────────────
@@ -403,9 +435,8 @@ document.getElementById('category-filter').addEventListener('change', e => {
   fetchStock();
 });
 
-document.getElementById('low-stock-filter').addEventListener('change', e => {
-  currentLowStock = e.target.checked;
-  fetchStock();
+document.getElementById('low-stock-toggle').addEventListener('click', () => {
+  setLowStockFilter(!currentLowStock);
 });
 
 // ── SupplierPicker ────────────────────────────────────────────────
@@ -639,6 +670,7 @@ document.getElementById('confirm-delete').addEventListener('click', async () => 
 requireLogin().then(async u => {
   user = u;
   renderNav('stock');
+  syncLowStockToggle();
   if (user.role !== 'ADMIN') {
     document.getElementById('admin-actions').style.display = 'none';
   }
