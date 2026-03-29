@@ -17,15 +17,14 @@ jest.mock('../src/middleware/auth', () => ({
 
 const app = require('../src/app');
 
-describe('orders mobile layout', () => {
-  it('sert la page commandes avec les garde-fous mobiles contre le débordement', async () => {
-    const res = await request(app).get('/orders.html');
+describe('settings mobile layout', () => {
+  it('sert la page paramètres avec des sections mobiles qui se replient sans dépasser', async () => {
+    const res = await request(app).get('/settings.html');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('data-mobile-pagination="true"');
-    expect(res.text).toContain('#orders-container > div');
+    expect(res.text).toContain('#settings-content .inline-flex');
     expect(res.text).toContain('overflow-wrap: anywhere');
-    expect(res.text).toContain('flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between');
-    expect(res.text).toContain('break-all text-sm font-medium text-slate-700 sm:truncate');
+    expect(res.text).toContain('flex flex-col items-start gap-2 px-6 py-4 border-b border-slate-100 sm:flex-row sm:items-center sm:justify-between');
+    expect(res.text).toContain('flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between');
   });
 });

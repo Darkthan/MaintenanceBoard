@@ -11,6 +11,17 @@
         overflow-x: hidden;
       }
 
+      .min-h-screen.flex,
+      main,
+      #settings-content,
+      #settings-content > div[id^="tab-"],
+      #settings-content .bg-white,
+      #user-panel > div,
+      #modal-create > div {
+        min-width: 0;
+        max-width: 100%;
+      }
+
       #settings-header {
         padding-left: 1rem;
         padding-right: 1rem;
@@ -34,6 +45,22 @@
       #settings-content > div[id^="tab-"] {
         width: 100%;
         min-width: 0;
+      }
+
+      #settings-content p,
+      #settings-content span,
+      #settings-content label,
+      #settings-content code {
+        overflow-wrap: anywhere;
+      }
+
+      #settings-content .inline-flex {
+        max-width: 100%;
+        flex-wrap: wrap;
+      }
+
+      #settings-content .justify-between {
+        gap: 0.75rem;
       }
 
       #settings-content .rounded-xl,
@@ -88,6 +115,22 @@
       }
 
       #tab-security .border-t.pt-4 button {
+        width: 100%;
+      }
+
+      #tab-database .border-b.border-slate-100.flex.items-center.justify-between,
+      #tab-security .border-b.border-slate-200.px-4.py-3.flex.items-center.justify-between.gap-3 {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      #tab-database .px-6.py-5 .flex.gap-3,
+      #tab-po > .flex.justify-end {
+        flex-direction: column;
+      }
+
+      #tab-database .px-6.py-5 .flex.gap-3 > *,
+      #tab-po > .flex.justify-end > * {
         width: 100%;
       }
 
@@ -344,7 +387,7 @@
 
         <!-- Compteurs -->
         <div class="bg-white rounded-xl border border-slate-200">
-          <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div class="flex flex-col items-start gap-2 px-6 py-4 border-b border-slate-100 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="font-semibold text-slate-800">État de la base</h2>
             <button onclick="loadDbStats()" class="text-xs text-blue-600 hover:underline">Rafraîchir</button>
           </div>
@@ -400,7 +443,7 @@
 
             <div id="import-result" class="hidden rounded-lg px-4 py-3 text-sm"></div>
 
-            <div class="flex gap-3">
+            <div class="flex flex-col gap-3 sm:flex-row">
               <button id="import-btn" disabled onclick="doImport()"
                 class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -563,7 +606,7 @@
 
         <div id="po-result" class="hidden rounded-lg px-4 py-3 text-sm"></div>
 
-        <div class="flex justify-end">
+        <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
           <button onclick="savePOTemplate()"
             class="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
             Enregistrer le modèle
@@ -603,7 +646,7 @@
             <span class="text-xs text-slate-400 mt-1 block">L'URL complète avec protocole, sans slash final.</span>
           </label>
 
-          <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
+          <div class="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <span id="webauthn-feedback" class="text-sm text-slate-500"></span>
             <button onclick="saveWebAuthn()"
               class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
@@ -672,7 +715,7 @@
           </div>
 
           <div class="rounded-xl border border-slate-200">
-            <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+            <div class="flex flex-col items-start gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h4 class="font-medium text-slate-800">IP publiques bloquées</h4>
                 <p class="text-xs text-slate-400 mt-0.5">Blocages temporaires actifs et adresses mises en liste noire.</p>
@@ -687,7 +730,7 @@
             </div>
           </div>
 
-          <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
+          <div class="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <span id="fail2ban-feedback" class="text-sm text-slate-500"></span>
             <button onclick="saveFail2ban()"
               class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
