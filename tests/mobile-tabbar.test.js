@@ -30,5 +30,6 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain('--mobile-content-clearance');
     expect(res.text).toContain('--mobile-fab-clearance');
     expect(res.text).toContain('[data-mobile-fab="true"]');
+    expect(res.text).toContain("label: 'Accueil'");
   });
 });
