@@ -152,6 +152,38 @@ router.patch('/buildings',
   }
 );
 
+// GET /api/rooms/print-list - Liste légère pour impression QR en masse
+router.get('/print-list', requireAuth, async (req, res, next) => {
+  try {
+    const search = String(req.query.search || '').trim();
+    const where = {};
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { number: { contains: search, mode: 'insensitive' } },
+        { building: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    const rooms = await prisma.room.findMany({
+      where,
+      orderBy: [{ building: 'asc' }, { number: 'asc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        building: true,
+        number: true
+      }
+    });
+
+    res.json(rooms.map(room => ({
+      ...room,
+      qrCodeUrl: `/api/rooms/${room.id}/qrcode`
+    })));
+  } catch (err) { next(err); }
+});
+
 // GET /api/rooms/:id - Détail d'une salle
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {

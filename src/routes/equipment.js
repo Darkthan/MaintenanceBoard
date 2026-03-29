@@ -115,6 +115,39 @@ router.get('/by-token/:token', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/equipment/print-list - Liste légère pour impression QR en masse
+router.get('/print-list', requireAuth, async (req, res, next) => {
+  try {
+    const search = String(req.query.search || '').trim();
+    const where = {};
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { type: { contains: search, mode: 'insensitive' } },
+        { serialNumber: { contains: search, mode: 'insensitive' } },
+        { room: { name: { contains: search, mode: 'insensitive' } } }
+      ];
+    }
+
+    const equipment = await prisma.equipment.findMany({
+      where,
+      orderBy: [{ name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        room: { select: { name: true, number: true, building: true } }
+      }
+    });
+
+    res.json(equipment.map(item => ({
+      ...item,
+      qrCodeUrl: `/api/equipment/${item.id}/qrcode`
+    })));
+  } catch (err) { next(err); }
+});
+
 // GET /api/equipment/:id - Détail avec interventions
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {

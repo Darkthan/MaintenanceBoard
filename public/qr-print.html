@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Impression QR codes – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm;
+    }
+
+    .print-sheet {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .print-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) 10rem;
+      gap: 1.25rem;
+      min-height: 15rem;
+      border: 1px solid rgb(203 213 225);
+      border-radius: 1.5rem;
+      background: white;
+      padding: 1.5rem;
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
+      align-items: center;
+    }
+
+    .print-card__name {
+      font-size: clamp(2rem, 3vw, 3rem);
+      line-height: 1;
+      letter-spacing: -0.03em;
+      font-weight: 900;
+      color: rgb(15 23 42);
+      overflow-wrap: anywhere;
+    }
+
+    .print-card__qr {
+      width: 10rem;
+      height: 10rem;
+      object-fit: contain;
+      justify-self: end;
+      image-rendering: crisp-edges;
+    }
+
+    .print-card--placeholder {
+      border-style: dashed;
+      border-color: rgb(226 232 240);
+      background: rgb(248 250 252);
+      box-shadow: none;
+    }
+
+    @media print {
+      body {
+        background: white;
+      }
+
+      aside,
+      header,
+      #selection-panel,
+      #print-summary,
+      #mobile-tabbar-shell {
+        display: none !important;
+      }
+
+      main {
+        margin: 0 !important;
+      }
+
+      #preview-panel {
+        padding: 0 !important;
+        max-width: none !important;
+      }
+
+      #print-sheets {
+        gap: 0;
+      }
+
+      .print-sheet {
+        min-height: calc(297mm - 20mm);
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        gap: 8mm;
+        break-after: page;
+        page-break-after: always;
+      }
+
+      .print-sheet:last-child {
+        break-after: auto;
+        page-break-after: auto;
+      }
+
+      .print-card {
+        min-height: 0;
+        height: 100%;
+        grid-template-columns: minmax(0, 1.3fr) 58mm;
+        gap: 8mm;
+        border-radius: 6mm;
+        padding: 10mm 9mm;
+        box-shadow: none;
+      }
+
+      .print-card__name {
+        font-size: 28pt;
+      }
+
+      .print-card__qr {
+        width: 58mm;
+        height: 58mm;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h6m0 0l-3-3m3 3l-3 3M7 7h10M7 12h4m-4 5h4M5 3h10a2 2 0 012 2v4H5a2 2 0 01-2-2V5a2 2 0 012-2z"/>
+        </svg>
+      </div>
+      <div><p class="text-white font-bold text-sm">MaintenanceBoard</p><p class="text-slate-400 text-xs">Impression QR</p></div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold"><span id="user-avatar">?</span></div>
+        <div class="flex-1 min-w-0"><p id="user-name" class="text-white text-sm font-medium truncate">...</p><p id="user-role" class="text-slate-400 text-xs"></p></div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 lg:ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <div>
+          <h1 class="text-xl font-semibold text-slate-800">Impression QR en masse</h1>
+          <p class="text-sm text-slate-500">Sélectionne des salles et du matériel, puis imprime 2 QR codes par feuille A4 avec le nom en grand.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button id="clear-selection-btn" type="button" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
+          Vider la sélection
+        </button>
+        <button id="print-btn" type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+          Imprimer
+        </button>
+      </div>
+    </header>
+
+    <div class="flex-1 p-6">
+      <div class="grid gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
+        <div id="selection-panel" class="space-y-5">
+          <section id="print-summary" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Résumé</p>
+            <div class="mt-3 flex items-end justify-between gap-4">
+              <div>
+                <p id="selected-total" class="text-3xl font-black tracking-tight text-slate-900">0</p>
+                <p id="selected-breakdown" class="text-sm text-slate-500">Aucun QR code sélectionné</p>
+              </div>
+              <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">A4 · 2 / feuille</span>
+            </div>
+          </section>
+
+          <section id="section-rooms" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Salles</p>
+                <h2 class="text-lg font-semibold text-slate-800">QR codes des salles</h2>
+              </div>
+              <span id="rooms-selected-count" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">0 sélectionnée</span>
+            </div>
+            <div class="mt-4 flex gap-2">
+              <input id="rooms-search" type="search" placeholder="Rechercher une salle ou un bâtiment"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div class="mt-3 flex gap-2 flex-wrap">
+              <button id="rooms-select-visible" type="button" class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition">Tout sélectionner</button>
+              <button id="rooms-clear-visible" type="button" class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition">Tout retirer</button>
+            </div>
+            <div id="rooms-list" class="mt-4 max-h-[24rem] space-y-2 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <p class="text-sm text-slate-400 text-center py-6">Chargement...</p>
+            </div>
+          </section>
+
+          <section id="section-equipment" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Matériel</p>
+                <h2 class="text-lg font-semibold text-slate-800">QR codes des équipements</h2>
+              </div>
+              <span id="equipment-selected-count" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">0 sélectionné</span>
+            </div>
+            <div class="mt-4 flex gap-2">
+              <input id="equipment-search" type="search" placeholder="Rechercher un matériel, type ou salle"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div class="mt-3 flex gap-2 flex-wrap">
+              <button id="equipment-select-visible" type="button" class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition">Tout sélectionner</button>
+              <button id="equipment-clear-visible" type="button" class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition">Tout retirer</button>
+            </div>
+            <div id="equipment-list" class="mt-4 max-h-[24rem] space-y-2 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <p class="text-sm text-slate-400 text-center py-6">Chargement...</p>
+            </div>
+          </section>
+        </div>
+
+        <section id="preview-panel" class="space-y-4">
+          <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Prévisualisation</p>
+                <h2 class="text-lg font-semibold text-slate-800">Planches d’impression</h2>
+              </div>
+              <span id="sheet-count" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">0 feuille</span>
+            </div>
+            <p class="mt-2 text-sm text-slate-500">Chaque planche contient 2 étiquettes. Le nom de l’élément est affiché en grand pour la pose sur le terrain.</p>
+          </div>
+
+          <div id="print-sheets" class="space-y-5">
+            <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-slate-400">
+              Sélectionne au moins une salle ou un équipement pour générer l’aperçu d’impression.
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+let currentUser;
+let allRooms = [];
+let allEquipment = [];
+let roomSearch = '';
+let equipmentSearch = '';
+
+const selectedRooms = new Set();
+const selectedEquipment = new Set();
+
+function escapeHtml(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+}
+
+function normalize(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getFilteredRooms() {
+  if (!roomSearch) return allRooms;
+  const query = normalize(roomSearch);
+  return allRooms.filter(room => [room.name, room.building, room.number].some(value => normalize(value).includes(query)));
+}
+
+function getFilteredEquipment() {
+  if (!equipmentSearch) return allEquipment;
+  const query = normalize(equipmentSearch);
+  return allEquipment.filter(item => [item.name, item.type, item.room?.name, item.room?.number, item.room?.building].some(value => normalize(value).includes(query)));
+}
+
+function getSelectedEntries() {
+  const rooms = allRooms
+    .filter(room => selectedRooms.has(room.id))
+    .map(room => ({
+      kind: 'room',
+      id: room.id,
+      name: room.name,
+      subtitle: [room.building, room.number ? `Salle ${room.number}` : null].filter(Boolean).join(' · ') || 'Salle',
+      qrCodeUrl: room.qrCodeUrl
+    }));
+
+  const equipment = allEquipment
+    .filter(item => selectedEquipment.has(item.id))
+    .map(item => ({
+      kind: 'equipment',
+      id: item.id,
+      name: item.name,
+      subtitle: [item.type, item.room?.name, item.room?.number ? `Salle ${item.room.number}` : null].filter(Boolean).join(' · ') || 'Matériel',
+      qrCodeUrl: item.qrCodeUrl
+    }));
+
+  return [...rooms, ...equipment];
+}
+
+function updateSummary() {
+  const roomCount = selectedRooms.size;
+  const equipmentCount = selectedEquipment.size;
+  const total = roomCount + equipmentCount;
+  const sheetCount = total ? Math.ceil(total / 2) : 0;
+
+  document.getElementById('selected-total').textContent = total;
+  document.getElementById('selected-breakdown').textContent = total
+    ? `${roomCount} salle${roomCount > 1 ? 's' : ''} · ${equipmentCount} matériel${equipmentCount > 1 ? 's' : ''}`
+    : 'Aucun QR code sélectionné';
+  document.getElementById('rooms-selected-count').textContent = `${roomCount} sélectionnée${roomCount > 1 ? 's' : ''}`;
+  document.getElementById('equipment-selected-count').textContent = `${equipmentCount} sélectionné${equipmentCount > 1 ? 's' : ''}`;
+  document.getElementById('sheet-count').textContent = `${sheetCount} feuille${sheetCount > 1 ? 's' : ''}`;
+  document.getElementById('print-btn').disabled = total === 0;
+}
+
+function renderRooms() {
+  const list = document.getElementById('rooms-list');
+  const rooms = getFilteredRooms();
+
+  if (!rooms.length) {
+    list.innerHTML = '<p class="text-sm text-slate-400 text-center py-6">Aucune salle ne correspond à la recherche.</p>';
+    return;
+  }
+
+  list.innerHTML = rooms.map(room => `
+    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 transition hover:border-blue-300 hover:bg-blue-50/40">
+      <input type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+        data-room-id="${room.id}" ${selectedRooms.has(room.id) ? 'checked' : ''} />
+      <span class="min-w-0 flex-1">
+        <span class="block text-sm font-semibold text-slate-800">${escapeHtml(room.name)}</span>
+        <span class="mt-1 block text-xs text-slate-500">${escapeHtml([room.building, room.number ? `Salle ${room.number}` : null].filter(Boolean).join(' · ') || 'Salle')}</span>
+      </span>
+    </label>
+  `).join('');
+
+  list.querySelectorAll('[data-room-id]').forEach(input => {
+    input.addEventListener('change', event => {
+      const id = event.target.dataset.roomId;
+      if (event.target.checked) selectedRooms.add(id);
+      else selectedRooms.delete(id);
+      updateSummary();
+      renderPreview();
+    });
+  });
+}
+
+function renderEquipment() {
+  const list = document.getElementById('equipment-list');
+  const equipment = getFilteredEquipment();
+
+  if (!equipment.length) {
+    list.innerHTML = '<p class="text-sm text-slate-400 text-center py-6">Aucun matériel ne correspond à la recherche.</p>';
+    return;
+  }
+
+  list.innerHTML = equipment.map(item => `
+    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 transition hover:border-blue-300 hover:bg-blue-50/40">
+      <input type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+        data-equipment-id="${item.id}" ${selectedEquipment.has(item.id) ? 'checked' : ''} />
+      <span class="min-w-0 flex-1">
+        <span class="block text-sm font-semibold text-slate-800">${escapeHtml(item.name)}</span>
+        <span class="mt-1 block text-xs text-slate-500">${escapeHtml([item.type, item.room?.name, item.room?.number ? `Salle ${item.room.number}` : null].filter(Boolean).join(' · ') || 'Matériel')}</span>
+      </span>
+    </label>
+  `).join('');
+
+  list.querySelectorAll('[data-equipment-id]').forEach(input => {
+    input.addEventListener('change', event => {
+      const id = event.target.dataset.equipmentId;
+      if (event.target.checked) selectedEquipment.add(id);
+      else selectedEquipment.delete(id);
+      updateSummary();
+      renderPreview();
+    });
+  });
+}
+
+function renderPreview() {
+  updateSummary();
+  const selectedEntries = getSelectedEntries();
+  const preview = document.getElementById('print-sheets');
+
+  if (!selectedEntries.length) {
+    preview.innerHTML = `
+      <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-slate-400">
+        Sélectionne au moins une salle ou un équipement pour générer l’aperçu d’impression.
+      </div>
+    `;
+    return;
+  }
+
+  const sheets = [];
+  for (let index = 0; index < selectedEntries.length; index += 2) {
+    sheets.push(selectedEntries.slice(index, index + 2));
+  }
+
+  preview.innerHTML = sheets.map((sheet, sheetIndex) => `
+    <section class="print-sheet">
+      ${sheet.map(entry => `
+        <article class="print-card">
+          <div class="min-w-0">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">${entry.kind === 'room' ? 'Salle' : 'Matériel'}</p>
+            <h3 class="print-card__name mt-3">${escapeHtml(entry.name)}</h3>
+            <p class="mt-4 text-sm text-slate-500">${escapeHtml(entry.subtitle)}</p>
+            <p class="mt-8 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">MaintenanceBoard</p>
+          </div>
+          <img class="print-card__qr" src="${entry.qrCodeUrl}" alt="QR code ${escapeHtml(entry.name)}" loading="${sheetIndex === 0 ? 'eager' : 'lazy'}" />
+        </article>
+      `).join('')}
+      ${sheet.length === 1 ? '<div class="print-card print-card--placeholder"></div>' : ''}
+    </section>
+  `).join('');
+}
+
+function toggleVisibleSelection(type, shouldSelect) {
+  const entries = type === 'rooms' ? getFilteredRooms() : getFilteredEquipment();
+  const targetSet = type === 'rooms' ? selectedRooms : selectedEquipment;
+  entries.forEach(entry => {
+    if (shouldSelect) targetSet.add(entry.id);
+    else targetSet.delete(entry.id);
+  });
+  if (type === 'rooms') renderRooms();
+  else renderEquipment();
+  renderPreview();
+}
+
+function clearSelection() {
+  selectedRooms.clear();
+  selectedEquipment.clear();
+  renderRooms();
+  renderEquipment();
+  renderPreview();
+}
+
+async function loadPrintData() {
+  const [rooms, equipment] = await Promise.all([
+    api.get('/rooms/print-list'),
+    api.get('/equipment/print-list')
+  ]);
+
+  allRooms = Array.isArray(rooms) ? rooms : [];
+  allEquipment = Array.isArray(equipment) ? equipment : [];
+  renderRooms();
+  renderEquipment();
+  renderPreview();
+}
+
+document.getElementById('rooms-search').addEventListener('input', event => {
+  roomSearch = event.target.value;
+  renderRooms();
+});
+
+document.getElementById('equipment-search').addEventListener('input', event => {
+  equipmentSearch = event.target.value;
+  renderEquipment();
+});
+
+document.getElementById('rooms-select-visible').addEventListener('click', () => toggleVisibleSelection('rooms', true));
+document.getElementById('rooms-clear-visible').addEventListener('click', () => toggleVisibleSelection('rooms', false));
+document.getElementById('equipment-select-visible').addEventListener('click', () => toggleVisibleSelection('equipment', true));
+document.getElementById('equipment-clear-visible').addEventListener('click', () => toggleVisibleSelection('equipment', false));
+document.getElementById('clear-selection-btn').addEventListener('click', clearSelection);
+document.getElementById('print-btn').addEventListener('click', () => {
+  if (!getSelectedEntries().length) return;
+  window.print();
+});
+
+requireLogin().then(async user => {
+  currentUser = user;
+  renderNav('equipment');
+
+  try {
+    await loadPrintData();
+    const requestedType = new URLSearchParams(window.location.search).get('type');
+    if (requestedType === 'rooms' || requestedType === 'equipment') {
+      document.getElementById(`section-${requestedType}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  } catch (err) {
+    document.getElementById('print-sheets').innerHTML = `
+      <div class="rounded-2xl border border-red-200 bg-red-50 px-6 py-10 text-center text-red-700">
+        Impossible de charger les QR codes à imprimer : ${escapeHtml(err.message)}
+      </div>
+    `;
+  }
+});
+</script>
+</body>
+</html>
