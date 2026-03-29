@@ -17,6 +17,9 @@ jest.mock('../src/lib/prisma', () => ({
   signatureRequest: { findMany: jest.fn() },
   supplier: { findMany: jest.fn() },
   stockItem: { findMany: jest.fn() },
+  internalConversation: { findMany: jest.fn() },
+  loanResource: { findMany: jest.fn() },
+  loanReservation: { findMany: jest.fn() },
   stockMovement: { findMany: jest.fn() },
   user: { findUnique: jest.fn(), findMany: jest.fn() }
 }));
@@ -41,6 +44,9 @@ function setupEmptyMocks() {
   prisma.signatureRequest.findMany.mockResolvedValue([]);
   prisma.supplier.findMany.mockResolvedValue([]);
   prisma.stockItem.findMany.mockResolvedValue([]);
+  prisma.internalConversation.findMany.mockResolvedValue([]);
+  prisma.loanResource.findMany.mockResolvedValue([]);
+  prisma.loanReservation.findMany.mockResolvedValue([]);
   prisma.user.findMany.mockResolvedValue([]);
 }
 
@@ -81,6 +87,12 @@ describe('GET /api/search', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('results');
     expect(Array.isArray(res.body.results)).toBe(true);
+  });
+
+  it('propose le nouvel espace d impression QR dans les actions rapides', async () => {
+    const res = await request(app).get('/api/search?q=qr');
+    expect(res.status).toBe(200);
+    expect(res.body.results.some(r => r.type === 'action' && r.href === '/qr-print.html')).toBe(true);
   });
 
   it('retourne les résultats groupés avec les bons types', async () => {
@@ -130,5 +142,74 @@ describe('GET /api/search', () => {
     const res = await request(app).get('/api/search?q=etude');
     expect(res.status).toBe(200);
     expect(res.body.results.some(r => r.type === 'room' && r.title === 'Salle Étude')).toBe(true);
+  });
+
+  it('retrouve une conversation interne a partir du participant ou du contenu', async () => {
+    prisma.internalConversation.findMany.mockResolvedValue([
+      {
+        id: 'conv-1',
+        type: 'DIRECT',
+        updatedAt: new Date('2026-03-29T10:00:00Z'),
+        participants: [
+          { userId: 'u1', user: { id: 'u1', name: 'Admin', email: 'a@test.com', role: 'ADMIN' } },
+          { userId: 'u2', user: { id: 'u2', name: 'Sophie Martin', email: 'sophie@test.com', role: 'TECH' } }
+        ],
+        messages: [
+          {
+            id: 'msg-1',
+            content: 'Peux-tu preparer les tablettes pour demain ?',
+            attachmentName: null,
+            createdAt: new Date('2026-03-29T09:00:00Z'),
+            sender: { id: 'u2', name: 'Sophie Martin', email: 'sophie@test.com' }
+          }
+        ]
+      }
+    ]);
+
+    const res = await request(app).get('/api/search?q=tablettes');
+    expect(res.status).toBe(200);
+    expect(res.body.results.some(r => r.type === 'message' && r.href === '/messages-thread.html?conversation=conv-1')).toBe(true);
+  });
+
+  it('retrouve les ressources et reservations de pret', async () => {
+    prisma.loanResource.findMany.mockResolvedValue([
+      {
+        id: 'loan-r1',
+        name: 'Lot de tablettes iPad',
+        category: 'Tablettes',
+        description: '12 iPad avec coques',
+        location: 'Armoire mobile',
+        instructions: 'Charger avant remise',
+        totalUnits: 12,
+        bundleSize: 6,
+        isActive: true,
+        equipment: { id: 'eq-1', name: 'Chariot iPad', type: 'Mobilite' },
+        _count: { reservations: 3 }
+      }
+    ]);
+    prisma.loanReservation.findMany.mockResolvedValue([
+      {
+        id: 'loan-res-1',
+        status: 'APPROVED',
+        requesterName: 'College Beaupeyrat',
+        requesterEmail: 'contact@beaupeyrat.test',
+        requesterPhone: null,
+        requesterOrganization: 'College Beaupeyrat',
+        startAt: new Date('2026-04-02T08:00:00Z'),
+        endAt: new Date('2026-04-04T16:00:00Z'),
+        requestedUnits: 6,
+        additionalNeeds: 'Applications pedagogiques',
+        notes: null,
+        internalNotes: null,
+        createdBy: { id: 'u1', name: 'Admin' },
+        approvedBy: { id: 'u1', name: 'Admin' },
+        resource: { id: 'loan-r1', name: 'Lot de tablettes iPad', category: 'Tablettes', location: 'Armoire mobile' }
+      }
+    ]);
+
+    const res = await request(app).get('/api/search?q=tablettes');
+    expect(res.status).toBe(200);
+    expect(res.body.results.some(r => r.type === 'loan' && r.id === 'loan-resource:loan-r1')).toBe(true);
+    expect(res.body.results.some(r => r.type === 'loan' && r.id === 'loan-reservation:loan-res-1')).toBe(true);
   });
 });

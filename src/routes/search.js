@@ -6,6 +6,9 @@ const router = express.Router();
 const prisma = require('../lib/prisma');
 const orderAttachmentModel = prisma.orderAttachment;
 const signatureRequestModel = prisma.signatureRequest;
+const internalConversationModel = prisma.internalConversation;
+const loanResourceModel = prisma.loanResource;
+const loanReservationModel = prisma.loanReservation;
 
 const EQUIPMENT_STATUS_LABELS = {
   ACTIVE: 'Actif',
@@ -45,6 +48,14 @@ const SIGNATURE_REQUEST_STATUS_LABELS = {
   CANCELLED: 'Annule'
 };
 
+const LOAN_RESERVATION_STATUS_LABELS = {
+  PENDING: 'En attente',
+  APPROVED: 'Approuve',
+  REJECTED: 'Refuse',
+  CANCELLED: 'Annule',
+  RETURNED: 'Restitue'
+};
+
 const PRIORITY_LABELS = {
   LOW: 'Basse',
   NORMAL: 'Normale',
@@ -53,6 +64,42 @@ const PRIORITY_LABELS = {
 };
 
 const ACTIONS = [
+  {
+    id: 'action:messages',
+    title: 'Messagerie',
+    subtitle: 'Acceder aux conversations internes',
+    href: '/messages.html',
+    keywords: ['message', 'messages', 'messagerie', 'conversation', 'conversations', 'discussion', 'groupe', 'chat'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Messagerie interne',
+      description: 'Ouvre la boite de reception et les conversations internes.'
+    }
+  },
+  {
+    id: 'action:loans',
+    title: 'Prets de materiel',
+    subtitle: 'Voir les ressources et reservations de pret',
+    href: '/loans.html',
+    keywords: ['pret', 'prets', 'reservation', 'reservations', 'emprunt', 'materiel', 'calendrier'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Prets',
+      description: 'Ouvre le catalogue de pret, les demandes et l agenda.'
+    }
+  },
+  {
+    id: 'action:qr-print',
+    title: 'Impression QR',
+    subtitle: 'Preparer les planches QR salles et materiel',
+    href: '/qr-print.html',
+    keywords: ['qr', 'qrcode', 'impression', 'imprimer', 'etiquette', 'salle', 'materiel', 'a4'],
+    roles: ['ADMIN'],
+    preview: {
+      title: 'Impression QR',
+      description: 'Ouvre l espace de preparation pour imprimer les QR codes en masse.'
+    }
+  },
   {
     id: 'action:new-intervention',
     title: 'Nouvelle intervention',
@@ -575,7 +622,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const techRestriction = req.user.role === 'TECH' ? { techId: req.user.id } : {};
     const signatureWhereBase = req.user.role === 'ADMIN' ? { orderId: null } : { orderId: null, createdBy: req.user.id };
 
-    const [rooms, equipment, interventions, orders, attachments, signatureDocuments, suppliers, stockItems, users] = await Promise.all([
+    const [rooms, equipment, interventions, orders, attachments, signatureDocuments, suppliers, stockItems, conversations, loanResources, loanReservations, users] = await Promise.all([
       prisma.room.findMany({
         take: candidateLimit,
         orderBy: [{ building: 'asc' }, { number: 'asc' }],
@@ -662,6 +709,52 @@ router.get('/', requireAuth, async (req, res, next) => {
           supplier: { select: { id: true, name: true } }
         }
       }),
+      internalConversationModel
+        ? internalConversationModel.findMany({
+            where: {
+              participants: {
+                some: { userId: req.user.id }
+              }
+            },
+            take: candidateLimit,
+            orderBy: { updatedAt: 'desc' },
+            include: {
+              participants: {
+                include: {
+                  user: { select: { id: true, name: true, email: true, role: true } }
+                }
+              },
+              messages: {
+                take: 1,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                  sender: { select: { id: true, name: true, email: true } }
+                }
+              }
+            }
+          }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
+        : Promise.resolve([]),
+      loanResourceModel
+        ? loanResourceModel.findMany({
+            take: candidateLimit,
+            orderBy: [{ category: 'asc' }, { name: 'asc' }],
+            include: {
+              equipment: { select: { id: true, name: true, type: true } },
+              _count: { select: { reservations: true } }
+            }
+          }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
+        : Promise.resolve([]),
+      loanReservationModel
+        ? loanReservationModel.findMany({
+            take: candidateLimit,
+            orderBy: { startAt: 'asc' },
+            include: {
+              resource: { select: { id: true, name: true, category: true, location: true } },
+              createdBy: { select: { id: true, name: true } },
+              approvedBy: { select: { id: true, name: true } }
+            }
+          }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
+        : Promise.resolve([]),
       req.user.role === 'ADMIN'
         ? prisma.user.findMany({
             take: candidateLimit,
@@ -938,6 +1031,124 @@ router.get('/', requireAuth, async (req, res, next) => {
       searchText: [item.name, item.reference, item.category, item.description, item.location, item.supplier?.name].filter(Boolean).join(' ')
     })), query, limit);
 
+    const conversationResults = filterAndRank(conversations.map(conversation => {
+      const participants = Array.isArray(conversation.participants)
+        ? conversation.participants
+            .filter(participant => participant.userId !== req.user.id)
+            .map(participant => participant.user)
+            .filter(Boolean)
+        : [];
+      const isGroup = conversation.type === 'GROUP' || participants.length > 1;
+      const lastMessage = Array.isArray(conversation.messages) ? conversation.messages[0] || null : null;
+      const displayName = isGroup
+        ? (participants.map(user => user.name).join(', ') || 'Conversation de groupe')
+        : (participants[0]?.name || 'Conversation');
+
+      return {
+        id: `conversation:${conversation.id}`,
+        type: 'message',
+        group: 'Messagerie',
+        title: displayName,
+        subtitle: [
+          isGroup ? 'Groupe' : 'Conversation directe',
+          lastMessage?.sender?.name ? `Dernier message : ${lastMessage.sender.name}` : null,
+          formatDate(conversation.updatedAt)
+        ].filter(Boolean).join(' · ') || 'Conversation',
+        href: `/messages-thread.html?conversation=${encodeURIComponent(conversation.id)}`,
+        openMode: 'preview',
+        preview: {
+          title: displayName,
+          description: lastMessage?.content || 'Ouvre la conversation interne correspondante.',
+          lines: [
+            participants.length ? `Participants : ${participants.map(user => user.name).join(', ')}` : null,
+            lastMessage?.attachmentName ? `Piece jointe : ${lastMessage.attachmentName}` : null,
+            lastMessage?.createdAt ? `Dernier message le ${formatDate(lastMessage.createdAt)}` : null
+          ].filter(Boolean),
+          badges: [isGroup ? 'Groupe' : 'Direct']
+        },
+        searchText: [
+          displayName,
+          ...participants.flatMap(user => [user.name, user.email, user.role]),
+          lastMessage?.content,
+          lastMessage?.attachmentName,
+          lastMessage?.sender?.name
+        ].filter(Boolean).join(' ')
+      };
+    }), query, limit);
+
+    const loanResourceResults = filterAndRank(loanResources.map(resource => ({
+      id: `loan-resource:${resource.id}`,
+      type: 'loan',
+      group: 'Prets',
+      title: resource.name,
+      subtitle: [resource.category, resource.location, resource.equipment?.name].filter(Boolean).join(' · ') || 'Ressource de pret',
+      href: `/loans.html?focus=${encodeURIComponent(resource.id)}`,
+      openMode: 'preview',
+      preview: {
+        title: resource.name,
+        description: resource.description || 'Ouvre la ressource de pret et sa disponibilite.',
+        lines: [
+          resource.category ? `Categorie : ${resource.category}` : null,
+          `Capacite : ${resource.totalUnits} unite(s)`,
+          resource.bundleSize > 1 ? `Lot verrouille : ${resource.bundleSize} unite(s)` : null,
+          resource.location ? `Emplacement : ${resource.location}` : null,
+          resource.equipment?.name ? `Equipement lie : ${resource.equipment.name}` : null,
+          `${resource._count?.reservations || 0} reservation(s)`
+        ].filter(Boolean),
+        badges: [resource.isActive ? 'Actif' : 'Archive']
+      },
+      searchText: [
+        resource.name,
+        resource.category,
+        resource.description,
+        resource.location,
+        resource.instructions,
+        resource.equipment?.name,
+        resource.equipment?.type
+      ].filter(Boolean).join(' ')
+    })), query, limit);
+
+    const loanReservationResults = filterAndRank(loanReservations.map(reservation => ({
+      id: `loan-reservation:${reservation.id}`,
+      type: 'loan',
+      group: 'Prets',
+      title: `${reservation.resource?.name || 'Reservation'} - ${reservation.requesterName}`,
+      subtitle: [
+        LOAN_RESERVATION_STATUS_LABELS[reservation.status] || reservation.status,
+        formatDate(reservation.startAt),
+        reservation.requesterOrganization
+      ].filter(Boolean).join(' · ') || 'Reservation de pret',
+      href: `/loans.html?focusReservation=${encodeURIComponent(reservation.id)}`,
+      openMode: 'preview',
+      preview: {
+        title: reservation.resource?.name || 'Reservation de pret',
+        description: reservation.additionalNeeds || reservation.notes || 'Ouvre la reservation de pret correspondante.',
+        lines: [
+          `Demandeur : ${reservation.requesterName}`,
+          reservation.requesterEmail ? `Email : ${reservation.requesterEmail}` : null,
+          `Periode : ${formatDate(reservation.startAt)} → ${formatDate(reservation.endAt)}`,
+          `Quantite : ${reservation.requestedUnits}`,
+          reservation.createdBy?.name ? `Cree par : ${reservation.createdBy.name}` : null,
+          reservation.approvedBy?.name ? `Valide par : ${reservation.approvedBy.name}` : null
+        ].filter(Boolean),
+        badges: [LOAN_RESERVATION_STATUS_LABELS[reservation.status] || reservation.status]
+      },
+      searchText: [
+        reservation.resource?.name,
+        reservation.resource?.category,
+        reservation.requesterName,
+        reservation.requesterEmail,
+        reservation.requesterPhone,
+        reservation.requesterOrganization,
+        reservation.additionalNeeds,
+        reservation.notes,
+        reservation.internalNotes,
+        reservation.createdBy?.name,
+        reservation.approvedBy?.name,
+        reservation.status
+      ].filter(Boolean).join(' ')
+    })), query, limit);
+
     const userResults = req.user.role === 'ADMIN'
       ? filterAndRank(users.map(user => ({
           id: `user:${user.id}`,
@@ -976,6 +1187,9 @@ router.get('/', requireAuth, async (req, res, next) => {
         ...orderResults,
         ...supplierResults,
         ...stockResults,
+        ...conversationResults,
+        ...loanResourceResults,
+        ...loanReservationResults,
         ...userResults
       ]
     });

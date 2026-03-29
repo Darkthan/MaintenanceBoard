@@ -971,6 +971,8 @@ function getSpotlightIcon(type) {
     room: 'M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5',
     equipment: EQUIPMENT_ICON_PATH,
     intervention: 'M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5m-1.414-9.414a2 2 0 1 1 2.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+    message: 'M3 8l7.89 4.945a2 2 0 0 0 2.22 0L21 8m-16 8h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2z',
+    loan: 'M8 7V5a4 4 0 1 1 8 0v2m-8 0h8m-8 0a2 2 0 0 0-2 2v8a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V9a2 2 0 0 0-2-2m-8 0v2m8-2v2',
     order: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2',
     supplier: 'M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Zm0 0V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2M9 13h6m-3-3v6',
     stock: 'M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Zm-9 4H8m0 3h3m5-3h-3m3 3h-3'
