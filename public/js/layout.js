@@ -84,6 +84,28 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined main > .flex-1 {
         padding: 1rem;
+        padding-bottom: 6.5rem;
+      }
+
+      body.app-mobile-refined #sidebar {
+        display: none !important;
+      }
+
+      body.app-mobile-refined button[onclick*="toggleSidebar"] {
+        display: none !important;
+      }
+
+      body.app-mobile-refined #mobile-tabbar-shell {
+        display: block !important;
+      }
+
+      body.app-mobile-refined .fixed.right-6.bottom-6,
+      body.app-mobile-refined .fixed.bottom-6.right-6 {
+        bottom: 6rem !important;
+      }
+
+      body.app-mobile-refined .fixed.bottom-4.right-4 {
+        bottom: 5.5rem !important;
       }
 
       body.app-mobile-refined [data-mobile-filters] {
@@ -320,6 +342,7 @@ function enhanceResponsiveLayout() {
 }
 
 function toggleSidebar() {
+  if (window.matchMedia?.('(max-width: 767px)')?.matches) return;
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('nav-overlay');
   if (!sidebar) return;
@@ -1773,7 +1796,125 @@ function renderNav(activePage) {
     });
   });
 
+  renderMobileTabbar(navItems, activePage);
+
   initSpotlight();
+}
+
+function renderMobileTabbar(navItems, activePage) {
+  const coreIds = ['dashboard', 'equipment', 'interventions', 'messages'];
+  const coreTabs = coreIds
+    .map(id => navItems.find(item => item.id === id))
+    .filter(Boolean);
+  const overflowTabs = navItems.filter(item => !coreIds.includes(item.id));
+  const moreActive = !coreIds.includes(activePage);
+
+  let shell = document.getElementById('mobile-tabbar-shell');
+  if (!shell) {
+    shell = document.createElement('div');
+    shell.id = 'mobile-tabbar-shell';
+    shell.className = 'hidden lg:hidden';
+    document.body.appendChild(shell);
+  }
+
+  shell.innerHTML = `
+    <div id="mobile-tabbar-overlay" class="hidden fixed inset-0 z-[70] bg-black/40"></div>
+    <div class="fixed inset-x-0 bottom-0 z-[80] lg:hidden px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-2">
+      <div class="rounded-[1.75rem] border border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10 backdrop-blur">
+        <div class="grid grid-cols-5 gap-1 px-2 py-2">
+          ${coreTabs.map(item => `
+            <a href="${item.href}"
+              class="flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium transition ${
+                activePage === item.id
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+              }">
+              <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.icon}" />
+              </svg>
+              <span class="truncate">${item.label}</span>
+            </a>
+          `).join('')}
+          <button id="mobile-tabbar-more-btn" type="button"
+            class="flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium transition ${
+              moreActive
+                ? 'bg-blue-600 text-white shadow'
+                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+            }">
+            <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <span class="truncate">Plus</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="mobile-tabbar-sheet" class="hidden fixed inset-x-0 bottom-0 z-[90] rounded-t-[2rem] bg-white px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-5 shadow-2xl shadow-slate-900/20 lg:hidden">
+      <div class="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-200"></div>
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Navigation</p>
+          <h3 class="text-lg font-semibold text-slate-800">Plus d’actions</h3>
+        </div>
+        <button id="mobile-tabbar-close-btn" type="button" class="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="mt-5 grid grid-cols-1 gap-2">
+        ${overflowTabs.map(item => `
+          <a href="${item.href}"
+            class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
+              activePage === item.id
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-slate-700 hover:bg-slate-50'
+            }">
+            <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.icon}" />
+            </svg>
+            <span>${item.label}</span>
+          </a>
+        `).join('')}
+      </div>
+      <div class="mt-4 grid grid-cols-2 gap-2 border-t border-slate-200 pt-4">
+        <button id="mobile-tabbar-account-btn" type="button"
+          class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
+          Compte
+        </button>
+        <button id="mobile-tabbar-logout-btn" type="button"
+          class="rounded-2xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition">
+          Déconnexion
+        </button>
+      </div>
+    </div>
+  `;
+
+  const overlay = document.getElementById('mobile-tabbar-overlay');
+  const sheet = document.getElementById('mobile-tabbar-sheet');
+  const openSheet = () => {
+    overlay?.classList.remove('hidden');
+    sheet?.classList.remove('hidden');
+  };
+  const closeSheet = () => {
+    overlay?.classList.add('hidden');
+    sheet?.classList.add('hidden');
+  };
+
+  document.getElementById('mobile-tabbar-more-btn')?.addEventListener('click', openSheet);
+  document.getElementById('mobile-tabbar-close-btn')?.addEventListener('click', closeSheet);
+  overlay?.addEventListener('click', closeSheet);
+  document.getElementById('mobile-tabbar-account-btn')?.addEventListener('click', () => {
+    closeSheet();
+    openAccountSettings();
+  });
+  document.getElementById('mobile-tabbar-logout-btn')?.addEventListener('click', () => {
+    closeSheet();
+    logout();
+  });
+  sheet?.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', closeSheet);
+  });
 }
 
 /**
