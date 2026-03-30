@@ -219,6 +219,14 @@ function ensureValidDates(startAt, endAt) {
   return { start, end };
 }
 
+function hasReservationScheduleChange(existing, nextData) {
+  if (nextData.resourceId && nextData.resourceId !== existing.resourceId) return true;
+  if (nextData.requestedUnits !== undefined && Number(nextData.requestedUnits) !== Number(existing.requestedUnits)) return true;
+  if (nextData.startAt && new Date(nextData.startAt).getTime() !== new Date(existing.startAt).getTime()) return true;
+  if (nextData.endAt && new Date(nextData.endAt).getTime() !== new Date(existing.endAt).getTime()) return true;
+  return false;
+}
+
 async function ensureAvailable(resourceId, startAt, endAt, requestedUnits, excludeReservationId = null) {
   const resource = await prisma.loanResource.findUnique({
     where: { id: resourceId },
@@ -835,9 +843,19 @@ loansRouter.post('/reservations',
 
 loansRouter.patch('/reservations/:id',
   [
+    body('resourceId').optional().isString(),
+    body('requesterName').optional().trim().isLength({ min: 2, max: 200 }),
+    body('requesterEmail').optional().isEmail().normalizeEmail(),
+    body('requesterPhone').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
+    body('requesterOrganization').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
+    body('startAt').optional().isISO8601(),
+    body('endAt').optional().isISO8601(),
+    body('requestedUnits').optional().isInt({ min: 1, max: 500 }),
     body('status').optional().isIn(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'RETURNED']),
+    body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('internalNotes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
-    body('additionalNeeds').optional({ values: 'falsy' }).trim().isLength({ max: 2000 })
+    body('additionalNeeds').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
+    body('skipNotification').optional().isBoolean()
   ],
   async (req, res, next) => {
     try {
@@ -849,16 +867,81 @@ loansRouter.patch('/reservations/:id',
       });
       if (!existing) return res.status(404).json({ error: 'Réservation introuvable' });
 
-      if (req.body.status === 'APPROVED') {
-        await ensureAvailable(existing.resourceId, existing.startAt, existing.endAt, existing.requestedUnits, existing.id);
+      const nextData = {
+        resourceId: req.body.resourceId || existing.resourceId,
+        requesterName: req.body.requesterName !== undefined ? req.body.requesterName : existing.requesterName,
+        requesterEmail: req.body.requesterEmail !== undefined ? normalizeEmail(req.body.requesterEmail) : existing.requesterEmail,
+        requesterPhone: req.body.requesterPhone !== undefined ? (req.body.requesterPhone || null) : existing.requesterPhone,
+        requesterOrganization: req.body.requesterOrganization !== undefined ? (req.body.requesterOrganization || null) : existing.requesterOrganization,
+        notes: req.body.notes !== undefined ? (req.body.notes || null) : existing.notes,
+        internalNotes: req.body.internalNotes !== undefined ? (req.body.internalNotes || null) : existing.internalNotes,
+        additionalNeeds: req.body.additionalNeeds !== undefined ? (req.body.additionalNeeds || null) : existing.additionalNeeds,
+        status: req.body.status !== undefined ? req.body.status : existing.status
+      };
+
+      if (req.body.startAt !== undefined || req.body.endAt !== undefined) {
+        const { start, end } = ensureValidDates(
+          req.body.startAt !== undefined ? req.body.startAt : existing.startAt,
+          req.body.endAt !== undefined ? req.body.endAt : existing.endAt
+        );
+        nextData.startAt = start;
+        nextData.endAt = end;
+      } else {
+        nextData.startAt = existing.startAt;
+        nextData.endAt = existing.endAt;
+      }
+
+      if (req.body.requestedUnits !== undefined) {
+        nextData.requestedUnits = parseInt(req.body.requestedUnits, 10);
+      } else {
+        nextData.requestedUnits = existing.requestedUnits;
+      }
+
+      const scheduleChanged = hasReservationScheduleChange(existing, nextData);
+      const shouldRecheckAvailability = scheduleChanged || (req.body.status === 'APPROVED' && existing.status !== 'APPROVED');
+      let availability = null;
+
+      if (shouldRecheckAvailability) {
+        availability = await ensureAvailable(
+          nextData.resourceId,
+          nextData.startAt,
+          nextData.endAt,
+          nextData.requestedUnits,
+          existing.id
+        );
+      }
+
+      if (!availability && nextData.resourceId !== existing.resourceId) {
+        const resource = await prisma.loanResource.findUnique({
+          where: { id: nextData.resourceId },
+          include: { ...EQUIPMENT_SELECT }
+        });
+        if (!resource || !resource.isActive) {
+          return res.status(404).json({ error: 'Ressource de prêt introuvable' });
+        }
+        availability = {
+          resource,
+          requestedUnits: nextData.requestedUnits,
+          reservedSlots: computeReservedSlots(resource, nextData.requestedUnits)
+        };
       }
 
       const reservation = await prisma.loanReservation.update({
         where: { id: req.params.id },
         data: {
-          ...(req.body.status !== undefined ? { status: req.body.status, approvedById: req.body.status === 'APPROVED' ? req.user.id : existing.approvedById } : {}),
-          ...(req.body.internalNotes !== undefined ? { internalNotes: req.body.internalNotes || null } : {}),
-          ...(req.body.additionalNeeds !== undefined ? { additionalNeeds: req.body.additionalNeeds || null } : {})
+          ...(req.body.resourceId !== undefined ? { resourceId: nextData.resourceId } : {}),
+          ...(req.body.requesterName !== undefined ? { requesterName: nextData.requesterName } : {}),
+          ...(req.body.requesterEmail !== undefined ? { requesterEmail: nextData.requesterEmail } : {}),
+          ...(req.body.requesterPhone !== undefined ? { requesterPhone: nextData.requesterPhone } : {}),
+          ...(req.body.requesterOrganization !== undefined ? { requesterOrganization: nextData.requesterOrganization } : {}),
+          ...(req.body.startAt !== undefined ? { startAt: nextData.startAt } : {}),
+          ...(req.body.endAt !== undefined ? { endAt: nextData.endAt } : {}),
+          ...(req.body.requestedUnits !== undefined ? { requestedUnits: nextData.requestedUnits } : {}),
+          ...(availability ? { reservedSlots: availability.reservedSlots } : {}),
+          ...(req.body.notes !== undefined ? { notes: nextData.notes } : {}),
+          ...(req.body.status !== undefined ? { status: nextData.status, approvedById: nextData.status === 'APPROVED' ? req.user.id : existing.approvedById } : {}),
+          ...(req.body.internalNotes !== undefined ? { internalNotes: nextData.internalNotes } : {}),
+          ...(req.body.additionalNeeds !== undefined ? { additionalNeeds: nextData.additionalNeeds } : {})
         },
         include: {
           resource: true,
@@ -869,7 +952,7 @@ loansRouter.patch('/reservations/:id',
       });
 
       // Email si statut changé vers APPROVED ou REJECTED
-      if (req.body.status && req.body.status !== existing.status) {
+      if (req.body.status && req.body.status !== existing.status && !req.body.skipNotification) {
         sendLoanStatusEmail(reservation, req.body.status).catch(() => {});
       }
 

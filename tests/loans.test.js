@@ -1,5 +1,6 @@
 const express = require('express');
 const request = require('supertest');
+const { createSmtpTransporter } = require('../src/utils/mail');
 
 jest.mock('../src/middleware/auth', () => ({
   requireAuth: (req, _res, next) => {
@@ -254,5 +255,101 @@ describe('loan requests', () => {
     expect(prisma.loanReservation.delete).toHaveBeenCalledWith({
       where: { id: 'reservation-1' }
     });
+  });
+
+  it('edite une reservation sans envoyer d email utilisateur', async () => {
+    const sendMail = jest.fn().mockResolvedValue({});
+    createSmtpTransporter.mockReturnValue({
+      transporter: { sendMail },
+      from: 'noreply@test.local'
+    });
+
+    prisma.loanReservation.findUnique.mockResolvedValue({
+      id: 'reservation-2',
+      resourceId: 'resource-1',
+      requesterName: 'Jean Dupont',
+      requesterEmail: 'jean@example.com',
+      requesterPhone: null,
+      requesterOrganization: null,
+      startAt: new Date('2026-04-02T08:00:00.000Z'),
+      endAt: new Date('2026-04-02T10:00:00.000Z'),
+      requestedUnits: 1,
+      reservedSlots: 1,
+      status: 'PENDING',
+      notes: null,
+      internalNotes: null,
+      additionalNeeds: null,
+      approvedById: null,
+      resource: {
+        id: 'resource-1',
+        name: 'Chariot iPad',
+        totalUnits: 10,
+        bundleSize: 5,
+        isActive: true
+      }
+    });
+    prisma.loanResource.findUnique.mockResolvedValue({
+      id: 'resource-1',
+      name: 'Chariot iPad',
+      totalUnits: 10,
+      bundleSize: 5,
+      isActive: true,
+      equipments: []
+    });
+    prisma.loanReservation.findMany.mockResolvedValue([]);
+    prisma.loanReservation.update.mockImplementation(async ({ data }) => ({
+      id: 'reservation-2',
+      resourceId: data.resourceId || 'resource-1',
+      requesterName: data.requesterName,
+      requesterEmail: data.requesterEmail,
+      requesterPhone: data.requesterPhone,
+      requesterOrganization: data.requesterOrganization,
+      startAt: data.startAt,
+      endAt: data.endAt,
+      requestedUnits: data.requestedUnits,
+      reservedSlots: data.reservedSlots,
+      status: data.status,
+      notes: data.notes,
+      internalNotes: data.internalNotes,
+      additionalNeeds: data.additionalNeeds,
+      resource: {
+        id: 'resource-1',
+        name: 'Chariot iPad',
+        totalUnits: 10,
+        bundleSize: 5,
+        isActive: true
+      }
+    }));
+
+    const res = await request(buildApp())
+      .patch('/api/loans/reservations/reservation-2')
+      .send({
+        requesterName: 'Jean Martin',
+        requesterEmail: 'jean.martin@example.com',
+        requesterPhone: '0102030405',
+        requesterOrganization: 'Lycée Beaupeyrat',
+        startAt: '2026-04-03T09:00:00.000Z',
+        endAt: '2026-04-03T11:00:00.000Z',
+        requestedUnits: 3,
+        status: 'APPROVED',
+        internalNotes: 'Préparer les chargeurs',
+        skipNotification: true
+      });
+
+    expect(res.status).toBe(200);
+    expect(prisma.loanReservation.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'reservation-2' },
+      data: expect.objectContaining({
+        requesterName: 'Jean Martin',
+        requesterEmail: 'jean.martin@example.com',
+        requesterPhone: '0102030405',
+        requesterOrganization: 'Lycée Beaupeyrat',
+        requestedUnits: 3,
+        reservedSlots: 1,
+        status: 'APPROVED',
+        internalNotes: 'Préparer les chargeurs'
+      })
+    }));
+    expect(sendMail).not.toHaveBeenCalled();
   });
 });
