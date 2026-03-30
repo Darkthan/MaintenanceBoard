@@ -5,7 +5,8 @@ const { normalizeDisplayScreens, DISPLAY_WIDGET_LABELS } = require('../utils/dis
 
 const router = express.Router();
 
-const INTERVENTION_ALERT_STATUSES = ['OPEN', 'IN_PROGRESS'];
+const INTERVENTION_VISIBLE_STATUSES = ['OPEN', 'IN_PROGRESS'];
+const INTERVENTION_RED_STATUSES = ['OPEN'];
 const FOLLOW_UP_ORDER_STATUSES = ['PENDING', 'ORDERED', 'PARTIAL'];
 const LOAN_VISIBLE_STATUSES = ['PENDING', 'APPROVED'];
 const PARIS_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
@@ -14,6 +15,12 @@ const PARIS_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
   month: '2-digit',
   day: '2-digit'
 });
+const PARIS_TIME_FORMATTER = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: 'Europe/Paris',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23'
+});
 
 function toneFromAlert(alert) {
   return alert ? 'alert' : 'neutral';
@@ -21,6 +28,40 @@ function toneFromAlert(alert) {
 
 function isSameParisDay(a, b) {
   return PARIS_DAY_FORMATTER.format(new Date(a)) === PARIS_DAY_FORMATTER.format(new Date(b));
+}
+
+function getParisDayKey(value) {
+  return PARIS_DAY_FORMATTER.format(new Date(value));
+}
+
+function getNextParisDayKey(value) {
+  const [year, month, day] = getParisDayKey(value).split('-').map(Number);
+  return PARIS_DAY_FORMATTER.format(new Date(Date.UTC(year, month - 1, day + 1, 12, 0, 0)));
+}
+
+function getParisMinutes(value) {
+  const [hours, minutes] = PARIS_TIME_FORMATTER.format(new Date(value)).split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function parseOpeningHour(openingHour) {
+  const [hours, minutes] = String(openingHour || '08:00').split(':').map(Number);
+  return (Number.isInteger(hours) ? hours : 8) * 60 + (Number.isInteger(minutes) ? minutes : 0);
+}
+
+function isLoanAlert(startAt, now, openingHour) {
+  const startDay = getParisDayKey(startAt);
+  const currentDay = getParisDayKey(now);
+  if (startDay === currentDay) {
+    return true;
+  }
+
+  const nextDay = getNextParisDayKey(now);
+  if (startDay !== nextDay) {
+    return false;
+  }
+
+  return getParisMinutes(now) < parseOpeningHour(openingHour);
 }
 
 function applyAlertsPreference(widget, alertsEnabled) {
@@ -99,7 +140,7 @@ async function buildOverviewWidget() {
   const [roomsCount, equipmentCount, openInterventionsCount, repairsCount, pendingAgentsCount, stockItems] = await Promise.all([
     prisma.room.count(),
     prisma.equipment.count(),
-    prisma.intervention.count({ where: { status: { in: INTERVENTION_ALERT_STATUSES } } }),
+    prisma.intervention.count({ where: { status: { in: INTERVENTION_RED_STATUSES } } }),
     prisma.equipment.count({ where: { status: 'REPAIR' } }),
     prisma.equipment.count({ where: { discoverySource: 'AGENT', discoveryStatus: 'PENDING' } }),
     prisma.stockItem.findMany({
@@ -164,9 +205,9 @@ async function buildOverviewWidget() {
 
 async function buildInterventionsWidget() {
   const [count, items] = await Promise.all([
-    prisma.intervention.count({ where: { status: { in: INTERVENTION_ALERT_STATUSES } } }),
+    prisma.intervention.count({ where: { status: { in: INTERVENTION_RED_STATUSES } } }),
     prisma.intervention.findMany({
-      where: { status: { in: INTERVENTION_ALERT_STATUSES } },
+      where: { status: { in: INTERVENTION_VISIBLE_STATUSES } },
       orderBy: [{ createdAt: 'desc' }],
       take: 8,
       include: {
@@ -186,7 +227,7 @@ async function buildInterventionsWidget() {
       title: item.title,
       subtitle: [formatRoomLabel(item.room), item.equipment?.name].filter(Boolean).join(' · ') || 'Intervention',
       meta: [item.status, item.priority].filter(Boolean).join(' · '),
-      alert: item.priority === 'HIGH' || item.priority === 'CRITICAL' || item.status === 'OPEN'
+      alert: INTERVENTION_RED_STATUSES.includes(item.status)
     }))
   };
 }
@@ -309,7 +350,7 @@ async function buildOrdersWidget() {
   };
 }
 
-async function buildUpcomingLoansWidget() {
+async function buildUpcomingLoansWidget(screen) {
   const now = new Date();
   const end = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
   const items = await prisma.loanReservation.findMany({
@@ -331,13 +372,13 @@ async function buildUpcomingLoansWidget() {
     id: 'upcomingLoans',
     kind: 'list',
     title: DISPLAY_WIDGET_LABELS.upcomingLoans,
-    tone: toneFromAlert(items.some(item => item.status === 'PENDING' || isSameParisDay(item.startAt, now))),
+    tone: toneFromAlert(items.some(item => isLoanAlert(item.startAt, now, screen?.openingHour))),
     emptyLabel: 'Aucune réservation prévue sur 14 jours.',
     items: items.map(item => ({
       title: item.resource?.name || 'Ressource',
       subtitle: [item.requesterName, item.requesterOrganization].filter(Boolean).join(' · '),
       meta: `${formatLoanDate(item.startAt)} → ${formatLoanDate(item.endAt)}`,
-      alert: item.status === 'PENDING' || isSameParisDay(item.startAt, now)
+      alert: isLoanAlert(item.startAt, now, screen?.openingHour)
     }))
   };
 }
@@ -366,7 +407,7 @@ router.get('/:token', async (req, res, next) => {
       screen.widgets
         .map(widgetId => WIDGET_BUILDERS[widgetId])
         .filter(Boolean)
-        .map(builder => builder())
+        .map(builder => builder(screen))
     );
     const renderedWidgets = widgets.map(widget => applyAlertsPreference(widget, screen.alertsEnabled !== false));
     const orderedWidgets = screen.layoutMode === 'MANUAL'

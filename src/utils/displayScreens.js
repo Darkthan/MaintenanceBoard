@@ -62,6 +62,7 @@ const DISPLAY_LAYOUT_IDS = new Set(DISPLAY_LAYOUT_OPTIONS.map(layout => layout.i
 const DISPLAY_DEFAULT_WIDGETS = ['overview', 'interventions', 'repairs', 'stockAlerts'];
 const DISPLAY_DEFAULT_LAYOUT_MODE = 'AUTO';
 const DISPLAY_DEFAULT_REFRESH_SECONDS = 30;
+const DISPLAY_DEFAULT_OPENING_HOUR = '08:00';
 const DISPLAY_DEFAULT_WIDGET_LAYOUTS = [
   { id: 'overview', size: 'hero' },
   { id: 'interventions', size: 'wide' },
@@ -73,6 +74,20 @@ function createDisplayError(message, status = 400) {
   const err = new Error(message);
   err.status = status;
   return err;
+}
+
+function normalizeOpeningHour(value, fallback = DISPLAY_DEFAULT_OPENING_HOUR) {
+  const text = String(value ?? fallback ?? DISPLAY_DEFAULT_OPENING_HOUR).trim();
+  if (!/^\d{2}:\d{2}$/.test(text)) {
+    throw createDisplayError("L'heure d'ouverture doit être au format HH:MM.");
+  }
+
+  const [hours, minutes] = text.split(':').map(Number);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    throw createDisplayError("L'heure d'ouverture doit être comprise entre 00:00 et 23:59.");
+  }
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
 function normalizeDisplayWidgets(rawWidgets) {
@@ -134,6 +149,7 @@ function normalizeDisplayScreens(rawScreens) {
         widgetLayouts,
         layoutMode: DISPLAY_LAYOUT_IDS.has(screen.layoutMode) ? screen.layoutMode : DISPLAY_DEFAULT_LAYOUT_MODE,
         alertsEnabled: screen.alertsEnabled !== false,
+        openingHour: normalizeOpeningHour(screen.openingHour, DISPLAY_DEFAULT_OPENING_HOUR),
         refreshSeconds: Number.isFinite(refreshValue) ? Math.max(15, Math.min(3600, Math.round(refreshValue))) : DISPLAY_DEFAULT_REFRESH_SECONDS,
         createdAt: screen.createdAt || null,
         updatedAt: screen.updatedAt || null
@@ -152,6 +168,11 @@ function normalizeDisplayScreenInput(input = {}, current = {}) {
   if (!Number.isFinite(refreshValue) || refreshValue < 15 || refreshValue > 3600) {
     throw createDisplayError('Le rafraîchissement doit être compris entre 15 et 3600 secondes.');
   }
+
+  const openingHour = normalizeOpeningHour(
+    input.openingHour !== undefined ? input.openingHour : current.openingHour,
+    DISPLAY_DEFAULT_OPENING_HOUR
+  );
 
   const widgets = normalizeDisplayWidgets(
     input.widgets !== undefined
@@ -186,6 +207,7 @@ function normalizeDisplayScreenInput(input = {}, current = {}) {
     name,
     layoutMode,
     alertsEnabled: input.alertsEnabled !== undefined ? !!input.alertsEnabled : current.alertsEnabled !== false,
+    openingHour,
     refreshSeconds: Math.round(refreshValue),
     widgets: widgetLayouts.map(layout => layout.id),
     widgetLayouts
@@ -229,6 +251,7 @@ function serializeDisplayScreen(screen, appUrl) {
     name: screen.name,
     token: screen.token,
     alertsEnabled: screen.alertsEnabled !== false,
+    openingHour: normalizeOpeningHour(screen.openingHour, DISPLAY_DEFAULT_OPENING_HOUR),
     refreshSeconds: screen.refreshSeconds,
     layoutMode: screen.layoutMode || DISPLAY_DEFAULT_LAYOUT_MODE,
     widgets: screen.widgets,
@@ -254,6 +277,7 @@ module.exports = {
   DISPLAY_DEFAULT_WIDGETS,
   DISPLAY_DEFAULT_LAYOUT_MODE,
   DISPLAY_DEFAULT_REFRESH_SECONDS,
+  DISPLAY_DEFAULT_OPENING_HOUR,
   normalizeDisplayScreens,
   normalizeDisplayScreenInput,
   createDisplayScreen,

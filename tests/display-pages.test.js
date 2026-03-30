@@ -9,6 +9,7 @@ describe('display screens pages', () => {
     expect(res.text).toContain('id="screen-form"');
     expect(res.text).toContain('id="screen-widget-list"');
     expect(res.text).toContain('id="screen-alerts-enabled"');
+    expect(res.text).toContain('id="screen-opening-hour"');
     expect(res.text).toContain('id="screen-layout-mode"');
     expect(res.text).toContain('id="screen-layout-list"');
   });
