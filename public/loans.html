@@ -199,14 +199,14 @@
 </div>
 
 <div id="resource-modal" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[90vh]">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
       <h3 id="resource-modal-title" class="font-semibold text-slate-800">Nouvelle ressource</h3>
       <button type="button" onclick="closeResourceModal()" class="text-slate-400 hover:text-slate-600">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
-    <form id="resource-form" class="p-6 space-y-4">
+    <form id="resource-form" class="p-6 space-y-4 overflow-y-auto flex-1">
       <input type="hidden" id="resource-id" />
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -259,10 +259,16 @@
             <p class="px-3 py-3 text-slate-400 text-xs text-center">Chargement…</p>
           </div>
         </div>
-        <!-- Répartition par lots (visible si totalSlots > 1 et équipements sélectionnés) -->
-        <div id="eq-lot-section" class="hidden mt-3">
-          <p class="text-xs font-medium text-slate-600 mb-2">Répartition par lots</p>
-          <div id="eq-lot-list" class="space-y-2"></div>
+        <!-- Bouton répartition lots (visible si totalSlots > 1) -->
+        <div id="eq-lot-btn-row" class="hidden mt-2">
+          <button type="button" onclick="openLotModal()"
+            class="inline-flex items-center gap-2 text-sm text-violet-600 hover:text-violet-800 font-medium transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h8M4 18h8"/>
+            </svg>
+            Répartir par lots
+            <span id="eq-lot-btn-summary" class="text-xs text-slate-400 font-normal"></span>
+          </button>
         </div>
       </div>
       <label class="flex items-center gap-3 text-sm text-slate-700">
@@ -275,6 +281,26 @@
         <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Enregistrer</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Modal répartition des lots -->
+<div id="lot-modal" class="hidden fixed inset-0 bg-black/60 z-[60] items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh]">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+      <div>
+        <h3 class="font-semibold text-slate-800">Répartition par lots</h3>
+        <p id="lot-modal-subtitle" class="text-xs text-slate-400 mt-0.5"></p>
+      </div>
+      <button type="button" onclick="closeLotModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="lot-modal-body" class="p-5 space-y-3 overflow-y-auto flex-1"></div>
+    <div class="px-6 py-4 border-t border-slate-200 flex-shrink-0 flex justify-end gap-3">
+      <button type="button" onclick="closeLotModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+      <button type="button" onclick="saveLotModal()" class="px-5 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700 transition">Confirmer</button>
+    </div>
   </div>
 </div>
 
@@ -532,45 +558,87 @@ function renderEqPicker(filter = '') {
     countEl.classList.add('hidden');
   }
 
-  renderLotSection();
+  updateLotBtnRow();
 }
 
-function renderLotSection() {
-  const section = document.getElementById('eq-lot-section');
+// ── Bouton "Répartir par lots" dans le formulaire ─────────────────
+function updateLotBtnRow() {
   const totalSlots = getFormTotalSlots();
+  const btnRow = document.getElementById('eq-lot-btn-row');
   if (totalSlots <= 1 || eqPickerSelected.size === 0) {
-    section.classList.add('hidden');
+    btnRow.classList.add('hidden');
     return;
   }
-  section.classList.remove('hidden');
+  btnRow.classList.remove('hidden');
+  // Résumé : "3 lots · 6 équipements"
+  document.getElementById('eq-lot-btn-summary').textContent =
+    `· ${totalSlots} lot(s) · ${eqPickerSelected.size} équipement(s)`;
+}
 
-  // Grouper les équipements sélectionnés par lot
+// ── Modal répartition des lots ────────────────────────────────────
+let lotModalDraftMap = new Map(); // copie de travail pendant que le modal est ouvert
+
+function openLotModal() {
+  const totalSlots = getFormTotalSlots();
+  // Clamp les lots existants et copier dans le brouillon
+  lotModalDraftMap = new Map();
+  for (const id of eqPickerSelected) {
+    const lot = Math.min(Math.max(1, eqLotMap.get(id) || 1), totalSlots);
+    lotModalDraftMap.set(id, lot);
+  }
+  document.getElementById('lot-modal-subtitle').textContent =
+    `${totalSlots} lot(s) · ${eqPickerSelected.size} équipement(s) sélectionné(s)`;
+  renderLotModal();
+  const m = document.getElementById('lot-modal');
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+}
+
+function closeLotModal() {
+  const m = document.getElementById('lot-modal');
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+}
+
+function saveLotModal() {
+  // Copier le brouillon dans eqLotMap
+  for (const [id, lot] of lotModalDraftMap) eqLotMap.set(id, lot);
+  closeLotModal();
+  updateLotBtnRow();
+}
+
+function renderLotModal() {
+  const totalSlots = getFormTotalSlots();
+  // Grouper par lot
   const lots = {};
   for (let l = 1; l <= totalSlots; l++) lots[l] = [];
   for (const id of eqPickerSelected) {
-    const lot = eqLotMap.get(id) || 1;
-    const clamped = Math.min(Math.max(1, lot), totalSlots);
-    if (clamped !== lot) eqLotMap.set(id, clamped);
-    (lots[clamped] = lots[clamped] || []).push(id);
+    const lot = lotModalDraftMap.get(id) || 1;
+    (lots[lot] = lots[lot] || []).push(id);
   }
 
-  const container = document.getElementById('eq-lot-list');
-  container.innerHTML = Object.entries(lots).map(([lotNum, ids]) => {
+  document.getElementById('lot-modal-body').innerHTML = Object.entries(lots).map(([lotNum, ids]) => {
     const lotN = parseInt(lotNum);
     const items = ids.map(id => {
       const eq = eqPickerAll.find(e => e.id === id);
       if (!eq) return '';
       const isRepair = eq.status === 'REPAIR';
       return `
-        <div class="flex items-center gap-2 py-1">
-          <span class="flex-1 text-xs text-slate-700 truncate ${isRepair ? 'text-orange-600' : ''}">
-            ${escapeHtml(eq.name)}${eq.serialNumber ? ` <span class="font-mono text-slate-400">${escapeHtml(eq.serialNumber)}</span>` : ''}
-          </span>
+        <div class="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm ${isRepair ? 'text-orange-600' : 'text-slate-700'} truncate">
+              ${escapeHtml(eq.name)}
+            </p>
+            ${eq.serialNumber ? `<p class="text-xs text-slate-400 font-mono">${escapeHtml(eq.serialNumber)}</p>` : ''}
+          </div>
+          ${isRepair ? '<span class="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded flex-shrink-0">Réparation</span>' : ''}
           <div class="flex gap-1 flex-shrink-0">
             ${Array.from({length: totalSlots}, (_, i) => i + 1).map(n => `
-              <button type="button" onclick="setEquipmentLot('${id}', ${n})"
-                class="w-6 h-6 rounded text-xs font-semibold transition
-                  ${eqLotMap.get(id) === n ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
+              <button type="button" onclick="setLotDraft('${id}', ${n})"
+                class="w-7 h-7 rounded-lg text-xs font-semibold transition
+                  ${lotModalDraftMap.get(id) === n
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
                 ${n}
               </button>`).join('')}
           </div>
@@ -578,21 +646,22 @@ function renderLotSection() {
     }).join('');
 
     return `
-      <div class="border border-slate-200 rounded-lg overflow-hidden">
-        <div class="px-3 py-1.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
-          <span class="text-xs font-semibold text-slate-600">Lot ${lotN}</span>
-          <span class="text-xs text-slate-400">${ids.length} équipement(s)</span>
+      <div class="border border-slate-200 rounded-xl overflow-hidden">
+        <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0">${lotN}</span>
+          <span class="text-sm font-medium text-slate-700">Lot ${lotN}</span>
+          <span class="text-xs text-slate-400 ml-auto">${ids.length} équipement(s)</span>
         </div>
-        <div class="px-3 py-1 divide-y divide-slate-50">
-          ${items || '<p class="text-xs text-slate-300 py-2 italic">Aucun équipement</p>'}
+        <div class="px-4 py-1">
+          ${items || '<p class="text-xs text-slate-300 py-3 italic text-center">Aucun équipement assigné</p>'}
         </div>
       </div>`;
   }).join('');
 }
 
-function setEquipmentLot(equipmentId, lotNumber) {
-  eqLotMap.set(equipmentId, lotNumber);
-  renderLotSection();
+function setLotDraft(equipmentId, lotNumber) {
+  lotModalDraftMap.set(equipmentId, lotNumber);
+  renderLotModal();
 }
 
 function toggleEqPicker(id) {
@@ -616,9 +685,9 @@ document.getElementById('eq-picker-search').addEventListener('input', e => {
   renderEqPicker(e.target.value);
 });
 
-// Recalculer les lots si totalUnits ou bundleSize changent
+// Recalculer le bouton lot si totalUnits ou bundleSize changent
 ['resource-total-units', 'resource-bundle-size'].forEach(id => {
-  document.getElementById(id).addEventListener('input', () => renderLotSection());
+  document.getElementById(id).addEventListener('input', () => updateLotBtnRow());
 });
 
 async function openResourceModal(resource = null) {
@@ -644,7 +713,7 @@ async function openResourceModal(resource = null) {
   document.getElementById('eq-picker-list').innerHTML =
     '<p class="px-3 py-3 text-slate-400 text-xs text-center">Chargement…</p>';
   document.getElementById('eq-picker-count').classList.add('hidden');
-  document.getElementById('eq-lot-section').classList.add('hidden');
+  document.getElementById('eq-lot-btn-row').classList.add('hidden');
 
   try {
     const data = await api.get('/equipment', { limit: 500 });
