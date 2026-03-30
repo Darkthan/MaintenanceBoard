@@ -111,6 +111,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
 // ── Routes API ────────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/search', require('./routes/search'));
+app.use('/api/display', require('./routes/display'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/interventions', require('./routes/interventions'));
@@ -181,6 +182,7 @@ app.get('/api/version', (req, res) => {
 app.get('/scan',   (req, res) => res.sendFile(path.join(__dirname, '../public/scan.html')));
 app.get('/report', (req, res) => res.sendFile(path.join(__dirname, '../public/report.html')));
 app.get('/loan-request', (req, res) => res.sendFile(path.join(__dirname, '../public/loan-request.html')));
+app.get('/screen/:token', (req, res) => res.sendFile(path.join(__dirname, '../public/display.html')));
 
 // ── SPA fallback (pages HTML) ─────────────────────────────────────────────────
 app.get('*path', (req, res) => {

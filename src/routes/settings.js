@@ -13,6 +13,14 @@ const {
   unblockIp,
   serializeFail2banForClient
 } = require('../utils/fail2ban');
+const {
+  DISPLAY_WIDGET_OPTIONS,
+  normalizeDisplayScreens,
+  createDisplayScreen,
+  updateDisplayScreen,
+  regenerateDisplayScreenToken,
+  serializeDisplayScreen
+} = require('../utils/displayScreens');
 
 const prisma = require('../lib/prisma');
 
@@ -21,7 +29,93 @@ const AGENT_MONITORING_DEFAULTS = {
   lowDiskThresholdGb: 20
 };
 
+function getDisplayScreens() {
+  return normalizeDisplayScreens(readSettings().displayScreens);
+}
+
+function saveDisplayScreens(screens) {
+  writeSettings({ displayScreens: screens });
+  return screens;
+}
+
+function findDisplayScreenOrThrow(screenId) {
+  const screens = getDisplayScreens();
+  const index = screens.findIndex(screen => screen.id === screenId);
+  if (index === -1) {
+    throw Object.assign(new Error('Écran introuvable'), { status: 404 });
+  }
+  return { screens, index, screen: screens[index] };
+}
+
 // ── Fail2ban ────────────────────────────────────────────────────────────────
+
+// ── Écrans d'affichage ───────────────────────────────────────────────────────
+
+router.get('/screens', requireAuth, requireAdmin, (_req, res) => {
+  res.json({
+    screens: getDisplayScreens().map(screen => serializeDisplayScreen(screen, config.appUrl)),
+    widgetOptions: DISPLAY_WIDGET_OPTIONS
+  });
+});
+
+router.post('/screens', requireAuth, requireAdmin, (req, res, next) => {
+  try {
+    const current = getDisplayScreens();
+    const screen = createDisplayScreen(req.body || {});
+    const screens = [...current, screen];
+    saveDisplayScreens(screens);
+    res.status(201).json({
+      message: 'Écran créé',
+      screen: serializeDisplayScreen(screen, config.appUrl)
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/screens/:id', requireAuth, requireAdmin, (req, res, next) => {
+  try {
+    const { screens, index, screen } = findDisplayScreenOrThrow(req.params.id);
+    const updated = updateDisplayScreen(screen, req.body || {});
+    screens[index] = updated;
+    saveDisplayScreens(screens);
+    res.json({
+      message: 'Écran enregistré',
+      screen: serializeDisplayScreen(updated, config.appUrl)
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/screens/:id/regenerate', requireAuth, requireAdmin, (req, res, next) => {
+  try {
+    const { screens, index, screen } = findDisplayScreenOrThrow(req.params.id);
+    const regenerated = regenerateDisplayScreenToken(screen);
+    screens[index] = regenerated;
+    saveDisplayScreens(screens);
+    res.json({
+      message: 'Lien régénéré',
+      screen: serializeDisplayScreen(regenerated, config.appUrl)
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/screens/:id', requireAuth, requireAdmin, (req, res, next) => {
+  try {
+    const screens = getDisplayScreens();
+    const nextScreens = screens.filter(screen => screen.id !== req.params.id);
+    if (nextScreens.length === screens.length) {
+      return res.status(404).json({ error: 'Écran introuvable' });
+    }
+    saveDisplayScreens(nextScreens);
+    res.json({ message: 'Écran supprimé' });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get('/fail2ban', requireAuth, requireAdmin, (_req, res) => {
   res.json(serializeFail2banForClient(readSettings().fail2ban));

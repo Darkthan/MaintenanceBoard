@@ -291,6 +291,10 @@
         class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
         Sécurité
       </button>
+      <button data-tab="screens" onclick="showTab('screens')"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
+        Écrans
+      </button>
     </div>
 
     <!-- Contenu -->
@@ -794,6 +798,115 @@
 
       </div><!-- /tab-security -->
 
+      <!-- ════════════════════════════════════ TAB : ÉCRANS -->
+      <div id="tab-screens" class="hidden w-full max-w-6xl min-w-0 space-y-5">
+
+        <div class="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 flex items-start gap-3">
+          <svg class="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <div>
+            <p class="font-semibold text-rose-900">Écrans d'affichage publics</p>
+            <p class="text-sm text-rose-800 mt-1">Chaque écran dispose de son propre lien sans authentification. Les blocs qui remontent une alerte apparaissent en rouge sur l'écran et sont identifiés ici comme <span class="font-medium">Alerte rouge</span>.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,380px)_minmax(0,1fr)] gap-5">
+          <form id="screen-form" class="bg-white rounded-xl border border-slate-200 p-6 space-y-5" onsubmit="saveScreen(event)">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-slate-800">Configuration d'écran</h2>
+                <p class="text-xs text-slate-400 mt-1">Crée un lien dédié et choisis exactement les blocs affichés.</p>
+              </div>
+              <span id="screens-count-badge" class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">0 écran</span>
+            </div>
+
+            <input type="hidden" id="screen-id" />
+
+            <label class="block text-sm">
+              <span class="font-medium text-slate-700 mb-1 block">Nom de l'écran</span>
+              <input id="screen-name" type="text" placeholder="Hall principal"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+            </label>
+
+            <label class="block text-sm">
+              <span class="font-medium text-slate-700 mb-1 block">Rafraîchissement</span>
+              <select id="screen-refresh"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                <option value="15">Toutes les 15 secondes</option>
+                <option value="30">Toutes les 30 secondes</option>
+                <option value="60">Toutes les 60 secondes</option>
+                <option value="120">Toutes les 2 minutes</option>
+                <option value="300">Toutes les 5 minutes</option>
+              </select>
+            </label>
+
+            <div class="space-y-3">
+              <div>
+                <p class="font-medium text-slate-700">Blocs visibles</p>
+                <p class="text-xs text-slate-400 mt-1">Les cartes marquées <span class="text-rose-600 font-medium">Alerte rouge</span> passent en rouge si une action est requise.</p>
+              </div>
+              <div id="screen-widget-list" class="grid grid-cols-1 gap-3"></div>
+            </div>
+
+            <div id="screen-feedback" class="hidden rounded-xl px-4 py-3 text-sm"></div>
+
+            <div id="screen-link-panel" class="hidden rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm font-medium text-slate-800">Lien public</p>
+                  <p class="text-xs text-slate-400 mt-1">À ouvrir directement sur l'écran, sans connexion.</p>
+                </div>
+                <button type="button" onclick="regenerateScreenToken()"
+                  class="inline-flex items-center justify-center rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 transition hover:bg-rose-50">
+                  Régénérer
+                </button>
+              </div>
+              <input id="screen-public-url" type="text" readonly
+                class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none" />
+              <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="copyScreenLink()"
+                  class="inline-flex items-center justify-center rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700">
+                  Copier le lien
+                </button>
+                <button type="button" onclick="openScreenLink()"
+                  class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+                  Ouvrir l'écran
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-3">
+              <button type="submit"
+                class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
+                Enregistrer l'écran
+              </button>
+              <button type="button" onclick="resetScreenForm()"
+                class="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                Nouvel écran
+              </button>
+            </div>
+          </form>
+
+          <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+              <div>
+                <h2 class="font-semibold text-slate-800">Écrans existants</h2>
+                <p class="text-xs text-slate-400 mt-1">Chaque écran garde son lien propre et sa sélection de blocs.</p>
+              </div>
+              <button type="button" onclick="loadScreens()"
+                class="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
+                Rafraîchir
+              </button>
+            </div>
+            <div id="screens-list" class="divide-y divide-slate-100">
+              <p class="px-6 py-6 text-sm text-slate-400">Chargement...</p>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /tab-screens -->
+
     </div><!-- /contenu -->
   </main>
 </div>
@@ -975,11 +1088,24 @@ requireLogin().then(u => { ME = u; renderNav('settings'); });
 let users = [];
 let currentUser = null;
 let logPeriod = 7;
+let screens = [];
+let currentScreen = null;
+
+const SCREEN_WIDGET_OPTIONS = [
+  { id: 'overview', label: 'Vue d’ensemble', description: 'Compteurs globaux et alertes principales.', alert: true },
+  { id: 'interventions', label: 'Interventions ouvertes', description: 'Tickets en cours à traiter.', alert: true },
+  { id: 'repairs', label: 'Équipements en réparation', description: 'Matériels actuellement en panne.', alert: true },
+  { id: 'stockAlerts', label: 'Stock bas', description: 'Consommables sous le seuil minimal.', alert: true },
+  { id: 'pendingAgents', label: 'Agents à valider', description: 'Découvertes agent en attente.', alert: true },
+  { id: 'orders', label: 'Commandes à suivre', description: 'Dernières commandes non terminées.', alert: true },
+  { id: 'upcomingLoans', label: 'Prêts à venir', description: 'Réservations prévues sur 14 jours.', alert: false }
+];
+const DEFAULT_SCREEN_WIDGETS = ['overview', 'interventions', 'repairs', 'stockAlerts'];
 
 // ─── Onglets principaux ────────────────────────────────────────────────────
 function showTab(name) {
   // Masquer tous les onglets de contenu
-  ['users', 'email', 'database', 'po', 'security'].forEach(t => {
+  ['users', 'email', 'database', 'po', 'security', 'screens'].forEach(t => {
     document.getElementById('tab-' + t).classList.add('hidden');
   });
   document.getElementById('tab-' + name).classList.remove('hidden');
@@ -999,7 +1125,16 @@ function showTab(name) {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
         Nouvel utilisateur
-      </button>` : '';
+      </button>`
+    : name === 'screens'
+      ? `<button onclick="resetScreenForm()"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Nouvel écran
+        </button>`
+      : '';
 
   // Chargement lazy
   if (name === 'users' && !users.length) loadUsers();
@@ -1010,6 +1145,7 @@ function showTab(name) {
     loadWebAuthn();
     loadFail2ban();
   }
+  if (name === 'screens') loadScreens();
 }
 
 // ─── Utilisateurs ──────────────────────────────────────────────────────────
@@ -1471,6 +1607,253 @@ async function savePOTemplate() {
   }
 }
 
+// ─── Écrans publics ────────────────────────────────────────────────────────
+function renderScreenWidgetOptions() {
+  const container = document.getElementById('screen-widget-list');
+  if (!container) return;
+  container.innerHTML = SCREEN_WIDGET_OPTIONS.map(widget => `
+    <label class="flex items-start gap-3 rounded-xl border border-slate-200 px-4 py-3 cursor-pointer hover:border-blue-200 hover:bg-slate-50 transition">
+      <input type="checkbox" value="${widget.id}" class="screen-widget-checkbox mt-1 h-4 w-4 rounded text-blue-600" />
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-medium text-slate-800">${widget.label}</span>
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${widget.alert ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'}">
+            ${widget.alert ? 'Alerte rouge' : 'Information'}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">${widget.description}</p>
+      </div>
+    </label>
+  `).join('');
+}
+
+function setScreenFeedback(message, tone = 'neutral') {
+  const feedback = document.getElementById('screen-feedback');
+  if (!message) {
+    feedback.classList.add('hidden');
+    feedback.textContent = '';
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.className = 'rounded-xl px-4 py-3 text-sm ' + (
+    tone === 'error'
+      ? 'bg-red-50 text-red-700 border border-red-200'
+      : tone === 'success'
+        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+        : 'bg-slate-50 text-slate-600 border border-slate-200'
+  );
+}
+
+function getSelectedScreenWidgets() {
+  return [...document.querySelectorAll('.screen-widget-checkbox:checked')].map(cb => cb.value);
+}
+
+function setSelectedScreenWidgets(widgetIds = []) {
+  const selected = new Set(widgetIds);
+  document.querySelectorAll('.screen-widget-checkbox').forEach(cb => {
+    cb.checked = selected.has(cb.value);
+  });
+}
+
+function updateScreensCountBadge() {
+  const badge = document.getElementById('screens-count-badge');
+  if (!badge) return;
+  badge.textContent = `${screens.length} écran${screens.length > 1 ? 's' : ''}`;
+}
+
+function renderScreensList() {
+  const list = document.getElementById('screens-list');
+  updateScreensCountBadge();
+
+  if (!screens.length) {
+    list.innerHTML = '<p class="px-6 py-6 text-sm text-slate-400">Aucun écran configuré pour le moment.</p>';
+    return;
+  }
+
+  list.innerHTML = screens.map(screen => {
+    const selected = currentScreen?.id === screen.id;
+    return `
+      <div class="px-6 py-5 ${selected ? 'bg-blue-50/60' : ''}">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="button" onclick="editScreen('${screen.id}')"
+                class="text-left font-semibold text-slate-800 hover:text-blue-700 transition">
+                ${screen.name}
+              </button>
+              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${selected ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}">
+                ${screen.refreshSeconds}s
+              </span>
+            </div>
+            <p class="mt-1 text-xs text-slate-400 break-all">${screen.publicUrl}</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              ${screen.widgetLabels.map(label => `
+                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">${label}</span>
+              `).join('')}
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="copySpecificScreenLink('${screen.publicUrl}')"
+              class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
+              Copier
+            </button>
+            <button type="button" onclick="window.open('${screen.publicUrl}', '_blank', 'noopener')"
+              class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
+              Ouvrir
+            </button>
+            <button type="button" onclick="editScreen('${screen.id}')"
+              class="inline-flex items-center justify-center rounded-lg border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-50">
+              Modifier
+            </button>
+            <button type="button" onclick="deleteScreen('${screen.id}')"
+              class="inline-flex items-center justify-center rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-50">
+              Supprimer
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function fillScreenForm(screen) {
+  currentScreen = screen;
+  document.getElementById('screen-id').value = screen?.id || '';
+  document.getElementById('screen-name').value = screen?.name || '';
+  document.getElementById('screen-refresh').value = String(screen?.refreshSeconds || 30);
+  setSelectedScreenWidgets(screen?.widgets || DEFAULT_SCREEN_WIDGETS);
+
+  const linkPanel = document.getElementById('screen-link-panel');
+  const linkInput = document.getElementById('screen-public-url');
+  if (screen?.publicUrl) {
+    linkInput.value = screen.publicUrl;
+    linkPanel.classList.remove('hidden');
+  } else {
+    linkInput.value = '';
+    linkPanel.classList.add('hidden');
+  }
+}
+
+function resetScreenForm() {
+  currentScreen = null;
+  document.getElementById('screen-form').reset();
+  document.getElementById('screen-id').value = '';
+  document.getElementById('screen-refresh').value = '30';
+  setSelectedScreenWidgets(DEFAULT_SCREEN_WIDGETS);
+  document.getElementById('screen-link-panel').classList.add('hidden');
+  document.getElementById('screen-public-url').value = '';
+  setScreenFeedback('');
+  renderScreensList();
+}
+
+function editScreen(screenId) {
+  const screen = screens.find(item => item.id === screenId);
+  if (!screen) return;
+  fillScreenForm(screen);
+  renderScreensList();
+}
+
+async function loadScreens() {
+  try {
+    const data = await api.get('/settings/screens');
+    screens = Array.isArray(data.screens) ? data.screens : [];
+    renderScreensList();
+
+    if (currentScreen) {
+      const fresh = screens.find(item => item.id === currentScreen.id);
+      if (fresh) fillScreenForm(fresh);
+      else resetScreenForm();
+    } else if (!document.getElementById('screen-id').value) {
+      resetScreenForm();
+    }
+  } catch (err) {
+    document.getElementById('screens-list').innerHTML = `<p class="px-6 py-6 text-sm text-red-600">${err.message}</p>`;
+    setScreenFeedback(err.message, 'error');
+  }
+}
+
+async function saveScreen(event) {
+  event.preventDefault();
+  setScreenFeedback('Enregistrement...');
+
+  try {
+    const payload = {
+      name: document.getElementById('screen-name').value.trim(),
+      refreshSeconds: parseInt(document.getElementById('screen-refresh').value, 10),
+      widgets: getSelectedScreenWidgets()
+    };
+    const screenId = document.getElementById('screen-id').value;
+    const response = screenId
+      ? await api.patch(`/settings/screens/${screenId}`, payload)
+      : await api.post('/settings/screens', payload);
+
+    await loadScreens();
+    const saved = screens.find(item => item.id === response.screen?.id);
+    if (saved) fillScreenForm(saved);
+    setScreenFeedback(response.message || 'Écran enregistré.', 'success');
+    showToast(response.message || 'Écran enregistré', 'success');
+  } catch (err) {
+    setScreenFeedback(err.message, 'error');
+  }
+}
+
+async function regenerateScreenToken() {
+  if (!currentScreen?.id) return;
+  if (!confirm(`Régénérer le lien public de "${currentScreen.name}" ? L'ancien lien cessera de fonctionner.`)) return;
+
+  try {
+    const response = await api.post(`/settings/screens/${currentScreen.id}/regenerate`, {});
+    await loadScreens();
+    const saved = screens.find(item => item.id === response.screen?.id);
+    if (saved) fillScreenForm(saved);
+    setScreenFeedback(response.message || 'Lien régénéré.', 'success');
+    showToast(response.message || 'Lien régénéré', 'success');
+  } catch (err) {
+    setScreenFeedback(err.message, 'error');
+  }
+}
+
+async function deleteScreen(screenId) {
+  const screen = screens.find(item => item.id === screenId);
+  if (!screen) return;
+  if (!confirm(`Supprimer l'écran "${screen.name}" ?`)) return;
+
+  try {
+    const response = await api.delete(`/settings/screens/${screenId}`);
+    if (currentScreen?.id === screenId) {
+      currentScreen = null;
+    }
+    await loadScreens();
+    if (!currentScreen) resetScreenForm();
+    setScreenFeedback(response.message || 'Écran supprimé.', 'success');
+    showToast(response.message || 'Écran supprimé', 'success');
+  } catch (err) {
+    setScreenFeedback(err.message, 'error');
+  }
+}
+
+async function copySpecificScreenLink(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Lien copié', 'success');
+  } catch {
+    showToast('Copie impossible', 'error');
+  }
+}
+
+function copyScreenLink() {
+  const url = document.getElementById('screen-public-url').value;
+  if (!url) return;
+  copySpecificScreenLink(url);
+}
+
+function openScreenLink() {
+  const url = document.getElementById('screen-public-url').value;
+  if (!url) return;
+  window.open(url, '_blank', 'noopener');
+}
+
 // ─── WebAuthn ──────────────────────────────────────────────────────────────
 async function loadWebAuthn() {
   try {
@@ -1620,9 +2003,12 @@ async function saveWebAuthn() {
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────
+renderScreenWidgetOptions();
+resetScreenForm();
+
 requireLogin().then(() => {
   const tab = new URLSearchParams(window.location.search).get('tab');
-  const allowedTabs = new Set(['users', 'email', 'database', 'po', 'security']);
+  const allowedTabs = new Set(['users', 'email', 'database', 'po', 'security', 'screens']);
   showTab(allowedTabs.has(tab) ? tab : 'users');
 });
 </script>
