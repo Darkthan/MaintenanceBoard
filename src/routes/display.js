@@ -37,6 +37,49 @@ function applyAlertsPreference(widget, alertsEnabled) {
   };
 }
 
+function rankAutoWidget(widget) {
+  const priorityById = {
+    overview: 0,
+    interventions: 1,
+    repairs: 2,
+    stockAlerts: 3,
+    pendingAgents: 4,
+    orders: 5,
+    upcomingLoans: 6
+  };
+
+  return [
+    widget.tone === 'alert' ? 0 : 1,
+    priorityById[widget.id] ?? 99
+  ];
+}
+
+function compareAutoWidgets(a, b) {
+  const rankA = rankAutoWidget(a);
+  const rankB = rankAutoWidget(b);
+  if (rankA[0] !== rankB[0]) return rankA[0] - rankB[0];
+  return rankA[1] - rankB[1];
+}
+
+function getManualSize(widgetLayouts, widgetId) {
+  return widgetLayouts.find(layout => layout.id === widgetId)?.size || 'compact';
+}
+
+function inferAutoSize(widget) {
+  if (widget.id === 'overview') return 'hero';
+  if (widget.tone === 'alert') return 'wide';
+  if (widget.id === 'upcomingLoans' && (widget.items?.length || 0) >= 4) return 'wide';
+  if ((widget.items?.length || 0) >= 6) return 'wide';
+  return 'compact';
+}
+
+function getWidgetLayout(widget, screen) {
+  const size = screen.layoutMode === 'MANUAL'
+    ? getManualSize(screen.widgetLayouts || [], widget.id)
+    : inferAutoSize(widget);
+  return { size };
+}
+
 function formatRoomLabel(room) {
   if (!room) return 'Non assigné';
   return room.number ? `${room.name} (${room.number})` : room.name;
@@ -326,6 +369,13 @@ router.get('/:token', async (req, res, next) => {
         .map(builder => builder())
     );
     const renderedWidgets = widgets.map(widget => applyAlertsPreference(widget, screen.alertsEnabled !== false));
+    const orderedWidgets = screen.layoutMode === 'MANUAL'
+      ? (screen.widgetLayouts || []).map(layout => renderedWidgets.find(widget => widget.id === layout.id)).filter(Boolean)
+      : renderedWidgets.slice().sort(compareAutoWidgets);
+    const widgetsWithLayout = orderedWidgets.map(widget => ({
+      ...widget,
+      layout: getWidgetLayout(widget, screen)
+    }));
 
     res.setHeader('Cache-Control', 'no-store');
     res.json({
@@ -333,12 +383,13 @@ router.get('/:token', async (req, res, next) => {
         id: screen.id,
         name: screen.name,
         alertsEnabled: screen.alertsEnabled !== false,
+        layoutMode: screen.layoutMode,
         refreshSeconds: screen.refreshSeconds,
         widgets: screen.widgets
       },
       generatedAt: new Date().toISOString(),
-      alertCount: renderedWidgets.filter(widget => widget.tone === 'alert').length,
-      widgets: renderedWidgets
+      alertCount: widgetsWithLayout.filter(widget => widget.tone === 'alert').length,
+      widgets: widgetsWithLayout
     });
   } catch (err) {
     next(err);

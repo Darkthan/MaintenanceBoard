@@ -47,8 +47,27 @@ const DISPLAY_WIDGET_OPTIONS = [
 
 const DISPLAY_WIDGET_LABELS = Object.fromEntries(DISPLAY_WIDGET_OPTIONS.map(widget => [widget.id, widget.label]));
 const DISPLAY_WIDGET_IDS = new Set(DISPLAY_WIDGET_OPTIONS.map(widget => widget.id));
+const DISPLAY_WIDGET_SIZE_OPTIONS = [
+  { id: 'compact', label: 'Compact' },
+  { id: 'wide', label: 'Large' },
+  { id: 'hero', label: 'Hero' }
+];
+const DISPLAY_WIDGET_SIZE_LABELS = Object.fromEntries(DISPLAY_WIDGET_SIZE_OPTIONS.map(size => [size.id, size.label]));
+const DISPLAY_WIDGET_SIZE_IDS = new Set(DISPLAY_WIDGET_SIZE_OPTIONS.map(size => size.id));
+const DISPLAY_LAYOUT_OPTIONS = [
+  { id: 'AUTO', label: 'Auto' },
+  { id: 'MANUAL', label: 'Manuel' }
+];
+const DISPLAY_LAYOUT_IDS = new Set(DISPLAY_LAYOUT_OPTIONS.map(layout => layout.id));
 const DISPLAY_DEFAULT_WIDGETS = ['overview', 'interventions', 'repairs', 'stockAlerts'];
+const DISPLAY_DEFAULT_LAYOUT_MODE = 'AUTO';
 const DISPLAY_DEFAULT_REFRESH_SECONDS = 30;
+const DISPLAY_DEFAULT_WIDGET_LAYOUTS = [
+  { id: 'overview', size: 'hero' },
+  { id: 'interventions', size: 'wide' },
+  { id: 'repairs', size: 'wide' },
+  { id: 'stockAlerts', size: 'compact' }
+];
 
 function createDisplayError(message, status = 400) {
   const err = new Error(message);
@@ -70,13 +89,37 @@ function normalizeDisplayWidgets(rawWidgets) {
   )];
 }
 
+function getDefaultWidgetLayout(widgetId) {
+  return DISPLAY_DEFAULT_WIDGET_LAYOUTS.find(layout => layout.id === widgetId) || { id: widgetId, size: 'compact' };
+}
+
+function normalizeWidgetLayouts(rawLayouts, fallbackWidgets = []) {
+  const source = Array.isArray(rawLayouts) && rawLayouts.length
+    ? rawLayouts
+    : normalizeDisplayWidgets(fallbackWidgets).map(widgetId => getDefaultWidgetLayout(widgetId));
+
+  const layouts = [];
+  const seen = new Set();
+
+  source.forEach(item => {
+    const id = typeof item === 'string' ? item.trim() : String(item?.id || '').trim();
+    if (!DISPLAY_WIDGET_IDS.has(id) || seen.has(id)) return;
+    const size = typeof item === 'object' && DISPLAY_WIDGET_SIZE_IDS.has(item?.size) ? item.size : getDefaultWidgetLayout(id).size;
+    seen.add(id);
+    layouts.push({ id, size });
+  });
+
+  return layouts;
+}
+
 function normalizeDisplayScreens(rawScreens) {
   if (!Array.isArray(rawScreens)) return [];
 
   return rawScreens
     .map(screen => {
       if (!screen || typeof screen !== 'object') return null;
-      const widgets = normalizeDisplayWidgets(screen.widgets);
+      const widgetLayouts = normalizeWidgetLayouts(screen.widgetLayouts, screen.widgets);
+      const widgets = widgetLayouts.map(layout => layout.id);
       const name = String(screen.name || '').trim();
       const token = String(screen.token || '').trim();
       const id = String(screen.id || '').trim();
@@ -88,6 +131,8 @@ function normalizeDisplayScreens(rawScreens) {
         name,
         token,
         widgets,
+        widgetLayouts,
+        layoutMode: DISPLAY_LAYOUT_IDS.has(screen.layoutMode) ? screen.layoutMode : DISPLAY_DEFAULT_LAYOUT_MODE,
         alertsEnabled: screen.alertsEnabled !== false,
         refreshSeconds: Number.isFinite(refreshValue) ? Math.max(15, Math.min(3600, Math.round(refreshValue))) : DISPLAY_DEFAULT_REFRESH_SECONDS,
         createdAt: screen.createdAt || null,
@@ -115,16 +160,35 @@ function normalizeDisplayScreenInput(input = {}, current = {}) {
         ? current.widgets
         : DISPLAY_DEFAULT_WIDGETS
   );
+  const widgetLayouts = normalizeWidgetLayouts(
+    input.widgetLayouts !== undefined
+      ? input.widgetLayouts
+      : current.widgetLayouts !== undefined
+        ? current.widgetLayouts
+        : widgets
+  ).filter(layout => widgets.includes(layout.id));
 
   if (!widgets.length) {
     throw createDisplayError('Sélectionnez au moins un bloc à afficher.');
   }
 
+  if (!widgetLayouts.length) {
+    throw createDisplayError('Définissez l’agencement des blocs sélectionnés.');
+  }
+
+  const layoutMode = DISPLAY_LAYOUT_IDS.has(input.layoutMode)
+    ? input.layoutMode
+    : DISPLAY_LAYOUT_IDS.has(current.layoutMode)
+      ? current.layoutMode
+      : DISPLAY_DEFAULT_LAYOUT_MODE;
+
   return {
     name,
+    layoutMode,
     alertsEnabled: input.alertsEnabled !== undefined ? !!input.alertsEnabled : current.alertsEnabled !== false,
     refreshSeconds: Math.round(refreshValue),
-    widgets
+    widgets: widgetLayouts.map(layout => layout.id),
+    widgetLayouts
   };
 }
 
@@ -166,8 +230,15 @@ function serializeDisplayScreen(screen, appUrl) {
     token: screen.token,
     alertsEnabled: screen.alertsEnabled !== false,
     refreshSeconds: screen.refreshSeconds,
+    layoutMode: screen.layoutMode || DISPLAY_DEFAULT_LAYOUT_MODE,
     widgets: screen.widgets,
     widgetLabels: screen.widgets.map(widgetId => DISPLAY_WIDGET_LABELS[widgetId] || widgetId),
+    widgetLayouts: screen.widgetLayouts.map(layout => ({
+      id: layout.id,
+      label: DISPLAY_WIDGET_LABELS[layout.id] || layout.id,
+      size: layout.size,
+      sizeLabel: DISPLAY_WIDGET_SIZE_LABELS[layout.size] || layout.size
+    })),
     publicUrl: buildDisplayPublicUrl(appUrl, screen.token),
     createdAt: screen.createdAt,
     updatedAt: screen.updatedAt
@@ -177,7 +248,11 @@ function serializeDisplayScreen(screen, appUrl) {
 module.exports = {
   DISPLAY_WIDGET_OPTIONS,
   DISPLAY_WIDGET_LABELS,
+  DISPLAY_WIDGET_SIZE_OPTIONS,
+  DISPLAY_WIDGET_SIZE_LABELS,
+  DISPLAY_LAYOUT_OPTIONS,
   DISPLAY_DEFAULT_WIDGETS,
+  DISPLAY_DEFAULT_LAYOUT_MODE,
   DISPLAY_DEFAULT_REFRESH_SECONDS,
   normalizeDisplayScreens,
   normalizeDisplayScreenInput,

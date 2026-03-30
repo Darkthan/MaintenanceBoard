@@ -26,7 +26,7 @@
     </header>
 
     <div id="screen-error" class="hidden mt-6 rounded-[24px] border border-rose-500/30 bg-rose-950/60 px-6 py-5 text-rose-100"></div>
-    <div id="display-grid" class="mt-6 grid gap-5 xl:grid-cols-2"></div>
+    <div id="display-grid" class="mt-6 grid gap-5 lg:grid-cols-2 xl:grid-cols-6 items-start"></div>
   </main>
 
   <script>
@@ -57,13 +57,20 @@
       });
     }
 
+    function getWidgetSpanClasses(widget) {
+      const size = widget.layout?.size || 'compact';
+      if (size === 'hero') return 'lg:col-span-2 xl:col-span-6';
+      if (size === 'wide') return 'lg:col-span-2 xl:col-span-3';
+      return 'lg:col-span-1 xl:col-span-2';
+    }
+
     function widgetShell(widget, innerHtml) {
       const classes = widget.tone === 'alert'
         ? 'border-rose-500/30 bg-rose-950/50'
         : 'border-white/10 bg-white/5';
       const tone = widget.tone === 'alert' ? 'text-rose-200' : 'text-slate-300';
       return `
-        <section class="rounded-[28px] border ${classes} px-6 py-5 shadow-xl shadow-slate-950/30">
+        <section class="rounded-[28px] border ${classes} px-6 py-5 shadow-xl shadow-slate-950/30 ${getWidgetSpanClasses(widget)}">
           <div class="mb-5 flex items-center justify-between gap-3">
             <div>
               <h2 class="text-xl font-semibold text-white">${escapeHtml(widget.title)}</h2>
@@ -81,6 +88,11 @@
     }
 
     function renderOverview(widget) {
+      const statsGridClass = widget.layout?.size === 'hero'
+        ? 'grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'
+        : widget.layout?.size === 'wide'
+          ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
+          : 'grid grid-cols-1 gap-4';
       const stats = (widget.stats || []).map(stat => `
         <article class="rounded-2xl border ${stat.alert ? 'border-rose-500/30 bg-rose-950/50' : 'border-white/10 bg-slate-900/40'} px-4 py-4">
           <p class="text-xs font-semibold uppercase tracking-[0.2em] ${stat.alert ? 'text-rose-200' : 'text-slate-400'}">${escapeHtml(stat.label)}</p>
@@ -89,7 +101,7 @@
         </article>
       `).join('');
 
-      return widgetShell(widget, `<div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">${stats}</div>`);
+      return widgetShell(widget, `<div class="${statsGridClass}">${stats}</div>`);
     }
 
     function renderListWidget(widget) {
@@ -144,7 +156,7 @@
 
         errorEl.classList.add('hidden');
         document.getElementById('screen-title').textContent = payload.screen?.name || 'Écran d’affichage';
-        document.getElementById('screen-subtitle').textContent = `${(payload.widgets || []).length} bloc(s) affiché(s) · rafraîchissement toutes les ${payload.screen?.refreshSeconds || 30} secondes`;
+        document.getElementById('screen-subtitle').textContent = `${(payload.widgets || []).length} bloc(s) affiché(s) · ${payload.screen?.layoutMode === 'MANUAL' ? 'agencement personnalisé' : 'agencement dynamique'} · rafraîchissement toutes les ${payload.screen?.refreshSeconds || 30} secondes`;
         document.getElementById('screen-updated').textContent = formatDateTime(payload.generatedAt);
         alertPill.classList.toggle('hidden', !(payload.alertCount > 0));
 

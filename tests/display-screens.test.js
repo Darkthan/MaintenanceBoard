@@ -78,13 +78,22 @@ describe('display screens settings and public payload', () => {
       .send({
         name: 'Hall principal',
         alertsEnabled: false,
+        layoutMode: 'MANUAL',
         refreshSeconds: 60,
-        widgets: ['overview', 'interventions', 'stockAlerts']
+        widgets: ['overview', 'interventions', 'stockAlerts'],
+        widgetLayouts: [
+          { id: 'interventions', size: 'hero' },
+          { id: 'overview', size: 'wide' },
+          { id: 'stockAlerts', size: 'compact' }
+        ]
       });
 
     expect(createRes.status).toBe(201);
     expect(createRes.body.screen.name).toBe('Hall principal');
     expect(createRes.body.screen.alertsEnabled).toBe(false);
+    expect(createRes.body.screen.layoutMode).toBe('MANUAL');
+    expect(createRes.body.screen.widgetLayouts.map(item => item.id)).toEqual(['interventions', 'overview', 'stockAlerts']);
+    expect(createRes.body.screen.widgetLayouts[0].size).toBe('hero');
     expect(createRes.body.screen.publicUrl).toContain('/screen/');
     expect(settingsStore.__getState().displayScreens).toHaveLength(1);
 
@@ -166,6 +175,8 @@ describe('display screens settings and public payload', () => {
     expect(res.body.widgets.some(widget => widget.id === 'interventions' && widget.items[0].alert)).toBe(true);
     expect(res.body.widgets.some(widget => widget.id === 'stockAlerts' && widget.items[0].title === 'Toner noir')).toBe(true);
     expect(res.body.widgets.some(widget => widget.id === 'upcomingLoans' && widget.items[0].alert)).toBe(true);
+    expect(res.body.widgets[0].id).toBe('overview');
+    expect(res.body.widgets[0].layout.size).toBe('hero');
   });
 
   it('désactive toutes les alertes visuelles quand l écran le demande', async () => {
@@ -215,6 +226,46 @@ describe('display screens settings and public payload', () => {
     expect(res.body.alertCount).toBe(0);
     expect(res.body.widgets.every(widget => widget.tone === 'neutral')).toBe(true);
     expect(res.body.widgets.every(widget => widget.items.every(item => item.alert === false))).toBe(true);
+  });
+
+  it('respecte l ordre et la taille en mode manuel', async () => {
+    settingsStore.__setState({
+      displayScreens: [
+        {
+          id: 'screen-3',
+          name: 'Accueil manuel',
+          token: 'manual-token',
+          alertsEnabled: true,
+          layoutMode: 'MANUAL',
+          refreshSeconds: 30,
+          widgets: ['orders', 'overview'],
+          widgetLayouts: [
+            { id: 'orders', size: 'hero' },
+            { id: 'overview', size: 'compact' }
+          ],
+          createdAt: '2026-03-30T08:00:00.000Z',
+          updatedAt: '2026-03-30T08:00:00.000Z'
+        }
+      ]
+    });
+
+    prisma.order.findMany.mockResolvedValue([
+      {
+        id: 'order-1',
+        title: 'Cartouches',
+        supplier: 'Canon',
+        requester: { name: 'Admin' },
+        status: 'PENDING'
+      }
+    ]);
+
+    const res = await request(buildApp()).get('/api/display/manual-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.screen.layoutMode).toBe('MANUAL');
+    expect(res.body.widgets.map(widget => widget.id)).toEqual(['orders', 'overview']);
+    expect(res.body.widgets[0].layout.size).toBe('hero');
+    expect(res.body.widgets[1].layout.size).toBe('compact');
   });
 
   it('retourne 404 pour un écran inconnu', async () => {

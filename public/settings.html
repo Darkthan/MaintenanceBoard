@@ -846,12 +846,32 @@
               Activer les alertes visuelles en rouge sur l'écran
             </label>
 
+            <label class="block text-sm">
+              <span class="font-medium text-slate-700 mb-1 block">Agencement</span>
+              <select id="screen-layout-mode"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                <option value="AUTO">Dynamique</option>
+                <option value="MANUAL">Personnalisé</option>
+              </select>
+              <span class="mt-1 block text-xs text-slate-400">Le mode dynamique remonte automatiquement les alertes et adapte la taille des blocs. Le mode personnalisé laisse choisir l’ordre et la taille.</span>
+            </label>
+
             <div class="space-y-3">
               <div>
                 <p class="font-medium text-slate-700">Blocs visibles</p>
                 <p class="text-xs text-slate-400 mt-1">Les cartes marquées <span class="text-rose-600 font-medium">Alerte rouge</span> passent en rouge si une action est requise.</p>
               </div>
               <div id="screen-widget-list" class="grid grid-cols-1 gap-3"></div>
+            </div>
+
+            <div class="space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="font-medium text-slate-700">Ordre et taille</p>
+                  <p id="screen-layout-hint" class="text-xs text-slate-400 mt-1">Ajuste l’ordre et la largeur des blocs pour ce mode.</p>
+                </div>
+              </div>
+              <div id="screen-layout-list" class="space-y-3"></div>
             </div>
 
             <div id="screen-feedback" class="hidden rounded-xl px-4 py-3 text-sm"></div>
@@ -1095,6 +1115,7 @@ let currentUser = null;
 let logPeriod = 7;
 let screens = [];
 let currentScreen = null;
+let screenWidgetLayouts = [];
 
 const SCREEN_WIDGET_OPTIONS = [
   { id: 'overview', label: 'Vue d’ensemble', description: 'Compteurs globaux et alertes principales.', alert: true },
@@ -1106,6 +1127,17 @@ const SCREEN_WIDGET_OPTIONS = [
   { id: 'upcomingLoans', label: 'Prêts à venir', description: 'Réservations prévues sur 14 jours.', alert: false }
 ];
 const DEFAULT_SCREEN_WIDGETS = ['overview', 'interventions', 'repairs', 'stockAlerts'];
+const SCREEN_WIDGET_SIZE_OPTIONS = [
+  { id: 'compact', label: 'Compact' },
+  { id: 'wide', label: 'Large' },
+  { id: 'hero', label: 'Hero' }
+];
+const SCREEN_WIDGET_DEFAULT_LAYOUTS = [
+  { id: 'overview', size: 'hero' },
+  { id: 'interventions', size: 'wide' },
+  { id: 'repairs', size: 'wide' },
+  { id: 'stockAlerts', size: 'compact' }
+];
 
 // ─── Onglets principaux ────────────────────────────────────────────────────
 function showTab(name) {
@@ -1630,6 +1662,10 @@ function renderScreenWidgetOptions() {
       </div>
     </label>
   `).join('');
+
+  document.querySelectorAll('.screen-widget-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => syncScreenWidgetLayouts());
+  });
 }
 
 function setScreenFeedback(message, tone = 'neutral') {
@@ -1654,11 +1690,109 @@ function getSelectedScreenWidgets() {
   return [...document.querySelectorAll('.screen-widget-checkbox:checked')].map(cb => cb.value);
 }
 
-function setSelectedScreenWidgets(widgetIds = []) {
+function getScreenWidgetOption(widgetId) {
+  return SCREEN_WIDGET_OPTIONS.find(widget => widget.id === widgetId) || { id: widgetId, label: widgetId, description: '' };
+}
+
+function getDefaultScreenWidgetLayout(widgetId) {
+  return SCREEN_WIDGET_DEFAULT_LAYOUTS.find(layout => layout.id === widgetId) || { id: widgetId, size: 'compact' };
+}
+
+function setSelectedScreenWidgets(widgetIds = [], widgetLayouts = null) {
   const selected = new Set(widgetIds);
   document.querySelectorAll('.screen-widget-checkbox').forEach(cb => {
     cb.checked = selected.has(cb.value);
   });
+  if (Array.isArray(widgetLayouts)) {
+    screenWidgetLayouts = widgetLayouts.map(layout => ({
+      id: layout.id,
+      size: SCREEN_WIDGET_SIZE_OPTIONS.some(option => option.id === layout.size) ? layout.size : getDefaultScreenWidgetLayout(layout.id).size
+    }));
+    renderScreenLayoutList();
+  } else {
+    syncScreenWidgetLayouts(widgetIds);
+  }
+}
+
+function syncScreenWidgetLayouts(selectedIds = getSelectedScreenWidgets()) {
+  const previous = new Map(screenWidgetLayouts.map(layout => [layout.id, layout]));
+  const orderedCurrentIds = screenWidgetLayouts.map(layout => layout.id).filter(id => selectedIds.includes(id));
+  const missingIds = selectedIds.filter(id => !orderedCurrentIds.includes(id));
+  screenWidgetLayouts = [
+    ...orderedCurrentIds.map(id => ({ ...previous.get(id) })),
+    ...missingIds.map(id => ({ ...(previous.get(id) || getDefaultScreenWidgetLayout(id)) }))
+  ];
+  renderScreenLayoutList();
+}
+
+function moveScreenLayout(widgetId, direction) {
+  const index = screenWidgetLayouts.findIndex(layout => layout.id === widgetId);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= screenWidgetLayouts.length) return;
+  const next = [...screenWidgetLayouts];
+  [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+  screenWidgetLayouts = next;
+  renderScreenLayoutList();
+}
+
+function updateScreenLayoutSize(widgetId, size) {
+  screenWidgetLayouts = screenWidgetLayouts.map(layout => (
+    layout.id === widgetId ? { ...layout, size } : layout
+  ));
+}
+
+function renderScreenLayoutList() {
+  const container = document.getElementById('screen-layout-list');
+  const layoutMode = document.getElementById('screen-layout-mode').value;
+  const hint = document.getElementById('screen-layout-hint');
+  const isManual = layoutMode === 'MANUAL';
+
+  if (hint) {
+    hint.textContent = isManual
+      ? 'Déplace les blocs et ajuste leur taille. L’écran respectera exactement cet ordre.'
+      : 'Le moteur dynamique réorganise automatiquement les alertes et adapte la taille des blocs.';
+  }
+
+  if (!screenWidgetLayouts.length) {
+    container.innerHTML = '<div class="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-400">Sélectionne au moins un bloc pour définir l’agencement.</div>';
+    return;
+  }
+
+  container.innerHTML = screenWidgetLayouts.map((layout, index) => {
+    const widget = getScreenWidgetOption(layout.id);
+    return `
+      <div class="rounded-xl border border-slate-200 px-4 py-4 ${isManual ? 'bg-white' : 'bg-slate-50'}">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">${index + 1}</span>
+              <span class="font-medium text-slate-800">${widget.label}</span>
+              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${widget.alert ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'}">
+                ${widget.alert ? 'Alerte rouge' : 'Information'}
+              </span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">${widget.description}</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" ${!isManual || index === 0 ? 'disabled' : ''} onclick="moveScreenLayout('${layout.id}', -1)"
+              class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium ${!isManual || index === 0 ? 'cursor-not-allowed text-slate-300' : 'text-slate-700 hover:bg-slate-50'} transition">
+              Monter
+            </button>
+            <button type="button" ${!isManual || index === screenWidgetLayouts.length - 1 ? 'disabled' : ''} onclick="moveScreenLayout('${layout.id}', 1)"
+              class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium ${!isManual || index === screenWidgetLayouts.length - 1 ? 'cursor-not-allowed text-slate-300' : 'text-slate-700 hover:bg-slate-50'} transition">
+              Descendre
+            </button>
+            <select ${!isManual ? 'disabled' : ''} onchange="updateScreenLayoutSize('${layout.id}', this.value)"
+              class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium ${!isManual ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'text-slate-700'}">
+              ${SCREEN_WIDGET_SIZE_OPTIONS.map(option => `
+                <option value="${option.id}" ${layout.size === option.id ? 'selected' : ''}>${option.label}</option>
+              `).join('')}
+            </select>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function updateScreensCountBadge() {
@@ -1693,11 +1827,14 @@ function renderScreensList() {
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${screen.alertsEnabled === false ? 'bg-slate-100 text-slate-500' : 'bg-rose-100 text-rose-700'}">
                 ${screen.alertsEnabled === false ? 'Alertes coupées' : 'Alertes actives'}
               </span>
+              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${screen.layoutMode === 'MANUAL' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}">
+                ${screen.layoutMode === 'MANUAL' ? 'Agencement manuel' : 'Agencement auto'}
+              </span>
             </div>
             <p class="mt-1 text-xs text-slate-400 break-all">${screen.publicUrl}</p>
             <div class="mt-3 flex flex-wrap gap-2">
-              ${screen.widgetLabels.map(label => `
-                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">${label}</span>
+              ${(screen.widgetLayouts || []).map(layout => `
+                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">${layout.label} · ${layout.sizeLabel}</span>
               `).join('')}
             </div>
           </div>
@@ -1731,7 +1868,11 @@ function fillScreenForm(screen) {
   document.getElementById('screen-name').value = screen?.name || '';
   document.getElementById('screen-refresh').value = String(screen?.refreshSeconds || 30);
   document.getElementById('screen-alerts-enabled').checked = screen?.alertsEnabled !== false;
-  setSelectedScreenWidgets(screen?.widgets || DEFAULT_SCREEN_WIDGETS);
+  document.getElementById('screen-layout-mode').value = screen?.layoutMode || 'AUTO';
+  setSelectedScreenWidgets(
+    screen?.widgets || DEFAULT_SCREEN_WIDGETS,
+    screen?.widgetLayouts || (screen?.widgets || DEFAULT_SCREEN_WIDGETS).map(id => getDefaultScreenWidgetLayout(id))
+  );
 
   const linkPanel = document.getElementById('screen-link-panel');
   const linkInput = document.getElementById('screen-public-url');
@@ -1750,7 +1891,8 @@ function resetScreenForm() {
   document.getElementById('screen-id').value = '';
   document.getElementById('screen-refresh').value = '30';
   document.getElementById('screen-alerts-enabled').checked = true;
-  setSelectedScreenWidgets(DEFAULT_SCREEN_WIDGETS);
+  document.getElementById('screen-layout-mode').value = 'AUTO';
+  setSelectedScreenWidgets(DEFAULT_SCREEN_WIDGETS, DEFAULT_SCREEN_WIDGETS.map(id => getDefaultScreenWidgetLayout(id)));
   document.getElementById('screen-link-panel').classList.add('hidden');
   document.getElementById('screen-public-url').value = '';
   setScreenFeedback('');
@@ -1790,9 +1932,11 @@ async function saveScreen(event) {
   try {
     const payload = {
       name: document.getElementById('screen-name').value.trim(),
+      layoutMode: document.getElementById('screen-layout-mode').value,
       alertsEnabled: document.getElementById('screen-alerts-enabled').checked,
       refreshSeconds: parseInt(document.getElementById('screen-refresh').value, 10),
-      widgets: getSelectedScreenWidgets()
+      widgets: getSelectedScreenWidgets(),
+      widgetLayouts: screenWidgetLayouts
     };
     const screenId = document.getElementById('screen-id').value;
     const response = screenId
@@ -2015,6 +2159,7 @@ async function saveWebAuthn() {
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 renderScreenWidgetOptions();
+document.getElementById('screen-layout-mode').addEventListener('change', renderScreenLayoutList);
 resetScreenForm();
 
 requireLogin().then(() => {
