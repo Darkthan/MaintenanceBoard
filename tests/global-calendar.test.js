@@ -48,7 +48,7 @@ describe('global calendar feed', () => {
   });
 
   it('retourne le lien iCal global authentifié', async () => {
-    const res = await request(buildApp()).get('/api/interventions/calendar-feed');
+    const res = await request(buildApp()).get('/api/calendar/global-feed');
 
     expect(res.status).toBe(200);
     expect(res.body.token).toBe('global-feed-token');

@@ -2,7 +2,7 @@ const express = require('express');
 const prisma = require('../lib/prisma');
 const { readSettings } = require('../utils/settings');
 const { normalizeDisplayScreens, DISPLAY_WIDGET_LABELS } = require('../utils/displayScreens');
-const { fetchGlobalCalendarEntries } = require('../utils/globalCalendar');
+const { fetchGlobalCalendarEntries, formatCalendarDate, formatRoomLabel } = require('../utils/globalCalendar');
 
 const router = express.Router();
 
@@ -124,20 +124,6 @@ function getWidgetLayout(widget, screen) {
   return { size };
 }
 
-function formatRoomLabel(room) {
-  if (!room) return 'Non assigné';
-  return room.number ? `${room.name} (${room.number})` : room.name;
-}
-
-function formatLoanDate(value) {
-  return new Date(value).toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
 
 function formatCalendarDayLabel(value) {
   return new Date(value).toLocaleDateString('fr-FR', {
@@ -227,7 +213,7 @@ async function buildOverviewWidget() {
   const lowStockCount = stockItems.filter(item => item.quantity <= item.minQuantity).length;
   const nextLoanDescription = nextLoan
     ? [
-        formatLoanDate(nextLoan.startAt),
+        formatCalendarDate(nextLoan.startAt),
         nextLoan.requesterName,
         nextLoan.resource?.name || 'Ressource'
       ].filter(Boolean).join(' · ')
@@ -450,7 +436,7 @@ async function buildUpcomingLoansWidget(screen) {
     items: items.map(item => ({
       title: item.resource?.name || 'Ressource',
       subtitle: [item.requesterName, item.requesterOrganization].filter(Boolean).join(' · '),
-      meta: `${formatLoanDate(item.startAt)} → ${formatLoanDate(item.endAt)}`,
+      meta: `${formatCalendarDate(item.startAt)} → ${formatCalendarDate(item.endAt)}`,
       alert: isLoanAlert(item.startAt, now, screen?.openingHour)
     }))
   };

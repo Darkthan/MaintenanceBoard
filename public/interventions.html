@@ -1208,7 +1208,7 @@ async function deleteIntervention(id) {
 
 async function loadGlobalCalendarFeed() {
   try {
-    const feed = await api.get('/interventions/calendar-feed');
+    const feed = await api.get('/calendar/global-feed');
     document.getElementById('global-calendar-feed-url').value = feed.url;
   } catch (err) {
     document.getElementById('global-calendar-feed-url').value = `Erreur : ${err.message}`;

@@ -226,10 +226,17 @@ function buildGlobalCalendarIcs(entries) {
   })));
 }
 
+let _cachedFeedToken = null;
+
 function getGlobalCalendarFeedToken() {
+  if (_cachedFeedToken) return _cachedFeedToken;
+
   const settings = readSettings();
   const existing = settings?.[GLOBAL_CALENDAR_TOKEN_KEY]?.token;
-  if (existing) return existing;
+  if (existing) {
+    _cachedFeedToken = existing;
+    return existing;
+  }
 
   const token = randomUUID();
   writeSettings({
@@ -238,6 +245,7 @@ function getGlobalCalendarFeedToken() {
       createdAt: new Date().toISOString()
     }
   });
+  _cachedFeedToken = token;
   return token;
 }
 
@@ -247,6 +255,8 @@ module.exports = {
   escapeIcsText,
   toIcsDate,
   buildIcs,
+  formatCalendarDate,
+  formatRoomLabel,
   fetchGlobalCalendarEntries,
   buildGlobalCalendarIcs,
   getGlobalCalendarFeedToken,

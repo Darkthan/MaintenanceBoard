@@ -40,7 +40,6 @@ const prisma = require('../lib/prisma');
 const { containsFilter } = require('../lib/db-utils');
 const { createSmtpTransporter } = require('../utils/mail');
 const config = require('../config');
-const { getGlobalCalendarFeedToken } = require('../utils/globalCalendar');
 const {
   extractLowDiskMountFromTitle,
   parseAgentAlertState,
@@ -199,14 +198,6 @@ router.get('/equipment/:equipId', requireAuth, async (req, res, next) => {
     });
     res.json(interventions.map(parsePhotos));
   } catch (err) { next(err); }
-});
-
-router.get('/calendar-feed', requireAuth, (req, res) => {
-  const token = getGlobalCalendarFeedToken();
-  res.json({
-    token,
-    url: `${config.appUrl}/api/calendar/global.ics?token=${encodeURIComponent(token)}`
-  });
 });
 
 // GET /api/interventions/:id - Détail
