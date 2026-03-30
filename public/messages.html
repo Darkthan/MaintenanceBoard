@@ -58,12 +58,21 @@
 
     <div class="flex-1 p-6 space-y-6">
       <section class="bg-white rounded-2xl border border-slate-200 p-5">
-        <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center justify-between gap-3 flex-wrap gap-y-2">
           <div>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Boîte de réception</p>
             <h2 class="text-lg font-semibold text-slate-800">Conversations internes</h2>
           </div>
-          <span id="conversation-count" class="text-xs text-slate-400">0 conversation</span>
+          <div class="flex items-center gap-3">
+            <button id="toggle-archived-btn" type="button"
+              class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 transition">
+              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              </svg>
+              Archivées
+            </button>
+            <span id="conversation-count" class="text-xs text-slate-400">0 conversation</span>
+          </div>
         </div>
         <div id="conversation-list" class="mt-4 space-y-3">
           <p class="text-sm text-slate-400 text-center py-10">Chargement...</p>
@@ -132,6 +141,7 @@
 let recipients = [];
 let conversations = [];
 let ticketThreads = [];
+let showingArchived = false;
 const selectedRecipientIds = new Set();
 
 const newConversationModalEl = document.getElementById('new-conversation-modal');
@@ -247,14 +257,23 @@ function renderRecipients() {
 function renderConversations() {
   conversationCountEl.textContent = `${conversations.length} conversation${conversations.length > 1 ? 's' : ''}`;
 
+  const toggleBtn = document.getElementById('toggle-archived-btn');
+  if (toggleBtn) {
+    toggleBtn.classList.toggle('bg-slate-100', showingArchived);
+    toggleBtn.classList.toggle('text-slate-800', showingArchived);
+    toggleBtn.textContent = showingArchived ? '← Actives' : '🗄 Archivées';
+  }
+
   if (!conversations.length) {
-    conversationListEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-10">Aucune conversation pour le moment.</p>';
+    conversationListEl.innerHTML = `<p class="text-sm text-slate-400 text-center py-10">${showingArchived ? 'Aucune conversation archivée.' : 'Aucune conversation pour le moment.'}</p>`;
     return;
   }
 
   conversationListEl.innerHTML = conversations.map(conversation => {
     const name = conversation.displayName || conversation.otherParticipant?.name || 'Conversation';
-    const preview = conversation.lastMessage?.content || conversation.lastMessage?.attachmentName || 'Aucun message';
+    const preview = conversation.lastMessage?.deleted
+      ? '<em>Message supprimé</em>'
+      : (conversation.lastMessage?.content || conversation.lastMessage?.attachmentName || 'Aucun message');
     const unreadBadge = conversation.unreadCount
       ? `<span class="inline-flex min-w-6 justify-center rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">${conversation.unreadCount}</span>`
       : '';
@@ -263,22 +282,64 @@ function renderConversations() {
       : (conversation.otherParticipant?.email || '');
 
     return `
-      <a href="${threadUrl(conversation.id)}"
-        class="block rounded-2xl border border-slate-200 bg-white px-4 py-4 transition hover:border-slate-300 hover:bg-slate-50">
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <div class="flex items-center gap-2">
-              <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(name)}</p>
-              ${unreadBadge}
+      <div class="group relative rounded-2xl border border-slate-200 bg-white transition hover:border-slate-300 hover:bg-slate-50">
+        <a href="${threadUrl(conversation.id)}" class="block px-4 py-4 pr-24">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(name)}</p>
+                ${unreadBadge}
+              </div>
+              <p class="mt-1 text-[11px] text-slate-400 truncate">${escapeHtml(meta)}</p>
+              <p class="mt-1 text-xs text-slate-500 truncate">${preview}</p>
             </div>
-            <p class="mt-1 text-[11px] text-slate-400 truncate">${escapeHtml(meta)}</p>
-            <p class="mt-1 text-xs text-slate-500 truncate">${escapeHtml(preview)}</p>
+            <span class="text-[11px] text-slate-400 whitespace-nowrap">${escapeHtml(formatRelative(conversation.lastMessage?.createdAt || conversation.updatedAt))}</span>
           </div>
-          <span class="text-[11px] text-slate-400 whitespace-nowrap">${escapeHtml(formatRelative(conversation.lastMessage?.createdAt || conversation.updatedAt))}</span>
+        </a>
+        <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+          <button type="button" data-action="archive" data-id="${conversation.id}"
+            title="${conversation.archivedAt ? 'Désarchiver' : 'Archiver'}"
+            class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+          </button>
+          <button type="button" data-action="delete" data-id="${conversation.id}"
+            title="Supprimer la conversation"
+            class="rounded-lg p-1.5 text-slate-400 hover:bg-red-100 hover:text-red-600 transition">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         </div>
-      </a>
+      </div>
     `;
   }).join('');
+
+  conversationListEl.querySelectorAll('[data-action="archive"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        const { archived } = await api.patch(`/messages/conversations/${btn.dataset.id}/archive`, {});
+        showToast(archived ? 'Conversation archivée' : 'Conversation désarchivée', 'success');
+        await loadConversations();
+      } catch (err) {
+        showToast(err.message || 'Erreur', 'error');
+      }
+    });
+  });
+
+  conversationListEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Supprimer définitivement cette conversation et tous ses messages ?')) return;
+      try {
+        await api.delete(`/messages/conversations/${btn.dataset.id}`);
+        showToast('Conversation supprimée', 'success');
+        await loadConversations();
+      } catch (err) {
+        showToast(err.message || 'Erreur', 'error');
+      }
+    });
+  });
 }
 
 const TICKET_STATUS_LABELS = {
@@ -331,7 +392,7 @@ async function loadRecipients() {
 }
 
 async function loadConversations() {
-  conversations = await api.get('/messages/conversations');
+  conversations = await api.get(`/messages/conversations${showingArchived ? '?archived=true' : ''}`);
   renderConversations();
 }
 
@@ -383,6 +444,11 @@ document.getElementById('refresh-btn').addEventListener('click', async () => {
   } catch (error) {
     showToast(error.message || 'Rafraîchissement impossible', 'error');
   }
+});
+
+document.getElementById('toggle-archived-btn').addEventListener('click', async () => {
+  showingArchived = !showingArchived;
+  await loadConversations();
 });
 
 document.getElementById('new-conversation-btn').addEventListener('click', openNewConversationModal);

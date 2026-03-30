@@ -120,17 +120,21 @@ async function buildConversationSummary(conversation, currentUserId) {
     otherParticipant,
     unreadCount,
     lastReadAt: currentParticipant?.lastReadAt || null,
+    archivedAt: currentParticipant?.archivedAt || null,
     lastMessage: lastMessage
       ? serializeMessage(lastMessage, conversation.id)
       : null
   };
 }
 
-async function listConversationSummaries(currentUserId) {
+async function listConversationSummaries(currentUserId, { archived = false } = {}) {
   const conversations = await prisma.internalConversation.findMany({
     where: {
       participants: {
-        some: { userId: currentUserId }
+        some: {
+          userId: currentUserId,
+          archivedAt: archived ? { not: null } : null
+        }
       }
     },
     orderBy: { updatedAt: 'desc' },
@@ -266,7 +270,8 @@ router.get('/users', requireAuth, async (req, res, next) => {
 
 router.get('/conversations', requireAuth, async (req, res, next) => {
   try {
-    res.json(await listConversationSummaries(req.user.id));
+    const archived = req.query.archived === 'true';
+    res.json(await listConversationSummaries(req.user.id, { archived }));
   } catch (err) {
     next(err);
   }
@@ -381,6 +386,12 @@ router.get('/conversations/:id/messages', requireAuth, async (req, res, next) =>
       }
     });
 
+    // Masquer le contenu des messages supprimés (soft delete)
+    const visibleMessages = messages.map(msg => msg.deletedAt
+      ? { ...msg, content: '', attachmentPath: null, attachmentName: null, attachmentMime: null, attachmentSize: null, deleted: true }
+      : msg
+    );
+
     await prisma.internalConversationParticipant.update({
       where: {
         conversationId_userId: {
@@ -391,7 +402,7 @@ router.get('/conversations/:id/messages', requireAuth, async (req, res, next) =>
       data: { lastReadAt: new Date() }
     });
 
-    res.json(messages.map(message => serializeMessage(message, conversationId)));
+    res.json(visibleMessages.map(message => serializeMessage(message, conversationId)));
   } catch (err) {
     next(err);
   }
@@ -440,6 +451,76 @@ router.post('/conversations/:id/messages', requireAuth, (req, res, next) => {
     if (req.file?.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
+    next(err);
+  }
+});
+
+router.patch('/conversations/:id/archive', requireAuth, async (req, res, next) => {
+  try {
+    const participant = await ensureConversationParticipant(req.params.id, req.user.id);
+    const updated = await prisma.internalConversationParticipant.update({
+      where: {
+        conversationId_userId: {
+          conversationId: req.params.id,
+          userId: req.user.id
+        }
+      },
+      data: { archivedAt: participant.archivedAt ? null : new Date() }
+    });
+    res.json({ archived: !!updated.archivedAt });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/conversations/:id', requireAuth, async (req, res, next) => {
+  try {
+    await ensureConversationParticipant(req.params.id, req.user.id);
+
+    // Récupérer les pièces jointes pour les supprimer du disque
+    const messages = await prisma.internalMessage.findMany({
+      where: { conversationId: req.params.id, attachmentPath: { not: null } },
+      select: { attachmentPath: true }
+    });
+
+    await prisma.internalConversation.delete({ where: { id: req.params.id } });
+
+    for (const msg of messages) {
+      if (msg.attachmentPath) {
+        const filePath = path.join(process.cwd(), 'uploads', msg.attachmentPath);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+    }
+
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/conversations/:id/messages/:messageId', requireAuth, async (req, res, next) => {
+  try {
+    await ensureConversationParticipant(req.params.id, req.user.id);
+
+    const message = await prisma.internalMessage.findUnique({
+      where: { id: req.params.messageId }
+    });
+
+    if (!message || message.conversationId !== req.params.id) {
+      return res.status(404).json({ error: 'Message introuvable' });
+    }
+
+    if (message.senderId !== req.user.id && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Vous ne pouvez supprimer que vos propres messages' });
+    }
+
+    await prisma.internalMessage.update({
+      where: { id: req.params.messageId },
+      data: { deletedAt: new Date() }
+    });
+
+    res.status(204).end();
+  } catch (err) {
     next(err);
   }
 });

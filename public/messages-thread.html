@@ -124,7 +124,35 @@
           <p id="thread-participant-email" class="text-sm text-slate-500"></p>
         </div>
       </div>
-      <span id="thread-updated-at" class="text-xs text-slate-400 hidden sm:block"></span>
+      <div class="flex items-center gap-2">
+        <span id="thread-updated-at" class="text-xs text-slate-400 hidden sm:block"></span>
+        <div class="relative" id="conversation-menu-wrapper">
+          <button id="conversation-menu-btn" type="button"
+            class="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+            title="Actions sur la conversation">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01" />
+            </svg>
+          </button>
+          <div id="conversation-menu" class="hidden absolute right-0 top-full mt-1 w-52 rounded-2xl border border-slate-200 bg-white shadow-lg z-30 py-1">
+            <button type="button" data-menu-action="archive"
+              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition">
+              <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              </svg>
+              <span id="archive-label">Archiver la conversation</span>
+            </button>
+            <hr class="my-1 border-slate-100">
+            <button type="button" data-menu-action="delete"
+              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Supprimer la conversation
+            </button>
+          </div>
+        </div>
+      </div>
     </header>
 
     <div class="thread-shell">
@@ -277,6 +305,7 @@ function renderThreadHeader() {
     ? (conversationSummary.participants || []).map(user => user.email || user.name).join(' · ')
     : (conversationSummary.otherParticipant?.email || '');
   threadUpdatedAtEl.textContent = conversationSummary.updatedAt ? `Mis à jour ${formatRelative(conversationSummary.updatedAt)}` : '';
+  updateConversationMenuLabel();
 }
 
 function renderMessages(messages) {
@@ -287,29 +316,104 @@ function renderMessages(messages) {
 
   messageListEl.innerHTML = messages.map(message => {
     const isMine = message.senderId === currentUser.id;
+    const isDeleted = !!message.deleted;
     const bubbleClass = isMine
       ? 'bg-blue-600 text-white ml-auto'
       : 'bg-white text-slate-800 mr-auto border border-slate-200';
     const metaClass = isMine ? 'text-blue-100' : 'text-slate-400';
-    const content = message.content
-      ? `<p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(message.content)}</p>`
-      : '';
+    const content = isDeleted
+      ? `<p class="text-xs italic opacity-60">Message supprimé</p>`
+      : (message.content ? `<p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(message.content)}</p>` : '');
+
+    const canDelete = !isDeleted && isMine;
+    const canCopy = !isDeleted && !!message.content;
+    const actions = (canCopy || canDelete) ? `
+      <div class="msg-actions flex gap-1 mt-1.5 ${isMine ? 'justify-end' : 'justify-start'}">
+        ${canCopy ? `<button type="button" data-msg-copy data-content="${escapeHtml(message.content)}"
+          class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium ${isMine ? 'text-blue-100 hover:bg-white/20' : 'text-slate-400 hover:bg-slate-100'} transition"
+          title="Copier le message">
+          <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          Copier</button>` : ''}
+        ${canDelete ? `<button type="button" data-msg-delete data-id="${message.id}"
+          class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium ${isMine ? 'text-blue-100 hover:bg-white/20' : 'text-slate-400 hover:bg-slate-100'} transition"
+          title="Supprimer ce message">
+          <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Supprimer</button>` : ''}
+      </div>` : '';
 
     return `
-      <div class="flex ${isMine ? 'justify-end' : 'justify-start'}">
+      <div class="flex flex-col ${isMine ? 'items-end' : 'items-start'}">
         <div class="max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${bubbleClass}">
           <div class="flex items-center justify-between gap-4">
             <p class="text-xs font-semibold ${metaClass}">${escapeHtml(message.sender?.name || 'Utilisateur')}</p>
             <p class="text-[11px] ${metaClass} whitespace-nowrap">${escapeHtml(formatDateTime(message.createdAt))}</p>
           </div>
           ${content}
-          ${buildAttachmentMarkup(message)}
+          ${isDeleted ? '' : buildAttachmentMarkup(message)}
         </div>
+        ${actions}
       </div>
     `;
   }).join('');
 
+  // Bind copy
+  messageListEl.querySelectorAll('[data-msg-copy]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.content);
+        showToast('Message copié', 'success');
+      } catch {
+        showToast('Impossible de copier', 'error');
+      }
+    });
+  });
+
+  // Bind delete
+  messageListEl.querySelectorAll('[data-msg-delete]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Supprimer ce message ?')) return;
+      try {
+        await api.delete(`/messages/conversations/${conversationId}/messages/${btn.dataset.id}`);
+        await loadMessages();
+      } catch (err) {
+        showToast(err.message || 'Erreur', 'error');
+      }
+    });
+  });
+
   messageListEl.scrollTop = messageListEl.scrollHeight;
+}
+
+function updateConversationMenuLabel() {
+  const label = document.getElementById('archive-label');
+  if (!label) return;
+  label.textContent = conversationSummary?.archivedAt ? 'Désarchiver la conversation' : 'Archiver la conversation';
+}
+
+async function handleConversationMenuAction(action) {
+  document.getElementById('conversation-menu')?.classList.add('hidden');
+  if (action === 'archive') {
+    try {
+      const { archived } = await api.patch(`/messages/conversations/${conversationId}/archive`, {});
+      conversationSummary = conversationSummary ? { ...conversationSummary, archivedAt: archived ? new Date() : null } : conversationSummary;
+      updateConversationMenuLabel();
+      showToast(archived ? 'Conversation archivée' : 'Conversation désarchivée', 'success');
+    } catch (err) {
+      showToast(err.message || 'Erreur', 'error');
+    }
+  } else if (action === 'delete') {
+    if (!confirm('Supprimer définitivement cette conversation et tous ses messages ?')) return;
+    try {
+      await api.delete(`/messages/conversations/${conversationId}`);
+      window.location.href = '/messages.html';
+    } catch (err) {
+      showToast(err.message || 'Erreur', 'error');
+    }
+  }
 }
 
 function setAttachment(file) {
@@ -386,6 +490,24 @@ function startAutoRefresh() {
     }
   }, 15000);
 }
+
+const conversationMenuBtn = document.getElementById('conversation-menu-btn');
+const conversationMenu = document.getElementById('conversation-menu');
+
+conversationMenuBtn?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  conversationMenu?.classList.toggle('hidden');
+});
+
+conversationMenu?.querySelectorAll('[data-menu-action]').forEach(btn => {
+  btn.addEventListener('click', () => handleConversationMenuAction(btn.dataset.menuAction));
+});
+
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('conversation-menu-wrapper')?.contains(e.target)) {
+    conversationMenu?.classList.add('hidden');
+  }
+});
 
 document.getElementById('pick-attachment-btn').addEventListener('click', () => attachmentInputEl.click());
 document.getElementById('clear-attachment-btn').addEventListener('click', () => setAttachment(null));
