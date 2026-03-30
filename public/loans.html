@@ -489,8 +489,8 @@ async function openResourceModal(resource = null) {
   const sel = document.getElementById('resource-equipment-id');
   sel.innerHTML = '<option value="">Aucun équipement lié</option>';
   try {
-    const equipments = await api.get('/equipment');
-    (equipments.items || equipments).forEach(eq => {
+    const equipments = await api.get('/equipment', { limit: 500 });
+    (equipments.data || equipments.items || []).forEach(eq => {
       const opt = document.createElement('option');
       opt.value = eq.id;
       opt.textContent = `${eq.name}${eq.serialNumber ? ` (${eq.serialNumber})` : ''}`;
@@ -662,7 +662,7 @@ async function openBulkModal() {
       api.get('/loans/resources')
     ]);
     const linkedIds = new Set(resources.filter(r => r.equipmentId).map(r => r.equipmentId));
-    const all = (equipData.items || equipData).filter(e => !linkedIds.has(e.id));
+    const all = (equipData.data || equipData.items || []).filter(e => !linkedIds.has(e.id));
     bulkEquipments = all;
     renderBulkList(all);
   } catch (err) {
