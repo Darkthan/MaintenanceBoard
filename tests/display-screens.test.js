@@ -36,7 +36,7 @@ jest.mock('../src/lib/prisma', () => ({
   intervention: { count: jest.fn(), findMany: jest.fn() },
   order: { findMany: jest.fn() },
   stockItem: { findMany: jest.fn() },
-  loanReservation: { findMany: jest.fn() }
+  loanReservation: { findMany: jest.fn(), findFirst: jest.fn() }
 }));
 
 const settingsStore = require('../src/utils/settings');
@@ -68,6 +68,7 @@ describe('display screens settings and public payload', () => {
     prisma.order.findMany.mockResolvedValue([]);
     prisma.stockItem.findMany.mockResolvedValue([]);
     prisma.loanReservation.findMany.mockResolvedValue([]);
+    prisma.loanReservation.findFirst.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -138,10 +139,9 @@ describe('display screens settings and public payload', () => {
     prisma.room.count.mockResolvedValue(12);
     prisma.equipment.count.mockImplementation(async ({ where } = {}) => {
       if (where?.status === 'REPAIR') return 2;
-      if (where?.discoveryStatus === 'PENDING') return 1;
       return 54;
     });
-    prisma.intervention.count.mockResolvedValue(3);
+    prisma.intervention.count.mockImplementation(async ({ where } = {}) => where?.status ? 3 : 9);
     prisma.intervention.findMany.mockResolvedValue([
       {
         id: 'int-1',
@@ -164,6 +164,15 @@ describe('display screens settings and public payload', () => {
         supplier: { name: 'HP' }
       }
     ]);
+    prisma.loanReservation.findFirst.mockResolvedValue({
+      id: 'loan-overview-1',
+      status: 'APPROVED',
+      requesterName: 'Lycée Beaupeyrat',
+      requesterOrganization: 'Lycée Beaupeyrat',
+      startAt: new Date('2026-03-30T12:00:00.000Z'),
+      endAt: new Date('2026-03-30T14:00:00.000Z'),
+      resource: { name: 'Chariot iPad', location: 'Réserve' }
+    });
     prisma.loanReservation.findMany.mockResolvedValue([
       {
         id: 'loan-1',
@@ -191,6 +200,17 @@ describe('display screens settings and public payload', () => {
     expect(res.body.screen.name).toBe('Accueil');
     expect(res.body.alertCount).toBeGreaterThan(0);
     expect(res.body.widgets.some(widget => widget.id === 'overview' && widget.tone === 'alert')).toBe(true);
+    const overview = res.body.widgets.find(widget => widget.id === 'overview');
+    expect(overview.stats.find(stat => stat.key === 'interventions')).toMatchObject({
+      label: 'Interventions',
+      value: 9,
+      alert: false
+    });
+    expect(overview.stats.find(stat => stat.key === 'nextLoan')).toMatchObject({
+      label: 'Prochaine réservation',
+      countdownTo: '2026-03-30T12:00:00.000Z',
+      alert: false
+    });
     expect(res.body.widgets.some(widget => widget.id === 'interventions' && widget.items[0].alert)).toBe(true);
     expect(res.body.widgets.some(widget => widget.id === 'stockAlerts' && widget.items[0].title === 'Toner noir')).toBe(true);
     const loansWidget = res.body.widgets.find(widget => widget.id === 'upcomingLoans');
@@ -216,7 +236,7 @@ describe('display screens settings and public payload', () => {
       ]
     });
 
-    prisma.intervention.count.mockResolvedValue(0);
+    prisma.intervention.count.mockImplementation(async ({ where } = {}) => where?.status ? 0 : 7);
     prisma.intervention.findMany.mockResolvedValue([
       {
         id: 'int-3',
@@ -235,7 +255,7 @@ describe('display screens settings and public payload', () => {
     const overview = res.body.widgets.find(widget => widget.id === 'overview');
     const interventions = res.body.widgets.find(widget => widget.id === 'interventions');
     expect(overview.stats.find(stat => stat.key === 'interventions').alert).toBe(false);
-    expect(overview.stats.find(stat => stat.key === 'interventions').value).toBe(0);
+    expect(overview.stats.find(stat => stat.key === 'interventions').value).toBe(7);
     expect(interventions.tone).toBe('neutral');
     expect(interventions.items[0].alert).toBe(false);
   });

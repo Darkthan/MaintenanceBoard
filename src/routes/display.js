@@ -136,19 +136,55 @@ function formatLoanDate(value) {
   });
 }
 
+function formatCountdown(targetDate, now = new Date()) {
+  const diffMs = new Date(targetDate).getTime() - new Date(now).getTime();
+  if (diffMs <= 0) {
+    return 'Maintenant';
+  }
+
+  const totalMinutes = Math.floor(diffMs / 60000);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+
+  if (days > 0) parts.push(`${days}j`);
+  if (hours > 0 || days > 0) parts.push(`${hours}h`);
+  parts.push(`${minutes}min`);
+
+  return `Dans ${parts.join(' ')}`;
+}
+
 async function buildOverviewWidget() {
-  const [roomsCount, equipmentCount, openInterventionsCount, repairsCount, pendingAgentsCount, stockItems] = await Promise.all([
+  const now = new Date();
+  const [roomsCount, equipmentCount, interventionsCount, repairsCount, stockItems, nextLoan] = await Promise.all([
     prisma.room.count(),
     prisma.equipment.count(),
-    prisma.intervention.count({ where: { status: { in: INTERVENTION_RED_STATUSES } } }),
+    prisma.intervention.count(),
     prisma.equipment.count({ where: { status: 'REPAIR' } }),
-    prisma.equipment.count({ where: { discoverySource: 'AGENT', discoveryStatus: 'PENDING' } }),
     prisma.stockItem.findMany({
       select: { id: true, quantity: true, minQuantity: true }
+    }),
+    prisma.loanReservation.findFirst({
+      where: {
+        status: { in: LOAN_VISIBLE_STATUSES },
+        startAt: { gte: now }
+      },
+      orderBy: [{ startAt: 'asc' }],
+      include: {
+        resource: { select: { name: true, location: true } }
+      }
     })
   ]);
 
   const lowStockCount = stockItems.filter(item => item.quantity <= item.minQuantity).length;
+  const nextLoanDescription = nextLoan
+    ? [
+        formatLoanDate(nextLoan.startAt),
+        nextLoan.requesterName,
+        nextLoan.resource?.name || 'Ressource'
+      ].filter(Boolean).join(' · ')
+    : 'Aucune réservation planifiée';
   const stats = [
     {
       key: 'rooms',
@@ -166,10 +202,10 @@ async function buildOverviewWidget() {
     },
     {
       key: 'interventions',
-      label: 'Interventions ouvertes',
-      value: openInterventionsCount,
-      description: openInterventionsCount ? 'Action requise' : 'Rien à signaler',
-      alert: openInterventionsCount > 0
+      label: 'Interventions',
+      value: interventionsCount,
+      description: 'Tous statuts confondus',
+      alert: false
     },
     {
       key: 'repairs',
@@ -186,11 +222,12 @@ async function buildOverviewWidget() {
       alert: lowStockCount > 0
     },
     {
-      key: 'agents',
-      label: 'Agents à valider',
-      value: pendingAgentsCount,
-      description: pendingAgentsCount ? 'Découvertes en attente' : 'Aucun agent en attente',
-      alert: pendingAgentsCount > 0
+      key: 'nextLoan',
+      label: 'Prochaine réservation',
+      value: nextLoan ? formatCountdown(nextLoan.startAt, now) : 'Aucune',
+      description: nextLoanDescription,
+      countdownTo: nextLoan?.startAt ? new Date(nextLoan.startAt).toISOString() : null,
+      alert: false
     }
   ];
 

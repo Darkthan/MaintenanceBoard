@@ -37,6 +37,7 @@
     })();
 
     let refreshTimer = null;
+    let countdownTimer = null;
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -55,6 +56,38 @@
         hour: '2-digit',
         minute: '2-digit'
       });
+    }
+
+    function formatCountdownText(targetValue) {
+      const diffMs = new Date(targetValue).getTime() - Date.now();
+      if (!Number.isFinite(diffMs) || diffMs <= 0) {
+        return 'Maintenant';
+      }
+
+      const totalMinutes = Math.floor(diffMs / 60000);
+      const days = Math.floor(totalMinutes / (24 * 60));
+      const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+      const minutes = totalMinutes % 60;
+      const parts = [];
+
+      if (days > 0) parts.push(`${days}j`);
+      if (hours > 0 || days > 0) parts.push(`${hours}h`);
+      parts.push(`${minutes}min`);
+
+      return `Dans ${parts.join(' ')}`;
+    }
+
+    function updateCountdowns() {
+      document.querySelectorAll('[data-countdown-to]').forEach(element => {
+        element.textContent = formatCountdownText(element.dataset.countdownTo);
+      });
+    }
+
+    function startCountdowns() {
+      window.clearInterval(countdownTimer);
+      updateCountdowns();
+      if (!document.querySelector('[data-countdown-to]')) return;
+      countdownTimer = window.setInterval(updateCountdowns, 1000);
     }
 
     function getWidgetSpanClasses(widget) {
@@ -96,7 +129,11 @@
       const stats = (widget.stats || []).map(stat => `
         <article class="rounded-2xl border ${stat.alert ? 'border-rose-500/30 bg-rose-950/50' : 'border-white/10 bg-slate-900/40'} px-4 py-4">
           <p class="text-xs font-semibold uppercase tracking-[0.2em] ${stat.alert ? 'text-rose-200' : 'text-slate-400'}">${escapeHtml(stat.label)}</p>
-          <p class="mt-3 text-4xl font-semibold ${stat.alert ? 'text-rose-100' : 'text-white'}">${escapeHtml(stat.value)}</p>
+          <p class="mt-3 text-4xl font-semibold ${stat.alert ? 'text-rose-100' : 'text-white'}">
+            ${stat.countdownTo
+              ? `<span data-countdown-to="${escapeHtml(stat.countdownTo)}">${escapeHtml(stat.value)}</span>`
+              : escapeHtml(stat.value)}
+          </p>
           <p class="mt-2 text-sm ${stat.alert ? 'text-rose-200' : 'text-slate-400'}">${escapeHtml(stat.description || '')}</p>
         </article>
       `).join('');
@@ -161,11 +198,13 @@
         alertPill.classList.toggle('hidden', !(payload.alertCount > 0));
 
         gridEl.innerHTML = (payload.widgets || []).map(renderWidget).join('');
+        startCountdowns();
         scheduleRefresh(payload.screen?.refreshSeconds || 30);
       } catch (err) {
         errorEl.textContent = err.message || 'Impossible de charger l’écran.';
         errorEl.classList.remove('hidden');
         gridEl.innerHTML = '';
+        window.clearInterval(countdownTimer);
         scheduleRefresh(30);
       }
     }
