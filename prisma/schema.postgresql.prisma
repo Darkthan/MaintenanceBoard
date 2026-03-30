@@ -185,6 +185,9 @@ model Intervention {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   closedAt    DateTime?
+  scheduledStartAt DateTime?
+  scheduledEndAt   DateTime?
+  dueAt            DateTime?
   source         String    @default("INTERNAL")
   reporterName   String?
   reporterEmail  String?

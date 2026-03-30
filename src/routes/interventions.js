@@ -40,6 +40,7 @@ const prisma = require('../lib/prisma');
 const { containsFilter } = require('../lib/db-utils');
 const { createSmtpTransporter } = require('../utils/mail');
 const config = require('../config');
+const { getGlobalCalendarFeedToken } = require('../utils/globalCalendar');
 const {
   extractLowDiskMountFromTitle,
   parseAgentAlertState,
@@ -200,6 +201,14 @@ router.get('/equipment/:equipId', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get('/calendar-feed', requireAuth, (req, res) => {
+  const token = getGlobalCalendarFeedToken();
+  res.json({
+    token,
+    url: `${config.appUrl}/api/calendar/global.ics?token=${encodeURIComponent(token)}`
+  });
+});
+
 // GET /api/interventions/:id - Détail
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
@@ -250,12 +259,33 @@ router.post('/',
     body('status').optional().isIn(VALID_STATUSES),
     body('priority').optional().isIn(VALID_PRIORITIES),
     body('roomId').optional({ nullable: true }).isUUID(),
-    body('equipmentId').optional({ nullable: true }).isUUID()
+    body('equipmentId').optional({ nullable: true }).isUUID(),
+    body('scheduledStartAt').optional({ nullable: true }).isISO8601(),
+    body('scheduledEndAt').optional({ nullable: true }).isISO8601(),
+    body('dueAt').optional({ nullable: true }).isISO8601()
   ],
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { title, description, notes, status, priority, roomId, equipmentId, techId, suggestedRoom, suggestedEquipment } = req.body;
+      const {
+        title,
+        description,
+        notes,
+        status,
+        priority,
+        roomId,
+        equipmentId,
+        techId,
+        suggestedRoom,
+        suggestedEquipment,
+        scheduledStartAt,
+        scheduledEndAt,
+        dueAt
+      } = req.body;
+
+      if (scheduledStartAt && scheduledEndAt && new Date(scheduledEndAt) < new Date(scheduledStartAt)) {
+        return res.status(400).json({ error: "La fin d'intervention doit être postérieure au début." });
+      }
 
       // TECH peut seulement créer pour lui-même
       const assignedTechId = req.user.role === 'ADMIN' && techId ? techId : req.user.id;
@@ -270,6 +300,9 @@ router.post('/',
           roomId: roomId || null,
           equipmentId: equipmentId || null,
           techId: assignedTechId,
+          scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt) : null,
+          scheduledEndAt: scheduledEndAt ? new Date(scheduledEndAt) : null,
+          dueAt: dueAt ? new Date(dueAt) : null,
           suggestedRoom: (!roomId && suggestedRoom) ? String(suggestedRoom).trim() || null : null,
           suggestedEquipment: (!equipmentId && suggestedEquipment) ? String(suggestedEquipment).trim() || null : null
         },
@@ -294,7 +327,10 @@ router.patch('/:id',
   requireAuth,
   [
     body('status').optional().isIn(VALID_STATUSES),
-    body('priority').optional().isIn(VALID_PRIORITIES)
+    body('priority').optional().isIn(VALID_PRIORITIES),
+    body('scheduledStartAt').optional({ nullable: true }).isISO8601(),
+    body('scheduledEndAt').optional({ nullable: true }).isISO8601(),
+    body('dueAt').optional({ nullable: true }).isISO8601()
   ],
   async (req, res, next) => {
     try {
@@ -306,7 +342,26 @@ router.patch('/:id',
         return res.status(403).json({ error: 'Accès refusé' });
       }
 
-      const { title, description, notes, status, priority, resolution, roomId, equipmentId, suggestedRoom, suggestedEquipment } = req.body;
+      const {
+        title,
+        description,
+        notes,
+        status,
+        priority,
+        resolution,
+        roomId,
+        equipmentId,
+        suggestedRoom,
+        suggestedEquipment,
+        scheduledStartAt,
+        scheduledEndAt,
+        dueAt
+      } = req.body;
+      const effectiveStart = scheduledStartAt !== undefined ? (scheduledStartAt ? new Date(scheduledStartAt) : null) : existing.scheduledStartAt;
+      const effectiveEnd = scheduledEndAt !== undefined ? (scheduledEndAt ? new Date(scheduledEndAt) : null) : existing.scheduledEndAt;
+      if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+        return res.status(400).json({ error: "La fin d'intervention doit être postérieure au début." });
+      }
       const data = {};
       if (title !== undefined) data.title = title;
       if (description !== undefined) data.description = description;
@@ -329,6 +384,9 @@ router.patch('/:id',
       }
       if (suggestedRoom !== undefined) data.suggestedRoom = suggestedRoom ? String(suggestedRoom).trim() || null : null;
       if (suggestedEquipment !== undefined) data.suggestedEquipment = suggestedEquipment ? String(suggestedEquipment).trim() || null : null;
+      if (scheduledStartAt !== undefined) data.scheduledStartAt = scheduledStartAt ? new Date(scheduledStartAt) : null;
+      if (scheduledEndAt !== undefined) data.scheduledEndAt = scheduledEndAt ? new Date(scheduledEndAt) : null;
+      if (dueAt !== undefined) data.dueAt = dueAt ? new Date(dueAt) : null;
 
       const intervention = await prisma.intervention.update({
         where: { id: req.params.id },

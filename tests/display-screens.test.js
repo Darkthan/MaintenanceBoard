@@ -84,10 +84,12 @@ describe('display screens settings and public payload', () => {
         alertsEnabled: false,
         openingHour: '07:30',
         layoutMode: 'MANUAL',
+        presentationMode: 'ROTATE',
+        rotationSeconds: 20,
         refreshSeconds: 60,
-        widgets: ['overview', 'interventions', 'stockAlerts'],
+        widgets: ['overview', 'globalCalendar', 'stockAlerts'],
         widgetLayouts: [
-          { id: 'interventions', size: 'hero' },
+          { id: 'globalCalendar', size: 'hero' },
           { id: 'overview', size: 'wide' },
           { id: 'stockAlerts', size: 'compact' }
         ]
@@ -98,7 +100,9 @@ describe('display screens settings and public payload', () => {
     expect(createRes.body.screen.alertsEnabled).toBe(false);
     expect(createRes.body.screen.openingHour).toBe('07:30');
     expect(createRes.body.screen.layoutMode).toBe('MANUAL');
-    expect(createRes.body.screen.widgetLayouts.map(item => item.id)).toEqual(['interventions', 'overview', 'stockAlerts']);
+    expect(createRes.body.screen.presentationMode).toBe('ROTATE');
+    expect(createRes.body.screen.rotationSeconds).toBe(20);
+    expect(createRes.body.screen.widgetLayouts.map(item => item.id)).toEqual(['globalCalendar', 'overview', 'stockAlerts']);
     expect(createRes.body.screen.widgetLayouts[0].size).toBe('hero');
     expect(createRes.body.screen.publicUrl).toContain('/screen/');
     expect(settingsStore.__getState().displayScreens).toHaveLength(1);
@@ -409,6 +413,67 @@ describe('display screens settings and public payload', () => {
     expect(res.body.widgets.map(widget => widget.id)).toEqual(['orders', 'overview']);
     expect(res.body.widgets[0].layout.size).toBe('hero');
     expect(res.body.widgets[1].layout.size).toBe('compact');
+  });
+
+  it('construit le widget calendrier global et expose le mode alternance', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-03-30T08:30:00.000Z'));
+
+    settingsStore.__setState({
+      displayScreens: [
+        {
+          id: 'screen-6',
+          name: 'Agenda',
+          token: 'calendar-token',
+          alertsEnabled: true,
+          openingHour: '08:00',
+          layoutMode: 'MANUAL',
+          presentationMode: 'ROTATE',
+          rotationSeconds: 20,
+          refreshSeconds: 30,
+          widgets: ['globalCalendar'],
+          widgetLayouts: [{ id: 'globalCalendar', size: 'hero' }],
+          createdAt: '2026-03-30T08:00:00.000Z',
+          updatedAt: '2026-03-30T08:00:00.000Z'
+        }
+      ]
+    });
+
+    prisma.intervention.findMany.mockResolvedValue([
+      {
+        id: 'int-9',
+        title: 'Maintenance projecteur',
+        status: 'OPEN',
+        priority: 'HIGH',
+        scheduledStartAt: new Date('2026-03-30T10:00:00.000Z'),
+        scheduledEndAt: new Date('2026-03-30T11:00:00.000Z'),
+        dueAt: new Date('2026-03-30T15:00:00.000Z'),
+        room: { name: 'Salle 201', number: '201' },
+        equipment: { name: 'Projecteur' },
+        tech: { name: 'Admin', email: 'admin@test.com' }
+      }
+    ]);
+    prisma.loanReservation.findMany.mockResolvedValue([
+      {
+        id: 'loan-9',
+        status: 'APPROVED',
+        requesterName: 'Mme Martin',
+        requesterOrganization: 'Lycée',
+        startAt: new Date('2026-03-31T08:00:00.000Z'),
+        endAt: new Date('2026-03-31T10:00:00.000Z'),
+        resource: { name: 'Chariot iPad', location: 'Réserve' }
+      }
+    ]);
+
+    const res = await request(buildApp()).get('/api/display/calendar-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.screen.presentationMode).toBe('ROTATE');
+    expect(res.body.screen.rotationSeconds).toBe(20);
+    expect(res.body.widgets[0].id).toBe('globalCalendar');
+    expect(res.body.widgets[0].kind).toBe('calendar');
+    expect(res.body.widgets[0].groups[0].items[0].title).toContain('Intervention');
+    expect(res.body.widgets[0].groups.flatMap(group => group.items).some(item => item.title.includes('Prêt'))).toBe(true);
   });
 
   it('retourne 404 pour un écran inconnu', async () => {

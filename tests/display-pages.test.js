@@ -11,6 +11,8 @@ describe('display screens pages', () => {
     expect(res.text).toContain('id="screen-alerts-enabled"');
     expect(res.text).toContain('id="screen-opening-hour"');
     expect(res.text).toContain('id="screen-layout-mode"');
+    expect(res.text).toContain('id="screen-presentation-mode"');
+    expect(res.text).toContain('id="screen-rotation-seconds"');
     expect(res.text).toContain('id="screen-layout-list"');
   });
 

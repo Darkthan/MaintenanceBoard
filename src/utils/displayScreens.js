@@ -42,6 +42,12 @@ const DISPLAY_WIDGET_OPTIONS = [
     label: 'Prêts à venir',
     description: 'Réservations prévues sur les 14 prochains jours.',
     alert: false
+  },
+  {
+    id: 'globalCalendar',
+    label: 'Calendrier global',
+    description: 'Agenda partagé des prêts et interventions datées.',
+    alert: true
   }
 ];
 
@@ -59,9 +65,16 @@ const DISPLAY_LAYOUT_OPTIONS = [
   { id: 'MANUAL', label: 'Manuel' }
 ];
 const DISPLAY_LAYOUT_IDS = new Set(DISPLAY_LAYOUT_OPTIONS.map(layout => layout.id));
+const DISPLAY_PRESENTATION_OPTIONS = [
+  { id: 'GRID', label: 'Grille' },
+  { id: 'ROTATE', label: 'Alternance plein écran' }
+];
+const DISPLAY_PRESENTATION_IDS = new Set(DISPLAY_PRESENTATION_OPTIONS.map(mode => mode.id));
 const DISPLAY_DEFAULT_WIDGETS = ['overview', 'interventions', 'repairs', 'stockAlerts'];
 const DISPLAY_DEFAULT_LAYOUT_MODE = 'AUTO';
 const DISPLAY_DEFAULT_REFRESH_SECONDS = 30;
+const DISPLAY_DEFAULT_PRESENTATION_MODE = 'GRID';
+const DISPLAY_DEFAULT_ROTATION_SECONDS = 15;
 const DISPLAY_DEFAULT_OPENING_HOUR = '08:00';
 const DISPLAY_DEFAULT_WIDGET_LAYOUTS = [
   { id: 'overview', size: 'hero' },
@@ -148,8 +161,12 @@ function normalizeDisplayScreens(rawScreens) {
         widgets,
         widgetLayouts,
         layoutMode: DISPLAY_LAYOUT_IDS.has(screen.layoutMode) ? screen.layoutMode : DISPLAY_DEFAULT_LAYOUT_MODE,
+        presentationMode: DISPLAY_PRESENTATION_IDS.has(screen.presentationMode) ? screen.presentationMode : DISPLAY_DEFAULT_PRESENTATION_MODE,
         alertsEnabled: screen.alertsEnabled !== false,
         openingHour: normalizeOpeningHour(screen.openingHour, DISPLAY_DEFAULT_OPENING_HOUR),
+        rotationSeconds: Number.isFinite(Number(screen.rotationSeconds))
+          ? Math.max(5, Math.min(300, Math.round(Number(screen.rotationSeconds))))
+          : DISPLAY_DEFAULT_ROTATION_SECONDS,
         refreshSeconds: Number.isFinite(refreshValue) ? Math.max(15, Math.min(3600, Math.round(refreshValue))) : DISPLAY_DEFAULT_REFRESH_SECONDS,
         createdAt: screen.createdAt || null,
         updatedAt: screen.updatedAt || null
@@ -167,6 +184,10 @@ function normalizeDisplayScreenInput(input = {}, current = {}) {
   const refreshValue = Number(input.refreshSeconds ?? current.refreshSeconds ?? DISPLAY_DEFAULT_REFRESH_SECONDS);
   if (!Number.isFinite(refreshValue) || refreshValue < 15 || refreshValue > 3600) {
     throw createDisplayError('Le rafraîchissement doit être compris entre 15 et 3600 secondes.');
+  }
+  const rotationValue = Number(input.rotationSeconds ?? current.rotationSeconds ?? DISPLAY_DEFAULT_ROTATION_SECONDS);
+  if (!Number.isFinite(rotationValue) || rotationValue < 5 || rotationValue > 300) {
+    throw createDisplayError("L'alternance plein écran doit être comprise entre 5 et 300 secondes.");
   }
 
   const openingHour = normalizeOpeningHour(
@@ -202,12 +223,19 @@ function normalizeDisplayScreenInput(input = {}, current = {}) {
     : DISPLAY_LAYOUT_IDS.has(current.layoutMode)
       ? current.layoutMode
       : DISPLAY_DEFAULT_LAYOUT_MODE;
+  const presentationMode = DISPLAY_PRESENTATION_IDS.has(input.presentationMode)
+    ? input.presentationMode
+    : DISPLAY_PRESENTATION_IDS.has(current.presentationMode)
+      ? current.presentationMode
+      : DISPLAY_DEFAULT_PRESENTATION_MODE;
 
   return {
     name,
     layoutMode,
+    presentationMode,
     alertsEnabled: input.alertsEnabled !== undefined ? !!input.alertsEnabled : current.alertsEnabled !== false,
     openingHour,
+    rotationSeconds: Math.round(rotationValue),
     refreshSeconds: Math.round(refreshValue),
     widgets: widgetLayouts.map(layout => layout.id),
     widgetLayouts
@@ -254,6 +282,8 @@ function serializeDisplayScreen(screen, appUrl) {
     openingHour: normalizeOpeningHour(screen.openingHour, DISPLAY_DEFAULT_OPENING_HOUR),
     refreshSeconds: screen.refreshSeconds,
     layoutMode: screen.layoutMode || DISPLAY_DEFAULT_LAYOUT_MODE,
+    presentationMode: screen.presentationMode || DISPLAY_DEFAULT_PRESENTATION_MODE,
+    rotationSeconds: screen.rotationSeconds ?? DISPLAY_DEFAULT_ROTATION_SECONDS,
     widgets: screen.widgets,
     widgetLabels: screen.widgets.map(widgetId => DISPLAY_WIDGET_LABELS[widgetId] || widgetId),
     widgetLayouts: screen.widgetLayouts.map(layout => ({
@@ -274,9 +304,12 @@ module.exports = {
   DISPLAY_WIDGET_SIZE_OPTIONS,
   DISPLAY_WIDGET_SIZE_LABELS,
   DISPLAY_LAYOUT_OPTIONS,
+  DISPLAY_PRESENTATION_OPTIONS,
   DISPLAY_DEFAULT_WIDGETS,
   DISPLAY_DEFAULT_LAYOUT_MODE,
   DISPLAY_DEFAULT_REFRESH_SECONDS,
+  DISPLAY_DEFAULT_PRESENTATION_MODE,
+  DISPLAY_DEFAULT_ROTATION_SECONDS,
   DISPLAY_DEFAULT_OPENING_HOUR,
   normalizeDisplayScreens,
   normalizeDisplayScreenInput,

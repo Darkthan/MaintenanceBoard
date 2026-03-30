@@ -2,6 +2,7 @@ const express = require('express');
 const prisma = require('../lib/prisma');
 const { readSettings } = require('../utils/settings');
 const { normalizeDisplayScreens, DISPLAY_WIDGET_LABELS } = require('../utils/displayScreens');
+const { fetchGlobalCalendarEntries } = require('../utils/globalCalendar');
 
 const router = express.Router();
 
@@ -86,7 +87,8 @@ function rankAutoWidget(widget) {
     stockAlerts: 3,
     pendingAgents: 4,
     orders: 5,
-    upcomingLoans: 6
+    upcomingLoans: 6,
+    globalCalendar: 7
   };
 
   return [
@@ -108,6 +110,7 @@ function getManualSize(widgetLayouts, widgetId) {
 
 function inferAutoSize(widget) {
   if (widget.id === 'overview') return 'hero';
+  if (widget.id === 'globalCalendar') return 'hero';
   if (widget.tone === 'alert') return 'wide';
   if (widget.id === 'upcomingLoans' && (widget.items?.length || 0) >= 4) return 'wide';
   if ((widget.items?.length || 0) >= 6) return 'wide';
@@ -134,6 +137,30 @@ function formatLoanDate(value) {
     hour: '2-digit',
     minute: '2-digit'
   });
+}
+
+function formatCalendarDayLabel(value) {
+  return new Date(value).toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  });
+}
+
+function formatCalendarTime(value) {
+  return new Date(value).toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function formatInterventionStatus(status) {
+  return {
+    OPEN: 'Ouvert',
+    IN_PROGRESS: 'En cours',
+    RESOLVED: 'Résolu',
+    CLOSED: 'Fermé'
+  }[status] || status;
 }
 
 function formatCountdown(targetDate, now = new Date()) {
@@ -429,6 +456,67 @@ async function buildUpcomingLoansWidget(screen) {
   };
 }
 
+function isCalendarEntryAlert(entry, now, screen) {
+  if (entry.sourceType === 'loan') {
+    return isLoanAlert(entry.startAt, now, screen?.openingHour);
+  }
+
+  if (entry.entryType === 'due') {
+    const dayKey = getParisDayKey(entry.startAt);
+    return ['OPEN', 'IN_PROGRESS'].includes(entry.status) && dayKey <= getParisDayKey(now);
+  }
+
+  return false;
+}
+
+async function buildGlobalCalendarWidget(screen) {
+  const now = new Date();
+  const startAt = new Date(now);
+  startAt.setHours(0, 0, 0, 0);
+  const endAt = new Date(startAt.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const entries = await fetchGlobalCalendarEntries(prisma, { startAt, endAt });
+  const limitedEntries = entries.slice(0, 18);
+  const groups = new Map();
+
+  limitedEntries.forEach(entry => {
+    const dayKey = getParisDayKey(entry.startAt);
+    if (!groups.has(dayKey)) {
+      groups.set(dayKey, {
+        dayKey,
+        label: formatCalendarDayLabel(entry.startAt),
+        items: []
+      });
+    }
+
+    const subtitle = entry.sourceType === 'loan'
+      ? [entry.requesterName, entry.requesterOrganization].filter(Boolean).join(' · ')
+      : [formatRoomLabel(entry.room), entry.equipment?.name].filter(Boolean).join(' · ');
+    const metaPrefix = entry.entryType === 'due'
+      ? `Due ${formatCalendarTime(entry.startAt)}`
+      : `${formatCalendarTime(entry.startAt)} → ${formatCalendarTime(entry.endAt)}`;
+
+    groups.get(dayKey).items.push({
+      title: entry.sourceType === 'loan'
+        ? `Prêt · ${entry.title}`
+        : `${entry.entryType === 'due' ? 'Échéance' : 'Intervention'} · ${entry.title}`,
+      subtitle: subtitle || (entry.sourceType === 'loan' ? 'Réservation' : 'Intervention planifiée'),
+      meta: [metaPrefix, entry.sourceType === 'loan' ? (entry.status === 'APPROVED' ? 'Approuvé' : 'En attente') : formatInterventionStatus(entry.status)].filter(Boolean).join(' · '),
+      alert: isCalendarEntryAlert(entry, now, screen)
+    });
+  });
+
+  const dayGroups = [...groups.values()].slice(0, 8);
+
+  return {
+    id: 'globalCalendar',
+    kind: 'calendar',
+    title: DISPLAY_WIDGET_LABELS.globalCalendar,
+    tone: toneFromAlert(dayGroups.some(group => group.items.some(item => item.alert))),
+    emptyLabel: 'Aucun événement planifié sur les 14 prochains jours.',
+    groups: dayGroups
+  };
+}
+
 const WIDGET_BUILDERS = {
   overview: buildOverviewWidget,
   interventions: buildInterventionsWidget,
@@ -436,7 +524,8 @@ const WIDGET_BUILDERS = {
   stockAlerts: buildStockAlertsWidget,
   pendingAgents: buildPendingAgentsWidget,
   orders: buildOrdersWidget,
-  upcomingLoans: buildUpcomingLoansWidget
+  upcomingLoans: buildUpcomingLoansWidget,
+  globalCalendar: buildGlobalCalendarWidget
 };
 
 router.get('/:token', async (req, res, next) => {
@@ -471,6 +560,8 @@ router.get('/:token', async (req, res, next) => {
         name: screen.name,
         alertsEnabled: screen.alertsEnabled !== false,
         layoutMode: screen.layoutMode,
+        presentationMode: screen.presentationMode || 'GRID',
+        rotationSeconds: screen.rotationSeconds || 15,
         refreshSeconds: screen.refreshSeconds,
         widgets: screen.widgets
       },

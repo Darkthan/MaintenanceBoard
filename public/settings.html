@@ -863,6 +863,30 @@
               <span class="mt-1 block text-xs text-slate-400">Le mode dynamique remonte automatiquement les alertes et adapte la taille des blocs. Le mode personnalisé laisse choisir l’ordre et la taille.</span>
             </label>
 
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label class="block text-sm">
+                <span class="font-medium text-slate-700 mb-1 block">Présentation</span>
+                <select id="screen-presentation-mode"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                  <option value="GRID">Grille</option>
+                  <option value="ROTATE">Alternance plein écran</option>
+                </select>
+                <span class="mt-1 block text-xs text-slate-400">Le mode alternance affiche un seul bloc à la fois, en plein écran, puis passe au suivant.</span>
+              </label>
+              <label class="block text-sm">
+                <span class="font-medium text-slate-700 mb-1 block">Durée d'alternance</span>
+                <select id="screen-rotation-seconds"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                  <option value="10">10 secondes</option>
+                  <option value="15">15 secondes</option>
+                  <option value="20">20 secondes</option>
+                  <option value="30">30 secondes</option>
+                  <option value="60">60 secondes</option>
+                </select>
+                <span class="mt-1 block text-xs text-slate-400">Utilisé uniquement en alternance plein écran.</span>
+              </label>
+            </div>
+
             <div class="space-y-3">
               <div>
                 <p class="font-medium text-slate-700">Blocs visibles</p>
@@ -1131,7 +1155,8 @@ const SCREEN_WIDGET_OPTIONS = [
   { id: 'stockAlerts', label: 'Stock bas', description: 'Consommables sous le seuil minimal.', alert: true },
   { id: 'pendingAgents', label: 'Agents à valider', description: 'Découvertes agent en attente.', alert: true },
   { id: 'orders', label: 'Commandes à suivre', description: 'Dernières commandes non terminées.', alert: true },
-  { id: 'upcomingLoans', label: 'Prêts à venir', description: 'Réservations prévues sur 14 jours.', alert: false }
+  { id: 'upcomingLoans', label: 'Prêts à venir', description: 'Réservations prévues sur 14 jours.', alert: false },
+  { id: 'globalCalendar', label: 'Calendrier global', description: 'Agenda des prêts et interventions datées.', alert: true }
 ];
 const DEFAULT_SCREEN_WIDGETS = ['overview', 'interventions', 'repairs', 'stockAlerts'];
 const SCREEN_WIDGET_SIZE_OPTIONS = [
@@ -1837,6 +1862,9 @@ function renderScreensList() {
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${screen.layoutMode === 'MANUAL' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}">
                 ${screen.layoutMode === 'MANUAL' ? 'Agencement manuel' : 'Agencement auto'}
               </span>
+              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${screen.presentationMode === 'ROTATE' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'}">
+                ${screen.presentationMode === 'ROTATE' ? `Alternance ${screen.rotationSeconds || 15}s` : 'Grille'}
+              </span>
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700">
                 Ouverture ${screen.openingHour || '08:00'}
               </span>
@@ -1880,6 +1908,8 @@ function fillScreenForm(screen) {
   document.getElementById('screen-alerts-enabled').checked = screen?.alertsEnabled !== false;
   document.getElementById('screen-opening-hour').value = screen?.openingHour || '08:00';
   document.getElementById('screen-layout-mode').value = screen?.layoutMode || 'AUTO';
+  document.getElementById('screen-presentation-mode').value = screen?.presentationMode || 'GRID';
+  document.getElementById('screen-rotation-seconds').value = String(screen?.rotationSeconds || 15);
   setSelectedScreenWidgets(
     screen?.widgets || DEFAULT_SCREEN_WIDGETS,
     screen?.widgetLayouts || (screen?.widgets || DEFAULT_SCREEN_WIDGETS).map(id => getDefaultScreenWidgetLayout(id))
@@ -1904,6 +1934,8 @@ function resetScreenForm() {
   document.getElementById('screen-alerts-enabled').checked = true;
   document.getElementById('screen-opening-hour').value = '08:00';
   document.getElementById('screen-layout-mode').value = 'AUTO';
+  document.getElementById('screen-presentation-mode').value = 'GRID';
+  document.getElementById('screen-rotation-seconds').value = '15';
   setSelectedScreenWidgets(DEFAULT_SCREEN_WIDGETS, DEFAULT_SCREEN_WIDGETS.map(id => getDefaultScreenWidgetLayout(id)));
   document.getElementById('screen-link-panel').classList.add('hidden');
   document.getElementById('screen-public-url').value = '';
@@ -1945,8 +1977,10 @@ async function saveScreen(event) {
     const payload = {
       name: document.getElementById('screen-name').value.trim(),
       layoutMode: document.getElementById('screen-layout-mode').value,
+      presentationMode: document.getElementById('screen-presentation-mode').value,
       alertsEnabled: document.getElementById('screen-alerts-enabled').checked,
       openingHour: document.getElementById('screen-opening-hour').value || '08:00',
+      rotationSeconds: parseInt(document.getElementById('screen-rotation-seconds').value, 10),
       refreshSeconds: parseInt(document.getElementById('screen-refresh').value, 10),
       widgets: getSelectedScreenWidgets(),
       widgetLayouts: screenWidgetLayouts

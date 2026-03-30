@@ -90,6 +90,22 @@
         </div>
       </div>
 
+      <section class="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 class="font-semibold text-slate-800">Calendrier global</h2>
+            <p class="text-sm text-slate-500">Flux iCal partagé des prêts et des interventions datées.</p>
+          </div>
+          <button id="refresh-global-calendar-feed-btn" type="button" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+        </div>
+        <textarea id="global-calendar-feed-url" rows="2" readonly class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"></textarea>
+        <div class="flex flex-wrap gap-2">
+          <button id="copy-global-calendar-feed-btn" type="button" class="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+            Copier le lien iCal
+          </button>
+        </div>
+      </section>
+
       <!-- Liste -->
       <div id="interventions-container" class="space-y-3">
         <p class="text-slate-400 text-center py-8">Chargement...</p>
@@ -148,6 +164,8 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
         <div><span class="text-xs text-slate-400 block">Technicien</span><span id="detail-tech" class="font-medium text-slate-700"></span></div>
         <div><span class="text-xs text-slate-400 block">Créée le</span><span id="detail-created" class="font-medium text-slate-700"></span></div>
+        <div><span class="text-xs text-slate-400 block">Intervention prévue</span><span id="detail-scheduled" class="font-medium text-slate-700"></span></div>
+        <div><span class="text-xs text-slate-400 block">Date due</span><span id="detail-due" class="font-medium text-slate-700"></span></div>
         <div>
           <span class="text-xs text-slate-400 block">Salle</span>
           <span id="detail-room" class="font-medium text-slate-700"></span>
@@ -328,6 +346,20 @@
             <option value="">-- Aucun --</option>
           </select>
           <input id="int-equip-suggestion" type="text" maxlength="200" placeholder="Nom de l'équipement à créer..." class="hidden mt-2 w-full border border-amber-300 bg-amber-50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Début d'intervention</label>
+          <input id="int-scheduled-start" type="datetime-local" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Fin d'intervention</label>
+          <input id="int-scheduled-end" type="datetime-local" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Date due</label>
+          <input id="int-due-at" type="datetime-local" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
       <div>
@@ -516,6 +548,31 @@ function toDateInputValue(value) {
   return `${year}-${month}-${day}`;
 }
 
+function toDatetimeLocalValue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function formatDateTimeLabel(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function formatScheduledRange(startAt, endAt) {
+  if (!startAt) return '—';
+  if (!endAt) return `Début ${formatDateTimeLabel(startAt)}`;
+  return `${formatDateTimeLabel(startAt)} → ${formatDateTimeLabel(endAt)}`;
+}
+
 function orderStatusBadge(status) {
   const config = {
     PENDING: ['En attente', 'bg-amber-100 text-amber-700'],
@@ -614,6 +671,8 @@ async function loadInterventions() {
               ${i.equipment ? `<span>🖥️ ${i.equipment.name}</span>` : ''}
               <span>👤 ${i.tech?.name || 'N/A'}</span>
               <span>📅 ${formatDate(i.createdAt, true)}</span>
+              ${i.scheduledStartAt ? `<span>🗓️ ${escapeHtml(formatScheduledRange(i.scheduledStartAt, i.scheduledEndAt))}</span>` : ''}
+              ${i.dueAt ? `<span>⏰ Due ${escapeHtml(formatDateTimeLabel(i.dueAt))}</span>` : ''}
               ${i.photos?.length ? `<span>📷 ${i.photos.length} photo(s)</span>` : ''}
               ${i.orders?.length ? `<span>🛒 ${i.orders.length} commande(s) liée(s)</span>` : ''}
               ${i.source === 'PUBLIC' ? '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Public</span>' : ''}
@@ -1060,6 +1119,9 @@ document.getElementById('add-intervention-btn').addEventListener('click', () => 
   document.getElementById('intervention-form').reset();
   document.getElementById('form-error').classList.add('hidden');
   document.getElementById('resolution-field').classList.add('hidden');
+  document.getElementById('int-scheduled-start').value = '';
+  document.getElementById('int-scheduled-end').value = '';
+  document.getElementById('int-due-at').value = '';
   document.getElementById('int-room-suggestion').classList.add('hidden');
   document.getElementById('int-equip-suggestion').classList.add('hidden');
   loadSelects(null, null);
@@ -1088,6 +1150,9 @@ function editIntervention(i) {
   } else {
     document.getElementById('resolution-field').classList.add('hidden');
   }
+  document.getElementById('int-scheduled-start').value = toDatetimeLocalValue(i.scheduledStartAt);
+  document.getElementById('int-scheduled-end').value = toDatetimeLocalValue(i.scheduledEndAt);
+  document.getElementById('int-due-at').value = toDatetimeLocalValue(i.dueAt);
   loadSelects(i.roomId, i.equipmentId, i.suggestedRoom, i.suggestedEquipment);
   modal.classList.remove('hidden');
 }
@@ -1103,6 +1168,9 @@ document.getElementById('intervention-form').addEventListener('submit', async e 
     priority: document.getElementById('int-priority').value,
     description: document.getElementById('int-description').value || null,
     resolution: document.getElementById('int-resolution').value || null,
+    scheduledStartAt: document.getElementById('int-scheduled-start').value || null,
+    scheduledEndAt: document.getElementById('int-scheduled-end').value || null,
+    dueAt: document.getElementById('int-due-at').value || null,
     roomId: (roomVal && roomVal !== '__suggest__') ? roomVal : null,
     equipmentId: (equipVal && equipVal !== '__suggest__') ? equipVal : null,
     suggestedRoom: roomVal === '__suggest__' ? (document.getElementById('int-room-suggestion').value.trim() || null) : null,
@@ -1136,6 +1204,15 @@ async function deleteIntervention(id) {
     showToast('Intervention supprimée');
     loadInterventions();
   } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function loadGlobalCalendarFeed() {
+  try {
+    const feed = await api.get('/interventions/calendar-feed');
+    document.getElementById('global-calendar-feed-url').value = feed.url;
+  } catch (err) {
+    document.getElementById('global-calendar-feed-url').value = `Erreur : ${err.message}`;
+  }
 }
 
 // Photos
@@ -1385,6 +1462,16 @@ const sharedDetailController = createInterventionDetailController({
   formatEquipment: intervention => intervention.equipment
     ? `${intervention.equipment.name}${intervention.equipment.type ? ` (${intervention.equipment.type})` : ''}`
     : '—',
+  extraFields: {
+    scheduled: {
+      id: 'detail-scheduled',
+      format: intervention => formatScheduledRange(intervention.scheduledStartAt, intervention.scheduledEndAt)
+    },
+    due: {
+      id: 'detail-due',
+      format: intervention => formatDateTimeLabel(intervention.dueAt)
+    }
+  },
   toast: showToast,
   onRefresh: async () => { await loadInterventions(); },
   onOpenSuccess: intervention => {
@@ -1433,7 +1520,20 @@ document.getElementById('detail-message-input').addEventListener('keydown', e =>
   }
 });
 
+document.getElementById('refresh-global-calendar-feed-btn').addEventListener('click', loadGlobalCalendarFeed);
+document.getElementById('copy-global-calendar-feed-btn').addEventListener('click', async () => {
+  const url = document.getElementById('global-calendar-feed-url').value;
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Lien iCal copié', 'success');
+  } catch {
+    showToast('Copie impossible', 'error');
+  }
+});
+
 requireLogin().then(() => {
+  loadGlobalCalendarFeed();
   loadInterventions();
   if (pageParams.get('action') === 'create') {
     setTimeout(() => document.getElementById('add-intervention-btn')?.click(), 50);

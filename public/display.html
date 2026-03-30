@@ -38,6 +38,7 @@
 
     let refreshTimer = null;
     let countdownTimer = null;
+    let widgetRotationTimer = null;
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -90,20 +91,26 @@
       countdownTimer = window.setInterval(updateCountdowns, 1000);
     }
 
-    function getWidgetSpanClasses(widget) {
+    function stopWidgetRotation() {
+      window.clearInterval(widgetRotationTimer);
+      widgetRotationTimer = null;
+    }
+
+    function getWidgetSpanClasses(widget, fullscreen = false) {
+      if (fullscreen) return 'col-span-full';
       const size = widget.layout?.size || 'compact';
       if (size === 'hero') return 'lg:col-span-2 xl:col-span-6';
       if (size === 'wide') return 'lg:col-span-2 xl:col-span-3';
       return 'lg:col-span-1 xl:col-span-2';
     }
 
-    function widgetShell(widget, innerHtml) {
+    function widgetShell(widget, innerHtml, { fullscreen = false } = {}) {
       const classes = widget.tone === 'alert'
         ? 'border-rose-500/30 bg-rose-950/50'
         : 'border-white/10 bg-white/5';
       const tone = widget.tone === 'alert' ? 'text-rose-200' : 'text-slate-300';
       return `
-        <section class="rounded-[28px] border ${classes} px-6 py-5 shadow-xl shadow-slate-950/30 ${getWidgetSpanClasses(widget)}">
+        <section class="rounded-[28px] border ${classes} px-6 py-5 shadow-xl shadow-slate-950/30 ${getWidgetSpanClasses(widget, fullscreen)} ${fullscreen ? 'min-h-[calc(100vh-16rem)] flex flex-col justify-center' : ''}">
           <div class="mb-5 flex items-center justify-between gap-3">
             <div>
               <h2 class="text-xl font-semibold text-white">${escapeHtml(widget.title)}</h2>
@@ -120,7 +127,7 @@
       `;
     }
 
-    function renderOverview(widget) {
+    function renderOverview(widget, options = {}) {
       const statsGridClass = widget.layout?.size === 'hero'
         ? 'grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'
         : widget.layout?.size === 'wide'
@@ -138,10 +145,10 @@
         </article>
       `).join('');
 
-      return widgetShell(widget, `<div class="${statsGridClass}">${stats}</div>`);
+      return widgetShell(widget, `<div class="${statsGridClass}">${stats}</div>`, options);
     }
 
-    function renderListWidget(widget) {
+    function renderListWidget(widget, options = {}) {
       const items = widget.items || [];
       const body = items.length
         ? `<div class="space-y-3">
@@ -160,12 +167,75 @@
           </div>`
         : `<div class="rounded-2xl border border-white/10 bg-slate-900/30 px-5 py-6 text-center text-slate-400">${escapeHtml(widget.emptyLabel || 'Aucune donnée')}</div>`;
 
-      return widgetShell(widget, body);
+      return widgetShell(widget, body, options);
     }
 
-    function renderWidget(widget) {
-      if (widget.kind === 'overview') return renderOverview(widget);
-      return renderListWidget(widget);
+    function renderCalendarWidget(widget, options = {}) {
+      const groups = widget.groups || [];
+      const body = groups.length
+        ? `<div class="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+            ${groups.map(group => `
+              <article class="rounded-2xl border border-white/10 bg-slate-900/40 px-4 py-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">${escapeHtml(group.label)}</p>
+                <div class="mt-4 space-y-3">
+                  ${group.items.map(item => `
+                    <div class="rounded-2xl border ${item.alert ? 'border-rose-500/25 bg-rose-950/40' : 'border-white/10 bg-slate-950/60'} px-4 py-3">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0 flex-1">
+                          <p class="text-base font-semibold ${item.alert ? 'text-rose-50' : 'text-white'}">${escapeHtml(item.title)}</p>
+                          ${item.subtitle ? `<p class="mt-1 text-sm ${item.alert ? 'text-rose-200' : 'text-slate-300'}">${escapeHtml(item.subtitle)}</p>` : ''}
+                          ${item.meta ? `<p class="mt-2 text-xs uppercase tracking-[0.18em] ${item.alert ? 'text-rose-300' : 'text-slate-500'}">${escapeHtml(item.meta)}</p>` : ''}
+                        </div>
+                        <span class="mt-1 inline-flex h-3 w-3 flex-shrink-0 rounded-full ${item.alert ? 'bg-rose-400' : 'bg-cyan-400'}"></span>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </article>
+            `).join('')}
+          </div>`
+        : `<div class="rounded-2xl border border-white/10 bg-slate-900/30 px-5 py-6 text-center text-slate-400">${escapeHtml(widget.emptyLabel || 'Aucune donnée')}</div>`;
+
+      return widgetShell(widget, body, options);
+    }
+
+    function renderWidget(widget, options = {}) {
+      if (widget.kind === 'overview') return renderOverview(widget, options);
+      if (widget.kind === 'calendar') return renderCalendarWidget(widget, options);
+      return renderListWidget(widget, options);
+    }
+
+    function renderWidgets(payload) {
+      const gridEl = document.getElementById('display-grid');
+      const widgets = payload.widgets || [];
+      const presentationMode = payload.screen?.presentationMode || 'GRID';
+      const rotationSeconds = payload.screen?.rotationSeconds || 15;
+
+      stopWidgetRotation();
+
+      if (presentationMode === 'ROTATE' && widgets.length) {
+        let index = 0;
+        const draw = () => {
+          const widget = widgets[index % widgets.length];
+          gridEl.className = 'mt-6 grid gap-0 grid-cols-1';
+          gridEl.innerHTML = renderWidget({
+            ...widget,
+            layout: { ...(widget.layout || {}), size: 'hero' }
+          }, { fullscreen: true });
+          startCountdowns();
+          index += 1;
+        };
+
+        draw();
+        if (widgets.length > 1) {
+          widgetRotationTimer = window.setInterval(draw, Math.max(5, rotationSeconds) * 1000);
+        }
+        return;
+      }
+
+      gridEl.className = 'mt-6 grid gap-5 lg:grid-cols-2 xl:grid-cols-6 items-start';
+      gridEl.innerHTML = widgets.map(widget => renderWidget(widget)).join('');
+      startCountdowns();
     }
 
     function scheduleRefresh(seconds) {
@@ -193,17 +263,17 @@
 
         errorEl.classList.add('hidden');
         document.getElementById('screen-title').textContent = payload.screen?.name || 'Écran d’affichage';
-        document.getElementById('screen-subtitle').textContent = `${(payload.widgets || []).length} bloc(s) affiché(s) · ${payload.screen?.layoutMode === 'MANUAL' ? 'agencement personnalisé' : 'agencement dynamique'} · rafraîchissement toutes les ${payload.screen?.refreshSeconds || 30} secondes`;
+        document.getElementById('screen-subtitle').textContent = `${(payload.widgets || []).length} bloc(s) affiché(s) · ${payload.screen?.layoutMode === 'MANUAL' ? 'agencement personnalisé' : 'agencement dynamique'} · ${payload.screen?.presentationMode === 'ROTATE' ? `alternance plein écran ${payload.screen?.rotationSeconds || 15}s` : 'affichage en grille'} · rafraîchissement toutes les ${payload.screen?.refreshSeconds || 30} secondes`;
         document.getElementById('screen-updated').textContent = formatDateTime(payload.generatedAt);
         alertPill.classList.toggle('hidden', !(payload.alertCount > 0));
 
-        gridEl.innerHTML = (payload.widgets || []).map(renderWidget).join('');
-        startCountdowns();
+        renderWidgets(payload);
         scheduleRefresh(payload.screen?.refreshSeconds || 30);
       } catch (err) {
         errorEl.textContent = err.message || 'Impossible de charger l’écran.';
         errorEl.classList.remove('hidden');
         gridEl.innerHTML = '';
+        stopWidgetRotation();
         window.clearInterval(countdownTimer);
         scheduleRefresh(30);
       }

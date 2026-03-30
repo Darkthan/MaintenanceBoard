@@ -241,6 +241,12 @@
         el('created').textContent = config.formatDate(intervention.createdAt);
         el('room').textContent = config.formatRoom(intervention);
         el('equipment').textContent = config.formatEquipment(intervention);
+        if (config.extraFields) {
+          Object.values(config.extraFields).forEach(field => {
+            const target = document.getElementById(field.id);
+            if (target) target.textContent = field.format(intervention);
+          });
+        }
         if (config.ids.fullLink) el('fullLink').href = config.fullLink(intervention.id);
         if (config.ids.notesInput) {
           el('notesInput').value = intervention.notes || '';
