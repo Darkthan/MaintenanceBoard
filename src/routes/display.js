@@ -155,9 +155,15 @@ function formatCountdown(targetDate, now = new Date()) {
   return `Dans ${parts.join(' ')}`;
 }
 
+function compareLoanStart(a, b) {
+  const startDiff = new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+  if (startDiff !== 0) return startDiff;
+  return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+}
+
 async function buildOverviewWidget() {
   const now = new Date();
-  const [roomsCount, equipmentCount, interventionsCount, repairsCount, stockItems, nextLoan] = await Promise.all([
+  const [roomsCount, equipmentCount, interventionsCount, repairsCount, stockItems, upcomingLoans] = await Promise.all([
     prisma.room.count(),
     prisma.equipment.count(),
     prisma.intervention.count(),
@@ -165,17 +171,19 @@ async function buildOverviewWidget() {
     prisma.stockItem.findMany({
       select: { id: true, quantity: true, minQuantity: true }
     }),
-    prisma.loanReservation.findFirst({
+    prisma.loanReservation.findMany({
       where: {
         status: { in: LOAN_VISIBLE_STATUSES },
         startAt: { gte: now }
       },
-      orderBy: [{ startAt: 'asc' }],
+      orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
+      take: 12,
       include: {
         resource: { select: { name: true, location: true } }
       }
     })
   ]);
+  const nextLoan = [...upcomingLoans].sort(compareLoanStart)[0] || null;
 
   const lowStockCount = stockItems.filter(item => item.quantity <= item.minQuantity).length;
   const nextLoanDescription = nextLoan

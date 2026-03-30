@@ -36,7 +36,7 @@ jest.mock('../src/lib/prisma', () => ({
   intervention: { count: jest.fn(), findMany: jest.fn() },
   order: { findMany: jest.fn() },
   stockItem: { findMany: jest.fn() },
-  loanReservation: { findMany: jest.fn(), findFirst: jest.fn() }
+  loanReservation: { findMany: jest.fn() }
 }));
 
 const settingsStore = require('../src/utils/settings');
@@ -68,7 +68,6 @@ describe('display screens settings and public payload', () => {
     prisma.order.findMany.mockResolvedValue([]);
     prisma.stockItem.findMany.mockResolvedValue([]);
     prisma.loanReservation.findMany.mockResolvedValue([]);
-    prisma.loanReservation.findFirst.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -164,16 +163,30 @@ describe('display screens settings and public payload', () => {
         supplier: { name: 'HP' }
       }
     ]);
-    prisma.loanReservation.findFirst.mockResolvedValue({
-      id: 'loan-overview-1',
-      status: 'APPROVED',
-      requesterName: 'Lycée Beaupeyrat',
-      requesterOrganization: 'Lycée Beaupeyrat',
-      startAt: new Date('2026-03-30T12:00:00.000Z'),
-      endAt: new Date('2026-03-30T14:00:00.000Z'),
-      resource: { name: 'Chariot iPad', location: 'Réserve' }
-    });
-    prisma.loanReservation.findMany.mockResolvedValue([
+    prisma.loanReservation.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'loan-overview-late',
+          status: 'APPROVED',
+          requesterName: 'Deux jours',
+          requesterOrganization: 'Lycée Beaupeyrat',
+          startAt: new Date('2026-04-01T12:00:00.000Z'),
+          endAt: new Date('2026-04-01T14:00:00.000Z'),
+          createdAt: new Date('2026-03-20T08:00:00.000Z'),
+          resource: { name: 'Caméra', location: 'Local' }
+        },
+        {
+          id: 'loan-overview-1',
+          status: 'APPROVED',
+          requesterName: 'Lycée Beaupeyrat',
+          requesterOrganization: 'Lycée Beaupeyrat',
+          startAt: new Date('2026-03-30T12:00:00.000Z'),
+          endAt: new Date('2026-03-30T14:00:00.000Z'),
+          createdAt: new Date('2026-03-29T08:00:00.000Z'),
+          resource: { name: 'Chariot iPad', location: 'Réserve' }
+        }
+      ])
+      .mockResolvedValueOnce([
       {
         id: 'loan-1',
         status: 'APPROVED',
