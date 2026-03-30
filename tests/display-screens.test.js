@@ -77,12 +77,14 @@ describe('display screens settings and public payload', () => {
       .post('/api/settings/screens')
       .send({
         name: 'Hall principal',
+        alertsEnabled: false,
         refreshSeconds: 60,
         widgets: ['overview', 'interventions', 'stockAlerts']
       });
 
     expect(createRes.status).toBe(201);
     expect(createRes.body.screen.name).toBe('Hall principal');
+    expect(createRes.body.screen.alertsEnabled).toBe(false);
     expect(createRes.body.screen.publicUrl).toContain('/screen/');
     expect(settingsStore.__getState().displayScreens).toHaveLength(1);
 
@@ -105,8 +107,9 @@ describe('display screens settings and public payload', () => {
           id: 'screen-1',
           name: 'Accueil',
           token: 'public-token',
+          alertsEnabled: true,
           refreshSeconds: 30,
-          widgets: ['overview', 'interventions', 'stockAlerts'],
+          widgets: ['overview', 'interventions', 'stockAlerts', 'upcomingLoans'],
           createdAt: '2026-03-30T08:00:00.000Z',
           updatedAt: '2026-03-30T08:00:00.000Z'
         }
@@ -142,6 +145,17 @@ describe('display screens settings and public payload', () => {
         supplier: { name: 'HP' }
       }
     ]);
+    prisma.loanReservation.findMany.mockResolvedValue([
+      {
+        id: 'loan-1',
+        status: 'APPROVED',
+        requesterName: 'Lycée Beaupeyrat',
+        requesterOrganization: 'Lycée Beaupeyrat',
+        startAt: new Date(),
+        endAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+        resource: { name: 'Chariot iPad', location: 'Réserve' }
+      }
+    ]);
 
     const res = await request(buildApp()).get('/api/display/public-token');
 
@@ -151,6 +165,56 @@ describe('display screens settings and public payload', () => {
     expect(res.body.widgets.some(widget => widget.id === 'overview' && widget.tone === 'alert')).toBe(true);
     expect(res.body.widgets.some(widget => widget.id === 'interventions' && widget.items[0].alert)).toBe(true);
     expect(res.body.widgets.some(widget => widget.id === 'stockAlerts' && widget.items[0].title === 'Toner noir')).toBe(true);
+    expect(res.body.widgets.some(widget => widget.id === 'upcomingLoans' && widget.items[0].alert)).toBe(true);
+  });
+
+  it('désactive toutes les alertes visuelles quand l écran le demande', async () => {
+    settingsStore.__setState({
+      displayScreens: [
+        {
+          id: 'screen-2',
+          name: 'Bibliothèque',
+          token: 'mute-token',
+          alertsEnabled: false,
+          refreshSeconds: 30,
+          widgets: ['interventions', 'upcomingLoans'],
+          createdAt: '2026-03-30T08:00:00.000Z',
+          updatedAt: '2026-03-30T08:00:00.000Z'
+        }
+      ]
+    });
+
+    prisma.intervention.count.mockResolvedValue(1);
+    prisma.intervention.findMany.mockResolvedValue([
+      {
+        id: 'int-2',
+        title: 'PC salle info',
+        status: 'OPEN',
+        priority: 'CRITICAL',
+        createdAt: new Date(),
+        room: { name: 'Info', number: '14' },
+        equipment: { name: 'PC-14' }
+      }
+    ]);
+    prisma.loanReservation.findMany.mockResolvedValue([
+      {
+        id: 'loan-2',
+        status: 'APPROVED',
+        requesterName: 'Collège',
+        requesterOrganization: 'Collège',
+        startAt: new Date(),
+        endAt: new Date(Date.now() + 60 * 60 * 1000),
+        resource: { name: 'Caméra', location: 'Local' }
+      }
+    ]);
+
+    const res = await request(buildApp()).get('/api/display/mute-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.screen.alertsEnabled).toBe(false);
+    expect(res.body.alertCount).toBe(0);
+    expect(res.body.widgets.every(widget => widget.tone === 'neutral')).toBe(true);
+    expect(res.body.widgets.every(widget => widget.items.every(item => item.alert === false))).toBe(true);
   });
 
   it('retourne 404 pour un écran inconnu', async () => {

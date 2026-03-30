@@ -8,6 +8,7 @@ describe('display screens pages', () => {
     expect(res.text).toContain('data-tab="screens"');
     expect(res.text).toContain('id="screen-form"');
     expect(res.text).toContain('id="screen-widget-list"');
+    expect(res.text).toContain('id="screen-alerts-enabled"');
   });
 
   it('sert la page publique écran sans authentification via /screen/:token', async () => {

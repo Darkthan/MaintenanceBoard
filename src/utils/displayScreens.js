@@ -88,6 +88,7 @@ function normalizeDisplayScreens(rawScreens) {
         name,
         token,
         widgets,
+        alertsEnabled: screen.alertsEnabled !== false,
         refreshSeconds: Number.isFinite(refreshValue) ? Math.max(15, Math.min(3600, Math.round(refreshValue))) : DISPLAY_DEFAULT_REFRESH_SECONDS,
         createdAt: screen.createdAt || null,
         updatedAt: screen.updatedAt || null
@@ -121,6 +122,7 @@ function normalizeDisplayScreenInput(input = {}, current = {}) {
 
   return {
     name,
+    alertsEnabled: input.alertsEnabled !== undefined ? !!input.alertsEnabled : current.alertsEnabled !== false,
     refreshSeconds: Math.round(refreshValue),
     widgets
   };
@@ -162,6 +164,7 @@ function serializeDisplayScreen(screen, appUrl) {
     id: screen.id,
     name: screen.name,
     token: screen.token,
+    alertsEnabled: screen.alertsEnabled !== false,
     refreshSeconds: screen.refreshSeconds,
     widgets: screen.widgets,
     widgetLabels: screen.widgets.map(widgetId => DISPLAY_WIDGET_LABELS[widgetId] || widgetId),

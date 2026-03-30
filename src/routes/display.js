@@ -8,9 +8,33 @@ const router = express.Router();
 const INTERVENTION_ALERT_STATUSES = ['OPEN', 'IN_PROGRESS'];
 const FOLLOW_UP_ORDER_STATUSES = ['PENDING', 'ORDERED', 'PARTIAL'];
 const LOAN_VISIBLE_STATUSES = ['PENDING', 'APPROVED'];
+const PARIS_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Paris',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
 
 function toneFromAlert(alert) {
   return alert ? 'alert' : 'neutral';
+}
+
+function isSameParisDay(a, b) {
+  return PARIS_DAY_FORMATTER.format(new Date(a)) === PARIS_DAY_FORMATTER.format(new Date(b));
+}
+
+function applyAlertsPreference(widget, alertsEnabled) {
+  if (alertsEnabled) return widget;
+  return {
+    ...widget,
+    tone: 'neutral',
+    stats: Array.isArray(widget.stats)
+      ? widget.stats.map(stat => ({ ...stat, alert: false }))
+      : widget.stats,
+    items: Array.isArray(widget.items)
+      ? widget.items.map(item => ({ ...item, alert: false }))
+      : widget.items
+  };
 }
 
 function formatRoomLabel(room) {
@@ -264,13 +288,13 @@ async function buildUpcomingLoansWidget() {
     id: 'upcomingLoans',
     kind: 'list',
     title: DISPLAY_WIDGET_LABELS.upcomingLoans,
-    tone: toneFromAlert(items.some(item => item.status === 'PENDING')),
+    tone: toneFromAlert(items.some(item => item.status === 'PENDING' || isSameParisDay(item.startAt, now))),
     emptyLabel: 'Aucune réservation prévue sur 14 jours.',
     items: items.map(item => ({
       title: item.resource?.name || 'Ressource',
       subtitle: [item.requesterName, item.requesterOrganization].filter(Boolean).join(' · '),
       meta: `${formatLoanDate(item.startAt)} → ${formatLoanDate(item.endAt)}`,
-      alert: item.status === 'PENDING'
+      alert: item.status === 'PENDING' || isSameParisDay(item.startAt, now)
     }))
   };
 }
@@ -301,18 +325,20 @@ router.get('/:token', async (req, res, next) => {
         .filter(Boolean)
         .map(builder => builder())
     );
+    const renderedWidgets = widgets.map(widget => applyAlertsPreference(widget, screen.alertsEnabled !== false));
 
     res.setHeader('Cache-Control', 'no-store');
     res.json({
       screen: {
         id: screen.id,
         name: screen.name,
+        alertsEnabled: screen.alertsEnabled !== false,
         refreshSeconds: screen.refreshSeconds,
         widgets: screen.widgets
       },
       generatedAt: new Date().toISOString(),
-      alertCount: widgets.filter(widget => widget.tone === 'alert').length,
-      widgets
+      alertCount: renderedWidgets.filter(widget => widget.tone === 'alert').length,
+      widgets: renderedWidgets
     });
   } catch (err) {
     next(err);
