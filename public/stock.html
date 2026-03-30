@@ -85,6 +85,20 @@
           <span id="low-stock-toggle-label">Seuil bas seulement</span>
           <span id="low-stock-toggle-state" class="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-500">Off</span>
         </button>
+        <button id="scan-btn" type="button"
+          class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0zM3 8V6a2 2 0 012-2h2M3 16v2a2 2 0 002 2h2M21 8V6a2 2 0 00-2-2h-2M21 16v2a2 2 0 01-2 2h-2"/>
+          </svg>
+          Scanner
+        </button>
+        <button id="qrcodes-btn" type="button"
+          class="hidden inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
+          <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 17h.01M17 14h.01M20 17h.01M17 20h.01M20 20h.01"/>
+          </svg>
+          QR Codes stock
+        </button>
       </div>
 
       <!-- Table -->
@@ -133,13 +147,25 @@
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Référence</label>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Référence fournisseur</label>
           <input id="item-reference" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Catégorie</label>
           <input id="item-category" type="text" list="category-datalist" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <datalist id="category-datalist"></datalist>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Code barre produit</label>
+        <div class="flex gap-2">
+          <input id="item-barcode" type="text" placeholder="EAN-13, Code 128..." class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <button type="button" id="scan-barcode-btn" title="Scanner le code barre"
+            class="flex-shrink-0 px-3 py-2 border border-slate-300 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0zM3 8V6a2 2 0 012-2h2M3 16v2a2 2 0 002 2h2M21 8V6a2 2 0 00-2-2h-2M21 16v2a2 2 0 01-2 2h-2"/>
+            </svg>
+          </button>
         </div>
       </div>
       <div>
@@ -254,6 +280,104 @@
   </div>
 </div>
 
+<!-- Modal Scanner QR / Code barre -->
+<div id="scan-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800">Scanner QR / Code barre</h3>
+      <button id="close-scan-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-4 space-y-3">
+      <div id="scan-reader" class="w-full rounded-lg overflow-hidden bg-black" style="min-height:240px"></div>
+      <p id="scan-status" class="text-center text-sm text-slate-500">Pointez la caméra vers un QR code ou un code barre</p>
+      <div id="scan-result" class="hidden bg-slate-50 rounded-lg p-3 text-sm text-slate-700"></div>
+      <div class="flex gap-2">
+        <input id="scan-manual-input" type="text" placeholder="Ou saisissez le code manuellement..."
+          class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button id="scan-manual-btn" type="button" class="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal QR Codes Stock (admin) -->
+<div id="qrcodes-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+      <h3 class="font-semibold text-slate-800">QR Codes Stock</h3>
+      <button id="close-qrcodes-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+      <!-- Nouveau QR code -->
+      <div class="border border-dashed border-slate-300 rounded-xl p-4">
+        <h4 class="text-sm font-medium text-slate-700 mb-3">Créer un nouveau QR code</h4>
+        <form id="qrcode-create-form" class="flex gap-3 flex-wrap">
+          <input id="qrcode-label" type="text" placeholder="Libellé (ex: Armoire A)" required
+            class="flex-1 min-w-40 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+          <button type="submit" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700 transition">Créer</button>
+        </form>
+      </div>
+      <!-- Liste QR codes -->
+      <div id="qrcodes-loading" class="text-center text-slate-400 text-sm py-6">Chargement...</div>
+      <div id="qrcodes-list" class="hidden space-y-3"></div>
+      <div id="qrcodes-empty" class="hidden text-center text-slate-400 text-sm py-6">Aucun QR code créé</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal détail QR code (édition articles) -->
+<div id="qrcode-detail-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+      <h3 id="qrcode-detail-title" class="font-semibold text-slate-800">QR Code</h3>
+      <button id="close-qrcode-detail" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-5">
+      <!-- Image QR -->
+      <div class="flex flex-col items-center gap-3">
+        <img id="qrcode-detail-img" src="" alt="QR Code" class="w-48 h-48 border border-slate-200 rounded-xl" />
+        <a id="qrcode-detail-download" href="#" download class="text-xs text-blue-600 hover:underline">Télécharger l'image</a>
+      </div>
+      <!-- Articles liés -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="text-sm font-medium text-slate-700">Articles liés</h4>
+          <span id="qrcode-items-count" class="text-xs text-slate-400"></span>
+        </div>
+        <div id="qrcode-items-list" class="space-y-1 mb-3 max-h-48 overflow-y-auto"></div>
+        <!-- Ajouter article -->
+        <div class="flex gap-2">
+          <input id="qrcode-item-search" type="text" placeholder="Rechercher un article à ajouter..."
+            class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+        </div>
+        <div id="qrcode-item-suggestions" class="hidden mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto z-10"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal résultat scan QR code stock (liste articles) -->
+<div id="scan-qr-result-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <div>
+        <h3 id="sqr-title" class="font-semibold text-slate-800">QR Code scanné</h3>
+        <p id="sqr-desc" class="text-xs text-slate-400 mt-0.5"></p>
+      </div>
+      <button id="close-sqr-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="sqr-items" class="p-4 space-y-2"></div>
+  </div>
+</div>
+
 <div id="admin-actions">
   <button id="add-item-btn" type="button"
     class="fixed right-6 bottom-6 z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
@@ -264,6 +388,7 @@
   </button>
 </div>
 
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
@@ -455,6 +580,7 @@ function openCreateModal() {
   document.getElementById('item-form').reset();
   document.getElementById('item-quantity').value = '0';
   document.getElementById('item-min-quantity').value = '0';
+  document.getElementById('item-barcode').value = '';
   document.getElementById('item-form-error').classList.add('hidden');
   stockSupplierPicker.load();
   itemModal.classList.remove('hidden');
@@ -465,6 +591,7 @@ function openEditModal(item) {
   document.getElementById('item-id').value = item.id;
   document.getElementById('item-name').value = item.name || '';
   document.getElementById('item-reference').value = item.reference || '';
+  document.getElementById('item-barcode').value = item.barcode || '';
   document.getElementById('item-category').value = item.category || '';
   document.getElementById('item-description').value = item.description || '';
   document.getElementById('item-quantity').value = item.quantity ?? 0;
@@ -482,6 +609,7 @@ document.getElementById('item-form').addEventListener('submit', async e => {
   const data = {
     name: document.getElementById('item-name').value,
     reference: document.getElementById('item-reference').value || null,
+    barcode: document.getElementById('item-barcode').value || null,
     category: document.getElementById('item-category').value || null,
     description: document.getElementById('item-description').value || null,
     quantity: parseInt(document.getElementById('item-quantity').value) || 0,
@@ -540,13 +668,17 @@ async function openDetailModal(id) {
 
     document.getElementById('detail-info').innerHTML = `
       <div class="bg-slate-50 rounded-lg p-3">
-        <p class="text-xs text-slate-500 mb-0.5">Référence</p>
+        <p class="text-xs text-slate-500 mb-0.5">Référence fournisseur</p>
         <p class="text-sm font-medium text-slate-800">${escapeHtml(item.reference) || '—'}</p>
       </div>
       <div class="bg-slate-50 rounded-lg p-3">
         <p class="text-xs text-slate-500 mb-0.5">Catégorie</p>
         <p class="text-sm font-medium text-slate-800">${escapeHtml(item.category) || '—'}</p>
       </div>
+      ${item.barcode ? `<div class="col-span-2 bg-blue-50 rounded-lg p-3">
+        <p class="text-xs text-blue-500 mb-0.5">Code barre</p>
+        <p class="text-sm font-mono font-medium text-blue-800">${escapeHtml(item.barcode)}</p>
+      </div>` : ''}
       <div class="bg-slate-50 rounded-lg p-3">
         <p class="text-xs text-slate-500 mb-0.5">Stock actuel</p>
         <p class="text-sm font-bold ${qtyColor}">${item.quantity} <span class="font-normal text-xs text-slate-500">/ seuil ${item.minQuantity}</span></p>
@@ -666,6 +798,327 @@ document.getElementById('confirm-delete').addEventListener('click', async () => 
   }
 });
 
+// ── Scanner QR / Code barre ───────────────────────────────────────
+let html5QrCode = null;
+let scannerActive = false;
+let scannerTargetField = null; // 'item-barcode' si ouvert depuis le formulaire
+
+const scanModal = document.getElementById('scan-modal');
+
+function openScanModal(targetField = null) {
+  scannerTargetField = targetField;
+  document.getElementById('scan-result').classList.add('hidden');
+  document.getElementById('scan-manual-input').value = '';
+  document.getElementById('scan-status').textContent = 'Pointez la caméra vers un QR code ou un code barre';
+  scanModal.classList.remove('hidden');
+  startScanner();
+}
+
+function closeScanModal() {
+  stopScanner();
+  scanModal.classList.add('hidden');
+  scannerTargetField = null;
+}
+
+async function startScanner() {
+  if (!window.Html5Qrcode) return;
+  try {
+    html5QrCode = new Html5Qrcode('scan-reader');
+    await html5QrCode.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 },
+      onScanSuccess,
+      () => {}
+    );
+    scannerActive = true;
+  } catch (e) {
+    document.getElementById('scan-status').textContent = 'Caméra non disponible. Saisissez le code manuellement.';
+  }
+}
+
+async function stopScanner() {
+  if (html5QrCode && scannerActive) {
+    try { await html5QrCode.stop(); } catch (_) {}
+    try { html5QrCode.clear(); } catch (_) {}
+    scannerActive = false;
+    html5QrCode = null;
+  }
+}
+
+async function onScanSuccess(decodedText) {
+  await stopScanner();
+  await resolveScanValue(decodedText);
+}
+
+async function resolveScanValue(value) {
+  if (!value) return;
+
+  // Si ouvert depuis le champ barcode du formulaire → juste remplir le champ
+  if (scannerTargetField) {
+    // Extraire le token si c'est une URL stock QR
+    const qrMatch = value.match(/[?&]stockqr=([^&]+)/);
+    const finalValue = qrMatch ? qrMatch[1] : value;
+    document.getElementById(scannerTargetField).value = finalValue;
+    closeScanModal();
+    return;
+  }
+
+  document.getElementById('scan-status').textContent = 'Recherche en cours...';
+
+  // Extraire le token si c'est une URL
+  const qrMatch = value.match(/[?&]stockqr=([^&]+)/);
+  const query = qrMatch ? qrMatch[1] : value;
+
+  try {
+    const result = await api.get('/stock/scan', { q: query });
+    closeScanModal();
+
+    if (result.type === 'item') {
+      openDetailModal(result.data.id);
+    } else if (result.type === 'qrcode') {
+      openScanQRResultModal(result.data);
+    }
+  } catch (err) {
+    document.getElementById('scan-status').textContent = err.status === 404
+      ? 'Aucun article ou QR code trouvé pour ce code.'
+      : 'Erreur : ' + err.message;
+    const resEl = document.getElementById('scan-result');
+    resEl.textContent = 'Code scanné : ' + value;
+    resEl.classList.remove('hidden');
+  }
+}
+
+document.getElementById('close-scan-modal').addEventListener('click', closeScanModal);
+scanModal.addEventListener('click', e => { if (e.target === scanModal) closeScanModal(); });
+document.getElementById('scan-btn').addEventListener('click', () => openScanModal());
+document.getElementById('scan-barcode-btn').addEventListener('click', () => openScanModal('item-barcode'));
+
+document.getElementById('scan-manual-btn').addEventListener('click', () => {
+  const v = document.getElementById('scan-manual-input').value.trim();
+  if (v) resolveScanValue(v);
+});
+document.getElementById('scan-manual-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('scan-manual-btn').click(); }
+});
+
+// ── Résultat scan QR code stock ────────────────────────────────────
+const sqrModal = document.getElementById('scan-qr-result-modal');
+document.getElementById('close-sqr-modal').addEventListener('click', () => sqrModal.classList.add('hidden'));
+sqrModal.addEventListener('click', e => { if (e.target === sqrModal) sqrModal.classList.add('hidden'); });
+
+function openScanQRResultModal(qrData) {
+  document.getElementById('sqr-title').textContent = escapeHtml(qrData.label);
+  document.getElementById('sqr-desc').textContent = qrData.description || '';
+  const container = document.getElementById('sqr-items');
+  const items = qrData.items || [];
+  if (items.length === 0) {
+    container.innerHTML = '<p class="text-slate-400 text-sm text-center py-4">Aucun article lié à ce QR code</p>';
+  } else {
+    container.innerHTML = items.map(item => {
+      const isLow = item.quantity <= item.minQuantity;
+      const qtyClass = item.quantity === 0 ? 'text-red-600' : isLow ? 'text-orange-600' : 'text-green-700';
+      return `
+        <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition"
+          onclick="sqrModal.classList.add('hidden'); openDetailModal('${item.id}')">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-slate-800 truncate">${escapeHtml(item.name)}</p>
+            ${item.reference ? `<p class="text-xs text-slate-400 font-mono">${escapeHtml(item.reference)}</p>` : ''}
+          </div>
+          <span class="text-sm font-bold ${qtyClass} flex-shrink-0">${item.quantity}
+            ${isLow ? '<span class="ml-0.5 text-xs text-orange-400">⚠</span>' : ''}
+          </span>
+        </div>`;
+    }).join('');
+  }
+  sqrModal.classList.remove('hidden');
+}
+
+// ── Gestion QR Codes Stock (admin) ────────────────────────────────
+const qrcodesModal = document.getElementById('qrcodes-modal');
+const qrcodeDetailModal = document.getElementById('qrcode-detail-modal');
+let currentQRCode = null;
+let stockItemsCache = [];
+
+document.getElementById('qrcodes-btn').addEventListener('click', openQRCodesModal);
+document.getElementById('close-qrcodes-modal').addEventListener('click', () => qrcodesModal.classList.add('hidden'));
+qrcodesModal.addEventListener('click', e => { if (e.target === qrcodesModal) qrcodesModal.classList.add('hidden'); });
+document.getElementById('close-qrcode-detail').addEventListener('click', () => qrcodeDetailModal.classList.add('hidden'));
+qrcodeDetailModal.addEventListener('click', e => { if (e.target === qrcodeDetailModal) qrcodeDetailModal.classList.add('hidden'); });
+
+async function openQRCodesModal() {
+  qrcodesModal.classList.remove('hidden');
+  await loadQRCodes();
+}
+
+async function loadQRCodes() {
+  document.getElementById('qrcodes-loading').classList.remove('hidden');
+  document.getElementById('qrcodes-list').classList.add('hidden');
+  document.getElementById('qrcodes-empty').classList.add('hidden');
+  try {
+    const list = await api.get('/stock/qrcodes');
+    document.getElementById('qrcodes-loading').classList.add('hidden');
+    if (!list || list.length === 0) {
+      document.getElementById('qrcodes-empty').classList.remove('hidden');
+    } else {
+      renderQRCodes(list);
+    }
+  } catch (_) {
+    document.getElementById('qrcodes-loading').textContent = 'Erreur de chargement';
+  }
+}
+
+function renderQRCodes(list) {
+  document.getElementById('qrcodes-list').classList.remove('hidden');
+  document.getElementById('qrcodes-list').innerHTML = list.map(qr => `
+    <div class="flex items-center gap-3 border border-slate-200 rounded-xl p-3 hover:bg-slate-50 transition">
+      <div class="w-9 h-9 bg-violet-100 rounded-lg flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 17h.01M17 14h.01M20 17h.01M17 20h.01M20 20h.01"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-slate-800">${escapeHtml(qr.label)}</p>
+        <p class="text-xs text-slate-400">${qr._count?.items ?? 0} article(s)</p>
+      </div>
+      <button onclick="openQRCodeDetail('${qr.id}')"
+        class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-100 transition text-slate-600">Modifier</button>
+      <button onclick="deleteQRCode('${qr.id}', '${escapeHtml(qr.label)}')"
+        class="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      </button>
+    </div>
+  `).join('');
+}
+
+document.getElementById('qrcode-create-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const label = document.getElementById('qrcode-label').value.trim();
+  if (!label) return;
+  try {
+    await api.post('/stock/qrcodes', { label });
+    document.getElementById('qrcode-label').value = '';
+    showToast('QR code créé');
+    await loadQRCodes();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+async function deleteQRCode(id, label) {
+  if (!confirm(`Supprimer le QR code "${label}" ?`)) return;
+  try {
+    await api.delete(`/stock/qrcodes/${id}`);
+    showToast('QR code supprimé');
+    await loadQRCodes();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function openQRCodeDetail(id) {
+  qrcodeDetailModal.classList.remove('hidden');
+  document.getElementById('qrcode-detail-title').textContent = 'Chargement...';
+  document.getElementById('qrcode-detail-img').src = '';
+  document.getElementById('qrcode-items-list').innerHTML = '';
+
+  try {
+    const qr = await api.get(`/stock/qrcodes/${id}`);
+    currentQRCode = qr;
+
+    document.getElementById('qrcode-detail-title').textContent = escapeHtml(qr.label);
+    const imgUrl = `/api/stock/qrcodes/${id}/image`;
+    document.getElementById('qrcode-detail-img').src = imgUrl;
+    document.getElementById('qrcode-detail-download').href = imgUrl;
+    document.getElementById('qrcode-detail-download').download = `qr-stock-${qr.label}.png`;
+    document.getElementById('qrcode-items-count').textContent = `${qr.items.length} article(s)`;
+
+    renderQRCodeItems(qr.items);
+    setupQRCodeItemSearch(qr.id, qr.items);
+  } catch (err) {
+    document.getElementById('qrcode-detail-title').textContent = 'Erreur';
+  }
+}
+
+function renderQRCodeItems(items) {
+  const container = document.getElementById('qrcode-items-list');
+  if (!items || items.length === 0) {
+    container.innerHTML = '<p class="text-xs text-slate-400 italic">Aucun article lié</p>';
+    return;
+  }
+  container.innerHTML = items.map(item => `
+    <div class="flex items-center gap-2 py-1.5 border-b border-slate-100 last:border-0">
+      <div class="flex-1 min-w-0">
+        <span class="text-sm text-slate-700">${escapeHtml(item.name)}</span>
+        ${item.barcode ? `<span class="ml-2 text-xs font-mono text-slate-400">${escapeHtml(item.barcode)}</span>` : ''}
+      </div>
+      <button onclick="removeItemFromQRCode('${item.id}')"
+        class="text-slate-300 hover:text-red-500 transition flex-shrink-0" title="Retirer">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+  `).join('');
+}
+
+async function removeItemFromQRCode(stockItemId) {
+  if (!currentQRCode) return;
+  const newIds = currentQRCode.items.filter(i => i.id !== stockItemId).map(i => i.id);
+  try {
+    const updated = await api.put(`/stock/qrcodes/${currentQRCode.id}/items`, { itemIds: newIds });
+    currentQRCode = updated;
+    document.getElementById('qrcode-items-count').textContent = `${updated.items.length} article(s)`;
+    renderQRCodeItems(updated.items);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function setupQRCodeItemSearch(qrId, currentItems) {
+  const input = document.getElementById('qrcode-item-search');
+  const suggestions = document.getElementById('qrcode-item-suggestions');
+  let searchTimeout;
+
+  input.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    const q = input.value.trim();
+    if (!q) { suggestions.classList.add('hidden'); return; }
+    searchTimeout = setTimeout(async () => {
+      try {
+        const items = await api.get('/stock', { q });
+        const currentIds = new Set((currentQRCode?.items || []).map(i => i.id));
+        const filtered = items.filter(i => !currentIds.has(i.id)).slice(0, 6);
+        if (filtered.length === 0) { suggestions.classList.add('hidden'); return; }
+        suggestions.classList.remove('hidden');
+        suggestions.innerHTML = filtered.map(item => `
+          <div class="px-3 py-2 hover:bg-violet-50 cursor-pointer text-sm flex items-center gap-2 border-b border-slate-100 last:border-0"
+            onclick="addItemToQRCode('${item.id}')">
+            <span class="flex-1 truncate">${escapeHtml(item.name)}</span>
+            ${item.barcode ? `<span class="text-xs font-mono text-slate-400">${escapeHtml(item.barcode)}</span>` : ''}
+            <span class="text-xs text-slate-400 flex-shrink-0">${item.quantity}</span>
+          </div>`).join('');
+      } catch (_) { suggestions.classList.add('hidden'); }
+    }, 300);
+  });
+
+  document.addEventListener('click', e => {
+    if (!suggestions.contains(e.target) && e.target !== input) suggestions.classList.add('hidden');
+  });
+}
+
+async function addItemToQRCode(stockItemId) {
+  if (!currentQRCode) return;
+  document.getElementById('qrcode-item-suggestions').classList.add('hidden');
+  document.getElementById('qrcode-item-search').value = '';
+  const newIds = [...(currentQRCode.items || []).map(i => i.id), stockItemId];
+  try {
+    const updated = await api.put(`/stock/qrcodes/${currentQRCode.id}/items`, { itemIds: newIds });
+    currentQRCode = updated;
+    document.getElementById('qrcode-items-count').textContent = `${updated.items.length} article(s)`;
+    renderQRCodeItems(updated.items);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
 // ── Init ─────────────────────────────────────────────────────────
 requireLogin().then(async u => {
   user = u;
@@ -673,6 +1126,9 @@ requireLogin().then(async u => {
   syncLowStockToggle();
   if (user.role !== 'ADMIN') {
     document.getElementById('admin-actions').style.display = 'none';
+  } else {
+    document.getElementById('qrcodes-btn').classList.remove('hidden');
+    document.getElementById('qrcodes-btn').classList.add('inline-flex');
   }
   await fetchAlerts();
   await fetchCategories();

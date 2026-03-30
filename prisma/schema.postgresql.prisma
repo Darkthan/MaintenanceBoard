@@ -459,6 +459,7 @@ model StockItem {
   id          String   @id @default(uuid())
   name        String
   reference   String?
+  barcode     String?  @unique
   category    String?
   description String?
   quantity    Int      @default(0)
@@ -469,10 +470,35 @@ model StockItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  supplier    Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplier    Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   movements   StockMovement[]
+  qrCodes     StockQRCodeItem[]
 
   @@map("stock_items")
+}
+
+model StockQRCode {
+  id          String   @id @default(uuid())
+  token       String   @unique @default(uuid())
+  label       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       StockQRCodeItem[]
+
+  @@map("stock_qrcodes")
+}
+
+model StockQRCodeItem {
+  qrCodeId    String
+  stockItemId String
+
+  qrCode      StockQRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+  stockItem   StockItem   @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  @@id([qrCodeId, stockItemId])
+  @@map("stock_qrcode_items")
 }
 
 model StockMovement {
