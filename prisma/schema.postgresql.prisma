@@ -165,7 +165,7 @@ model Equipment {
   enrollmentToken AgentToken? @relation(fields: [enrollmentTokenId], references: [id], onDelete: SetNull)
   sessionLogs     MachineSessionLog[]
   supplierRef     Supplier?   @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  loanResources   LoanResource[]
+  loanResources   LoanResourceEquipment[]
 
   @@map("equipment")
 }
@@ -531,16 +531,25 @@ model LoanResource {
   instructions String?
   color        String?
   isActive     Boolean  @default(true)
-  equipmentId  String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  equipment    Equipment?        @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
   reservations LoanReservation[]
   magicLinks   LoanMagicLink[]
+  equipments   LoanResourceEquipment[]
 
-  @@index([equipmentId])
   @@map("loan_resources")
+}
+
+model LoanResourceEquipment {
+  loanResourceId String
+  equipmentId    String
+
+  loanResource LoanResource @relation(fields: [loanResourceId], references: [id], onDelete: Cascade)
+  equipment    Equipment    @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@id([loanResourceId, equipmentId])
+  @@map("loan_resource_equipments")
 }
 
 model LoanMagicLink {

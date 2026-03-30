@@ -38,8 +38,18 @@ function validate(req, res) {
 
 function mapResource(resource) {
   const bundle = getBundleInfo(resource);
-  return { ...resource, ...bundle };
+  const equipments = (resource.equipments || []).map(e => e.equipment || e).filter(Boolean);
+  const hasRepairEquipment = equipments.length > 0 && equipments.some(e => e.status === 'REPAIR');
+  return { ...resource, ...bundle, equipments, hasRepairEquipment };
 }
+
+const EQUIPMENT_SELECT = {
+  equipments: {
+    include: {
+      equipment: { select: { id: true, name: true, serialNumber: true, status: true, type: true } }
+    }
+  }
+};
 
 function computeOccurrences(startAt, endAt, recurrence) {
   const occurrences = [{ startAt: new Date(startAt), endAt: new Date(endAt) }];
@@ -197,9 +207,18 @@ function ensureValidDates(startAt, endAt) {
 }
 
 async function ensureAvailable(resourceId, startAt, endAt, requestedUnits, excludeReservationId = null) {
-  const resource = await prisma.loanResource.findUnique({ where: { id: resourceId } });
+  const resource = await prisma.loanResource.findUnique({
+    where: { id: resourceId },
+    include: { equipments: { include: { equipment: { select: { id: true, status: true } } } } }
+  });
   if (!resource || !resource.isActive) {
     throw Object.assign(new Error('Ressource de prêt introuvable'), { status: 404 });
+  }
+
+  // Bloquer si au moins un équipement lié est en réparation
+  const linkedEquipments = (resource.equipments || []).map(e => e.equipment).filter(Boolean);
+  if (linkedEquipments.length > 0 && linkedEquipments.some(e => e.status === 'REPAIR')) {
+    throw Object.assign(new Error('Cette ressource est temporairement indisponible : un équipement lié est en cours de réparation.'), { status: 409 });
   }
 
   const bundle = getBundleInfo(resource);
@@ -459,7 +478,7 @@ loansRouter.get('/resources', async (_req, res, next) => {
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
       include: {
         _count: { select: { reservations: true, magicLinks: true } },
-        equipment: { select: { id: true, name: true, serialNumber: true } }
+        ...EQUIPMENT_SELECT
       }
     });
     res.json(resources.map(resource => ({ ...mapResource(resource) })));
@@ -478,13 +497,14 @@ loansRouter.post('/resources',
     body('location').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
     body('instructions').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('color').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
-    body('equipmentId').optional({ values: 'falsy' }).isString()
+    body('equipmentIds').optional().isArray()
   ],
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
       const totalUnits = Number(req.body.totalUnits);
       const bundleSize = Math.min(totalUnits, Number(req.body.bundleSize) || 1);
+      const equipmentIds = Array.isArray(req.body.equipmentIds) ? req.body.equipmentIds : [];
 
       const resource = await prisma.loanResource.create({
         data: {
@@ -496,9 +516,11 @@ loansRouter.post('/resources',
           location: req.body.location || null,
           instructions: req.body.instructions || null,
           color: req.body.color || null,
-          equipmentId: req.body.equipmentId || null
+          equipments: equipmentIds.length > 0
+            ? { create: equipmentIds.map(id => ({ equipmentId: id })) }
+            : undefined
         },
-        include: { equipment: { select: { id: true, name: true, serialNumber: true } } }
+        include: { ...EQUIPMENT_SELECT }
       });
 
       res.status(201).json(mapResource(resource));
@@ -522,7 +544,7 @@ loansRouter.post('/resources/bulk',
       });
 
       // Filtrer ceux qui ont déjà une ressource de prêt liée
-      const alreadyLinked = await prisma.loanResource.findMany({
+      const alreadyLinked = await prisma.loanResourceEquipment.findMany({
         where: { equipmentId: { in: equipmentIds } },
         select: { equipmentId: true }
       });
@@ -535,7 +557,7 @@ loansRouter.post('/resources/bulk',
             name: e.name,
             totalUnits: 1,
             bundleSize: 1,
-            equipmentId: e.id
+            equipments: { create: [{ equipmentId: e.id }] }
           }
         }))
       );
@@ -562,7 +584,7 @@ loansRouter.patch('/resources/:id',
     body('instructions').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('color').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
     body('isActive').optional().isBoolean(),
-    body('equipmentId').optional({ values: 'falsy' }).isString()
+    body('equipmentIds').optional().isArray()
   ],
   async (req, res, next) => {
     try {
@@ -574,21 +596,33 @@ loansRouter.patch('/resources/:id',
       const totalUnits = req.body.totalUnits !== undefined ? Number(req.body.totalUnits) : existing.totalUnits;
       const bundleSize = req.body.bundleSize !== undefined ? Math.min(totalUnits, Number(req.body.bundleSize) || 1) : existing.bundleSize;
 
+      const updateData = {
+        ...(req.body.name !== undefined ? { name: req.body.name } : {}),
+        ...(req.body.category !== undefined ? { category: req.body.category || null } : {}),
+        ...(req.body.description !== undefined ? { description: req.body.description || null } : {}),
+        ...(req.body.totalUnits !== undefined ? { totalUnits } : {}),
+        ...(req.body.bundleSize !== undefined || req.body.totalUnits !== undefined ? { bundleSize } : {}),
+        ...(req.body.location !== undefined ? { location: req.body.location || null } : {}),
+        ...(req.body.instructions !== undefined ? { instructions: req.body.instructions || null } : {}),
+        ...(req.body.color !== undefined ? { color: req.body.color || null } : {}),
+        ...(req.body.isActive !== undefined ? { isActive: !!req.body.isActive } : {})
+      };
+
+      // Si equipmentIds fourni, remplacer la liste
+      if (Array.isArray(req.body.equipmentIds)) {
+        await prisma.loanResourceEquipment.deleteMany({ where: { loanResourceId: req.params.id } });
+        if (req.body.equipmentIds.length > 0) {
+          await prisma.loanResourceEquipment.createMany({
+            data: req.body.equipmentIds.map(eId => ({ loanResourceId: req.params.id, equipmentId: eId })),
+            skipDuplicates: true
+          });
+        }
+      }
+
       const updated = await prisma.loanResource.update({
         where: { id: req.params.id },
-        data: {
-          ...(req.body.name !== undefined ? { name: req.body.name } : {}),
-          ...(req.body.category !== undefined ? { category: req.body.category || null } : {}),
-          ...(req.body.description !== undefined ? { description: req.body.description || null } : {}),
-          ...(req.body.totalUnits !== undefined ? { totalUnits } : {}),
-          ...(req.body.bundleSize !== undefined || req.body.totalUnits !== undefined ? { bundleSize } : {}),
-          ...(req.body.location !== undefined ? { location: req.body.location || null } : {}),
-          ...(req.body.instructions !== undefined ? { instructions: req.body.instructions || null } : {}),
-          ...(req.body.color !== undefined ? { color: req.body.color || null } : {}),
-          ...(req.body.isActive !== undefined ? { isActive: !!req.body.isActive } : {}),
-          ...(req.body.equipmentId !== undefined ? { equipmentId: req.body.equipmentId || null } : {})
-        },
-        include: { equipment: { select: { id: true, name: true, serialNumber: true } } }
+        data: updateData,
+        include: { ...EQUIPMENT_SELECT }
       });
 
       res.json(mapResource(updated));
