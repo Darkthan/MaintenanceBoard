@@ -158,7 +158,29 @@ function formatCountdown(targetDate, now = new Date()) {
 function compareLoanStart(a, b) {
   const startDiff = new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
   if (startDiff !== 0) return startDiff;
-  return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+  const createdDiff = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+  if (createdDiff !== 0) return createdDiff;
+  return String(a.id || '').localeCompare(String(b.id || ''));
+}
+
+async function fetchUpcomingLoanReservations(now, limit = null) {
+  const query = {
+    where: {
+      status: { in: LOAN_VISIBLE_STATUSES },
+      startAt: { gte: now }
+    },
+    orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
+    include: {
+      resource: { select: { name: true, location: true } }
+    }
+  };
+
+  if (Number.isInteger(limit) && limit > 0) {
+    query.take = limit;
+  }
+
+  const items = await prisma.loanReservation.findMany(query);
+  return items.slice().sort(compareLoanStart);
 }
 
 async function buildOverviewWidget() {
@@ -171,17 +193,7 @@ async function buildOverviewWidget() {
     prisma.stockItem.findMany({
       select: { id: true, quantity: true, minQuantity: true }
     }),
-    prisma.loanReservation.findMany({
-      where: {
-        status: { in: LOAN_VISIBLE_STATUSES },
-        startAt: { gte: now }
-      },
-      orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
-      take: 12,
-      include: {
-        resource: { select: { name: true, location: true } }
-      }
-    })
+    fetchUpcomingLoanReservations(now)
   ]);
   const nextLoan = [...upcomingLoans].sort(compareLoanStart)[0] || null;
 
@@ -398,20 +410,9 @@ async function buildOrdersWidget() {
 async function buildUpcomingLoansWidget(screen) {
   const now = new Date();
   const end = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-  const items = await prisma.loanReservation.findMany({
-    where: {
-      status: { in: LOAN_VISIBLE_STATUSES },
-      startAt: {
-        gte: now,
-        lte: end
-      }
-    },
-    orderBy: [{ startAt: 'asc' }],
-    take: 8,
-    include: {
-      resource: { select: { name: true, location: true } }
-    }
-  });
+  const items = (await fetchUpcomingLoanReservations(now, 32))
+    .filter(item => new Date(item.startAt) <= end)
+    .slice(0, 8);
 
   return {
     id: 'upcomingLoans',
