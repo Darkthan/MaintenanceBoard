@@ -365,8 +365,9 @@ router.post('/import',
       const created = await prisma.$transaction(async (tx) => {
         const equipments = [];
         for (const result of valid) {
-          const { roomNumber, ...data } = result.data;
+          const { roomNumber, suggestedRoomNumber, ...data } = result.data;
           let roomId = null;
+          let suggestedRoomId = null;
 
           if (roomNumber) {
             const room = await tx.room.findFirst({
@@ -375,9 +376,16 @@ router.post('/import',
             if (room) roomId = room.id;
           }
 
+          if (suggestedRoomNumber) {
+            const suggestedRoom = await tx.room.findFirst({
+              where: { number: { equals: suggestedRoomNumber, mode: 'insensitive' } }
+            });
+            if (suggestedRoom) suggestedRoomId = suggestedRoom.id;
+          }
+
           try {
             const equip = await tx.equipment.create({
-              data: { ...data, roomId }
+              data: { ...data, roomId, suggestedRoomId }
             });
             equipments.push(equip);
           } catch (e) {

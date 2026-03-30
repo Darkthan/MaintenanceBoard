@@ -440,6 +440,12 @@
         <p>name,type,brand,model,serialNumber,roomNumber,status</p>
         <p>PC-101-01,PC,Dell,OptiPlex 7090,SN123,101,ACTIVE</p>
       </div>
+      <div class="bg-blue-50 rounded-lg p-3 text-xs text-blue-900">
+        <p class="font-semibold mb-1">Version boostée compatible agent :</p>
+        <p class="font-mono text-[11px] break-all">name,type,serialNumber,roomNumber,discoverySource,discoveryStatus,agentHostname,lastSeenAt,suggestedRoomNumber,agentCpu,agentRamGb,agentOs,agentIps,agentMacs,agentPeripherals,agentDisks</p>
+        <p class="font-mono text-[11px] mt-1 break-all">PC-CDI-01,PC,SN-AGENT-01,201,AGENT,PENDING,pc-cdi-01,2026-03-30T08:15:00Z,202,Intel Core i5,16,Windows 11,"10.0.0.15|192.168.1.15","00:11:22:33:44:55|66:77:88:99:AA:BB","Webcam|Casque","[{""mount"":""C:"",""totalGb"":512,""freeGb"":120}]"</p>
+        <p class="mt-2 text-[11px] text-blue-800">Champs reconnus en plus : <span class="font-mono">agentInfo</span> JSON complet, <span class="font-mono">agentManufacturer</span>, <span class="font-mono">agentModel</span>, <span class="font-mono">agentOsVersion</span>, <span class="font-mono">agentUser</span>. Les listes peuvent être fournies en JSON ou séparées par <span class="font-mono">|</span>.</p>
+      </div>
       <input id="import-file" type="file" accept=".csv,.xlsx,.xls"
         class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
       <label class="flex items-center gap-2 text-sm text-slate-600">

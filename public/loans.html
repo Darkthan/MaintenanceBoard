@@ -259,6 +259,11 @@
             <p class="px-3 py-3 text-slate-400 text-xs text-center">Chargement…</p>
           </div>
         </div>
+        <!-- Répartition par lots (visible si totalSlots > 1 et équipements sélectionnés) -->
+        <div id="eq-lot-section" class="hidden mt-3">
+          <p class="text-xs font-medium text-slate-600 mb-2">Répartition par lots</p>
+          <div id="eq-lot-list" class="space-y-2"></div>
+        </div>
       </div>
       <label class="flex items-center gap-3 text-sm text-slate-700">
         <input id="resource-active" type="checkbox" class="h-4 w-4 rounded text-blue-600" checked />
@@ -482,7 +487,14 @@ function closeLinkModal() {
 
 // ── Picker multi-équipements ──────────────────────────────────────
 let eqPickerAll = [];
-let eqPickerSelected = new Set();
+let eqPickerSelected = new Set();   // Set<equipmentId>
+let eqLotMap = new Map();           // Map<equipmentId, lotNumber>
+
+function getFormTotalSlots() {
+  const totalUnits = parseInt(document.getElementById('resource-total-units').value) || 1;
+  const bundleSize = Math.max(1, parseInt(document.getElementById('resource-bundle-size').value) || 1);
+  return Math.max(1, Math.floor(totalUnits / bundleSize));
+}
 
 function renderEqPicker(filter = '') {
   const list = document.getElementById('eq-picker-list');
@@ -519,19 +531,94 @@ function renderEqPicker(filter = '') {
   } else {
     countEl.classList.add('hidden');
   }
+
+  renderLotSection();
+}
+
+function renderLotSection() {
+  const section = document.getElementById('eq-lot-section');
+  const totalSlots = getFormTotalSlots();
+  if (totalSlots <= 1 || eqPickerSelected.size === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+
+  // Grouper les équipements sélectionnés par lot
+  const lots = {};
+  for (let l = 1; l <= totalSlots; l++) lots[l] = [];
+  for (const id of eqPickerSelected) {
+    const lot = eqLotMap.get(id) || 1;
+    const clamped = Math.min(Math.max(1, lot), totalSlots);
+    if (clamped !== lot) eqLotMap.set(id, clamped);
+    (lots[clamped] = lots[clamped] || []).push(id);
+  }
+
+  const container = document.getElementById('eq-lot-list');
+  container.innerHTML = Object.entries(lots).map(([lotNum, ids]) => {
+    const lotN = parseInt(lotNum);
+    const items = ids.map(id => {
+      const eq = eqPickerAll.find(e => e.id === id);
+      if (!eq) return '';
+      const isRepair = eq.status === 'REPAIR';
+      return `
+        <div class="flex items-center gap-2 py-1">
+          <span class="flex-1 text-xs text-slate-700 truncate ${isRepair ? 'text-orange-600' : ''}">
+            ${escapeHtml(eq.name)}${eq.serialNumber ? ` <span class="font-mono text-slate-400">${escapeHtml(eq.serialNumber)}</span>` : ''}
+          </span>
+          <div class="flex gap-1 flex-shrink-0">
+            ${Array.from({length: totalSlots}, (_, i) => i + 1).map(n => `
+              <button type="button" onclick="setEquipmentLot('${id}', ${n})"
+                class="w-6 h-6 rounded text-xs font-semibold transition
+                  ${eqLotMap.get(id) === n ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
+                ${n}
+              </button>`).join('')}
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="border border-slate-200 rounded-lg overflow-hidden">
+        <div class="px-3 py-1.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-600">Lot ${lotN}</span>
+          <span class="text-xs text-slate-400">${ids.length} équipement(s)</span>
+        </div>
+        <div class="px-3 py-1 divide-y divide-slate-50">
+          ${items || '<p class="text-xs text-slate-300 py-2 italic">Aucun équipement</p>'}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function setEquipmentLot(equipmentId, lotNumber) {
+  eqLotMap.set(equipmentId, lotNumber);
+  renderLotSection();
 }
 
 function toggleEqPicker(id) {
   if (eqPickerSelected.has(id)) {
     eqPickerSelected.delete(id);
+    eqLotMap.delete(id);
   } else {
     eqPickerSelected.add(id);
+    // Assigner au lot le moins rempli
+    const totalSlots = getFormTotalSlots();
+    const counts = {};
+    for (let l = 1; l <= totalSlots; l++) counts[l] = 0;
+    for (const [, lot] of eqLotMap) counts[lot] = (counts[lot] || 0) + 1;
+    const minLot = Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0];
+    eqLotMap.set(id, parseInt(minLot) || 1);
   }
   renderEqPicker(document.getElementById('eq-picker-search').value);
 }
 
 document.getElementById('eq-picker-search').addEventListener('input', e => {
   renderEqPicker(e.target.value);
+});
+
+// Recalculer les lots si totalUnits ou bundleSize changent
+['resource-total-units', 'resource-bundle-size'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => renderLotSection());
 });
 
 async function openResourceModal(resource = null) {
@@ -551,11 +638,13 @@ async function openResourceModal(resource = null) {
   document.getElementById('resource-active').checked = resource?.isActive ?? true;
 
   // Init picker
-  eqPickerSelected = new Set((resource?.equipments || []).map(e => e.id || e));
+  eqPickerSelected = new Set((resource?.equipments || []).map(e => e.id));
+  eqLotMap = new Map((resource?.equipments || []).map(e => [e.id, e.lotNumber || 1]));
   document.getElementById('eq-picker-search').value = '';
   document.getElementById('eq-picker-list').innerHTML =
     '<p class="px-3 py-3 text-slate-400 text-xs text-center">Chargement…</p>';
   document.getElementById('eq-picker-count').classList.add('hidden');
+  document.getElementById('eq-lot-section').classList.add('hidden');
 
   try {
     const data = await api.get('/equipment', { limit: 500 });
@@ -639,15 +728,31 @@ function renderResources() {
         <button type="button" onclick="openResourceModal(loanResources.find(resource => resource.id === '${resource.id}'))" class="text-sm text-blue-600 hover:text-blue-700 transition flex-shrink-0">Modifier</button>
       </div>
       <p class="text-sm text-slate-600">${resource.description || 'Aucune description.'}</p>
-      ${resource.equipments && resource.equipments.length > 0 ? `
-      <div class="flex flex-wrap gap-1.5">
-        ${resource.equipments.map(eq => `
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium
+      ${resource.equipments && resource.equipments.length > 0 ? (() => {
+        const totalSlots = resource.totalSlots || 1;
+        if (totalSlots > 1) {
+          // Grouper par lot
+          const lots = {};
+          for (let l = 1; l <= totalSlots; l++) lots[l] = [];
+          resource.equipments.forEach(eq => { (lots[eq.lotNumber || 1] = lots[eq.lotNumber || 1] || []).push(eq); });
+          return `<div class="space-y-1">${Object.entries(lots).map(([lotN, eqs]) => `
+            <div class="flex items-start gap-2">
+              <span class="flex-shrink-0 mt-0.5 text-xs font-semibold text-slate-400 w-10">Lot ${lotN}</span>
+              <div class="flex flex-wrap gap-1">
+                ${eqs.length === 0 ? '<span class="text-xs text-slate-300 italic">vide</span>' : eqs.map(eq => `
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded border text-xs
+                    ${eq.status === 'REPAIR' ? 'border-orange-200 bg-orange-50 text-orange-700' : 'border-slate-200 bg-white text-slate-600'}">
+                    ${escapeHtml(eq.name)}${eq.serialNumber ? ` · ${escapeHtml(eq.serialNumber)}` : ''}
+                  </span>`).join('')}
+              </div>
+            </div>`).join('')}</div>`;
+        }
+        return `<div class="flex flex-wrap gap-1.5">${resource.equipments.map(eq => `
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium
             ${eq.status === 'REPAIR' ? 'border-orange-200 bg-orange-50 text-orange-700' : 'border-slate-200 bg-white text-slate-600'}">
-            ${eq.status === 'REPAIR' ? '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' : ''}
             ${escapeHtml(eq.name)}${eq.serialNumber ? ` · ${escapeHtml(eq.serialNumber)}` : ''}
-          </span>`).join('')}
-      </div>` : ''}
+          </span>`).join('')}</div>`;
+      })() : ''}
       <div class="grid grid-cols-2 gap-3 text-sm">
         <div class="rounded-xl bg-white px-3 py-2 border border-slate-200">
           <p class="text-slate-400 text-xs uppercase tracking-wide">Capacité</p>
@@ -1258,7 +1363,7 @@ document.getElementById('resource-form').addEventListener('submit', async event 
     instructions: document.getElementById('resource-instructions').value.trim() || null,
     color: document.getElementById('resource-color').value.trim() || null,
     isActive: document.getElementById('resource-active').checked,
-    equipmentIds: [...eqPickerSelected]
+    equipments: [...eqPickerSelected].map(id => ({ id, lotNumber: eqLotMap.get(id) || 1 }))
   };
   const id = document.getElementById('resource-id').value;
 

@@ -38,9 +38,22 @@ function validate(req, res) {
 
 function mapResource(resource) {
   const bundle = getBundleInfo(resource);
-  const equipments = (resource.equipments || []).map(e => e.equipment || e).filter(Boolean);
+  const equipments = (resource.equipments || []).map(e => ({
+    ...(e.equipment || e),
+    lotNumber: e.lotNumber ?? 1
+  })).filter(e => e.id);
   const hasRepairEquipment = equipments.length > 0 && equipments.some(e => e.status === 'REPAIR');
   return { ...resource, ...bundle, equipments, hasRepairEquipment };
+}
+
+// Normalise un tableau [{id, lotNumber}] ou [string] → [{id, lotNumber}]
+function normalizeEquipmentList(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(item => typeof item === 'string'
+      ? { id: item, lotNumber: 1 }
+      : { id: item.id || item.equipmentId, lotNumber: parseInt(item.lotNumber) || 1 })
+    .filter(e => e.id);
 }
 
 const EQUIPMENT_SELECT = {
@@ -497,14 +510,14 @@ loansRouter.post('/resources',
     body('location').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
     body('instructions').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('color').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
-    body('equipmentIds').optional().isArray()
+    body('equipments').optional().isArray()
   ],
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
       const totalUnits = Number(req.body.totalUnits);
       const bundleSize = Math.min(totalUnits, Number(req.body.bundleSize) || 1);
-      const equipmentIds = Array.isArray(req.body.equipmentIds) ? req.body.equipmentIds : [];
+      const equipmentList = normalizeEquipmentList(req.body.equipments || req.body.equipmentIds);
 
       const resource = await prisma.loanResource.create({
         data: {
@@ -516,8 +529,8 @@ loansRouter.post('/resources',
           location: req.body.location || null,
           instructions: req.body.instructions || null,
           color: req.body.color || null,
-          equipments: equipmentIds.length > 0
-            ? { create: equipmentIds.map(id => ({ equipmentId: id })) }
+          equipments: equipmentList.length > 0
+            ? { create: equipmentList.map(e => ({ equipmentId: e.id, lotNumber: e.lotNumber })) }
             : undefined
         },
         include: { ...EQUIPMENT_SELECT }
@@ -584,7 +597,7 @@ loansRouter.patch('/resources/:id',
     body('instructions').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('color').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
     body('isActive').optional().isBoolean(),
-    body('equipmentIds').optional().isArray()
+    body('equipments').optional().isArray()
   ],
   async (req, res, next) => {
     try {
@@ -608,12 +621,14 @@ loansRouter.patch('/resources/:id',
         ...(req.body.isActive !== undefined ? { isActive: !!req.body.isActive } : {})
       };
 
-      // Si equipmentIds fourni, remplacer la liste
-      if (Array.isArray(req.body.equipmentIds)) {
+      // Si equipments fourni, remplacer la liste
+      const rawList = req.body.equipments ?? req.body.equipmentIds;
+      if (Array.isArray(rawList)) {
+        const equipmentList = normalizeEquipmentList(rawList);
         await prisma.loanResourceEquipment.deleteMany({ where: { loanResourceId: req.params.id } });
-        if (req.body.equipmentIds.length > 0) {
+        if (equipmentList.length > 0) {
           await prisma.loanResourceEquipment.createMany({
-            data: req.body.equipmentIds.map(eId => ({ loanResourceId: req.params.id, equipmentId: eId })),
+            data: equipmentList.map(e => ({ loanResourceId: req.params.id, equipmentId: e.id, lotNumber: e.lotNumber })),
             skipDuplicates: true
           });
         }

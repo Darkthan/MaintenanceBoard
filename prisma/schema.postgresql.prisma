@@ -544,6 +544,7 @@ model LoanResource {
 model LoanResourceEquipment {
   loanResourceId String
   equipmentId    String
+  lotNumber      Int    @default(1)
 
   loanResource LoanResource @relation(fields: [loanResourceId], references: [id], onDelete: Cascade)
   equipment    Equipment    @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
