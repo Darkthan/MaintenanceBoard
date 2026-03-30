@@ -171,6 +171,28 @@ describe('GET /api/search', () => {
     expect(res.body.results.some(r => r.type === 'message' && r.href === '/messages-thread.html?conversation=conv-1')).toBe(true);
   });
 
+  it('retrouve un poste a partir de son adresse IP agent', async () => {
+    prisma.equipment.findMany.mockResolvedValue([
+      {
+        id: 'eq-42',
+        name: 'PC CDI 01',
+        type: 'Ordinateur',
+        brand: 'Dell',
+        model: 'OptiPlex',
+        serialNumber: 'SN-42',
+        agentHostname: 'pc-cdi-01',
+        agentInfo: JSON.stringify({ ips: ['10.42.0.15', '192.168.1.20'] }),
+        status: 'ACTIVE',
+        room: { id: 'room-1', name: 'CDI', number: '12' },
+        _count: { interventions: 0 }
+      }
+    ]);
+
+    const res = await request(app).get('/api/search?q=10.42.0.15');
+    expect(res.status).toBe(200);
+    expect(res.body.results.some(r => r.type === 'equipment' && r.id === 'equipment:eq-42')).toBe(true);
+  });
+
   it('retrouve les ressources et reservations de pret', async () => {
     prisma.loanResource.findMany.mockResolvedValue([
       {

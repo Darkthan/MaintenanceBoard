@@ -63,6 +63,24 @@ const PRIORITY_LABELS = {
   CRITICAL: 'Critique'
 };
 
+function extractAgentIps(agentInfo) {
+  if (!agentInfo) return [];
+
+  let parsed = agentInfo;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+
+  const ips = parsed?.ips;
+  if (Array.isArray(ips)) return ips.filter(Boolean);
+  if (typeof ips === 'string' && ips.trim()) return [ips.trim()];
+  return [];
+}
+
 const ACTIONS = [
   {
     id: 'action:messages',
@@ -810,6 +828,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         item.model,
         item.serialNumber,
         item.agentHostname,
+        ...extractAgentIps(item.agentInfo),
         item.room?.name,
         item.room?.number
       ].filter(Boolean).join(' ')
