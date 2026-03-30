@@ -56,16 +56,29 @@
       <button id="refresh-btn" type="button" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
     </header>
 
-    <div class="flex-1 p-6">
-      <section class="bg-white rounded-2xl border border-slate-200 p-5 min-h-[520px]">
+    <div class="flex-1 p-6 space-y-6">
+      <section class="bg-white rounded-2xl border border-slate-200 p-5">
         <div class="flex items-center justify-between gap-3">
           <div>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Boîte de réception</p>
-            <h2 class="text-lg font-semibold text-slate-800">Conversations</h2>
+            <h2 class="text-lg font-semibold text-slate-800">Conversations internes</h2>
           </div>
           <span id="conversation-count" class="text-xs text-slate-400">0 conversation</span>
         </div>
         <div id="conversation-list" class="mt-4 space-y-3">
+          <p class="text-sm text-slate-400 text-center py-10">Chargement...</p>
+        </div>
+      </section>
+
+      <section class="bg-amber-50 rounded-2xl border border-amber-200 p-5">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-amber-500">Tickets &amp; Interventions</p>
+            <h2 class="text-lg font-semibold text-slate-800">Messages des demandes</h2>
+          </div>
+          <span id="ticket-thread-count" class="text-xs text-slate-400">0 ticket</span>
+        </div>
+        <div id="ticket-thread-list" class="mt-4 space-y-3">
           <p class="text-sm text-slate-400 text-center py-10">Chargement...</p>
         </div>
       </section>
@@ -118,6 +131,7 @@
 <script>
 let recipients = [];
 let conversations = [];
+let ticketThreads = [];
 const selectedRecipientIds = new Set();
 
 const newConversationModalEl = document.getElementById('new-conversation-modal');
@@ -126,6 +140,8 @@ const contactsCountEl = document.getElementById('contacts-count');
 const selectedRecipientsEl = document.getElementById('selected-recipients');
 const conversationListEl = document.getElementById('conversation-list');
 const conversationCountEl = document.getElementById('conversation-count');
+const ticketThreadListEl = document.getElementById('ticket-thread-list');
+const ticketThreadCountEl = document.getElementById('ticket-thread-count');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -265,6 +281,50 @@ function renderConversations() {
   }).join('');
 }
 
+const TICKET_STATUS_LABELS = {
+  OPEN: 'Ouvert', IN_PROGRESS: 'En cours', RESOLVED: 'Résolu', CLOSED: 'Fermé', PENDING: 'En attente'
+};
+
+function ticketThreadUrl(interventionId) {
+  return `/messages-ticket.html?id=${encodeURIComponent(interventionId)}`;
+}
+
+function renderTicketThreads() {
+  ticketThreadCountEl.textContent = `${ticketThreads.length} ticket${ticketThreads.length > 1 ? 's' : ''}`;
+
+  if (!ticketThreads.length) {
+    ticketThreadListEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">Aucun ticket avec message pour le moment.</p>';
+    return;
+  }
+
+  ticketThreadListEl.innerHTML = ticketThreads.map(thread => {
+    const unreadBadge = thread.unreadCount
+      ? `<span class="inline-flex min-w-6 justify-center rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-semibold text-white">${thread.unreadCount}</span>`
+      : '';
+    const statusLabel = TICKET_STATUS_LABELS[thread.status] || thread.status;
+    const preview = thread.lastMessage?.content || thread.lastMessage?.attachmentName || 'Aucun message';
+    const from = thread.lastMessage ? (thread.lastMessage.authorType === 'REPORTER' ? 'Demandeur' : 'Tech') : '';
+
+    return `
+      <a href="${ticketThreadUrl(thread.id)}"
+        class="block rounded-2xl border border-amber-200 bg-white px-4 py-4 transition hover:border-amber-300 hover:bg-amber-50">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(thread.title)}</p>
+              ${unreadBadge}
+              <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">${escapeHtml(statusLabel)}</span>
+            </div>
+            ${thread.roomName ? `<p class="mt-0.5 text-[11px] text-slate-400">${escapeHtml(thread.roomName)}</p>` : ''}
+            <p class="mt-1 text-xs text-slate-500 truncate">${from ? `<span class="font-medium">${escapeHtml(from)}</span> : ` : ''}${escapeHtml(preview)}</p>
+          </div>
+          <span class="text-[11px] text-slate-400 whitespace-nowrap">${escapeHtml(formatRelative(thread.lastMessage?.createdAt || thread.updatedAt))}</span>
+        </div>
+      </a>
+    `;
+  }).join('');
+}
+
 async function loadRecipients() {
   recipients = await api.get('/messages/users');
   renderRecipients();
@@ -273,6 +333,11 @@ async function loadRecipients() {
 async function loadConversations() {
   conversations = await api.get('/messages/conversations');
   renderConversations();
+}
+
+async function loadTicketThreads() {
+  ticketThreads = await api.get('/messages/ticket-threads');
+  renderTicketThreads();
 }
 
 async function openConversationForSelection() {
@@ -314,7 +379,7 @@ document.getElementById('open-conversation-btn').addEventListener('click', async
 
 document.getElementById('refresh-btn').addEventListener('click', async () => {
   try {
-    await Promise.all([loadRecipients(), loadConversations()]);
+    await Promise.all([loadRecipients(), loadConversations(), loadTicketThreads()]);
   } catch (error) {
     showToast(error.message || 'Rafraîchissement impossible', 'error');
   }
@@ -330,7 +395,7 @@ newConversationModalEl.addEventListener('click', event => {
 requireLogin().then(async user => {
   renderNav('messages');
   try {
-    await Promise.all([loadRecipients(), loadConversations()]);
+    await Promise.all([loadRecipients(), loadConversations(), loadTicketThreads()]);
   } catch (error) {
     showToast(error.message || 'Erreur lors du chargement de la messagerie', 'error');
   }

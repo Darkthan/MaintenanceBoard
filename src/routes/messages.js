@@ -153,6 +153,100 @@ async function listConversationSummaries(currentUserId) {
   return Promise.all(conversations.map(conversation => buildConversationSummary(conversation, currentUserId)));
 }
 
+router.get('/unread-count', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Compter les messages internes non lus (envoyés par d'autres)
+    const participations = await prisma.internalConversationParticipant.findMany({
+      where: { userId },
+      select: { conversationId: true, lastReadAt: true }
+    });
+
+    let internalCount = 0;
+    for (const p of participations) {
+      const count = await prisma.internalMessage.count({
+        where: {
+          conversationId: p.conversationId,
+          senderId: { not: userId },
+          ...(p.lastReadAt ? { createdAt: { gt: p.lastReadAt } } : {})
+        }
+      });
+      internalCount += count;
+    }
+
+    // Compter les messages REPORTER non lus (readAt = null) sur les interventions du tech
+    const ticketCount = await prisma.ticketMessage.count({
+      where: {
+        authorType: 'REPORTER',
+        readAt: null,
+        intervention: {
+          OR: [
+            { techId: userId },
+            { createdById: userId }
+          ]
+        }
+      }
+    });
+
+    res.json({ internal: internalCount, tickets: ticketCount, total: internalCount + ticketCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/ticket-threads', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const where = req.user.role === 'ADMIN'
+      ? {}
+      : { OR: [{ techId: userId }, { createdById: userId }] };
+
+    const interventions = await prisma.intervention.findMany({
+      where: {
+        ...where,
+        messages: { some: {} }
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        updatedAt: true,
+        room: { select: { name: true } },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { content: true, authorType: true, attachmentName: true, createdAt: true }
+        },
+        _count: {
+          select: {
+            messages: {
+              where: { authorType: 'REPORTER', readAt: null }
+            }
+          }
+        }
+      }
+    });
+
+    const threads = interventions.map(intervention => ({
+      id: intervention.id,
+      title: intervention.title,
+      status: intervention.status,
+      updatedAt: intervention.updatedAt,
+      roomName: intervention.room?.name || null,
+      unreadCount: intervention._count.messages,
+      lastMessage: intervention.messages[0] || null
+    }));
+
+    res.json(threads);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/users', requireAuth, async (req, res, next) => {
   try {
     const users = await prisma.user.findMany({

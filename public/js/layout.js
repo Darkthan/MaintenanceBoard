@@ -1716,6 +1716,28 @@ function initAccountSettings() {
   });
 }
 
+let _navUnreadCount = 0;
+let _navBadgeInterval = null;
+
+async function refreshNavBadge() {
+  try {
+    const data = await api.get('/messages/unread-count');
+    const newCount = (data && data.total) ? data.total : 0;
+    if (newCount !== _navUnreadCount) {
+      _navUnreadCount = newCount;
+      document.querySelectorAll('[data-nav-messages-badge]').forEach(el => {
+        el.textContent = newCount > 99 ? '99+' : newCount;
+        el.classList.toggle('hidden', newCount === 0);
+      });
+      document.querySelectorAll('[data-mobile-messages-badge]').forEach(el => {
+        el.classList.toggle('hidden', newCount === 0);
+      });
+    }
+  } catch (_err) {
+    // silencieux (ex: déconnexion)
+  }
+}
+
 function renderNav(activePage) {
   enhanceResponsiveLayout();
   initAccountSettings();
@@ -1752,6 +1774,7 @@ function renderNav(activePage) {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.icon}" />
       </svg>
       <span>${item.label}</span>
+      ${item.id === 'messages' ? `<span data-nav-messages-badge class="ml-auto inline-flex min-w-5 justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white ${_navUnreadCount > 0 ? '' : 'hidden'}">${_navUnreadCount > 99 ? '99+' : _navUnreadCount}</span>` : ''}
     </a>
   `).join('');
 
@@ -1808,6 +1831,12 @@ function renderNav(activePage) {
 
   renderMobileTabbar(navItems, activePage);
 
+  // Badge notifications messagerie
+  refreshNavBadge();
+  if (!_navBadgeInterval) {
+    _navBadgeInterval = setInterval(refreshNavBadge, 30000);
+  }
+
   initSpotlight();
 }
 
@@ -1839,9 +1868,12 @@ function renderMobileTabbar(navItems, activePage) {
                   ? 'bg-blue-600 text-white shadow'
                   : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
               }">
-              <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.icon}" />
-              </svg>
+              <div class="relative">
+                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.icon}" />
+                </svg>
+                ${item.id === 'messages' ? `<span data-mobile-messages-badge class="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-white ${_navUnreadCount > 0 ? '' : 'hidden'}"></span>` : ''}
+              </div>
               <span class="truncate">${item.label}</span>
             </a>
           `).join('')}
