@@ -277,4 +277,31 @@ describe('GET /api/search', () => {
     expect(res.status).toBe(200);
     expect(res.body.results.some(r => r.type === 'knowledge' && r.href === '/knowledge-base.html?article=kb-1')).toBe(true);
   });
+
+  it('retrouve un article a partir d un mot present dans le contenu', async () => {
+    fs.writeFileSync(knowledgeBaseFile, JSON.stringify({
+      articles: [
+        {
+          id: 'kb-2',
+          slug: 'imprimante-badge',
+          title: 'Imprimante badges',
+          summary: 'Procedure de depannage',
+          category: 'Support',
+          tags: ['impression'],
+          content: 'Si le bourrage persiste, nettoyer le module de fusion puis relancer une impression test.',
+          createdAt: '2026-03-31T08:00:00.000Z',
+          updatedAt: '2026-03-31T08:00:00.000Z',
+          createdByName: 'Admin',
+          updatedByName: 'Admin'
+        }
+      ]
+    }, null, 2));
+
+    const res = await request(app).get('/api/search?q=module de fusion');
+    expect(res.status).toBe(200);
+    expect(res.body.results[0]).toEqual(expect.objectContaining({
+      type: 'knowledge',
+      href: '/knowledge-base.html?article=kb-2'
+    }));
+  });
 });

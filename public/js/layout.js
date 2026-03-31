@@ -967,6 +967,7 @@ function getShortcutLabel() {
 function getSpotlightIcon(type) {
   const icons = {
     action: 'M12 6v12m6-6H6',
+    knowledge: 'M12 6.253v13m0-13C10.832 5.483 9.246 5 7.5 5C4.462 5 2 6.462 2 8.265v11C2 17.462 4.462 16 7.5 16c1.746 0 3.332.483 4.5 1.253m0-11C13.168 5.483 14.754 5 16.5 5 19.538 5 22 6.462 22 8.265v11C22 17.462 19.538 16 16.5 16c-1.746 0-3.332.483-4.5 1.253',
     document: 'M9 3h6l5 5v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm6 1.5V9h4.5',
     room: 'M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5',
     equipment: EQUIPMENT_ICON_PATH,
@@ -1089,7 +1090,7 @@ function renderSpotlightPreview() {
         Tape pour filtrer les donnees, fichiers, reglages et actions rapides. Les fleches changent la selection, Entree ouvre la cible.
       </p>
       <div class="spotlight-preview__list">
-        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Commence par une salle, une commande, un fournisseur, un utilisateur, un fichier ou un mot-cle de configuration.</span></div>
+        <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Commence par une salle, une commande, un fournisseur, un utilisateur, un article de documentation ou un mot-cle de configuration.</span></div>
         <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Les actions rapides ouvrent directement les onglets de parametres, exports et pages utiles.</span></div>
         <div class="spotlight-preview__item"><span class="spotlight-preview__item-dot"></span><span>Le bouton fermer permet de quitter le menu aussi sur mobile.</span></div>
       </div>

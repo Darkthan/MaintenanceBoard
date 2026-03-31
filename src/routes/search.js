@@ -527,6 +527,24 @@ function filterAndRank(results, query, limit) {
     .slice(0, limit);
 }
 
+function mergeAndRankResults(groups, query, limit) {
+  const items = groups.flat();
+  if (!query) return items.slice(0, limit);
+
+  return items
+    .map(result => ({
+      ...result,
+      score: scoreMatch(query, result.title, result.subtitle, result.searchText)
+    }))
+    .filter(result => result.score > 0)
+    .sort((a, b) => {
+      if ((b.boost || 0) !== (a.boost || 0)) return (b.boost || 0) - (a.boost || 0);
+      if (b.score !== a.score) return b.score - a.score;
+      return String(a.title).localeCompare(String(b.title), 'fr');
+    })
+    .slice(0, limit);
+}
+
 function getOrderNumber(order, poPrefix) {
   return `${poPrefix}${new Date(order.createdAt).getFullYear()}-${String(order.id).slice(-6).toUpperCase()}`;
 }
@@ -1187,9 +1205,12 @@ router.get('/', requireAuth, async (req, res, next) => {
       type: 'knowledge',
       group: 'Documentation',
       title: article.title,
-      subtitle: [article.category, formatDate(article.updatedAt)].filter(Boolean).join(' · ') || 'Article de documentation',
+      subtitle: [article.category, article.summary || stripMarkdown(article.content).slice(0, 120), formatDate(article.updatedAt)]
+        .filter(Boolean)
+        .join(' · ') || 'Article de documentation',
       href: `/knowledge-base.html?article=${encodeURIComponent(article.id)}`,
       openMode: 'preview',
+      boost: 20,
       preview: {
         title: article.title,
         description: article.summary || 'Ouvre l article de la base de connaissance.',
@@ -1236,23 +1257,23 @@ router.get('/', requireAuth, async (req, res, next) => {
 
     res.json({
       query,
-      results: [
-        ...actions,
-        ...documentResults,
-        ...attachmentDocumentResults,
-        ...signatureDocumentResults,
-        ...roomResults,
-        ...equipmentResults,
-        ...interventionResults,
-        ...orderResults,
-        ...supplierResults,
-        ...stockResults,
-        ...conversationResults,
-        ...knowledgeResults,
-        ...loanResourceResults,
-        ...loanReservationResults,
-        ...userResults
-      ]
+      results: mergeAndRankResults([
+        knowledgeResults,
+        actions,
+        documentResults,
+        attachmentDocumentResults,
+        signatureDocumentResults,
+        roomResults,
+        equipmentResults,
+        interventionResults,
+        orderResults,
+        supplierResults,
+        stockResults,
+        conversationResults,
+        loanResourceResults,
+        loanReservationResults,
+        userResults
+      ], query, Math.max(limit * 4, 18))
     });
   } catch (err) {
     next(err);
