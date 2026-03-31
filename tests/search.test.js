@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const request = require('supertest');
 
 jest.mock('../src/middleware/auth', () => ({
@@ -51,9 +53,20 @@ function setupEmptyMocks() {
 }
 
 describe('GET /api/search', () => {
+  const tempDir = path.join(process.cwd(), 'tests', '.tmp');
+  const knowledgeBaseFile = path.join(tempDir, 'knowledge-base.search.test.json');
+
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.KNOWLEDGE_BASE_FILE = knowledgeBaseFile;
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.rmSync(knowledgeBaseFile, { force: true });
     setupEmptyMocks();
+  });
+
+  afterEach(() => {
+    fs.rmSync(knowledgeBaseFile, { force: true });
+    delete process.env.KNOWLEDGE_BASE_FILE;
   });
 
   it('retourne 200 avec résultats groupés pour une requête valide', async () => {
@@ -93,6 +106,12 @@ describe('GET /api/search', () => {
     const res = await request(app).get('/api/search?q=qr');
     expect(res.status).toBe(200);
     expect(res.body.results.some(r => r.type === 'action' && r.href === '/qr-print.html')).toBe(true);
+  });
+
+  it('propose la documentation interne dans les actions rapides', async () => {
+    const res = await request(app).get('/api/search?q=documentation');
+    expect(res.status).toBe(200);
+    expect(res.body.results.some(r => r.type === 'action' && r.href === '/knowledge-base.html')).toBe(true);
   });
 
   it('retourne les résultats groupés avec les bons types', async () => {
@@ -233,5 +252,29 @@ describe('GET /api/search', () => {
     expect(res.status).toBe(200);
     expect(res.body.results.some(r => r.type === 'loan' && r.id === 'loan-resource:loan-r1')).toBe(true);
     expect(res.body.results.some(r => r.type === 'loan' && r.id === 'loan-reservation:loan-res-1')).toBe(true);
+  });
+
+  it('retrouve un article de base de connaissance', async () => {
+    fs.writeFileSync(knowledgeBaseFile, JSON.stringify({
+      articles: [
+        {
+          id: 'kb-1',
+          slug: 'vpn-enseignant',
+          title: 'VPN enseignant',
+          summary: 'Acces distant au reseau interne',
+          category: 'Reseau',
+          tags: ['vpn', 'distance'],
+          content: 'Le portail VPN est accessible via le navigateur.',
+          createdAt: '2026-03-31T08:00:00.000Z',
+          updatedAt: '2026-03-31T08:00:00.000Z',
+          createdByName: 'Admin',
+          updatedByName: 'Admin'
+        }
+      ]
+    }, null, 2));
+
+    const res = await request(app).get('/api/search?q=vpn');
+    expect(res.status).toBe(200);
+    expect(res.body.results.some(r => r.type === 'knowledge' && r.href === '/knowledge-base.html?article=kb-1')).toBe(true);
   });
 });

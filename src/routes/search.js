@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { readSettings } = require('../utils/settings');
+const { listKnowledgeBaseArticles, stripMarkdown } = require('../utils/knowledgeBase');
 
 const router = express.Router();
 const prisma = require('../lib/prisma');
@@ -116,6 +117,18 @@ const ACTIONS = [
     preview: {
       title: 'Impression QR',
       description: 'Ouvre l espace de preparation pour imprimer les QR codes en masse.'
+    }
+  },
+  {
+    id: 'action:knowledge-base',
+    title: 'Documentation interne',
+    subtitle: 'Consulter la base de connaissance',
+    href: '/knowledge-base.html',
+    keywords: ['documentation', 'doc', 'docs', 'base de connaissance', 'wiki', 'procedure', 'procedures', 'knowledge base'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Documentation',
+      description: 'Ouvre la base de connaissance interne et les procedures.'
     }
   },
   {
@@ -630,6 +643,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const broadDocumentMode = documentIntent && !strippedQuery;
     const attachmentCategoryFilter = getAttachmentCategoryFilter(documentStateIntent);
     const candidateLimit = Math.min(160, Math.max(limit * 12, 72));
+    const knowledgeArticles = listKnowledgeBaseArticles();
 
     const actions = buildActions(query, req.user.role, actionLimit);
 
@@ -1168,6 +1182,33 @@ router.get('/', requireAuth, async (req, res, next) => {
       ].filter(Boolean).join(' ')
     })), query, limit);
 
+    const knowledgeResults = filterAndRank(knowledgeArticles.map(article => ({
+      id: `knowledge:${article.id}`,
+      type: 'knowledge',
+      group: 'Documentation',
+      title: article.title,
+      subtitle: [article.category, formatDate(article.updatedAt)].filter(Boolean).join(' · ') || 'Article de documentation',
+      href: `/knowledge-base.html?article=${encodeURIComponent(article.id)}`,
+      openMode: 'preview',
+      preview: {
+        title: article.title,
+        description: article.summary || 'Ouvre l article de la base de connaissance.',
+        lines: [
+          article.category ? `Categorie : ${article.category}` : null,
+          Array.isArray(article.tags) && article.tags.length ? `Tags : ${article.tags.join(', ')}` : null,
+          article.updatedByName ? `Mis a jour par : ${article.updatedByName}` : null
+        ].filter(Boolean),
+        badges: [...(article.category ? [article.category] : []), ...(Array.isArray(article.tags) ? article.tags.slice(0, 2) : [])]
+      },
+      searchText: [
+        article.title,
+        article.summary,
+        article.category,
+        ...(Array.isArray(article.tags) ? article.tags : []),
+        stripMarkdown(article.content)
+      ].filter(Boolean).join(' ')
+    })), query, limit);
+
     const userResults = req.user.role === 'ADMIN'
       ? filterAndRank(users.map(user => ({
           id: `user:${user.id}`,
@@ -1207,6 +1248,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         ...supplierResults,
         ...stockResults,
         ...conversationResults,
+        ...knowledgeResults,
         ...loanResourceResults,
         ...loanReservationResults,
         ...userResults

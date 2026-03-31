@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Base de connaissance – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+
+<div class="min-h-screen flex">
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.483 9.246 5 7.5 5C4.462 5 2 6.462 2 8.265v11C2 17.462 4.462 16 7.5 16c1.746 0 3.332.483 4.5 1.253m0-11C13.168 5.483 14.754 5 16.5 5 19.538 5 22 6.462 22 8.265v11C22 17.462 19.538 16 16.5 16c-1.746 0-3.332.483-4.5 1.253" />
+        </svg>
+      </div>
+      <div>
+        <p class="text-white font-bold text-sm">MaintenanceBoard</p>
+        <p class="text-slate-400 text-xs">Documentation</p>
+      </div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <span id="user-avatar">?</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 lg:ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <div>
+          <h1 class="text-xl font-semibold text-slate-800">Base de connaissance</h1>
+          <p class="text-sm text-slate-500">Procédures, documentation technique et notes internes.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="refresh-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">
+          Rafraîchir
+        </button>
+        <button id="new-article-btn" type="button" class="hidden rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition">
+          Nouvel article
+        </button>
+      </div>
+    </header>
+
+    <div class="flex-1 p-6">
+      <div class="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <div class="space-y-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Bibliothèque</p>
+              <h2 class="text-lg font-semibold text-slate-800">Articles</h2>
+            </div>
+            <input id="knowledge-search-input" type="search" placeholder="Rechercher un article, un tag, un mot-clé..."
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Catégories</p>
+              <button id="clear-category-btn" type="button" class="text-xs text-slate-500 hover:text-blue-600 transition">Tout voir</button>
+            </div>
+            <div id="knowledge-categories" class="mt-3 flex flex-wrap gap-2">
+              <span class="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs text-slate-500">Chargement...</span>
+            </div>
+          </div>
+
+          <p id="knowledge-count" class="text-sm text-slate-500">0 article</p>
+
+          <div id="knowledge-article-list" class="space-y-3">
+            <p class="text-sm text-slate-400 text-center py-10">Chargement...</p>
+          </div>
+        </section>
+
+        <section id="knowledge-article-view" class="bg-white rounded-2xl border border-slate-200 min-h-[60vh] overflow-hidden">
+          <div id="knowledge-empty-state" class="h-full flex flex-col items-center justify-center px-8 py-16 text-center">
+            <div class="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-5">
+              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.483 9.246 5 7.5 5C4.462 5 2 6.462 2 8.265v11C2 17.462 4.462 16 7.5 16c1.746 0 3.332.483 4.5 1.253m0-11C13.168 5.483 14.754 5 16.5 5 19.538 5 22 6.462 22 8.265v11C22 17.462 19.538 16 16.5 16c-1.746 0-3.332.483-4.5 1.253" />
+              </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-slate-800">Choisis un article</h3>
+            <p class="mt-2 max-w-xl text-sm text-slate-500">Sélectionne une fiche dans la colonne de gauche pour afficher son contenu et ses métadonnées.</p>
+          </div>
+
+          <article id="knowledge-article-panel" class="hidden h-full flex flex-col">
+            <div class="border-b border-slate-200 px-6 py-5">
+              <div class="flex items-start justify-between gap-4 flex-wrap">
+                <div class="min-w-0">
+                  <p id="article-category" class="text-xs font-semibold uppercase tracking-wide text-blue-600"></p>
+                  <h2 id="article-title" class="mt-1 text-2xl font-semibold text-slate-900"></h2>
+                  <p id="article-summary" class="mt-3 text-sm leading-6 text-slate-600"></p>
+                  <div id="article-tags" class="mt-4 flex flex-wrap gap-2"></div>
+                </div>
+                <div id="article-admin-actions" class="hidden items-center gap-2">
+                  <button id="edit-article-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Modifier</button>
+                  <button id="delete-article-btn" type="button" class="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition">Supprimer</button>
+                </div>
+              </div>
+              <p id="article-meta" class="mt-4 text-xs text-slate-400"></p>
+            </div>
+            <div class="flex-1 overflow-y-auto px-6 py-6">
+              <div id="article-content" class="space-y-3 text-sm text-slate-700"></div>
+            </div>
+          </article>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="knowledge-editor-modal" class="hidden fixed inset-0 z-[120] bg-slate-950/60 backdrop-blur-sm p-4 overflow-y-auto">
+  <div class="min-h-full flex items-center justify-center">
+    <div class="w-full max-w-6xl rounded-[2rem] border border-slate-200 bg-white shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-blue-600">Documentation</p>
+          <h2 id="editor-title" class="text-xl font-semibold text-slate-900">Nouvel article</h2>
+        </div>
+        <button id="close-editor-btn" type="button" class="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <form id="knowledge-editor-form" class="grid xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] min-h-[70vh]">
+        <div class="space-y-5 border-b xl:border-b-0 xl:border-r border-slate-200 px-6 py-6">
+          <label class="block text-sm">
+            <span class="mb-1.5 block font-medium text-slate-700">Titre</span>
+            <input id="editor-article-title" type="text" required maxlength="160"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+          </label>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block text-sm">
+              <span class="mb-1.5 block font-medium text-slate-700">Catégorie</span>
+              <input id="editor-article-category" type="text" maxlength="120" placeholder="Ex : Réseau, Agents, Procédures"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1.5 block font-medium text-slate-700">Tags</span>
+              <input id="editor-article-tags" type="text" maxlength="220" placeholder="tag1, tag2, tag3"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+            </label>
+          </div>
+
+          <label class="block text-sm">
+            <span class="mb-1.5 block font-medium text-slate-700">Résumé</span>
+            <textarea id="editor-article-summary" rows="3" maxlength="500" placeholder="Résumé affiché dans la liste"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-y"></textarea>
+          </label>
+
+          <label class="block text-sm">
+            <span class="mb-1.5 block font-medium text-slate-700">Contenu Markdown</span>
+            <textarea id="editor-article-content" rows="18" required placeholder="# Procédure&#10;&#10;- Étape 1&#10;- Étape 2"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-y font-mono text-sm"></textarea>
+          </label>
+
+          <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
+            <p id="editor-feedback" class="text-sm text-slate-500"></p>
+            <div class="flex items-center gap-2">
+              <button id="cancel-editor-btn" type="button" class="rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+              <button id="save-article-btn" type="submit" class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-50 px-6 py-6 flex flex-col min-h-0">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Prévisualisation</p>
+            <h3 class="mt-1 text-lg font-semibold text-slate-900">Rendu article</h3>
+          </div>
+          <div class="mt-5 rounded-3xl border border-slate-200 bg-white px-5 py-5 overflow-y-auto flex-1">
+            <p id="editor-preview-category" class="text-xs font-semibold uppercase tracking-wide text-blue-600"></p>
+            <h4 id="editor-preview-title" class="mt-1 text-2xl font-semibold text-slate-900">Titre de l’article</h4>
+            <p id="editor-preview-summary" class="mt-3 text-sm leading-6 text-slate-600">Le résumé s’affichera ici.</p>
+            <div id="editor-preview-tags" class="mt-4 flex flex-wrap gap-2"></div>
+            <div id="editor-preview-content" class="mt-6 space-y-3 text-sm text-slate-700">
+              <p class="text-slate-400">Le contenu Markdown s’affichera ici.</p>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="/js/vendor/markdown-it.min.js"></script>
+<script src="/js/rich-text.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+let currentUser = null;
+let knowledgeArticles = [];
+let availableCategories = [];
+let selectedArticleId = '';
+let selectedCategory = '';
+let currentSearch = '';
+let editorArticleId = '';
+
+const searchInputEl = document.getElementById('knowledge-search-input');
+const articleListEl = document.getElementById('knowledge-article-list');
+const articleCountEl = document.getElementById('knowledge-count');
+const categoriesEl = document.getElementById('knowledge-categories');
+const articlePanelEl = document.getElementById('knowledge-article-panel');
+const emptyStateEl = document.getElementById('knowledge-empty-state');
+const articleCategoryEl = document.getElementById('article-category');
+const articleTitleEl = document.getElementById('article-title');
+const articleSummaryEl = document.getElementById('article-summary');
+const articleTagsEl = document.getElementById('article-tags');
+const articleMetaEl = document.getElementById('article-meta');
+const articleContentEl = document.getElementById('article-content');
+const newArticleBtnEl = document.getElementById('new-article-btn');
+const articleAdminActionsEl = document.getElementById('article-admin-actions');
+const editorModalEl = document.getElementById('knowledge-editor-modal');
+const editorFormEl = document.getElementById('knowledge-editor-form');
+const editorTitleEl = document.getElementById('editor-title');
+const editorFeedbackEl = document.getElementById('editor-feedback');
+const editorTitleInputEl = document.getElementById('editor-article-title');
+const editorCategoryInputEl = document.getElementById('editor-article-category');
+const editorTagsInputEl = document.getElementById('editor-article-tags');
+const editorSummaryInputEl = document.getElementById('editor-article-summary');
+const editorContentInputEl = document.getElementById('editor-article-content');
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatDateTime(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function isAdmin() {
+  return currentUser?.role === 'ADMIN';
+}
+
+function updateEditorPreview() {
+  const title = editorTitleInputEl.value.trim();
+  const category = editorCategoryInputEl.value.trim();
+  const summary = editorSummaryInputEl.value.trim();
+  const content = editorContentInputEl.value.trim();
+  const tags = editorTagsInputEl.value.split(/[,\n;]/).map(tag => tag.trim()).filter(Boolean);
+
+  document.getElementById('editor-preview-category').textContent = category || 'Documentation';
+  document.getElementById('editor-preview-title').textContent = title || 'Titre de l’article';
+  document.getElementById('editor-preview-summary').textContent = summary || 'Le résumé s’affichera ici.';
+  document.getElementById('editor-preview-tags').innerHTML = tags.map(tag => `
+    <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">${escapeHtml(tag)}</span>
+  `).join('');
+  document.getElementById('editor-preview-content').innerHTML = content
+    ? renderRichText(content)
+    : '<p class="text-slate-400">Le contenu Markdown s’affichera ici.</p>';
+}
+
+function openEditor(article) {
+  if (!isAdmin()) return;
+  editorArticleId = article?.id || '';
+  editorTitleEl.textContent = editorArticleId ? 'Modifier l’article' : 'Nouvel article';
+  editorFeedbackEl.textContent = '';
+  editorFeedbackEl.className = 'text-sm text-slate-500';
+  editorTitleInputEl.value = article?.title || '';
+  editorCategoryInputEl.value = article?.category || '';
+  editorTagsInputEl.value = Array.isArray(article?.tags) ? article.tags.join(', ') : '';
+  editorSummaryInputEl.value = article?.summary || '';
+  editorContentInputEl.value = article?.content || '';
+  updateEditorPreview();
+  editorModalEl.classList.remove('hidden');
+  document.body.classList.add('overflow-hidden');
+  editorTitleInputEl.focus();
+}
+
+function closeEditor() {
+  editorModalEl.classList.add('hidden');
+  document.body.classList.remove('overflow-hidden');
+}
+
+function updateUrl(articleId) {
+  const url = new URL(window.location.href);
+  if (articleId) url.searchParams.set('article', articleId);
+  else url.searchParams.delete('article');
+  window.history.replaceState({}, '', url);
+}
+
+function renderCategories() {
+  if (!availableCategories.length) {
+    categoriesEl.innerHTML = '<span class="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs text-slate-500">Aucune catégorie</span>';
+    return;
+  }
+
+  categoriesEl.innerHTML = availableCategories.map(category => `
+    <button type="button" data-category-value="${escapeHtml(category.value)}"
+      class="rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+        selectedCategory === category.value
+          ? 'border-blue-200 bg-blue-50 text-blue-700'
+          : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700'
+      }">
+      ${escapeHtml(category.value)} <span class="text-slate-400">${category.count}</span>
+    </button>
+  `).join('');
+
+  categoriesEl.querySelectorAll('[data-category-value]').forEach(button => {
+    button.addEventListener('click', () => {
+      selectedCategory = button.dataset.categoryValue || '';
+      loadKnowledgeArticles();
+    });
+  });
+}
+
+function renderArticleList() {
+  articleCountEl.textContent = `${knowledgeArticles.length} article${knowledgeArticles.length > 1 ? 's' : ''}`;
+
+  if (!knowledgeArticles.length) {
+    articleListEl.innerHTML = `
+      <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center">
+        <p class="text-sm font-medium text-slate-600">Aucun article trouvé</p>
+        <p class="mt-2 text-sm text-slate-400">${currentSearch || selectedCategory ? 'Essaie un autre filtre ou une autre recherche.' : 'Commence par créer une première fiche.'}</p>
+      </div>
+    `;
+    emptyStateEl.classList.remove('hidden');
+    articlePanelEl.classList.add('hidden');
+    return;
+  }
+
+  articleListEl.innerHTML = knowledgeArticles.map(article => `
+    <button type="button" data-article-id="${article.id}"
+      class="w-full rounded-2xl border p-4 text-left transition ${
+        selectedArticleId === article.id
+          ? 'border-blue-200 bg-blue-50'
+          : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50'
+      }">
+      <p class="text-xs font-semibold uppercase tracking-wide ${article.category ? 'text-blue-600' : 'text-slate-400'}">${escapeHtml(article.category || 'Documentation')}</p>
+      <h3 class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(article.title)}</h3>
+      <p class="mt-2 text-sm leading-6 text-slate-500 line-clamp-3">${escapeHtml(article.summary || article.excerpt || 'Aucun résumé.')}</p>
+      <p class="mt-3 text-[11px] text-slate-400">${escapeHtml(new Date(article.updatedAt).toLocaleDateString('fr-FR'))}</p>
+    </button>
+  `).join('');
+
+  articleListEl.querySelectorAll('[data-article-id]').forEach(button => {
+    button.addEventListener('click', () => {
+      const articleId = button.dataset.articleId;
+      if (articleId) selectArticle(articleId);
+    });
+  });
+}
+
+async function selectArticle(articleId) {
+  try {
+    const article = await api.get(`/knowledge-base/${encodeURIComponent(articleId)}`);
+    selectedArticleId = article.id;
+    updateUrl(article.id);
+    renderArticleList();
+    emptyStateEl.classList.add('hidden');
+    articlePanelEl.classList.remove('hidden');
+
+    articleCategoryEl.textContent = article.category || 'Documentation';
+    articleTitleEl.textContent = article.title;
+    articleSummaryEl.textContent = article.summary || '';
+    articleTagsEl.innerHTML = (article.tags || []).map(tag => `
+      <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">${escapeHtml(tag)}</span>
+    `).join('');
+    articleMetaEl.textContent = [
+      article.updatedByName ? `Mis à jour par ${article.updatedByName}` : null,
+      article.updatedAt ? `le ${formatDateTime(article.updatedAt)}` : null
+    ].filter(Boolean).join(' ');
+    articleContentEl.innerHTML = renderRichText(article.content || '');
+
+    if (isAdmin()) {
+      articleAdminActionsEl.classList.remove('hidden');
+      articleAdminActionsEl.classList.add('flex');
+      document.getElementById('edit-article-btn').onclick = () => openEditor(article);
+      document.getElementById('delete-article-btn').onclick = () => deleteArticle(article.id, article.title);
+    }
+  } catch (err) {
+    showToast(err.message || 'Impossible de charger l’article', 'error');
+  }
+}
+
+async function loadKnowledgeArticles() {
+  articleListEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-10">Chargement...</p>';
+
+  try {
+    const data = await api.get('/knowledge-base', {
+      q: currentSearch || undefined,
+      category: selectedCategory || undefined
+    });
+
+    knowledgeArticles = Array.isArray(data.items) ? data.items : [];
+    availableCategories = Array.isArray(data.categories) ? data.categories : [];
+    renderCategories();
+    renderArticleList();
+
+    const requestedArticleId = new URLSearchParams(window.location.search).get('article');
+    if (requestedArticleId && knowledgeArticles.some(article => article.id === requestedArticleId)) {
+      await selectArticle(requestedArticleId);
+      return;
+    }
+
+    if (selectedArticleId && knowledgeArticles.some(article => article.id === selectedArticleId)) {
+      await selectArticle(selectedArticleId);
+      return;
+    }
+
+    if (knowledgeArticles.length) {
+      await selectArticle(knowledgeArticles[0].id);
+      return;
+    }
+
+    selectedArticleId = '';
+    updateUrl('');
+  } catch (err) {
+    articleListEl.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-6 text-sm text-red-700">${escapeHtml(err.message || 'Impossible de charger la documentation.')}</div>`;
+  }
+}
+
+async function deleteArticle(articleId, articleTitle) {
+  if (!isAdmin()) return;
+  if (!confirm(`Supprimer l’article "${articleTitle}" ?`)) return;
+
+  try {
+    await api.delete(`/knowledge-base/${encodeURIComponent(articleId)}`);
+    if (selectedArticleId === articleId) selectedArticleId = '';
+    showToast('Article supprimé', 'success');
+    await loadKnowledgeArticles();
+  } catch (err) {
+    showToast(err.message || 'Suppression impossible', 'error');
+  }
+}
+
+let searchDebounceId = null;
+searchInputEl.addEventListener('input', () => {
+  currentSearch = searchInputEl.value.trim();
+  clearTimeout(searchDebounceId);
+  searchDebounceId = setTimeout(loadKnowledgeArticles, 180);
+});
+
+document.getElementById('clear-category-btn').addEventListener('click', () => {
+  selectedCategory = '';
+  loadKnowledgeArticles();
+});
+document.getElementById('refresh-btn').addEventListener('click', loadKnowledgeArticles);
+newArticleBtnEl.addEventListener('click', () => openEditor());
+document.getElementById('close-editor-btn').addEventListener('click', closeEditor);
+document.getElementById('cancel-editor-btn').addEventListener('click', closeEditor);
+editorModalEl.addEventListener('click', event => {
+  if (event.target === editorModalEl) closeEditor();
+});
+
+['input', 'change'].forEach(eventName => {
+  editorTitleInputEl.addEventListener(eventName, updateEditorPreview);
+  editorCategoryInputEl.addEventListener(eventName, updateEditorPreview);
+  editorTagsInputEl.addEventListener(eventName, updateEditorPreview);
+  editorSummaryInputEl.addEventListener(eventName, updateEditorPreview);
+  editorContentInputEl.addEventListener(eventName, updateEditorPreview);
+});
+
+editorFormEl.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!isAdmin()) return;
+
+  const payload = {
+    title: editorTitleInputEl.value.trim(),
+    category: editorCategoryInputEl.value.trim(),
+    tags: editorTagsInputEl.value.trim(),
+    summary: editorSummaryInputEl.value.trim(),
+    content: editorContentInputEl.value
+  };
+
+  editorFeedbackEl.textContent = 'Enregistrement...';
+  editorFeedbackEl.className = 'text-sm text-slate-500';
+
+  try {
+    const response = editorArticleId
+      ? await api.patch(`/knowledge-base/${encodeURIComponent(editorArticleId)}`, payload)
+      : await api.post('/knowledge-base', payload);
+
+    selectedArticleId = response.article?.id || '';
+    closeEditor();
+    showToast(editorArticleId ? 'Article mis à jour' : 'Article créé', 'success');
+    await loadKnowledgeArticles();
+  } catch (err) {
+    editorFeedbackEl.textContent = err.message || 'Impossible d’enregistrer l’article.';
+    editorFeedbackEl.className = 'text-sm text-red-600';
+  }
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !editorModalEl.classList.contains('hidden')) {
+    closeEditor();
+  }
+});
+
+requireLogin().then(user => {
+  currentUser = user;
+  renderNav('knowledge-base');
+  if (isAdmin()) {
+    newArticleBtnEl.classList.remove('hidden');
+  }
+  loadKnowledgeArticles();
+});
+</script>
+</body>
+</html>
