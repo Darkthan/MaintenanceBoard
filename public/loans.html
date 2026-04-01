@@ -834,55 +834,27 @@ function renderResources() {
   document.getElementById('resources-list').innerHTML = loanResources.map(resource => `
     <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
       <div class="flex items-start justify-between gap-3">
-        <div>
-          <div class="flex items-center gap-2 flex-wrap">
-            <h3 class="font-semibold text-slate-800">${resource.name}</h3>
-            ${resource.isActive ? '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Active</span>' : '<span class="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">Inactive</span>'}
-            ${resource.hasRepairEquipment ? '<span class="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>En réparation</span>' : ''}
-          </div>
-          <p class="text-sm text-slate-500 mt-1">${resource.category || 'Sans catégorie'}${resource.location ? ` · ${resource.location}` : ''}</p>
+        <div class="flex-1 min-w-0">
+          <button type="button" onclick="openResourceModal(loanResources.find(resource => resource.id === '${resource.id}'))" class="text-left hover:text-blue-600 transition">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="font-semibold text-slate-800 hover:underline">${resource.name}</h3>
+              ${resource.isActive ? '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Active</span>' : '<span class="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">Inactive</span>'}
+              ${resource.hasRepairEquipment ? '<span class="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>En réparation</span>' : ''}
+            </div>
+            <p class="text-sm text-slate-500 mt-1">${resource.category || 'Sans catégorie'}</p>
+          </button>
         </div>
         <button type="button" onclick="openResourceModal(loanResources.find(resource => resource.id === '${resource.id}'))" class="text-sm text-blue-600 hover:text-blue-700 transition flex-shrink-0">Modifier</button>
       </div>
-      <p class="text-sm text-slate-600">${resource.description || 'Aucune description.'}</p>
-      ${resource.equipments && resource.equipments.length > 0 ? (() => {
-        const totalSlots = resource.totalSlots || 1;
-        if (totalSlots > 1) {
-          // Grouper par lot
-          const lots = {};
-          for (let l = 1; l <= totalSlots; l++) lots[l] = [];
-          resource.equipments.forEach(eq => { (lots[eq.lotNumber || 1] = lots[eq.lotNumber || 1] || []).push(eq); });
-          return `<div class="space-y-1">${Object.entries(lots).map(([lotN, eqs]) => `
-            <div class="flex items-start gap-2">
-              <span class="flex-shrink-0 mt-0.5 text-xs font-semibold text-slate-400 w-10">Lot ${lotN}</span>
-              <div class="flex flex-wrap gap-1">
-                ${eqs.length === 0 ? '<span class="text-xs text-slate-300 italic">vide</span>' : eqs.map(eq => `
-                  <span class="inline-flex items-center px-1.5 py-0.5 rounded border text-xs
-                    ${eq.status === 'REPAIR' ? 'border-orange-200 bg-orange-50 text-orange-700' : 'border-slate-200 bg-white text-slate-600'}">
-                    ${escapeHtml(eq.name)}${eq.serialNumber ? ` · ${escapeHtml(eq.serialNumber)}` : ''}
-                  </span>`).join('')}
-              </div>
-            </div>`).join('')}</div>`;
-        }
-        return `<div class="flex flex-wrap gap-1.5">${resource.equipments.map(eq => `
-          <span class="inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium
-            ${eq.status === 'REPAIR' ? 'border-orange-200 bg-orange-50 text-orange-700' : 'border-slate-200 bg-white text-slate-600'}">
-            ${escapeHtml(eq.name)}${eq.serialNumber ? ` · ${escapeHtml(eq.serialNumber)}` : ''}
-          </span>`).join('')}</div>`;
-      })() : ''}
       <div class="grid grid-cols-2 gap-3 text-sm">
         <div class="rounded-xl bg-white px-3 py-2 border border-slate-200">
           <p class="text-slate-400 text-xs uppercase tracking-wide">Capacité</p>
           <p class="mt-1 font-medium text-slate-800">${resource.totalUnits} unité(s)</p>
         </div>
         <div class="rounded-xl bg-white px-3 py-2 border border-slate-200">
-          <p class="text-slate-400 text-xs uppercase tracking-wide">Lot verrouillé</p>
-          <p class="mt-1 font-medium text-slate-800">${resource.bundleSize} unité(s) · ${resource.totalSlots} lot(s)</p>
+          <p class="text-slate-400 text-xs uppercase tracking-wide">Lots</p>
+          <p class="mt-1 font-medium text-slate-800">${resource.totalSlots}</p>
         </div>
-      </div>
-      <div class="rounded-xl bg-white px-3 py-3 border border-slate-200">
-        <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Consignes</p>
-        <p class="mt-1 text-sm text-slate-600">${resource.instructions || 'Aucune consigne préparatoire.'}</p>
       </div>
     </article>
   `).join('');
