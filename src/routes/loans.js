@@ -518,6 +518,7 @@ loansRouter.post('/resources',
     body('location').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
     body('instructions').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('color').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
+    body('usesBundles').optional().isBoolean(),
     body('equipments').optional().isArray()
   ],
   async (req, res, next) => {
@@ -525,6 +526,7 @@ loansRouter.post('/resources',
       if (!validate(req, res)) return;
       const totalUnits = Number(req.body.totalUnits);
       const bundleSize = Math.min(totalUnits, Number(req.body.bundleSize) || 1);
+      const usesBundles = req.body.usesBundles !== false;
       const equipmentList = normalizeEquipmentList(req.body.equipments || req.body.equipmentIds);
 
       const resource = await prisma.loanResource.create({
@@ -537,6 +539,7 @@ loansRouter.post('/resources',
           location: req.body.location || null,
           instructions: req.body.instructions || null,
           color: req.body.color || null,
+          usesBundles,
           equipments: equipmentList.length > 0
             ? { create: equipmentList.map(e => ({ equipmentId: e.id, lotNumber: e.lotNumber })) }
             : undefined
@@ -605,6 +608,7 @@ loansRouter.patch('/resources/:id',
     body('instructions').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('color').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
     body('isActive').optional().isBoolean(),
+    body('usesBundles').optional().isBoolean(),
     body('equipments').optional().isArray()
   ],
   async (req, res, next) => {
@@ -626,7 +630,8 @@ loansRouter.patch('/resources/:id',
         ...(req.body.location !== undefined ? { location: req.body.location || null } : {}),
         ...(req.body.instructions !== undefined ? { instructions: req.body.instructions || null } : {}),
         ...(req.body.color !== undefined ? { color: req.body.color || null } : {}),
-        ...(req.body.isActive !== undefined ? { isActive: !!req.body.isActive } : {})
+        ...(req.body.isActive !== undefined ? { isActive: !!req.body.isActive } : {}),
+        ...(req.body.usesBundles !== undefined ? { usesBundles: !!req.body.usesBundles } : {})
       };
 
       // Si equipments fourni, remplacer la liste

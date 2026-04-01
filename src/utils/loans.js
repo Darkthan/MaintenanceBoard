@@ -10,6 +10,13 @@ function toPositiveInt(value, fallback = 1) {
 
 function getBundleInfo(resource) {
   const totalUnits = toPositiveInt(resource?.totalUnits, 1);
+  const usesBundles = resource?.usesBundles !== false;
+
+  if (!usesBundles) {
+    // Mode sans lots : 1 seul lot avec toutes les unités
+    return { totalUnits, bundleSize: totalUnits, totalSlots: 1 };
+  }
+
   const bundleSize = Math.min(totalUnits, toPositiveInt(resource?.bundleSize, 1));
   const totalSlots = Math.max(1, Math.floor(totalUnits / bundleSize));
   return { totalUnits, bundleSize, totalSlots };

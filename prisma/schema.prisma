@@ -512,6 +512,7 @@ model LoanResource {
   instructions String?
   color        String?
   isActive     Boolean  @default(true)
+  usesBundles  Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
