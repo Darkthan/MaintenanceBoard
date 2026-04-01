@@ -968,7 +968,7 @@
       </div><!-- /tab-screens -->
 
       <!-- ═══════════════════════════════════ TAB : CALENDRIER -->
-      <div id="tab-calendar" class="hidden w-full max-w-xl min-w-0 space-y-5">
+      <div id="tab-calendar" class="hidden w-full max-w-2xl min-w-0 space-y-5">
         <section class="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <div>
@@ -980,6 +980,22 @@
           <textarea id="global-calendar-feed-url" rows="2" readonly class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"></textarea>
           <div class="flex flex-wrap gap-2">
             <button id="copy-global-calendar-feed-btn" type="button" class="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+              Copier le lien iCal
+            </button>
+          </div>
+        </section>
+
+        <section class="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 class="font-semibold text-slate-800">Calendrier des prêts</h2>
+              <p class="text-sm text-slate-500">Flux iCal dédié aux ressources et prêts.</p>
+            </div>
+            <button id="refresh-loans-calendar-feed-btn" type="button" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+          </div>
+          <textarea id="loans-calendar-feed-url" rows="2" readonly class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"></textarea>
+          <div class="flex flex-wrap gap-2">
+            <button id="copy-loans-calendar-feed-btn" type="button" class="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
               Copier le lien iCal
             </button>
           </div>
@@ -1699,13 +1715,22 @@ async function savePOTemplate() {
   }
 }
 
-// ─── Calendrier global ────────────────────────────────────────────────────────
+// ─── Calendriers ──────────────────────────────────────────────────────────────
 async function loadGlobalCalendarFeed() {
   try {
     const feed = await api.get('/calendar/global-feed');
     document.getElementById('global-calendar-feed-url').value = feed.url;
   } catch (err) {
     document.getElementById('global-calendar-feed-url').value = `Erreur : ${err.message}`;
+  }
+}
+
+async function loadLoansCalendarFeed() {
+  try {
+    const feed = await api.get('/loans/calendar-feed');
+    document.getElementById('loans-calendar-feed-url').value = feed.url;
+  } catch (err) {
+    document.getElementById('loans-calendar-feed-url').value = `Erreur : ${err.message}`;
   }
 }
 
@@ -2242,10 +2267,22 @@ renderScreenWidgetOptions();
 document.getElementById('screen-layout-mode').addEventListener('change', renderScreenLayoutList);
 resetScreenForm();
 
-// Calendrier
+// Calendriers
 document.getElementById('refresh-global-calendar-feed-btn').addEventListener('click', loadGlobalCalendarFeed);
 document.getElementById('copy-global-calendar-feed-btn').addEventListener('click', async () => {
   const url = document.getElementById('global-calendar-feed-url').value;
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Lien iCal copié', 'success');
+  } catch {
+    showToast('Copie impossible', 'error');
+  }
+});
+
+document.getElementById('refresh-loans-calendar-feed-btn').addEventListener('click', loadLoansCalendarFeed);
+document.getElementById('copy-loans-calendar-feed-btn').addEventListener('click', async () => {
+  const url = document.getElementById('loans-calendar-feed-url').value;
   if (!url) return;
   try {
     await navigator.clipboard.writeText(url);
@@ -2260,6 +2297,7 @@ requireLogin().then(() => {
   const allowedTabs = new Set(['users', 'email', 'database', 'po', 'security', 'screens', 'calendar']);
   showTab(allowedTabs.has(tab) ? tab : 'users');
   loadGlobalCalendarFeed();
+  loadLoansCalendarFeed();
 });
 </script>
 </body>
