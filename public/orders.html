@@ -312,20 +312,27 @@
     <div class="px-6 py-5 space-y-4">
       <!-- Zone de placement -->
       <div>
-        <p class="text-sm font-medium text-slate-700 mb-1">Zone de signature sur le document</p>
-        <p class="text-xs text-slate-400 mb-2">Dessinez un rectangle sur l'aperçu pour définir précisément la zone de signature.</p>
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div>
+            <p class="text-sm font-medium text-slate-700">Zone de signature sur le document</p>
+            <p class="text-xs text-slate-400 mt-0.5">Cliquez sur "Éditer la zone" pour une meilleure vue.</p>
+          </div>
+          <button type="button" id="open-sig-editor-btn" onclick="openSigEditorWindow()"
+            class="px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-200 hover:bg-blue-50 rounded-lg transition flex-shrink-0">
+            Éditer la zone
+          </button>
+        </div>
         <div id="attach-placement-container"
           class="rounded-xl select-none bg-slate-50 border border-slate-200"
-          style="min-height:120px;max-height:300px;">
-          <div id="attach-placement-loading" class="flex flex-col items-center justify-center py-8 gap-2 text-slate-400">
-            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+          style="min-height:80px;max-height:180px;">
+          <div id="attach-placement-loading" class="flex flex-col items-center justify-center py-6 gap-2 text-slate-400">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
             </svg>
-            <span class="text-sm">Chargement de l'aperçu…</span>
+            <span class="text-xs">Chargement…</span>
           </div>
         </div>
-        <p class="text-xs text-slate-400 mt-1.5 text-center">Cliquez-glissez pour définir la zone · elle sera initialisée en bas à droite</p>
       </div>
 
       <hr class="border-slate-100" />
@@ -360,6 +367,43 @@
           Envoyer le lien
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Édition de la zone de signature (plein écran) -->
+<div id="sig-editor-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4">
+  <div class="bg-white shadow-2xl w-full h-full sm:h-auto sm:max-h-[95vh] sm:max-w-5xl sm:rounded-2xl flex flex-col">
+    <div class="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 flex-shrink-0">
+      <div class="min-w-0">
+        <h3 class="font-semibold text-slate-800">Définir la zone de signature</h3>
+        <p id="sig-editor-filename" class="text-xs text-slate-400 mt-0.5 truncate max-w-xs"></p>
+      </div>
+      <button onclick="closeSigEditorWindow()" class="text-slate-400 hover:text-slate-600 flex-shrink-0 ml-3">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="flex-1 p-4 sm:p-6 overflow-auto flex flex-col">
+      <div class="flex-1 flex flex-col items-center justify-center">
+        <div id="sig-editor-container"
+          class="rounded-xl select-none bg-slate-50 border border-slate-200 w-full"
+          style="max-width:800px;aspect-ratio:auto;">
+          <div id="sig-editor-loading" class="flex flex-col items-center justify-center w-full h-96 gap-2 text-slate-400">
+            <svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <span class="text-sm">Chargement du document…</span>
+          </div>
+        </div>
+      </div>
+      <p class="text-xs text-slate-400 mt-4 text-center">Cliquez-glissez pour tracer la zone de signature</p>
+    </div>
+    <div class="flex gap-3 px-4 sm:px-6 py-4 border-t border-slate-200 flex-shrink-0">
+      <button type="button" onclick="closeSigEditorWindow()"
+        class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+      <button type="button" onclick="saveSigEditorPosition()"
+        class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">Valider</button>
     </div>
   </div>
 </div>
@@ -1417,11 +1461,16 @@ async function cancelSigRequest(reqId) {
 
 let attachSigBlobUrl = null;
 let attachSigAttachId = null;
+let attachSigMime = '';
+let attachSigFilename = '';
 
 async function openAttachSigModal(btn) {
   attachSigAttachId = btn.dataset.attachId;
-  const mime = btn.dataset.attachMime || '';
-  const filename = btn.dataset.attachName || 'document';
+  attachSigMime = btn.dataset.attachMime || '';
+  attachSigFilename = btn.dataset.attachName || 'document';
+
+  const mime = attachSigMime;
+  const filename = attachSigFilename;
 
   document.getElementById('attach-sig-filename').textContent = filename;
   document.getElementById('attach-sig-name').value = '';
@@ -1512,6 +1561,112 @@ function closeAttachSigModal() {
   SigPlacement.destroy(container);
   document.getElementById('attach-sig-modal').classList.add('hidden');
   if (attachSigBlobUrl) { URL.revokeObjectURL(attachSigBlobUrl); attachSigBlobUrl = null; }
+}
+
+// ─── Éditeur plein écran de zone de signature ──────────────────────────────
+
+async function openSigEditorWindow() {
+  document.getElementById('sig-editor-filename').textContent = attachSigFilename;
+  document.getElementById('sig-editor-modal').classList.remove('hidden');
+
+  const container = document.getElementById('sig-editor-container');
+  SigPlacement.destroy(container);
+
+  // Copier la position actuelle du petit aperçu
+  const smallContainer = document.getElementById('attach-placement-container');
+  const currentPos = SigPlacement.getPos(smallContainer);
+
+  container.innerHTML = `
+    <div id="sig-editor-loading" class="flex flex-col items-center justify-center w-full h-96 gap-2 text-slate-400">
+      <svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
+      <span class="text-sm">Chargement du document…</span>
+    </div>`;
+
+  const onReady = () => SigPlacement.init(container, { initialPos: currentPos });
+
+  if (attachSigMime === 'application/pdf' || attachSigMime.startsWith('image/')) {
+    try {
+      const resp = await fetch(`/api/orders/${detailOrderId}/attachments/${attachSigAttachId}`, { credentials: 'include' });
+      if (!resp.ok) throw new Error('Fichier inaccessible');
+      const blob = await resp.blob();
+      const editorBlobUrl = URL.createObjectURL(blob);
+
+      await loadAttachPreviewForEditor(container, attachSigMime, editorBlobUrl, onReady);
+
+      // Nettoyer l'URL après chargement
+      setTimeout(() => URL.revokeObjectURL(editorBlobUrl), 1000);
+    } catch {
+      container.innerHTML = `<div style="width:100%;height:400px;background:#f8fafc;display:flex;align-items:center;justify-content:center;">
+        <p class="text-sm text-slate-400">Aperçu non disponible</p></div>`;
+      onReady();
+    }
+  } else {
+    container.innerHTML = `<div style="width:100%;height:400px;background:#f8fafc;display:flex;align-items:center;justify-content:center;">
+      <p class="text-sm text-slate-400">Aperçu non disponible pour ce type de fichier</p></div>`;
+    onReady();
+  }
+}
+
+async function loadAttachPreviewForEditor(container, mime, blobUrl, onReady) {
+  const initPlacement = () => requestAnimationFrame(() => onReady());
+
+  if (mime.startsWith('image/')) {
+    const img = new Image();
+    img.onload = () => {
+      container.innerHTML = '';
+      img.style.cssText = 'display:block;width:100%;height:auto;pointer-events:none;';
+      container.appendChild(img);
+      initPlacement();
+    };
+    img.onerror = () => { container.innerHTML = '<div style="height:400px"></div>'; initPlacement(); };
+    img.src = blobUrl;
+    return;
+  }
+
+  if (mime === 'application/pdf' && typeof pdfjsLib !== 'undefined') {
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({ url: blobUrl }).promise;
+      const page = await pdf.getPage(pdf.numPages);
+      const baseVp = page.getViewport({ scale: 1 });
+      const containerW = Math.min(container.parentElement.clientWidth || 600, 800);
+      const scale = containerW / baseVp.width;
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      container.innerHTML = '';
+      canvas.style.cssText = `display:block;width:${vp.width}px;height:${vp.height}px;max-width:100%;pointer-events:none;`;
+      container.appendChild(canvas);
+      initPlacement();
+      return;
+    } catch { /* fallback */ }
+  }
+
+  container.innerHTML = '<div style="width:100%;height:400px;background:#f8fafc;display:flex;align-items:center;justify-content:center;"><p style="font-size:14px;color:#94a3b8;">Aperçu non disponible</p></div>';
+  initPlacement();
+}
+
+function closeSigEditorWindow() {
+  const container = document.getElementById('sig-editor-container');
+  SigPlacement.destroy(container);
+  document.getElementById('sig-editor-modal').classList.add('hidden');
+}
+
+function saveSigEditorPosition() {
+  const editorContainer = document.getElementById('sig-editor-container');
+  const smallContainer = document.getElementById('attach-placement-container');
+  const pos = SigPlacement.getPos(editorContainer);
+
+  // Copier la position au petit aperçu
+  SigPlacement.reset(smallContainer, pos);
+
+  closeSigEditorWindow();
+  showToast('Zone de signature mise à jour', 'success');
 }
 
 async function submitAttachSig() {
