@@ -118,6 +118,16 @@
       node.setAttribute('rel', 'noopener noreferrer');
       node.classList.add('text-blue-600', 'underline', 'underline-offset-2');
     });
+    wrapper.querySelectorAll('img').forEach(node => {
+      const safe = safeUrl(node.getAttribute('src'));
+      if (!safe) {
+        node.remove();
+        return;
+      }
+      node.setAttribute('src', safe);
+      node.setAttribute('loading', 'lazy');
+      node.classList.add('mt-3', 'max-h-[32rem]', 'w-auto', 'max-w-full', 'rounded-2xl', 'border', 'border-slate-200', 'bg-white', 'shadow-sm');
+    });
 
     wrapper.querySelectorAll('li').forEach(node => decorateTaskNode(node, options, state));
     Array.from(wrapper.children)

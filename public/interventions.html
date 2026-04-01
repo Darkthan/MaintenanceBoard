@@ -90,22 +90,6 @@
         </div>
       </div>
 
-      <section class="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
-        <div class="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h2 class="font-semibold text-slate-800">Calendrier global</h2>
-            <p class="text-sm text-slate-500">Flux iCal partagé des prêts et des interventions datées.</p>
-          </div>
-          <button id="refresh-global-calendar-feed-btn" type="button" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
-        </div>
-        <textarea id="global-calendar-feed-url" rows="2" readonly class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"></textarea>
-        <div class="flex flex-wrap gap-2">
-          <button id="copy-global-calendar-feed-btn" type="button" class="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
-            Copier le lien iCal
-          </button>
-        </div>
-      </section>
-
       <!-- Liste -->
       <div id="interventions-container" class="space-y-3">
         <p class="text-slate-400 text-center py-8">Chargement...</p>
@@ -1206,15 +1190,6 @@ async function deleteIntervention(id) {
   } catch (err) { showToast(err.message, 'error'); }
 }
 
-async function loadGlobalCalendarFeed() {
-  try {
-    const feed = await api.get('/calendar/global-feed');
-    document.getElementById('global-calendar-feed-url').value = feed.url;
-  } catch (err) {
-    document.getElementById('global-calendar-feed-url').value = `Erreur : ${err.message}`;
-  }
-}
-
 // Photos
 const photosModal = document.getElementById('photos-modal');
 function openPhotosModal(id) {
@@ -1520,20 +1495,7 @@ document.getElementById('detail-message-input').addEventListener('keydown', e =>
   }
 });
 
-document.getElementById('refresh-global-calendar-feed-btn').addEventListener('click', loadGlobalCalendarFeed);
-document.getElementById('copy-global-calendar-feed-btn').addEventListener('click', async () => {
-  const url = document.getElementById('global-calendar-feed-url').value;
-  if (!url) return;
-  try {
-    await navigator.clipboard.writeText(url);
-    showToast('Lien iCal copié', 'success');
-  } catch {
-    showToast('Copie impossible', 'error');
-  }
-});
-
 requireLogin().then(() => {
-  loadGlobalCalendarFeed();
   loadInterventions();
   if (pageParams.get('action') === 'create') {
     setTimeout(() => document.getElementById('add-intervention-btn')?.click(), 50);

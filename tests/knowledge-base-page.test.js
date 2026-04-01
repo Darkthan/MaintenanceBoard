@@ -27,5 +27,9 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('knowledge-article-view');
     expect(res.text).toContain('knowledge-editor-modal');
     expect(res.text).toContain('Nouvel article');
+    expect(res.text).toContain('editor-image-input');
+    expect(res.text).toContain('editor-document-input');
+    expect(res.text).toContain('article-documents');
+    expect(res.text).toContain('Les images sont compressées automatiquement');
   });
 });

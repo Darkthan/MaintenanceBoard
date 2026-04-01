@@ -1,0 +1,29 @@
+{
+  "poTemplate": {
+    "orgName": "OGEC Beaupeyrat",
+    "orgAddress": "9 ter rue Petiniaud-Beaupeyrat",
+    "orgCity": "87000",
+    "orgPhone": "",
+    "orgEmail": "",
+    "orgSiret": "",
+    "tvaRate": 20,
+    "currency": "EUR",
+    "poPrefix": "BC-",
+    "paymentTerms": "",
+    "footerNote": "OGEC Beaupeyrat - 2026",
+    "accountingEmail": "l-ducreux@beaupeyrat.com",
+    "autoEmailCategories": [
+      "INVOICE",
+      "SIGNED_QUOTE"
+    ]
+  },
+  "smtp": {
+    "host": "smtp.beaupeyrat.com",
+    "port": 587,
+    "user": "l-ducreux",
+    "from": "support@beaupeyrat.fr",
+    "testTo": "l-ducreux@beaupeyrat.com",
+    "secure": false,
+    "pass": "aKfT@y2X4cxD!"
+  }
+}

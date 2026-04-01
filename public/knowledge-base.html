@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Base de connaissance – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 </head>
 <body class="bg-slate-50">
 
@@ -56,6 +57,9 @@
       <div class="flex items-center gap-2">
         <button id="refresh-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">
           Rafraîchir
+        </button>
+        <button id="new-diagram-btn" type="button" class="hidden rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition">
+          Nouveau plan réseau
         </button>
         <button id="new-article-btn" type="button" class="hidden rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition">
           Nouvel article
@@ -121,6 +125,15 @@
             </div>
             <div class="flex-1 overflow-y-auto px-6 py-6">
               <div id="article-content" class="space-y-3 text-sm text-slate-700"></div>
+              <div id="article-documents-wrap" class="hidden mt-8 border-t border-slate-200 pt-6">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Documents liés</p>
+                    <h3 class="mt-1 text-lg font-semibold text-slate-900">Pièces jointes</h3>
+                  </div>
+                </div>
+                <div id="article-documents" class="mt-4 space-y-3"></div>
+              </div>
             </div>
           </article>
         </section>
@@ -173,9 +186,29 @@
 
           <label class="block text-sm">
             <span class="mb-1.5 block font-medium text-slate-700">Contenu Markdown</span>
-            <textarea id="editor-article-content" rows="18" required placeholder="# Procédure&#10;&#10;- Étape 1&#10;- Étape 2"
+            <textarea id="editor-article-content" rows="18" placeholder="# Procédure&#10;&#10;- Étape 1&#10;- Étape 2"
               class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-y font-mono text-sm"></textarea>
           </label>
+
+          <section class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium text-slate-800">Images et documents</p>
+                <p class="mt-1 text-xs text-slate-500">Les images sont compressées automatiquement avant enregistrement. Les documents restent liés à l’article.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <input id="editor-image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden" />
+                <button id="add-image-btn" type="button" class="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 transition">
+                  Ajouter une image
+                </button>
+                <input id="editor-document-input" type="file" accept=".pdf,.txt,.md,.csv,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" class="hidden" />
+                <button id="add-document-btn" type="button" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+                  Ajouter un document
+                </button>
+              </div>
+            </div>
+            <div id="editor-attachments-list" class="mt-4 space-y-3"></div>
+          </section>
 
           <div class="flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
             <p id="editor-feedback" class="text-sm text-slate-500"></p>
@@ -206,6 +239,64 @@
   </div>
 </div>
 
+<!-- draw.io diagram editor modal -->
+<div id="diagram-editor-modal" class="hidden fixed inset-0 z-[130] bg-slate-950/60 backdrop-blur-sm">
+  <div class="h-full flex flex-col p-4">
+    <div class="bg-white rounded-2xl flex flex-col h-full overflow-hidden shadow-2xl">
+      <div class="flex items-center gap-4 border-b border-slate-200 px-5 py-4 shrink-0 flex-wrap">
+        <div class="shrink-0">
+          <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Plan réseau</p>
+          <h2 id="diagram-editor-heading" class="text-lg font-semibold text-slate-900">Nouveau plan réseau</h2>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap flex-1">
+          <label class="block text-sm shrink-0">
+            <span class="mb-1 block text-xs font-medium text-slate-500">Titre <span class="text-red-500">*</span></span>
+            <input id="diagram-title-input" type="text" maxlength="160"
+              class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 w-52" />
+          </label>
+          <label class="block text-sm shrink-0">
+            <span class="mb-1 block text-xs font-medium text-slate-500">Catégorie</span>
+            <input id="diagram-category-input" type="text" maxlength="120" placeholder="Réseau, Bâtiment A..."
+              class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 w-40" />
+          </label>
+          <label class="block text-sm shrink-0">
+            <span class="mb-1 block text-xs font-medium text-slate-500">Tags</span>
+            <input id="diagram-tags-input" type="text" maxlength="220" placeholder="tag1, tag2"
+              class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 w-36" />
+          </label>
+          <label class="block text-sm shrink-0">
+            <span class="mb-1 block text-xs font-medium text-slate-500">Description</span>
+            <input id="diagram-summary-input" type="text" maxlength="300" placeholder="Résumé court..."
+              class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 w-44" />
+          </label>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span id="diagram-editor-feedback" class="text-sm text-slate-500"></span>
+          <button id="cancel-diagram-btn" type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+          <button id="save-diagram-btn" type="button" class="rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition">Enregistrer</button>
+          <button id="close-diagram-btn" type="button" class="ml-1 rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="flex-1 min-h-0 relative">
+        <div id="diagram-loading" class="absolute inset-0 flex items-center justify-center bg-white z-10">
+          <div class="flex flex-col items-center gap-3 text-slate-400">
+            <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <p class="text-sm">Chargement de l'éditeur draw.io…</p>
+          </div>
+        </div>
+        <iframe id="drawio-iframe" src="" class="w-full h-full border-0 hidden" title="Éditeur draw.io"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/js/vendor/markdown-it.min.js"></script>
 <script src="/js/rich-text.js"></script>
 <script src="/js/api.js"></script>
@@ -219,6 +310,7 @@ let selectedArticleId = '';
 let selectedCategory = '';
 let currentSearch = '';
 let editorArticleId = '';
+let selectedArticle = null;
 
 const searchInputEl = document.getElementById('knowledge-search-input');
 const articleListEl = document.getElementById('knowledge-article-list');
@@ -232,6 +324,8 @@ const articleSummaryEl = document.getElementById('article-summary');
 const articleTagsEl = document.getElementById('article-tags');
 const articleMetaEl = document.getElementById('article-meta');
 const articleContentEl = document.getElementById('article-content');
+const articleDocumentsWrapEl = document.getElementById('article-documents-wrap');
+const articleDocumentsEl = document.getElementById('article-documents');
 const newArticleBtnEl = document.getElementById('new-article-btn');
 const articleAdminActionsEl = document.getElementById('article-admin-actions');
 const editorModalEl = document.getElementById('knowledge-editor-modal');
@@ -243,6 +337,11 @@ const editorCategoryInputEl = document.getElementById('editor-article-category')
 const editorTagsInputEl = document.getElementById('editor-article-tags');
 const editorSummaryInputEl = document.getElementById('editor-article-summary');
 const editorContentInputEl = document.getElementById('editor-article-content');
+const editorAttachmentsListEl = document.getElementById('editor-attachments-list');
+const editorImageInputEl = document.getElementById('editor-image-input');
+const editorDocumentInputEl = document.getElementById('editor-document-input');
+const addImageBtnEl = document.getElementById('add-image-btn');
+const addDocumentBtnEl = document.getElementById('add-document-btn');
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -264,6 +363,35 @@ function formatDateTime(value) {
   });
 }
 
+function formatFileSize(value) {
+  const size = Number(value || 0);
+  if (!size) return '0 o';
+  if (size < 1024) return `${size} o`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1).replace('.0', '')} Ko`;
+  return `${(size / (1024 * 1024)).toFixed(1).replace('.0', '')} Mo`;
+}
+
+function isImageAttachment(attachment) {
+  return attachment?.kind === 'image' || String(attachment?.mime || '').startsWith('image/');
+}
+
+function getAttachmentMarkdown(attachment) {
+  const label = String(attachment?.name || 'image').replace(/\.[^.]+$/, '').trim() || 'image';
+  return `![${label}](${attachment.url})`;
+}
+
+function insertTextAtCursor(input, text) {
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  const before = input.value.slice(0, start);
+  const after = input.value.slice(end);
+  input.value = before + text + after;
+  const nextPos = before.length + text.length;
+  input.selectionStart = nextPos;
+  input.selectionEnd = nextPos;
+  input.focus();
+}
+
 function isAdmin() {
   return currentUser?.role === 'ADMIN';
 }
@@ -281,13 +409,113 @@ function updateEditorPreview() {
   document.getElementById('editor-preview-tags').innerHTML = tags.map(tag => `
     <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">${escapeHtml(tag)}</span>
   `).join('');
-  document.getElementById('editor-preview-content').innerHTML = content
+  const previewContentEl = document.getElementById('editor-preview-content');
+  previewContentEl.innerHTML = content
     ? renderRichText(content)
     : '<p class="text-slate-400">Le contenu Markdown s’affichera ici.</p>';
+  if (content) initMermaidInEl(previewContentEl);
+}
+
+function renderArticleDocuments(article) {
+  const documents = (article?.attachments || []).filter(attachment => !isImageAttachment(attachment));
+
+  if (!documents.length) {
+    articleDocumentsWrapEl.classList.add('hidden');
+    articleDocumentsEl.innerHTML = '';
+    return;
+  }
+
+  articleDocumentsWrapEl.classList.remove('hidden');
+  articleDocumentsEl.innerHTML = documents.map(attachment => `
+    <a href="${attachment.url}" target="_blank" rel="noopener noreferrer"
+      class="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:border-blue-200 hover:bg-blue-50 transition">
+      <div class="min-w-0">
+        <p class="truncate text-sm font-medium text-slate-800">${escapeHtml(attachment.name)}</p>
+        <p class="mt-1 text-xs text-slate-400">${escapeHtml(formatFileSize(attachment.size))}${attachment.uploadedByName ? ` · ${escapeHtml(attachment.uploadedByName)}` : ''}</p>
+      </div>
+      <span class="shrink-0 text-xs font-medium text-blue-700">Ouvrir</span>
+    </a>
+  `).join('');
+}
+
+function renderEditorAttachments(attachments = []) {
+  if (!attachments.length) {
+    editorAttachmentsListEl.innerHTML = `
+      <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">
+        Les images ajoutées peuvent être insérées dans le Markdown. Les documents apparaîtront dans une section dédiée sur l’article.
+      </div>
+    `;
+    return;
+  }
+
+  editorAttachmentsListEl.innerHTML = attachments.map(attachment => `
+    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-medium text-slate-800">${escapeHtml(attachment.name)}</p>
+          <p class="mt-1 text-xs text-slate-400">
+            ${isImageAttachment(attachment) ? 'Image compressée' : 'Document joint'}
+            · ${escapeHtml(formatFileSize(attachment.size))}
+            ${attachment.uploadedByName ? ` · ${escapeHtml(attachment.uploadedByName)}` : ''}
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <a href="${attachment.url}" target="_blank" rel="noopener noreferrer"
+            class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition">
+            Ouvrir
+          </a>
+          ${isImageAttachment(attachment) ? `
+            <button type="button" data-insert-attachment="${attachment.id}"
+              class="rounded-xl border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 transition">
+              Insérer
+            </button>
+          ` : ''}
+          ${isAdmin() ? `
+            <button type="button" data-delete-attachment="${attachment.id}"
+              class="rounded-xl border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition">
+              Supprimer
+            </button>
+          ` : ''}
+        </div>
+      </div>
+      ${isImageAttachment(attachment) ? `
+        <img src="${attachment.url}" alt="${escapeHtml(attachment.name)}" class="mt-3 max-h-40 max-w-full rounded-2xl border border-slate-200 object-contain bg-slate-50" loading="lazy" />
+      ` : ''}
+    </div>
+  `).join('');
+
+  editorAttachmentsListEl.querySelectorAll('[data-insert-attachment]').forEach(button => {
+    button.addEventListener('click', () => {
+      const attachment = (selectedArticle?.attachments || []).find(item => item.id === button.dataset.insertAttachment);
+      if (!attachment) return;
+      insertTextAtCursor(editorContentInputEl, `${editorContentInputEl.value.trim() ? '\n\n' : ''}${getAttachmentMarkdown(attachment)}\n`);
+      updateEditorPreview();
+    });
+  });
+
+  editorAttachmentsListEl.querySelectorAll('[data-delete-attachment]').forEach(button => {
+    button.addEventListener('click', async () => {
+      if (!editorArticleId) return;
+      const attachment = (selectedArticle?.attachments || []).find(item => item.id === button.dataset.deleteAttachment);
+      if (!attachment) return;
+      if (!confirm(`Supprimer "${attachment.name}" ?`)) return;
+
+      try {
+        const response = await api.delete(`/knowledge-base/${encodeURIComponent(editorArticleId)}/attachments/${encodeURIComponent(attachment.id)}`);
+        selectedArticle = response.article || selectedArticle;
+        renderEditorAttachments(selectedArticle?.attachments || []);
+        renderArticleDocuments(selectedArticle);
+        showToast('Pièce jointe supprimée', 'success');
+      } catch (err) {
+        showToast(err.message || 'Suppression impossible', 'error');
+      }
+    });
+  });
 }
 
 function openEditor(article) {
   if (!isAdmin()) return;
+  selectedArticle = article || null;
   editorArticleId = article?.id || '';
   editorTitleEl.textContent = editorArticleId ? 'Modifier l’article' : 'Nouvel article';
   editorFeedbackEl.textContent = '';
@@ -297,6 +525,7 @@ function openEditor(article) {
   editorTagsInputEl.value = Array.isArray(article?.tags) ? article.tags.join(', ') : '';
   editorSummaryInputEl.value = article?.summary || '';
   editorContentInputEl.value = article?.content || '';
+  renderEditorAttachments(article?.attachments || []);
   updateEditorPreview();
   editorModalEl.classList.remove('hidden');
   document.body.classList.add('overflow-hidden');
@@ -306,6 +535,8 @@ function openEditor(article) {
 function closeEditor() {
   editorModalEl.classList.add('hidden');
   document.body.classList.remove('overflow-hidden');
+  editorImageInputEl.value = '';
+  editorDocumentInputEl.value = '';
 }
 
 function updateUrl(articleId) {
@@ -355,19 +586,23 @@ function renderArticleList() {
     return;
   }
 
-  articleListEl.innerHTML = knowledgeArticles.map(article => `
+  articleListEl.innerHTML = knowledgeArticles.map(article => {
+    const isNet = article.type === 'network-diagram';
+    const activeClass = selectedArticleId === article.id
+      ? (isNet ? 'border-purple-200 bg-purple-50' : 'border-blue-200 bg-blue-50')
+      : (isNet ? 'border-slate-200 bg-white hover:border-purple-200 hover:bg-purple-50' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50');
+    const categoryLabel = isNet
+      ? `<span class="inline-flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>Plan réseau${article.category ? ' · ' + escapeHtml(article.category) : ''}</span>`
+      : escapeHtml(article.category || 'Documentation');
+    return `
     <button type="button" data-article-id="${article.id}"
-      class="w-full rounded-2xl border p-4 text-left transition ${
-        selectedArticleId === article.id
-          ? 'border-blue-200 bg-blue-50'
-          : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50'
-      }">
-      <p class="text-xs font-semibold uppercase tracking-wide ${article.category ? 'text-blue-600' : 'text-slate-400'}">${escapeHtml(article.category || 'Documentation')}</p>
+      class="w-full rounded-2xl border p-4 text-left transition ${activeClass}">
+      <p class="text-xs font-semibold uppercase tracking-wide ${isNet ? 'text-purple-600' : article.category ? 'text-blue-600' : 'text-slate-400'}">${categoryLabel}</p>
       <h3 class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(article.title)}</h3>
       <p class="mt-2 text-sm leading-6 text-slate-500 line-clamp-3">${escapeHtml(article.summary || article.excerpt || 'Aucun résumé.')}</p>
       <p class="mt-3 text-[11px] text-slate-400">${escapeHtml(new Date(article.updatedAt).toLocaleDateString('fr-FR'))}</p>
-    </button>
-  `).join('');
+    </button>`;
+  }).join('');
 
   articleListEl.querySelectorAll('[data-article-id]').forEach(button => {
     button.addEventListener('click', () => {
@@ -380,13 +615,18 @@ function renderArticleList() {
 async function selectArticle(articleId) {
   try {
     const article = await api.get(`/knowledge-base/${encodeURIComponent(articleId)}`);
+    selectedArticle = article;
     selectedArticleId = article.id;
     updateUrl(article.id);
     renderArticleList();
     emptyStateEl.classList.add('hidden');
     articlePanelEl.classList.remove('hidden');
 
-    articleCategoryEl.textContent = article.category || 'Documentation';
+    const isNetworkDiagram = article.type === 'network-diagram';
+    articleCategoryEl.className = `text-xs font-semibold uppercase tracking-wide ${isNetworkDiagram ? 'text-purple-600' : 'text-blue-600'}`;
+    articleCategoryEl.textContent = isNetworkDiagram
+      ? `Plan réseau${article.category ? ' · ' + article.category : ''}`
+      : (article.category || 'Documentation');
     articleTitleEl.textContent = article.title;
     articleSummaryEl.textContent = article.summary || '';
     articleTagsEl.innerHTML = (article.tags || []).map(tag => `
@@ -396,12 +636,26 @@ async function selectArticle(articleId) {
       article.updatedByName ? `Mis à jour par ${article.updatedByName}` : null,
       article.updatedAt ? `le ${formatDateTime(article.updatedAt)}` : null
     ].filter(Boolean).join(' ');
-    articleContentEl.innerHTML = renderRichText(article.content || '');
+
+    if (isNetworkDiagram) {
+      if (article.diagramSvg) {
+        articleContentEl.innerHTML = `<div class="w-full overflow-auto rounded-xl border border-slate-200 bg-white p-3">${article.diagramSvg}</div>`;
+      } else {
+        articleContentEl.innerHTML = '<p class="text-slate-400 text-sm italic">Aucun diagramme enregistré. Cliquez sur Modifier pour créer le plan.</p>';
+      }
+    } else {
+      articleContentEl.innerHTML = renderRichText(article.content || '');
+      initMermaidInEl(articleContentEl);
+    }
+    renderArticleDocuments(article);
 
     if (isAdmin()) {
       articleAdminActionsEl.classList.remove('hidden');
       articleAdminActionsEl.classList.add('flex');
-      document.getElementById('edit-article-btn').onclick = () => openEditor(article);
+      document.getElementById('edit-article-btn').onclick = () => {
+        if (isNetworkDiagram) openDiagramEditor(article);
+        else openEditor(article);
+      };
       document.getElementById('delete-article-btn').onclick = () => deleteArticle(article.id, article.title);
     }
   } catch (err) {
@@ -439,6 +693,7 @@ async function loadKnowledgeArticles() {
       return;
     }
 
+    selectedArticle = null;
     selectedArticleId = '';
     updateUrl('');
   } catch (err) {
@@ -475,6 +730,8 @@ document.getElementById('refresh-btn').addEventListener('click', loadKnowledgeAr
 newArticleBtnEl.addEventListener('click', () => openEditor());
 document.getElementById('close-editor-btn').addEventListener('click', closeEditor);
 document.getElementById('cancel-editor-btn').addEventListener('click', closeEditor);
+addImageBtnEl.addEventListener('click', () => editorImageInputEl.click());
+addDocumentBtnEl.addEventListener('click', () => editorDocumentInputEl.click());
 editorModalEl.addEventListener('click', event => {
   if (event.target === editorModalEl) closeEditor();
 });
@@ -487,10 +744,83 @@ editorModalEl.addEventListener('click', event => {
   editorContentInputEl.addEventListener(eventName, updateEditorPreview);
 });
 
+async function ensureEditorArticle() {
+  if (editorArticleId) return editorArticleId;
+
+  const title = editorTitleInputEl.value.trim();
+  if (!title) {
+    throw new Error('Le titre est obligatoire avant d’ajouter une pièce jointe.');
+  }
+
+  editorFeedbackEl.textContent = 'Création du brouillon...';
+  editorFeedbackEl.className = 'text-sm text-slate-500';
+
+  const response = await api.post('/knowledge-base', {
+    title,
+    category: editorCategoryInputEl.value.trim(),
+    tags: editorTagsInputEl.value.trim(),
+    summary: editorSummaryInputEl.value.trim(),
+    content: editorContentInputEl.value
+  });
+
+  editorArticleId = response.article?.id || '';
+  selectedArticleId = editorArticleId;
+  selectedArticle = response.article || null;
+  editorTitleEl.textContent = 'Modifier l’article';
+  renderEditorAttachments(selectedArticle?.attachments || []);
+
+  return editorArticleId;
+}
+
+async function handleAttachmentUpload(file) {
+  if (!file || !isAdmin()) return;
+
+  try {
+    const articleId = await ensureEditorArticle();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    editorFeedbackEl.textContent = ALLOWED_IMAGE_MIME_SET.has(file.type) ? 'Compression et envoi de l’image...' : 'Envoi du document...';
+    editorFeedbackEl.className = 'text-sm text-slate-500';
+
+    const response = await api.upload(`/knowledge-base/${encodeURIComponent(articleId)}/attachments`, formData);
+    selectedArticle = response.article || selectedArticle;
+    renderEditorAttachments(selectedArticle?.attachments || []);
+    renderArticleDocuments(selectedArticle);
+
+    if (response.attachment && isImageAttachment(response.attachment)) {
+      insertTextAtCursor(editorContentInputEl, `${editorContentInputEl.value.trim() ? '\n\n' : ''}${getAttachmentMarkdown(response.attachment)}\n`);
+      updateEditorPreview();
+    }
+
+    editorFeedbackEl.textContent = response.attachment && isImageAttachment(response.attachment)
+      ? 'Image ajoutée et insérée dans le contenu.'
+      : 'Document ajouté à l’article.';
+    showToast(response.message || 'Pièce jointe ajoutée', 'success');
+  } catch (err) {
+    editorFeedbackEl.textContent = err.message || 'Impossible d’ajouter la pièce jointe.';
+    editorFeedbackEl.className = 'text-sm text-red-600';
+  } finally {
+    editorImageInputEl.value = '';
+    editorDocumentInputEl.value = '';
+  }
+}
+
+const ALLOWED_IMAGE_MIME_SET = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
+editorImageInputEl.addEventListener('change', event => {
+  handleAttachmentUpload(event.target.files?.[0] || null);
+});
+
+editorDocumentInputEl.addEventListener('change', event => {
+  handleAttachmentUpload(event.target.files?.[0] || null);
+});
+
 editorFormEl.addEventListener('submit', async event => {
   event.preventDefault();
   if (!isAdmin()) return;
 
+  const wasEditing = Boolean(editorArticleId);
   const payload = {
     title: editorTitleInputEl.value.trim(),
     category: editorCategoryInputEl.value.trim(),
@@ -507,9 +837,10 @@ editorFormEl.addEventListener('submit', async event => {
       ? await api.patch(`/knowledge-base/${encodeURIComponent(editorArticleId)}`, payload)
       : await api.post('/knowledge-base', payload);
 
+    selectedArticle = response.article || null;
     selectedArticleId = response.article?.id || '';
     closeEditor();
-    showToast(editorArticleId ? 'Article mis à jour' : 'Article créé', 'success');
+    showToast(wasEditing ? 'Article mis à jour' : 'Article créé', 'success');
     await loadKnowledgeArticles();
   } catch (err) {
     editorFeedbackEl.textContent = err.message || 'Impossible d’enregistrer l’article.';
@@ -518,16 +849,160 @@ editorFormEl.addEventListener('submit', async event => {
 });
 
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !editorModalEl.classList.contains('hidden')) {
-    closeEditor();
+  if (event.key === 'Escape') {
+    if (!diagramEditorModalEl.classList.contains('hidden')) closeDiagramEditor();
+    else if (!editorModalEl.classList.contains('hidden')) closeEditor();
   }
 });
+
+// ── Mermaid ──────────────────────────────────────────────────────────────────
+
+mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+
+function initMermaidInEl(containerEl) {
+  const codeBlocks = containerEl.querySelectorAll('code.language-mermaid');
+  if (!codeBlocks.length) return;
+  codeBlocks.forEach(codeEl => {
+    const pre = codeEl.closest('pre') || codeEl.parentElement;
+    const div = document.createElement('div');
+    div.className = 'mermaid';
+    div.textContent = codeEl.textContent;
+    pre.replaceWith(div);
+  });
+  mermaid.run({ nodes: containerEl.querySelectorAll('.mermaid') });
+}
+
+// ── draw.io network diagram editor ───────────────────────────────────────────
+
+let diagramEditorArticleId = '';
+let _diagramCurrentXml = '';
+let _diagramPendingSave = false;
+
+const diagramEditorModalEl = document.getElementById('diagram-editor-modal');
+const drawioIframeEl = document.getElementById('drawio-iframe');
+const diagramLoadingEl = document.getElementById('diagram-loading');
+const diagramFeedbackEl = document.getElementById('diagram-editor-feedback');
+
+function openDiagramEditor(article) {
+  if (!isAdmin()) return;
+  diagramEditorArticleId = article?.id || '';
+  document.getElementById('diagram-editor-heading').textContent = diagramEditorArticleId ? 'Modifier le plan réseau' : 'Nouveau plan réseau';
+  document.getElementById('diagram-title-input').value = article?.title || '';
+  document.getElementById('diagram-category-input').value = article?.category || '';
+  document.getElementById('diagram-tags-input').value = Array.isArray(article?.tags) ? article.tags.join(', ') : '';
+  document.getElementById('diagram-summary-input').value = article?.summary || '';
+  diagramFeedbackEl.textContent = '';
+  _diagramCurrentXml = article?.diagramXml || '';
+  _diagramPendingSave = false;
+
+  diagramLoadingEl.classList.remove('hidden');
+  drawioIframeEl.classList.add('hidden');
+  drawioIframeEl.src = 'https://embed.diagrams.net/?embed=1&spin=1&proto=json&libraries=1&lang=fr';
+  diagramEditorModalEl.classList.remove('hidden');
+  document.body.classList.add('overflow-hidden');
+}
+
+function closeDiagramEditor() {
+  diagramEditorModalEl.classList.add('hidden');
+  document.body.classList.remove('overflow-hidden');
+  drawioIframeEl.src = '';
+  drawioIframeEl.classList.add('hidden');
+  diagramLoadingEl.classList.remove('hidden');
+  _diagramCurrentXml = '';
+  _diagramPendingSave = false;
+}
+
+function sendToDrawio(msg) {
+  drawioIframeEl.contentWindow?.postMessage(JSON.stringify(msg), '*');
+}
+
+window.addEventListener('message', event => {
+  if (event.source !== drawioIframeEl.contentWindow) return;
+  let msg;
+  try { msg = JSON.parse(event.data); } catch { return; }
+
+  if (msg.event === 'init') {
+    diagramLoadingEl.classList.add('hidden');
+    drawioIframeEl.classList.remove('hidden');
+    sendToDrawio({
+      action: 'load',
+      xml: _diagramCurrentXml ||
+        '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>'
+    });
+  } else if (msg.event === 'autosave' || msg.event === 'save') {
+    if (msg.xml) _diagramCurrentXml = msg.xml;
+  } else if (msg.event === 'export') {
+    if (_diagramPendingSave) {
+      _diagramPendingSave = false;
+      if (msg.xml) _diagramCurrentXml = msg.xml;
+      saveDiagram(msg.data || '');
+    }
+  } else if (msg.event === 'exit') {
+    closeDiagramEditor();
+  }
+});
+
+document.getElementById('save-diagram-btn').addEventListener('click', () => {
+  const title = document.getElementById('diagram-title-input').value.trim();
+  if (!title) {
+    diagramFeedbackEl.textContent = 'Le titre est obligatoire.';
+    diagramFeedbackEl.className = 'text-sm text-red-600';
+    return;
+  }
+  _diagramPendingSave = true;
+  diagramFeedbackEl.textContent = 'Export en cours…';
+  diagramFeedbackEl.className = 'text-sm text-slate-500';
+  sendToDrawio({ action: 'export', format: 'svg' });
+});
+
+async function saveDiagram(svgData) {
+  const title = document.getElementById('diagram-title-input').value.trim();
+  const category = document.getElementById('diagram-category-input').value.trim();
+  const tags = document.getElementById('diagram-tags-input').value.trim();
+  const summary = document.getElementById('diagram-summary-input').value.trim();
+
+  diagramFeedbackEl.textContent = 'Enregistrement…';
+  diagramFeedbackEl.className = 'text-sm text-slate-500';
+
+  const payload = {
+    type: 'network-diagram',
+    title,
+    category,
+    tags,
+    summary,
+    content: '',
+    diagramXml: _diagramCurrentXml,
+    diagramSvg: svgData || ''
+  };
+
+  try {
+    const response = diagramEditorArticleId
+      ? await api.patch(`/knowledge-base/${encodeURIComponent(diagramEditorArticleId)}`, payload)
+      : await api.post('/knowledge-base', payload);
+
+    selectedArticleId = response.article?.id || '';
+    closeDiagramEditor();
+    showToast(diagramEditorArticleId ? 'Plan mis à jour' : 'Plan créé', 'success');
+    await loadKnowledgeArticles();
+  } catch (err) {
+    diagramFeedbackEl.textContent = err.message || 'Impossible d'enregistrer le plan.';
+    diagramFeedbackEl.className = 'text-sm text-red-600';
+    _diagramPendingSave = false;
+  }
+}
+
+document.getElementById('cancel-diagram-btn').addEventListener('click', closeDiagramEditor);
+document.getElementById('close-diagram-btn').addEventListener('click', closeDiagramEditor);
+
+const newDiagramBtnEl = document.getElementById('new-diagram-btn');
+newDiagramBtnEl.addEventListener('click', () => openDiagramEditor());
 
 requireLogin().then(user => {
   currentUser = user;
   renderNav('knowledge-base');
   if (isAdmin()) {
     newArticleBtnEl.classList.remove('hidden');
+    newDiagramBtnEl.classList.remove('hidden');
   }
   loadKnowledgeArticles();
 });

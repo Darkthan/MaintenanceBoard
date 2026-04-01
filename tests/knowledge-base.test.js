@@ -33,17 +33,26 @@ function buildApp() {
 describe('knowledge base routes', () => {
   const tempDir = path.join(process.cwd(), 'tests', '.tmp');
   const knowledgeBaseFile = path.join(tempDir, 'knowledge-base.test.json');
+  const knowledgeBaseUploadDir = path.join(tempDir, 'knowledge-base-uploads');
+  const tinyPngBuffer = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO8B2u0AAAAASUVORK5CYII=',
+    'base64'
+  );
 
   beforeEach(() => {
     mockRole = 'ADMIN';
     process.env.KNOWLEDGE_BASE_FILE = knowledgeBaseFile;
+    process.env.KNOWLEDGE_BASE_UPLOAD_DIR = knowledgeBaseUploadDir;
     fs.mkdirSync(tempDir, { recursive: true });
     fs.rmSync(knowledgeBaseFile, { force: true });
+    fs.rmSync(knowledgeBaseUploadDir, { recursive: true, force: true });
   });
 
   afterEach(() => {
     fs.rmSync(knowledgeBaseFile, { force: true });
+    fs.rmSync(knowledgeBaseUploadDir, { recursive: true, force: true });
     delete process.env.KNOWLEDGE_BASE_FILE;
+    delete process.env.KNOWLEDGE_BASE_UPLOAD_DIR;
   });
 
   it('cree un article puis le relit', async () => {
@@ -162,5 +171,56 @@ describe('knowledge base routes', () => {
 
     const listRes = await request(buildApp()).get('/api/knowledge-base');
     expect(listRes.body.items).toHaveLength(0);
+  });
+
+  it('ajoute une image compressee et un document a un article', async () => {
+    const createRes = await request(buildApp())
+      .post('/api/knowledge-base')
+      .send({
+        title: 'Procédure projecteur',
+        content: ''
+      });
+
+    expect(createRes.status).toBe(201);
+    const articleId = createRes.body.article.id;
+
+    const imageRes = await request(buildApp())
+      .post(`/api/knowledge-base/${articleId}/attachments`)
+      .attach('file', tinyPngBuffer, 'photo.png');
+
+    expect(imageRes.status).toBe(201);
+    expect(imageRes.body.attachment).toEqual(expect.objectContaining({
+      kind: 'image',
+      mime: 'image/webp'
+    }));
+
+    const articleRes = await request(buildApp()).get(`/api/knowledge-base/${articleId}`);
+    expect(articleRes.status).toBe(200);
+    expect(articleRes.body.attachments).toHaveLength(1);
+    expect(articleRes.body.attachments[0].url).toContain(`/api/knowledge-base/${articleId}/attachments/`);
+
+    const docRes = await request(buildApp())
+      .post(`/api/knowledge-base/${articleId}/attachments`)
+      .attach('file', Buffer.from('guide'), 'guide.txt');
+
+    expect(docRes.status).toBe(201);
+    expect(docRes.body.attachment).toEqual(expect.objectContaining({
+      kind: 'file',
+      mime: 'text/plain'
+    }));
+
+    const attachmentFileRes = await request(buildApp()).get(docRes.body.attachment.url);
+    expect(attachmentFileRes.status).toBe(200);
+    expect(attachmentFileRes.headers['content-type']).toContain('text/plain');
+
+    const deleteAttachmentRes = await request(buildApp())
+      .delete(`/api/knowledge-base/${articleId}/attachments/${docRes.body.attachment.id}`);
+
+    expect(deleteAttachmentRes.status).toBe(200);
+    expect(deleteAttachmentRes.body.article.attachments).toHaveLength(1);
+
+    const deleteArticleRes = await request(buildApp()).delete(`/api/knowledge-base/${articleId}`);
+    expect(deleteArticleRes.status).toBe(200);
+    expect(fs.existsSync(path.join(knowledgeBaseUploadDir, articleId))).toBe(false);
   });
 });
