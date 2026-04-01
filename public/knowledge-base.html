@@ -985,7 +985,7 @@ async function saveDiagram(svgData) {
     showToast(diagramEditorArticleId ? 'Plan mis à jour' : 'Plan créé', 'success');
     await loadKnowledgeArticles();
   } catch (err) {
-    diagramFeedbackEl.textContent = err.message || 'Impossible d'enregistrer le plan.';
+    diagramFeedbackEl.textContent = err.message || "Impossible d'enregistrer le plan.";
     diagramFeedbackEl.className = 'text-sm text-red-600';
     _diagramPendingSave = false;
   }
