@@ -220,7 +220,7 @@ router.post('/',
     body('name').trim().isLength({ min: 1, max: 200 }),
     body('type').trim().isLength({ min: 1, max: 100 }),
     body('status').optional().isIn(VALID_STATUSES),
-    body('roomId').optional().isUUID()
+    body('roomId').optional({ nullable: true }).isUUID()
   ],
   async (req, res, next) => {
     try {
