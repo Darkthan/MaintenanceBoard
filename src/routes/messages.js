@@ -179,16 +179,13 @@ router.get('/unread-count', requireAuth, async (req, res, next) => {
       internalCount += count;
     }
 
-    // Compter les messages REPORTER non lus (readAt = null) sur les interventions du tech
+    // Compter les messages REPORTER non lus (readAt = null) sur les interventions assignées au tech
     const ticketCount = await prisma.ticketMessage.count({
       where: {
         authorType: 'REPORTER',
         readAt: null,
         intervention: {
-          OR: [
-            { techId: userId },
-            { createdById: userId }
-          ]
+          techId: userId
         }
       }
     });
@@ -205,7 +202,7 @@ router.get('/ticket-threads', requireAuth, async (req, res, next) => {
 
     const where = req.user.role === 'ADMIN'
       ? {}
-      : { OR: [{ techId: userId }, { createdById: userId }] };
+      : { techId: userId };
 
     const interventions = await prisma.intervention.findMany({
       where: {
