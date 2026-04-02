@@ -24,6 +24,11 @@ jest.mock('../src/lib/prisma', () => ({
     findUnique: jest.fn(),
     update: jest.fn()
   },
+  interventionCheckupItem: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn()
+  },
   equipment: {
     updateMany: jest.fn(),
     findUnique: jest.fn(),

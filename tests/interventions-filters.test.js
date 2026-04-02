@@ -25,6 +25,11 @@ jest.mock('../src/lib/prisma', () => ({
     findUnique: jest.fn(),
     update: jest.fn()
   },
+  interventionCheckupItem: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn()
+  },
   equipment: {
     updateMany: jest.fn(),
     findUnique: jest.fn(),
@@ -59,16 +64,20 @@ describe('GET /api/interventions filters', () => {
 
     expect(res.status).toBe(200);
     expect(prisma.intervention.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        mergedIntoId: null,
-        status: { in: ['OPEN', 'IN_PROGRESS'] }
-      })
+      where: {
+        AND: expect.arrayContaining([
+          { mergedIntoId: null },
+          { status: { in: ['OPEN', 'IN_PROGRESS'] } }
+        ])
+      }
     }));
     expect(prisma.intervention.count).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        mergedIntoId: null,
-        status: { in: ['OPEN', 'IN_PROGRESS'] }
-      })
+      where: {
+        AND: expect.arrayContaining([
+          { mergedIntoId: null },
+          { status: { in: ['OPEN', 'IN_PROGRESS'] } }
+        ])
+      }
     });
   });
 });

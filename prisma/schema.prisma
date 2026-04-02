@@ -38,6 +38,7 @@ model User {
   approvedLoanRequests LoanReservation[] @relation("LoanApprovedBy")
   internalConversationParticipants InternalConversationParticipant[]
   sentInternalMessages            InternalMessage[] @relation("InternalMessageSender")
+  checkedCheckupItems            InterventionCheckupItem[]
 
   @@map("users")
 }
@@ -142,6 +143,7 @@ model Equipment {
   sessionLogs     MachineSessionLog[]
   supplierRef     Supplier?   @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   loanResources   LoanResourceEquipment[]
+  checkupItems    InterventionCheckupItem[]
 
   @@map("equipment")
 }
@@ -151,9 +153,11 @@ model Intervention {
   title       String
   description String?
   notes       String?
+  kind        String   @default("STANDARD") // STANDARD | CHECKUP
   status      String   @default("OPEN")    // OPEN | IN_PROGRESS | RESOLVED | CLOSED
   priority    String   @default("NORMAL")  // LOW | NORMAL | HIGH | CRITICAL
   photos      String   @default("[]")      // JSON array sérialisé
+  checkupTemplate String @default("[]")    // JSON array sérialisé des étapes à vérifier
   resolution  String?
   roomId      String?
   equipmentId String?
@@ -181,8 +185,30 @@ model Intervention {
   stockMovements StockMovement[]
   messages       TicketMessage[]
   reporters      InterventionReporter[]
+  checkupItems   InterventionCheckupItem[]
 
   @@map("interventions")
+}
+
+model InterventionCheckupItem {
+  id             String       @id @default(uuid())
+  interventionId String
+  equipmentId    String
+  status         String       @default("PENDING") // PENDING | IN_PROGRESS | DONE
+  checklistState String       @default("[]")      // JSON array sérialisé
+  notes          String?
+  checkedAt      DateTime?
+  checkedById    String?
+  orderIndex     Int          @default(0)
+
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  equipment      Equipment    @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  checkedBy      User?        @relation(fields: [checkedById], references: [id], onDelete: SetNull)
+
+  @@unique([interventionId, equipmentId])
+  @@index([interventionId, status, orderIndex])
+  @@index([equipmentId])
+  @@map("intervention_checkup_items")
 }
 
 model InterventionReporter {

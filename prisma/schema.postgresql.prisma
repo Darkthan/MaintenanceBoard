@@ -62,6 +62,7 @@ model User {
   approvedLoanRequests LoanReservation[] @relation("LoanApprovedBy")
   internalConversationParticipants InternalConversationParticipant[]
   sentInternalMessages            InternalMessage[] @relation("InternalMessageSender")
+  checkedCheckupItems            InterventionCheckupItem[]
 
   @@map("users")
 }
@@ -166,6 +167,7 @@ model Equipment {
   sessionLogs     MachineSessionLog[]
   supplierRef     Supplier?   @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   loanResources   LoanResourceEquipment[]
+  checkupItems    InterventionCheckupItem[]
 
   @@map("equipment")
 }
@@ -175,9 +177,11 @@ model Intervention {
   title       String
   description String?
   notes       String?
+  kind        String    @default("STANDARD")
   status      IntStatus @default(OPEN)
   priority    String    @default("NORMAL")
   photos      String[]
+  checkupTemplate String @default("[]")
   resolution  String?
   roomId      String?
   equipmentId String?
@@ -205,8 +209,30 @@ model Intervention {
   reporters InterventionReporter[]
   stockMovements StockMovement[]
   messages       TicketMessage[]
+  checkupItems   InterventionCheckupItem[]
 
   @@map("interventions")
+}
+
+model InterventionCheckupItem {
+  id             String       @id @default(uuid())
+  interventionId String
+  equipmentId    String
+  status         String       @default("PENDING")
+  checklistState String       @default("[]")
+  notes          String?
+  checkedAt      DateTime?
+  checkedById    String?
+  orderIndex     Int          @default(0)
+
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  equipment      Equipment    @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  checkedBy      User?        @relation(fields: [checkedById], references: [id], onDelete: SetNull)
+
+  @@unique([interventionId, equipmentId])
+  @@index([interventionId, status, orderIndex])
+  @@index([equipmentId])
+  @@map("intervention_checkup_items")
 }
 
 model InterventionReporter {

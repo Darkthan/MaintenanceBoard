@@ -22,12 +22,15 @@ describe('interventions page', () => {
     const res = await request(app).get('/interventions.html');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('Calendrier global');
-    expect(res.text).toContain('global-calendar-feed-url');
+    expect(res.text).toContain('Interventions');
+    expect(res.text).toContain('toggle-filters-btn');
     expect(res.text).toContain('int-scheduled-start');
     expect(res.text).toContain('int-scheduled-end');
     expect(res.text).toContain('int-due-at');
     expect(res.text).toContain('detail-scheduled');
     expect(res.text).toContain('detail-due');
+    expect(res.text).toContain('add-checkup-btn');
+    expect(res.text).toContain('checkup-form');
+    expect(res.text).toContain('detail-checkup-section');
   });
 });

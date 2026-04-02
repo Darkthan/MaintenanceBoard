@@ -47,13 +47,181 @@ const {
   suppressLowDiskAlert
 } = require('../utils/agentMonitoring');
 
+const VALID_INTERVENTION_KINDS = ['STANDARD', 'CHECKUP'];
+const VALID_CHECKUP_ITEM_STATUSES = ['PENDING', 'IN_PROGRESS', 'DONE'];
+
 // SQLite stocke photos en JSON string — normaliser en tableau JS
-function parsePhotos(intervention) {
+function parseStringArray(value, fallback = []) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string') return fallback;
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function parseChecklistTemplate(value) {
+  const items = parseStringArray(value, []);
+  return items
+    .map((item, index) => {
+      const label = typeof item === 'string'
+        ? item.trim()
+        : String(item?.label || '').trim();
+      if (!label) return null;
+      return {
+        id: typeof item === 'object' && item?.id ? String(item.id) : `task-${index + 1}`,
+        label
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizeCheckupState(value, template = []) {
+  const rawItems = parseStringArray(value, []);
+  const rawById = new Map();
+  rawItems.forEach(item => {
+    const key = String(item?.id || item?.label || '').trim();
+    if (key) rawById.set(key, !!item?.done);
+  });
+
+  return template.map(task => ({
+    id: task.id,
+    label: task.label,
+    done: rawById.get(task.id) ?? rawById.get(task.label) ?? false
+  }));
+}
+
+function serializeCheckupItem(item, template = []) {
+  const checklistState = normalizeCheckupState(item?.checklistState, template);
+  const status = VALID_CHECKUP_ITEM_STATUSES.includes(String(item?.status || ''))
+    ? String(item.status)
+    : (checklistState.every(entry => entry.done) && checklistState.length ? 'DONE' : 'PENDING');
+
+  return {
+    ...item,
+    status,
+    checklistState,
+    equipmentLabel: item?.equipment
+      ? `${item.equipment.name}${item.equipment.type ? ` (${item.equipment.type})` : ''}`
+      : 'Équipement',
+    roomLabel: item?.equipment?.room
+      ? `${item.equipment.room.name}${item.equipment.room.number ? ` (${item.equipment.room.number})` : ''}`
+      : 'Sans salle'
+  };
+}
+
+function serializeIntervention(intervention, { includeCheckupItems = true } = {}) {
   if (!intervention) return intervention;
   const p = intervention.photos;
-  const photos = Array.isArray(p) ? p : (typeof p === 'string' ? JSON.parse(p || '[]') : []);
-  intervention.photos = photos.map(photo => toInterventionPhotoUrl(intervention.id, photo));
-  return intervention;
+  const photos = Array.isArray(p) ? p : parseStringArray(p, []);
+  const checkupTemplate = parseChecklistTemplate(intervention.checkupTemplate || '[]');
+  const rawCheckupItems = Array.isArray(intervention.checkupItems) ? intervention.checkupItems : [];
+  const checkupItems = rawCheckupItems.map(item => serializeCheckupItem(item, checkupTemplate));
+  const summary = checkupItems.reduce((acc, item) => {
+    acc.total += 1;
+    if (item.status === 'DONE') acc.done += 1;
+    else if (item.status === 'IN_PROGRESS') acc.inProgress += 1;
+    else acc.pending += 1;
+    return acc;
+  }, { total: 0, done: 0, inProgress: 0, pending: 0 });
+
+  return {
+    ...intervention,
+    photos: photos.map(photo => toInterventionPhotoUrl(intervention.id, photo)),
+    kind: VALID_INTERVENTION_KINDS.includes(String(intervention.kind || '')) ? intervention.kind : 'STANDARD',
+    checkupTemplate,
+    checkupSummary: summary,
+    ...(includeCheckupItems ? { checkupItems } : {})
+  };
+}
+
+function inferCheckupItemStatus(checklistState, notes) {
+  if (Array.isArray(checklistState) && checklistState.length > 0 && checklistState.every(entry => entry.done)) {
+    return 'DONE';
+  }
+  if ((Array.isArray(checklistState) && checklistState.some(entry => entry.done)) || String(notes || '').trim()) {
+    return 'IN_PROGRESS';
+  }
+  return 'PENDING';
+}
+
+function sortCheckupEquipment(items = []) {
+  return [...items].sort((left, right) => {
+    const leftBuilding = left.room?.building || '';
+    const rightBuilding = right.room?.building || '';
+    const leftRoom = left.room?.name || '';
+    const rightRoom = right.room?.name || '';
+    const leftType = left.type || '';
+    const rightType = right.type || '';
+    const leftName = left.name || '';
+    const rightName = right.name || '';
+
+    return leftBuilding.localeCompare(rightBuilding, 'fr')
+      || leftRoom.localeCompare(rightRoom, 'fr')
+      || leftType.localeCompare(rightType, 'fr')
+      || leftName.localeCompare(rightName, 'fr');
+  });
+}
+
+function buildCheckupEquipmentWhere({ search, building, roomId, type }) {
+  const clauses = [{ status: { not: 'DECOMMISSIONED' } }];
+
+  if (building) clauses.push({ room: { building: containsFilter(building) } });
+  if (roomId) clauses.push({ roomId });
+  if (type) clauses.push({ type: containsFilter(type) });
+  if (search) {
+    clauses.push({
+      OR: [
+        { name: containsFilter(search) },
+        { type: containsFilter(search) },
+        { brand: containsFilter(search) },
+        { model: containsFilter(search) },
+        { room: { name: containsFilter(search) } },
+        { room: { number: containsFilter(search) } },
+        { room: { building: containsFilter(search) } }
+      ]
+    });
+  }
+
+  return clauses.length === 1 ? clauses[0] : { AND: clauses };
+}
+
+function buildInterventionAccessClauses(user, techId) {
+  if (user.role === 'TECH') {
+    if (techId && techId !== user.id) {
+      return [{ kind: 'CHECKUP' }, { techId: user.id }];
+    }
+    return [{ OR: [{ techId: user.id }, { kind: 'CHECKUP' }] }];
+  }
+
+  return techId ? [{ techId }] : [];
+}
+
+async function syncCheckupInterventionStatus(interventionId) {
+  const items = await prisma.interventionCheckupItem.findMany({
+    where: { interventionId },
+    select: { status: true }
+  });
+
+  let nextStatus = 'OPEN';
+  if (items.length > 0 && items.every(item => item.status === 'DONE')) {
+    nextStatus = 'RESOLVED';
+  } else if (items.some(item => item.status === 'DONE' || item.status === 'IN_PROGRESS')) {
+    nextStatus = 'IN_PROGRESS';
+  }
+
+  const updated = await prisma.intervention.update({
+    where: { id: interventionId },
+    data: {
+      status: nextStatus,
+      closedAt: nextStatus === 'RESOLVED' ? new Date() : null
+    },
+    include: interventionDetailInclude
+  });
+
+  return serializeIntervention(updated);
 }
 
 const validate = (req, res) => {
@@ -68,7 +236,7 @@ const validate = (req, res) => {
 const VALID_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
 const VALID_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'];
 
-const interventionInclude = {
+const interventionListInclude = {
   room: { select: { id: true, name: true, number: true, building: true } },
   equipment: { select: { id: true, name: true, type: true, brand: true, model: true } },
   tech: { select: { id: true, name: true, email: true } },
@@ -94,11 +262,43 @@ const interventionInclude = {
     orderBy: { createdAt: 'desc' },
     take: 1,
     select: { authorType: true }
+  },
+  checkupItems: {
+    select: { id: true, status: true, checklistState: true }
+  }
+};
+
+const interventionDetailInclude = {
+  ...interventionListInclude,
+  checkupItems: {
+    orderBy: [
+      { equipment: { room: { building: 'asc' } } },
+      { equipment: { room: { name: 'asc' } } },
+      { equipment: { type: 'asc' } },
+      { equipment: { name: 'asc' } }
+    ],
+    include: {
+      equipment: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          brand: true,
+          model: true,
+          status: true,
+          room: { select: { id: true, name: true, number: true, building: true } }
+        }
+      },
+      checkedBy: { select: { id: true, name: true, email: true } }
+    }
   }
 };
 
 function canAccessIntervention(user, intervention) {
-  return !!intervention && (user.role !== 'TECH' || intervention.techId === user.id);
+  if (!intervention) return false;
+  if (user.role !== 'TECH') return true;
+  if (intervention.kind === 'CHECKUP') return true;
+  return intervention.techId === user.id;
 }
 
 function toInterventionPhotoUrl(interventionId, rawPath) {
@@ -130,31 +330,34 @@ router.get('/', requireAuth, async (req, res, next) => {
     const skip = (page - 1) * limit;
     const { status, priority, roomId, equipmentId, techId, dateFrom, dateTo, search, source } = req.query;
 
-    const where = { mergedIntoId: null };
+    const clauses = [{ mergedIntoId: null }];
     if (status) {
       const statuses = (Array.isArray(status) ? status : [status]).filter(value => VALID_STATUSES.includes(value));
-      if (statuses.length === 1) where.status = statuses[0];
-      else if (statuses.length > 1) where.status = { in: statuses };
+      if (statuses.length === 1) clauses.push({ status: statuses[0] });
+      else if (statuses.length > 1) clauses.push({ status: { in: statuses } });
     }
-    if (priority && VALID_PRIORITIES.includes(priority)) where.priority = priority;
-    if (roomId) where.roomId = roomId;
-    if (equipmentId) where.equipmentId = equipmentId;
-    // TECH ne voit que ses propres interventions (sauf admin)
-    if (techId) where.techId = techId;
-    else if (req.user.role === 'TECH') where.techId = req.user.id;
+    if (priority && VALID_PRIORITIES.includes(priority)) clauses.push({ priority });
+    if (roomId) clauses.push({ roomId });
+    if (equipmentId) clauses.push({ equipmentId });
+    clauses.push(...buildInterventionAccessClauses(req.user, techId));
 
     if (dateFrom || dateTo) {
-      where.createdAt = {};
-      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
-      if (dateTo) where.createdAt.lte = new Date(dateTo);
+      const createdAt = {};
+      if (dateFrom) createdAt.gte = new Date(dateFrom);
+      if (dateTo) createdAt.lte = new Date(dateTo);
+      clauses.push({ createdAt });
     }
     if (search) {
-      where.OR = [
-        { title: containsFilter(search) },
-        { description: containsFilter(search) }
-      ];
+      clauses.push({
+        OR: [
+          { title: containsFilter(search) },
+          { description: containsFilter(search) }
+        ]
+      });
     }
-    if (source && ['INTERNAL', 'PUBLIC'].includes(source)) where.source = source;
+    if (source && ['INTERNAL', 'PUBLIC'].includes(source)) clauses.push({ source });
+
+    const where = clauses.length === 1 ? clauses[0] : { AND: clauses };
 
     const [interventions, total] = await Promise.all([
       prisma.intervention.findMany({
@@ -162,13 +365,13 @@ router.get('/', requireAuth, async (req, res, next) => {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: interventionInclude
+        include: interventionListInclude
       }),
       prisma.intervention.count({ where })
     ]);
 
     res.json({
-      data: interventions.map(parsePhotos),
+      data: interventions.map(item => serializeIntervention(item, { includeCheckupItems: false })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
     });
   } catch (err) { next(err); }
@@ -177,26 +380,221 @@ router.get('/', requireAuth, async (req, res, next) => {
 // GET /api/interventions/room/:roomId - Historique d'une salle
 router.get('/room/:roomId', requireAuth, async (req, res, next) => {
   try {
+    const where = {
+      AND: [
+        { roomId: req.params.roomId, mergedIntoId: null },
+        ...buildInterventionAccessClauses(req.user)
+      ]
+    };
     const interventions = await prisma.intervention.findMany({
-      where: { roomId: req.params.roomId, mergedIntoId: null },
+      where,
       orderBy: { createdAt: 'desc' },
       take: 50,
-      include: interventionInclude
+      include: interventionListInclude
     });
-    res.json(interventions.map(parsePhotos));
+    res.json(interventions.map(item => serializeIntervention(item, { includeCheckupItems: false })));
   } catch (err) { next(err); }
 });
 
 // GET /api/interventions/equipment/:equipId - Historique d'un équipement
 router.get('/equipment/:equipId', requireAuth, async (req, res, next) => {
   try {
+    const where = {
+      AND: [
+        { equipmentId: req.params.equipId, mergedIntoId: null },
+        ...buildInterventionAccessClauses(req.user)
+      ]
+    };
     const interventions = await prisma.intervention.findMany({
-      where: { equipmentId: req.params.equipId, mergedIntoId: null },
+      where,
       orderBy: { createdAt: 'desc' },
       take: 50,
-      include: interventionInclude
+      include: interventionListInclude
     });
-    res.json(interventions.map(parsePhotos));
+    res.json(interventions.map(item => serializeIntervention(item, { includeCheckupItems: false })));
+  } catch (err) { next(err); }
+});
+
+router.get('/checkup/catalog', requireAuth, async (req, res, next) => {
+  try {
+    const equipment = await prisma.equipment.findMany({
+      where: buildCheckupEquipmentWhere(req.query),
+      orderBy: [
+        { room: { building: 'asc' } },
+        { room: { name: 'asc' } },
+        { type: 'asc' },
+        { name: 'asc' }
+      ],
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        brand: true,
+        model: true,
+        status: true,
+        roomId: true,
+        room: { select: { id: true, name: true, number: true, building: true } }
+      }
+    });
+
+    res.json(sortCheckupEquipment(equipment));
+  } catch (err) { next(err); }
+});
+
+router.get('/:id/checkup/items', requireAuth, async (req, res, next) => {
+  try {
+    const intervention = await prisma.intervention.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        kind: true,
+        techId: true,
+        checkupTemplate: true
+      }
+    });
+
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+    if (intervention.kind !== 'CHECKUP') return res.status(400).json({ error: 'Cette intervention n est pas un checkup.' });
+    if (!canAccessIntervention(req.user, intervention)) return res.status(403).json({ error: 'Accès refusé' });
+
+    const template = parseChecklistTemplate(intervention.checkupTemplate || '[]');
+    const where = {
+      interventionId: intervention.id
+    };
+    const filters = [];
+
+    if (req.query.status && VALID_CHECKUP_ITEM_STATUSES.includes(req.query.status)) {
+      filters.push({ status: req.query.status });
+    }
+    if (req.query.building) filters.push({ equipment: { room: { building: containsFilter(req.query.building) } } });
+    if (req.query.roomId) filters.push({ equipment: { roomId: req.query.roomId } });
+    if (req.query.type) filters.push({ equipment: { type: containsFilter(req.query.type) } });
+    if (req.query.search) {
+      filters.push({
+        OR: [
+          { equipment: { name: containsFilter(req.query.search) } },
+          { equipment: { type: containsFilter(req.query.search) } },
+          { equipment: { brand: containsFilter(req.query.search) } },
+          { equipment: { model: containsFilter(req.query.search) } },
+          { equipment: { room: { name: containsFilter(req.query.search) } } },
+          { equipment: { room: { number: containsFilter(req.query.search) } } },
+          { equipment: { room: { building: containsFilter(req.query.search) } } }
+        ]
+      });
+    }
+    if (filters.length) where.AND = filters;
+
+    const items = await prisma.interventionCheckupItem.findMany({
+      where,
+      orderBy: [
+        { equipment: { room: { building: 'asc' } } },
+        { equipment: { room: { name: 'asc' } } },
+        { equipment: { type: 'asc' } },
+        { equipment: { name: 'asc' } }
+      ],
+      include: {
+        equipment: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            brand: true,
+            model: true,
+            status: true,
+            roomId: true,
+            room: { select: { id: true, name: true, number: true, building: true } }
+          }
+        },
+        checkedBy: { select: { id: true, name: true, email: true } }
+      }
+    });
+
+    res.json({
+      template,
+      items: items.map(item => serializeCheckupItem(item, template))
+    });
+  } catch (err) { next(err); }
+});
+
+router.patch('/:id/checkup/items/:itemId', requireAuth, async (req, res, next) => {
+  try {
+    const intervention = await prisma.intervention.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        kind: true,
+        techId: true,
+        checkupTemplate: true
+      }
+    });
+
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+    if (intervention.kind !== 'CHECKUP') return res.status(400).json({ error: 'Cette intervention n est pas un checkup.' });
+    if (!canAccessIntervention(req.user, intervention)) return res.status(403).json({ error: 'Accès refusé' });
+
+    const existingItem = await prisma.interventionCheckupItem.findUnique({
+      where: { id: req.params.itemId },
+      include: {
+        equipment: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            brand: true,
+            model: true,
+            status: true,
+            roomId: true,
+            room: { select: { id: true, name: true, number: true, building: true } }
+          }
+        },
+        checkedBy: { select: { id: true, name: true, email: true } }
+      }
+    });
+
+    if (!existingItem || existingItem.interventionId !== intervention.id) {
+      return res.status(404).json({ error: 'Équipement de checkup introuvable' });
+    }
+
+    const template = parseChecklistTemplate(intervention.checkupTemplate || '[]');
+    const notes = req.body.notes !== undefined ? String(req.body.notes || '').trim() || null : existingItem.notes;
+    const checklistState = req.body.checklistState !== undefined
+      ? normalizeCheckupState(req.body.checklistState, template)
+      : normalizeCheckupState(existingItem.checklistState, template);
+    const status = inferCheckupItemStatus(checklistState, notes);
+
+    const updated = await prisma.interventionCheckupItem.update({
+      where: { id: existingItem.id },
+      data: {
+        notes,
+        status,
+        checklistState: JSON.stringify(checklistState),
+        checkedAt: status === 'DONE' ? new Date() : null,
+        checkedById: status === 'DONE' ? req.user.id : null
+      },
+      include: {
+        equipment: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            brand: true,
+            model: true,
+            status: true,
+            roomId: true,
+            room: { select: { id: true, name: true, number: true, building: true } }
+          }
+        },
+        checkedBy: { select: { id: true, name: true, email: true } }
+      }
+    });
+
+    const parent = await syncCheckupInterventionStatus(intervention.id);
+
+    res.json({
+      item: serializeCheckupItem(updated, template),
+      intervention: parent,
+      summary: parent.checkupSummary
+    });
   } catch (err) { next(err); }
 });
 
@@ -205,14 +603,14 @@ router.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const intervention = await prisma.intervention.findUnique({
       where: { id: req.params.id },
-      include: interventionInclude
+      include: interventionDetailInclude
     });
     if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
     // TECH ne peut voir que ses propres interventions
     if (!canAccessIntervention(req.user, intervention)) {
       return res.status(403).json({ error: 'Accès refusé' });
     }
-    res.json(parsePhotos(intervention));
+    res.json(serializeIntervention(intervention));
   } catch (err) { next(err); }
 });
 
@@ -221,16 +619,14 @@ router.get('/:id/photos/:filename', requireAuth, async (req, res, next) => {
   try {
     const intervention = await prisma.intervention.findUnique({
       where: { id: req.params.id },
-      select: { id: true, techId: true, photos: true }
+      select: { id: true, techId: true, kind: true, photos: true }
     });
     if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
     if (!canAccessIntervention(req.user, intervention)) {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
-    const photos = Array.isArray(intervention.photos)
-      ? intervention.photos
-      : JSON.parse(intervention.photos || '[]');
+    const photos = parseStringArray(intervention.photos, []);
     const filename = path.basename(req.params.filename);
     const allowed = photos.some(photo => path.basename(String(photo)) === filename);
     if (!allowed) return res.status(404).json({ error: 'Photo introuvable' });
@@ -247,6 +643,7 @@ router.post('/',
   requireAuth,
   [
     body('title').trim().isLength({ min: 3, max: 300 }),
+    body('kind').optional().isIn(VALID_INTERVENTION_KINDS),
     body('status').optional().isIn(VALID_STATUSES),
     body('priority').optional().isIn(VALID_PRIORITIES),
     body('roomId').optional({ nullable: true }).isUUID(),
@@ -262,6 +659,7 @@ router.post('/',
         title,
         description,
         notes,
+        kind,
         status,
         priority,
         roomId,
@@ -273,9 +671,73 @@ router.post('/',
         scheduledEndAt,
         dueAt
       } = req.body;
+      const interventionKind = VALID_INTERVENTION_KINDS.includes(kind) ? kind : 'STANDARD';
 
       if (scheduledStartAt && scheduledEndAt && new Date(scheduledEndAt) < new Date(scheduledStartAt)) {
         return res.status(400).json({ error: "La fin d'intervention doit être postérieure au début." });
+      }
+
+      if (interventionKind === 'CHECKUP') {
+        const checkupTemplate = parseChecklistTemplate(req.body.checkupTemplate || []);
+        const requestedEquipmentIds = [...new Set(
+          (Array.isArray(req.body.checkupEquipmentIds) ? req.body.checkupEquipmentIds : [req.body.checkupEquipmentIds])
+            .filter(Boolean)
+            .map(value => String(value))
+        )];
+
+        if (!checkupTemplate.length) {
+          return res.status(400).json({ error: 'Définissez au moins une action à vérifier pour le checkup.' });
+        }
+        if (!requestedEquipmentIds.length) {
+          return res.status(400).json({ error: 'Sélectionnez au moins un équipement pour le checkup.' });
+        }
+
+        const equipmentList = sortCheckupEquipment(await prisma.equipment.findMany({
+          where: {
+            id: { in: requestedEquipmentIds },
+            status: { not: 'DECOMMISSIONED' }
+          },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            room: { select: { id: true, name: true, number: true, building: true } }
+          }
+        }));
+
+        if (equipmentList.length !== requestedEquipmentIds.length) {
+          return res.status(400).json({ error: 'Au moins un équipement sélectionné est introuvable ou indisponible.' });
+        }
+
+        const intervention = await prisma.intervention.create({
+          data: {
+            title,
+            description: description || null,
+            notes: notes || null,
+            kind: 'CHECKUP',
+            status: status || 'OPEN',
+            priority: priority || 'NORMAL',
+            techId: null,
+            scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt) : null,
+            scheduledEndAt: scheduledEndAt ? new Date(scheduledEndAt) : null,
+            dueAt: dueAt ? new Date(dueAt) : null,
+            checkupTemplate: JSON.stringify(checkupTemplate),
+            checkupItems: {
+              create: equipmentList.map((equipment, index) => ({
+                equipmentId: equipment.id,
+                orderIndex: index,
+                checklistState: JSON.stringify(checkupTemplate.map(task => ({
+                  id: task.id,
+                  label: task.label,
+                  done: false
+                })))
+              }))
+            }
+          },
+          include: interventionDetailInclude
+        });
+
+        return res.status(201).json(serializeIntervention(intervention));
       }
 
       // TECH peut seulement créer pour lui-même
@@ -286,6 +748,7 @@ router.post('/',
           title,
           description: description || null,
           notes: notes || null,
+          kind: 'STANDARD',
           status: status || 'OPEN',
           priority: priority || 'NORMAL',
           roomId: roomId || null,
@@ -297,7 +760,7 @@ router.post('/',
           suggestedRoom: (!roomId && suggestedRoom) ? String(suggestedRoom).trim() || null : null,
           suggestedEquipment: (!equipmentId && suggestedEquipment) ? String(suggestedEquipment).trim() || null : null
         },
-        include: interventionInclude
+        include: interventionDetailInclude
       });
 
       // Mettre l'équipement en REPAIR si intervention ouverte
@@ -308,7 +771,7 @@ router.post('/',
         });
       }
 
-      res.status(201).json(parsePhotos(intervention));
+      res.status(201).json(serializeIntervention(intervention));
     } catch (err) { next(err); }
   }
 );
@@ -382,7 +845,7 @@ router.patch('/:id',
       const intervention = await prisma.intervention.update({
         where: { id: req.params.id },
         data,
-        include: interventionInclude
+        include: interventionDetailInclude
       });
 
       // Remettre l'équipement en ACTIVE si intervention résolue/fermée
@@ -409,7 +872,7 @@ router.patch('/:id',
         }
       }
 
-      res.json(parsePhotos(intervention));
+      res.json(serializeIntervention(intervention));
     } catch (err) {
       if (err.code === 'P2025') return res.status(404).json({ error: 'Intervention introuvable' });
       next(err);
@@ -434,15 +897,15 @@ router.post('/:id/photos',
       }
 
       const photoPaths = req.files.map(f => `photos/${f.filename}`);
-      const current = Array.isArray(existing.photos) ? existing.photos : JSON.parse(existing.photos || '[]');
+      const current = parseStringArray(existing.photos, []);
       const merged = [...current, ...photoPaths];
       const intervention = await prisma.intervention.update({
         where: { id: req.params.id },
         data: { photos: JSON.stringify(merged) },
-        include: interventionInclude
+        include: interventionDetailInclude
       });
 
-      res.json({ message: `${req.files.length} photo(s) ajoutée(s)`, intervention: parsePhotos(intervention) });
+      res.json({ message: `${req.files.length} photo(s) ajoutée(s)`, intervention: serializeIntervention(intervention) });
     } catch (err) { next(err); }
   }
 );
@@ -473,8 +936,8 @@ router.post('/:id/merge',
       }
 
       const [source, target] = await Promise.all([
-        prisma.intervention.findUnique({ where: { id: sourceId }, include: interventionInclude }),
-        prisma.intervention.findUnique({ where: { id: targetInterventionId }, include: interventionInclude })
+        prisma.intervention.findUnique({ where: { id: sourceId }, include: interventionDetailInclude }),
+        prisma.intervention.findUnique({ where: { id: targetInterventionId }, include: interventionDetailInclude })
       ]);
 
       if (!source || !target) return res.status(404).json({ error: 'Intervention introuvable.' });
@@ -524,10 +987,10 @@ router.post('/:id/merge',
 
       const merged = await prisma.intervention.findUnique({
         where: { id: targetInterventionId },
-        include: interventionInclude
+        include: interventionDetailInclude
       });
 
-      res.json({ message: 'Demandes fusionnées', intervention: parsePhotos(merged) });
+      res.json({ message: 'Demandes fusionnées', intervention: serializeIntervention(merged) });
     } catch (err) { next(err); }
   }
 );
@@ -608,7 +1071,10 @@ router.post('/:id/messages', requireAuth, (req, res, next) => {
       return res.status(400).json({ error: 'Le message doit contenir 2000 caractères max.' });
     }
 
-    const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
+    const intervention = await prisma.intervention.findUnique({
+      where: { id: req.params.id },
+      include: { reporters: true }
+    });
     if (!intervention) {
       if (req.file) fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'Intervention introuvable' });
@@ -684,9 +1150,9 @@ router.post('/:id/approve-room', requireAuth, requireAdmin, async (req, res, nex
     const updated = await prisma.intervention.update({
       where: { id: req.params.id },
       data: { roomId: room.id, suggestedRoom: null },
-      include: interventionInclude
+      include: interventionDetailInclude
     });
-    res.json({ message: `Salle "${room.name}" créée et liée à l'intervention`, intervention: parsePhotos(updated) });
+    res.json({ message: `Salle "${room.name}" créée et liée à l'intervention`, intervention: serializeIntervention(updated) });
   } catch (err) { next(err); }
 });
 
@@ -701,9 +1167,9 @@ router.post('/:id/approve-equipment', requireAuth, requireAdmin, async (req, res
     const updated = await prisma.intervention.update({
       where: { id: req.params.id },
       data: { equipmentId: equipment.id, suggestedEquipment: null },
-      include: interventionInclude
+      include: interventionDetailInclude
     });
-    res.json({ message: `Équipement "${equipment.name}" créé et lié à l'intervention`, intervention: parsePhotos(updated) });
+    res.json({ message: `Équipement "${equipment.name}" créé et lié à l'intervention`, intervention: serializeIntervention(updated) });
   } catch (err) { next(err); }
 });
 

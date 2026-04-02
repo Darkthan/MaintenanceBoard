@@ -732,8 +732,19 @@ function updateBundlesToggle() {
 
 document.getElementById('resource-uses-bundles').addEventListener('change', updateBundlesToggle);
 
-// Recalculer le bouton lot si totalUnits ou bundleSize changent
-['resource-total-units', 'resource-bundle-size', 'resource-total-lots'].forEach(id => {
+// Mettre à jour totalLots quand totalUnits change en mode "sans lots"
+document.getElementById('resource-total-units').addEventListener('input', () => {
+  const usesBundles = document.getElementById('resource-uses-bundles').checked;
+  if (!usesBundles) {
+    // Garder la valeur actuelle de totalLots pour que bundleSize = totalUnits / totalLots
+    updateLotBtnRow();
+  } else {
+    updateLotBtnRow();
+  }
+});
+
+// Recalculer le bouton lot si bundleSize ou totalLots changent
+['resource-bundle-size', 'resource-total-lots'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => updateLotBtnRow());
 });
 
@@ -1500,10 +1511,16 @@ document.getElementById('resource-form').addEventListener('submit', async event 
   errorEl.classList.add('hidden');
 
   const usesBundles = document.getElementById('resource-uses-bundles').checked;
-  const totalUnits = parseInt(document.getElementById('resource-total-units').value, 10);
-  const bundleSize = usesBundles
-    ? parseInt(document.getElementById('resource-bundle-size').value, 10)
-    : Math.max(1, Math.floor(totalUnits / (parseInt(document.getElementById('resource-total-lots').value, 10) || 1)));
+  const totalUnits = parseInt(document.getElementById('resource-total-units').value, 10) || 1;
+
+  let bundleSize;
+  if (usesBundles) {
+    bundleSize = parseInt(document.getElementById('resource-bundle-size').value, 10) || 1;
+    bundleSize = Math.max(1, Math.min(totalUnits, bundleSize)); // Limiter entre 1 et totalUnits
+  } else {
+    const totalLots = parseInt(document.getElementById('resource-total-lots').value, 10) || 1;
+    bundleSize = Math.max(1, Math.floor(totalUnits / totalLots));
+  }
 
   const payload = {
     name: document.getElementById('resource-name').value.trim(),

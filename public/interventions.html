@@ -225,6 +225,40 @@
       <div id="detail-reporters-list" class="flex flex-wrap gap-2"></div>
     </div>
 
+    <div id="detail-checkup-section" class="hidden px-5 py-4 border-b border-slate-100 space-y-4">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Checkup salle par salle</p>
+          <p class="text-xs text-slate-400">Chaque équipement validé passe en grisé pour éviter les doublons entre techniciens.</p>
+        </div>
+        <div id="detail-checkup-summary" class="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <input id="detail-checkup-search" type="search" placeholder="Rechercher un équipement..."
+          class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <select id="detail-checkup-status"
+          class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Tous statuts</option>
+          <option value="PENDING">À faire</option>
+          <option value="IN_PROGRESS">En cours</option>
+          <option value="DONE">Contrôlé</option>
+        </select>
+        <select id="detail-checkup-building"
+          class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Tous bâtiments</option>
+        </select>
+        <select id="detail-checkup-room"
+          class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Toutes salles</option>
+        </select>
+        <select id="detail-checkup-type"
+          class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Tous types</option>
+        </select>
+      </div>
+      <div id="detail-checkup-list" class="space-y-3"></div>
+    </div>
+
     <div class="px-5 py-4 space-y-3">
       <div class="flex items-center justify-between gap-3">
         <div>
@@ -363,6 +397,97 @@
   </div>
 </div>
 
+<div id="checkup-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-screen overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
+      <div>
+        <h3 class="font-semibold text-slate-800">Nouveau checkup</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Préparez la tournée par bâtiment, salle et type d'équipement.</p>
+      </div>
+      <button id="close-checkup-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="checkup-form" class="p-6 space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Titre *</label>
+            <input id="checkup-title" type="text" required
+              class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <textarea id="checkup-description" rows="3"
+              class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="Ex: contrôle trimestriel des vidéoprojecteurs et postes fixes."></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Liste des vérifications *</label>
+            <textarea id="checkup-template" rows="7"
+              class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="- Vérifier l'alimentation&#10;- Tester l'affichage&#10;- Contrôler les câbles"></textarea>
+            <p class="mt-1 text-xs text-slate-400">Une ligne par action. Cette checklist sera répétée équipement par équipement.</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Début</label>
+              <input id="checkup-scheduled-start" type="datetime-local"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Fin</label>
+              <input id="checkup-scheduled-end" type="datetime-local"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Date due</label>
+              <input id="checkup-due-at" type="datetime-local"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+        </div>
+        <div class="space-y-4">
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-sm font-semibold text-slate-800">Sélection du matériel</p>
+                <p id="checkup-selection-count" class="text-xs text-slate-400">0 équipement sélectionné</p>
+              </div>
+              <button type="button" id="checkup-select-filtered-btn"
+                class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-100 transition">
+                Sélectionner les résultats filtrés
+              </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input id="checkup-search" type="search" placeholder="Rechercher..."
+                class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+              <select id="checkup-building"
+                class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Tous bâtiments</option>
+              </select>
+              <select id="checkup-room"
+                class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Toutes salles</option>
+              </select>
+              <select id="checkup-type"
+                class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Tous types</option>
+              </select>
+            </div>
+          </div>
+          <div id="checkup-equipment-list" class="max-h-[28rem] overflow-y-auto space-y-3 pr-1"></div>
+        </div>
+      </div>
+      <div id="checkup-form-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="cancel-checkup-modal" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" id="checkup-submit-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Créer le checkup</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="merge-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
@@ -416,13 +541,37 @@
   </div>
 </div>
 
-<button id="add-intervention-btn" type="button"
-  class="fixed right-6 bottom-6 z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
-  aria-label="Nouvelle intervention" title="Nouvelle intervention">
-  <svg class="mx-auto h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-  </svg>
-</button>
+<div class="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3">
+  <div id="add-intervention-menu" class="hidden w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/10">
+    <button id="add-standard-intervention-btn" type="button"
+      class="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-slate-50 transition">
+      <span class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      </span>
+      <span>
+        <span class="block text-sm font-semibold text-slate-800">Intervention standard</span>
+        <span class="block text-xs text-slate-400">Ticket classique lié à une salle ou un équipement.</span>
+      </span>
+    </button>
+    <button id="add-checkup-btn" type="button"
+      class="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-slate-50 transition">
+      <span class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      </span>
+      <span>
+        <span class="block text-sm font-semibold text-slate-800">Checkup</span>
+        <span class="block text-xs text-slate-400">Préparer une tournée de contrôle avec checklist partagée.</span>
+      </span>
+    </button>
+  </div>
+  <button id="add-intervention-btn" type="button"
+    class="h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+    aria-label="Nouvelle intervention" title="Nouvelle intervention">
+    <svg class="mx-auto h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+  </button>
+</div>
 
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
@@ -438,6 +587,18 @@ let currentPage = 1, currentSearch = '', currentStatuses = [], currentPriority =
 const pageParams = new URLSearchParams(window.location.search);
 const TOTAL_FILTER_SLOTS = 4;
 let filtersExpanded = false;
+let interventionRooms = [];
+let interventionEquipment = [];
+let checkupCatalog = [];
+let checkupCatalogRooms = [];
+let checkupCatalogBuildings = [];
+let checkupCatalogTypes = [];
+const selectedCheckupEquipmentIds = new Set();
+let detailCheckupRooms = [];
+let detailCheckupBuildings = [];
+let detailCheckupTypes = [];
+const checkupFilters = { search: '', building: '', roomId: '', type: '' };
+const detailCheckupFilters = { search: '', status: '', building: '', roomId: '', type: '' };
 
 function getSelectedValues(select) {
   return Array.from(select?.selectedOptions || []).map(option => option.value).filter(Boolean);
@@ -557,6 +718,94 @@ function formatScheduledRange(startAt, endAt) {
   return `${formatDateTimeLabel(startAt)} → ${formatDateTimeLabel(endAt)}`;
 }
 
+function debounce(fn, delay = 300) {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
+}
+
+function buildRoomLabel(room) {
+  if (!room) return 'Sans salle';
+  const parts = [room.name || 'Sans nom'];
+  if (room.number) parts.push(`(${room.number})`);
+  return parts.join(' ');
+}
+
+function buildEquipmentLabel(equipment) {
+  if (!equipment) return 'Équipement';
+  return equipment.type ? `${equipment.name} (${equipment.type})` : equipment.name;
+}
+
+function buildRoomGroupLabel(room) {
+  if (!room) return 'Sans salle';
+  const segments = [];
+  if (room.building) segments.push(room.building);
+  segments.push(buildRoomLabel(room));
+  return segments.join(' · ');
+}
+
+function normalizeChecklistTemplate(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map(line => line.replace(/^[-*]\s*/, '').trim())
+    .filter(Boolean)
+    .map((label, index) => ({ id: `task-${index + 1}`, label }));
+}
+
+function checkupStatusBadge(status) {
+  const config = {
+    PENDING: ['À faire', 'bg-amber-100 text-amber-700'],
+    IN_PROGRESS: ['En cours', 'bg-blue-100 text-blue-700'],
+    DONE: ['Contrôlé', 'bg-slate-200 text-slate-600']
+  };
+  const [label, classes] = config[status] || [status, 'bg-slate-100 text-slate-700'];
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${classes}">${label}</span>`;
+}
+
+function kindBadge(kind) {
+  if (kind === 'CHECKUP') {
+    return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Checkup</span>';
+  }
+  return '';
+}
+
+function formatCheckupSummary(summary) {
+  if (!summary?.total) return '0 / 0 contrôlé';
+  return `${summary.done} / ${summary.total} contrôlé${summary.done > 1 ? 's' : ''}`;
+}
+
+function updateCheckupSelectionCount() {
+  const count = selectedCheckupEquipmentIds.size;
+  const label = count > 1 ? 'équipements sélectionnés' : 'équipement sélectionné';
+  document.getElementById('checkup-selection-count').textContent = `${count} ${label}`;
+}
+
+function updateCheckupRoomOptions(targetId, rooms, selectedBuilding = '', selectedRoomId = '') {
+  const select = document.getElementById(targetId);
+  const filteredRooms = (rooms || []).filter(room => !selectedBuilding || room.building === selectedBuilding);
+  select.innerHTML = '<option value="">Toutes salles</option>' + filteredRooms.map(room => `
+    <option value="${room.id}" ${room.id === selectedRoomId ? 'selected' : ''}>
+      ${escapeHtml(buildRoomGroupLabel(room))}
+    </option>
+  `).join('');
+}
+
+function renderCheckupBuildingOptions(targetId, buildings, selectedValue = '') {
+  const select = document.getElementById(targetId);
+  select.innerHTML = '<option value="">Tous bâtiments</option>' + (buildings || []).map(building => `
+    <option value="${escapeHtml(building)}" ${building === selectedValue ? 'selected' : ''}>${escapeHtml(building)}</option>
+  `).join('');
+}
+
+function renderCheckupTypeOptions(targetId, types, selectedValue = '') {
+  const select = document.getElementById(targetId);
+  select.innerHTML = '<option value="">Tous types</option>' + (types || []).map(type => `
+    <option value="${escapeHtml(type)}" ${type === selectedValue ? 'selected' : ''}>${escapeHtml(type)}</option>
+  `).join('');
+}
+
 function orderStatusBadge(status) {
   const config = {
     PENDING: ['En attente', 'bg-amber-100 text-amber-700'],
@@ -598,6 +847,261 @@ if (pageParams.get('source')) {
   document.getElementById('source-filter').value = currentSource;
 }
 updateFilterSummary();
+
+function toggleAddInterventionMenu(forceOpen) {
+  const menu = document.getElementById('add-intervention-menu');
+  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !shouldOpen);
+}
+
+function closeStandardInterventionModal() {
+  document.getElementById('intervention-modal').classList.add('hidden');
+}
+
+function openStandardInterventionModal() {
+  document.getElementById('modal-title').textContent = 'Nouvelle intervention';
+  document.getElementById('intervention-id').value = '';
+  document.getElementById('intervention-form').reset();
+  document.getElementById('form-error').classList.add('hidden');
+  document.getElementById('resolution-field').classList.add('hidden');
+  document.getElementById('int-scheduled-start').value = '';
+  document.getElementById('int-scheduled-end').value = '';
+  document.getElementById('int-due-at').value = '';
+  document.getElementById('int-room-suggestion').classList.add('hidden');
+  document.getElementById('int-equip-suggestion').classList.add('hidden');
+  toggleAddInterventionMenu(false);
+  loadSelects(null, null);
+  document.getElementById('intervention-modal').classList.remove('hidden');
+}
+
+function closeCheckupModal() {
+  document.getElementById('checkup-modal').classList.add('hidden');
+}
+
+async function loadCheckupCatalogOptions() {
+  const [buildings, roomsRes, types] = await Promise.all([
+    api.get('/rooms/buildings'),
+    api.get('/rooms', { limit: 500 }),
+    api.get('/equipment/types')
+  ]);
+
+  checkupCatalogBuildings = (buildings || []).map(item => item.name).filter(Boolean);
+  checkupCatalogRooms = (roomsRes.data || []).map(room => ({
+    id: room.id,
+    name: room.name,
+    number: room.number,
+    building: room.building || ''
+  }));
+  checkupCatalogTypes = (types || []).filter(Boolean);
+
+  renderCheckupBuildingOptions('checkup-building', checkupCatalogBuildings, checkupFilters.building);
+  renderCheckupTypeOptions('checkup-type', checkupCatalogTypes, checkupFilters.type);
+  updateCheckupRoomOptions('checkup-room', checkupCatalogRooms, checkupFilters.building, checkupFilters.roomId);
+}
+
+async function refreshCheckupCatalog() {
+  const container = document.getElementById('checkup-equipment-list');
+  container.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">Chargement du matériel...</p>';
+
+  const params = {};
+  if (checkupFilters.search) params.search = checkupFilters.search;
+  if (checkupFilters.building) params.building = checkupFilters.building;
+  if (checkupFilters.roomId) params.roomId = checkupFilters.roomId;
+  if (checkupFilters.type) params.type = checkupFilters.type;
+
+  try {
+    checkupCatalog = await api.get('/interventions/checkup/catalog', params);
+    renderCheckupCatalog();
+  } catch (err) {
+    container.innerHTML = `<p class="text-sm text-red-500 text-center py-8">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderCheckupCatalog() {
+  const container = document.getElementById('checkup-equipment-list');
+  if (!checkupCatalog.length) {
+    container.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">Aucun équipement trouvé avec ces filtres.</div>';
+    updateCheckupSelectionCount();
+    return;
+  }
+
+  let currentGroup = '';
+  container.innerHTML = checkupCatalog.map(item => {
+    const group = buildRoomGroupLabel(item.room);
+    const shouldShowGroup = group !== currentGroup;
+    currentGroup = group;
+    const checked = selectedCheckupEquipmentIds.has(item.id);
+    return `
+      ${shouldShowGroup ? `<div class="sticky top-0 z-10 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/90">${escapeHtml(group)}</div>` : ''}
+      <label class="flex items-start gap-3 rounded-2xl border ${checked ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'} p-4 cursor-pointer transition hover:border-blue-200">
+        <input type="checkbox" data-checkup-equipment-id="${item.id}" ${checked ? 'checked' : ''}
+          class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="font-medium text-slate-800">${escapeHtml(buildEquipmentLabel(item))}</p>
+            ${item.brand ? `<span class="text-xs text-slate-400">${escapeHtml(item.brand)}</span>` : ''}
+            ${item.model ? `<span class="text-xs text-slate-400">· ${escapeHtml(item.model)}</span>` : ''}
+          </div>
+          <p class="mt-1 text-xs text-slate-500">${escapeHtml(group)}</p>
+        </div>
+      </label>
+    `;
+  }).join('');
+
+  container.querySelectorAll('[data-checkup-equipment-id]').forEach(input => {
+    input.addEventListener('change', event => {
+      const equipmentId = event.currentTarget.dataset.checkupEquipmentId;
+      if (event.currentTarget.checked) selectedCheckupEquipmentIds.add(equipmentId);
+      else selectedCheckupEquipmentIds.delete(equipmentId);
+      updateCheckupSelectionCount();
+    });
+  });
+
+  updateCheckupSelectionCount();
+}
+
+async function openCheckupModal() {
+  document.getElementById('checkup-form').reset();
+  document.getElementById('checkup-form-error').classList.add('hidden');
+  document.getElementById('checkup-equipment-list').innerHTML = '';
+  document.getElementById('checkup-scheduled-start').value = '';
+  document.getElementById('checkup-scheduled-end').value = '';
+  document.getElementById('checkup-due-at').value = '';
+  selectedCheckupEquipmentIds.clear();
+  checkupFilters.search = '';
+  checkupFilters.building = '';
+  checkupFilters.roomId = '';
+  checkupFilters.type = '';
+  toggleAddInterventionMenu(false);
+  updateCheckupSelectionCount();
+  await loadCheckupCatalogOptions();
+  await refreshCheckupCatalog();
+  document.getElementById('checkup-modal').classList.remove('hidden');
+}
+
+async function loadDetailCheckupOptions(intervention) {
+  const items = Array.isArray(intervention.checkupItems) ? intervention.checkupItems : [];
+  const roomMap = new Map();
+  const buildingSet = new Set();
+  const typeSet = new Set();
+
+  items.forEach(item => {
+    const room = item.equipment?.room;
+    if (room?.id && !roomMap.has(room.id)) {
+      roomMap.set(room.id, {
+        id: room.id,
+        name: room.name,
+        number: room.number,
+        building: room.building || ''
+      });
+    }
+    if (room?.building) buildingSet.add(room.building);
+    if (item.equipment?.type) typeSet.add(item.equipment.type);
+  });
+
+  detailCheckupRooms = [...roomMap.values()].sort((left, right) => buildRoomGroupLabel(left).localeCompare(buildRoomGroupLabel(right), 'fr'));
+  detailCheckupBuildings = [...buildingSet].sort((left, right) => left.localeCompare(right, 'fr'));
+  detailCheckupTypes = [...typeSet].sort((left, right) => left.localeCompare(right, 'fr'));
+
+  renderCheckupBuildingOptions('detail-checkup-building', detailCheckupBuildings, detailCheckupFilters.building);
+  renderCheckupTypeOptions('detail-checkup-type', detailCheckupTypes, detailCheckupFilters.type);
+  updateCheckupRoomOptions('detail-checkup-room', detailCheckupRooms, detailCheckupFilters.building, detailCheckupFilters.roomId);
+}
+
+async function loadDetailCheckupItems() {
+  if (!detailInterventionId) return;
+  const params = {};
+  if (detailCheckupFilters.search) params.search = detailCheckupFilters.search;
+  if (detailCheckupFilters.status) params.status = detailCheckupFilters.status;
+  if (detailCheckupFilters.building) params.building = detailCheckupFilters.building;
+  if (detailCheckupFilters.roomId) params.roomId = detailCheckupFilters.roomId;
+  if (detailCheckupFilters.type) params.type = detailCheckupFilters.type;
+
+  const container = document.getElementById('detail-checkup-list');
+  container.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">Chargement du checkup...</p>';
+
+  try {
+    const result = await api.get(`/interventions/${detailInterventionId}/checkup/items`, params);
+    renderDetailCheckupItems(result.items || [], result.template || []);
+  } catch (err) {
+    container.innerHTML = `<p class="text-sm text-red-500 text-center py-8">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderDetailCheckupItems(items, template) {
+  const container = document.getElementById('detail-checkup-list');
+  if (!items.length) {
+    container.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">Aucun équipement ne correspond à ces filtres.</div>';
+    return;
+  }
+
+  let currentGroup = '';
+  container.innerHTML = items.map(item => {
+    const group = buildRoomGroupLabel(item.equipment?.room);
+    const showGroup = group !== currentGroup;
+    currentGroup = group;
+    const disabled = item.status === 'DONE';
+    const checklist = (item.checklistState || template || []).map(task => `
+      <label class="flex items-start gap-2 text-sm ${disabled ? 'text-slate-400' : 'text-slate-700'}">
+        <input type="checkbox" data-checkup-task-id="${task.id}" ${task.done ? 'checked' : ''} ${disabled ? 'disabled' : ''}
+          class="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-60" />
+        <span>${escapeHtml(task.label)}</span>
+      </label>
+    `).join('');
+    return `
+      ${showGroup ? `<div class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/90">${escapeHtml(group)}</div>` : ''}
+      <div class="rounded-2xl border ${disabled ? 'border-slate-200 bg-slate-100' : 'border-slate-200 bg-white'} p-4" data-checkup-item-card="${item.id}">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <h4 class="font-semibold ${disabled ? 'text-slate-500' : 'text-slate-800'}">${escapeHtml(buildEquipmentLabel(item.equipment))}</h4>
+              ${checkupStatusBadge(item.status)}
+            </div>
+            <p class="mt-1 text-xs ${disabled ? 'text-slate-400' : 'text-slate-500'}">${escapeHtml(group)}</p>
+            ${item.checkedBy?.name ? `<p class="mt-1 text-xs text-slate-400">Contrôlé par ${escapeHtml(item.checkedBy.name)}${item.checkedAt ? ` le ${escapeHtml(formatDateTimeLabel(item.checkedAt))}` : ''}</p>` : ''}
+          </div>
+          ${disabled ? '<span class="text-xs font-medium text-slate-400">Verrouillé pour éviter un double passage</span>' : `
+            <button type="button" data-checkup-save="${item.id}"
+              class="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">
+              Enregistrer
+            </button>
+          `}
+        </div>
+        <div class="mt-4 space-y-2">${checklist}</div>
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-slate-500 mb-1">Notes équipement</label>
+          <textarea data-checkup-notes="${item.id}" rows="2" ${disabled ? 'disabled' : ''}
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:bg-slate-200 disabled:text-slate-500"
+            placeholder="Observation, pièce à remplacer, anomalie constatée...">${escapeHtml(item.notes || '')}</textarea>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('[data-checkup-save]').forEach(button => {
+    button.addEventListener('click', async event => {
+      const itemId = event.currentTarget.dataset.checkupSave;
+      const card = container.querySelector(`[data-checkup-item-card="${itemId}"]`);
+      const checklistState = Array.from(card.querySelectorAll('[data-checkup-task-id]')).map(input => ({
+        id: input.dataset.checkupTaskId,
+        done: input.checked
+      }));
+      const notes = card.querySelector(`[data-checkup-notes="${itemId}"]`)?.value || '';
+      event.currentTarget.disabled = true;
+      try {
+        const result = await api.patch(`/interventions/${detailInterventionId}/checkup/items/${itemId}`, { checklistState, notes });
+        detailInterventionData = result.intervention;
+        document.getElementById('detail-checkup-summary').textContent = formatCheckupSummary(result.summary);
+        showToast('Équipement mis à jour');
+        await loadInterventions();
+        await sharedDetailController.open(detailInterventionId);
+      } catch (err) {
+        showToast(err.message, 'error');
+        event.currentTarget.disabled = false;
+      }
+    });
+  });
+}
 
 async function loadInterventions() {
   const container = document.getElementById('interventions-container');
@@ -644,12 +1148,14 @@ async function loadInterventions() {
                 class="font-semibold text-slate-800 hover:text-blue-600 transition text-left underline-offset-2 hover:underline">
                 ${i.title}
               </a>
+              ${kindBadge(i.kind)}
               ${statusBadge(i.status)}
               ${i.priority !== 'NORMAL' ? priorityBadge(i.priority) : ''}
               ${needsAttention ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Réponse attendue</span>` : ''}
             </div>
             ${i.description ? `<p class="text-sm text-slate-600 mt-1 line-clamp-2">${escapeHtml(typeof richTextToPlainText === 'function' ? richTextToPlainText(i.description) : i.description)}</p>` : ''}
             ${i.notes ? `<p class="text-xs text-slate-500 mt-2">📝 Notes enregistrées</p>` : ''}
+            ${i.kind === 'CHECKUP' ? `<p class="text-xs text-emerald-700 mt-2 font-medium">Checkup partagé: ${escapeHtml(formatCheckupSummary(i.checkupSummary))}</p>` : ''}
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
               ${i.room ? `<span>📍 ${i.room.name}${i.room.number ? ` (${i.room.number})` : ''}</span>` : ''}
               ${i.equipment ? `<span>🖥️ ${i.equipment.name}</span>` : ''}
@@ -684,6 +1190,7 @@ async function loadInterventions() {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             </button>
             <button onclick="event.stopPropagation(); editIntervention(${JSON.stringify(i).replace(/"/g, '&quot;')})"
+              ${i.kind === 'CHECKUP' ? 'disabled' : ''}
               class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
@@ -1043,6 +1550,54 @@ document.getElementById('priority-filter').addEventListener('change', e => { cur
 document.getElementById('source-filter').addEventListener('change', e => { currentSource = e.target.value; currentPage = 1; loadInterventions(); });
 document.getElementById('toggle-filters-btn').addEventListener('click', () => setFiltersExpanded(!filtersExpanded));
 document.getElementById('clear-filters-btn').addEventListener('click', resetFilters);
+document.getElementById('checkup-search').addEventListener('input', debounce(event => {
+  checkupFilters.search = event.target.value.trim();
+  refreshCheckupCatalog();
+}, 250));
+document.getElementById('checkup-building').addEventListener('change', event => {
+  checkupFilters.building = event.target.value;
+  if (!checkupCatalogRooms.some(room => room.id === checkupFilters.roomId && (!checkupFilters.building || room.building === checkupFilters.building))) {
+    checkupFilters.roomId = '';
+  }
+  updateCheckupRoomOptions('checkup-room', checkupCatalogRooms, checkupFilters.building, checkupFilters.roomId);
+  refreshCheckupCatalog();
+});
+document.getElementById('checkup-room').addEventListener('change', event => {
+  checkupFilters.roomId = event.target.value;
+  refreshCheckupCatalog();
+});
+document.getElementById('checkup-type').addEventListener('change', event => {
+  checkupFilters.type = event.target.value;
+  refreshCheckupCatalog();
+});
+document.getElementById('checkup-select-filtered-btn').addEventListener('click', () => {
+  checkupCatalog.forEach(item => selectedCheckupEquipmentIds.add(item.id));
+  renderCheckupCatalog();
+});
+document.getElementById('detail-checkup-search').addEventListener('input', debounce(event => {
+  detailCheckupFilters.search = event.target.value.trim();
+  loadDetailCheckupItems();
+}, 250));
+document.getElementById('detail-checkup-status').addEventListener('change', event => {
+  detailCheckupFilters.status = event.target.value;
+  loadDetailCheckupItems();
+});
+document.getElementById('detail-checkup-building').addEventListener('change', event => {
+  detailCheckupFilters.building = event.target.value;
+  if (!detailCheckupRooms.some(room => room.id === detailCheckupFilters.roomId && (!detailCheckupFilters.building || room.building === detailCheckupFilters.building))) {
+    detailCheckupFilters.roomId = '';
+  }
+  updateCheckupRoomOptions('detail-checkup-room', detailCheckupRooms, detailCheckupFilters.building, detailCheckupFilters.roomId);
+  loadDetailCheckupItems();
+});
+document.getElementById('detail-checkup-room').addEventListener('change', event => {
+  detailCheckupFilters.roomId = event.target.value;
+  loadDetailCheckupItems();
+});
+document.getElementById('detail-checkup-type').addEventListener('change', event => {
+  detailCheckupFilters.type = event.target.value;
+  loadDetailCheckupItems();
+});
 
 async function approveSuggestion(type, id) {
   try {
@@ -1073,13 +1628,15 @@ async function loadSelects(roomId, equipId, suggestedRoom, suggestedEquipment) {
       api.get('/rooms', { limit: 200 }),
       api.get('/equipment', { limit: 500 })
     ]);
+    interventionRooms = rooms.data || [];
+    interventionEquipment = equips.data || [];
     const suggestRoomOpt = '<option value="__suggest__">+ Suggérer une nouvelle salle...</option>';
     const suggestEquipOpt = '<option value="__suggest__">+ Suggérer un nouvel équipement...</option>';
     document.getElementById('int-room').innerHTML = '<option value="">-- Aucune --</option>' +
-      rooms.data.map(r => `<option value="${r.id}" ${r.id === roomId ? 'selected' : ''}>${r.name}${r.number ? ` (${r.number})` : ''}</option>`).join('') +
+      interventionRooms.map(r => `<option value="${r.id}" ${r.id === roomId ? 'selected' : ''}>${r.name}${r.number ? ` (${r.number})` : ''}</option>`).join('') +
       suggestRoomOpt;
     document.getElementById('int-equip').innerHTML = '<option value="">-- Aucun --</option>' +
-      equips.data.map(e => `<option value="${e.id}" ${e.id === equipId ? 'selected' : ''}>${e.name} (${e.type})</option>`).join('') +
+      interventionEquipment.map(e => `<option value="${e.id}" ${e.id === equipId ? 'selected' : ''}>${e.name} (${e.type})</option>`).join('') +
       suggestEquipOpt;
 
     // Restaurer une suggestion existante (mode édition)
@@ -1097,22 +1654,26 @@ async function loadSelects(roomId, equipId, suggestedRoom, suggestedEquipment) {
 }
 
 const modal = document.getElementById('intervention-modal');
-document.getElementById('add-intervention-btn').addEventListener('click', () => {
-  document.getElementById('modal-title').textContent = 'Nouvelle intervention';
-  document.getElementById('intervention-id').value = '';
-  document.getElementById('intervention-form').reset();
-  document.getElementById('form-error').classList.add('hidden');
-  document.getElementById('resolution-field').classList.add('hidden');
-  document.getElementById('int-scheduled-start').value = '';
-  document.getElementById('int-scheduled-end').value = '';
-  document.getElementById('int-due-at').value = '';
-  document.getElementById('int-room-suggestion').classList.add('hidden');
-  document.getElementById('int-equip-suggestion').classList.add('hidden');
-  loadSelects(null, null);
-  modal.classList.remove('hidden');
+const checkupModal = document.getElementById('checkup-modal');
+document.getElementById('add-intervention-btn').addEventListener('click', event => {
+  event.stopPropagation();
+  toggleAddInterventionMenu();
 });
-document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
-document.getElementById('cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
+document.addEventListener('click', event => {
+  const menu = document.getElementById('add-intervention-menu');
+  const fab = document.getElementById('add-intervention-btn');
+  if (!menu.contains(event.target) && !fab.contains(event.target)) {
+    toggleAddInterventionMenu(false);
+  }
+});
+document.getElementById('add-standard-intervention-btn').addEventListener('click', openStandardInterventionModal);
+document.getElementById('add-checkup-btn').addEventListener('click', () => {
+  openCheckupModal().catch(err => showToast(err.message, 'error'));
+});
+document.getElementById('close-modal').addEventListener('click', closeStandardInterventionModal);
+document.getElementById('cancel-modal').addEventListener('click', closeStandardInterventionModal);
+document.getElementById('close-checkup-modal').addEventListener('click', closeCheckupModal);
+document.getElementById('cancel-checkup-modal').addEventListener('click', closeCheckupModal);
 
 document.getElementById('int-status').addEventListener('change', e => {
   const rf = document.getElementById('resolution-field');
@@ -1121,6 +1682,10 @@ document.getElementById('int-status').addEventListener('change', e => {
 });
 
 function editIntervention(i) {
+  if (i.kind === 'CHECKUP') {
+    showToast('Le checkup se pilote depuis son panneau de détail.', 'warning');
+    return;
+  }
   document.getElementById('modal-title').textContent = 'Modifier l\'intervention';
   document.getElementById('intervention-id').value = i.id;
   document.getElementById('int-title').value = i.title;
@@ -1172,13 +1737,44 @@ document.getElementById('intervention-form').addEventListener('submit', async e 
       await api.post('/interventions', data);
       showToast('Intervention créée');
     }
-    modal.classList.add('hidden');
+    closeStandardInterventionModal();
     loadInterventions();
   } catch (err) {
     const errEl = document.getElementById('form-error');
     errEl.textContent = err.message;
     errEl.classList.remove('hidden');
   } finally { submitBtn.disabled = false; }
+});
+
+document.getElementById('checkup-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const submitBtn = document.getElementById('checkup-submit-btn');
+  const errEl = document.getElementById('checkup-form-error');
+  const template = normalizeChecklistTemplate(document.getElementById('checkup-template').value);
+  const payload = {
+    kind: 'CHECKUP',
+    title: document.getElementById('checkup-title').value.trim(),
+    description: document.getElementById('checkup-description').value.trim() || null,
+    checkupTemplate: template,
+    checkupEquipmentIds: [...selectedCheckupEquipmentIds],
+    scheduledStartAt: document.getElementById('checkup-scheduled-start').value || null,
+    scheduledEndAt: document.getElementById('checkup-scheduled-end').value || null,
+    dueAt: document.getElementById('checkup-due-at').value || null
+  };
+
+  submitBtn.disabled = true;
+  errEl.classList.add('hidden');
+  try {
+    await api.post('/interventions', payload);
+    showToast('Checkup créé');
+    closeCheckupModal();
+    await loadInterventions();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+  }
 });
 
 async function deleteIntervention(id) {
@@ -1449,11 +2045,29 @@ const sharedDetailController = createInterventionDetailController({
   },
   toast: showToast,
   onRefresh: async () => { await loadInterventions(); },
-  onOpenSuccess: intervention => {
+  onOpenSuccess: async intervention => {
     detailInterventionId = intervention.id;
     detailInterventionData = intervention;
     const panel = document.getElementById('detail-panel');
     panel.classList.remove('hidden');
+    const checkupSection = document.getElementById('detail-checkup-section');
+    if (intervention.kind === 'CHECKUP') {
+      detailCheckupFilters.search = '';
+      detailCheckupFilters.status = '';
+      detailCheckupFilters.building = '';
+      detailCheckupFilters.roomId = '';
+      detailCheckupFilters.type = '';
+      document.getElementById('detail-checkup-search').value = '';
+      document.getElementById('detail-checkup-status').value = '';
+      document.getElementById('detail-checkup-summary').textContent = formatCheckupSummary(intervention.checkupSummary);
+      checkupSection.classList.remove('hidden');
+      await loadDetailCheckupOptions(intervention);
+      await loadDetailCheckupItems();
+    } else {
+      checkupSection.classList.add('hidden');
+      document.getElementById('detail-checkup-list').innerHTML = '';
+      document.getElementById('detail-checkup-summary').textContent = '';
+    }
   },
   onOpenError: error => showToast(error.message, 'error'),
   onClose: () => {
@@ -1461,6 +2075,8 @@ const sharedDetailController = createInterventionDetailController({
     panel.classList.add('hidden');
     detailInterventionId = null;
     detailInterventionData = null;
+    document.getElementById('detail-checkup-section').classList.add('hidden');
+    document.getElementById('detail-checkup-list').innerHTML = '';
   },
   afterMessagesLoaded: async () => { await loadInterventions(); },
   afterMerge: async targetId => {
@@ -1498,7 +2114,7 @@ document.getElementById('detail-message-input').addEventListener('keydown', e =>
 requireLogin().then(() => {
   loadInterventions();
   if (pageParams.get('action') === 'create') {
-    setTimeout(() => document.getElementById('add-intervention-btn')?.click(), 50);
+    setTimeout(() => openStandardInterventionModal(), 50);
   }
 });
 if (pageParams.get('focus')) {
