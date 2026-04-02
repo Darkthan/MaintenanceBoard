@@ -524,9 +524,19 @@ loansRouter.post('/resources',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const totalUnits = Number(req.body.totalUnits);
-      const bundleSize = Math.min(totalUnits, Number(req.body.bundleSize) || 1);
+      const totalUnits = Number(req.body.totalUnits) || 1;
       const usesBundles = req.body.usesBundles !== false;
+
+      // Calculer bundleSize selon le mode
+      let bundleSize;
+      if (usesBundles) {
+        // Mode avec lots : utiliser bundleSize fourni ou par défaut
+        bundleSize = Math.max(1, Math.min(totalUnits, Number(req.body.bundleSize) || 1));
+      } else {
+        // Mode sans lots : bundleSize = totalUnits (1 seul lot)
+        bundleSize = totalUnits;
+      }
+
       const equipmentList = normalizeEquipmentList(req.body.equipments || req.body.equipmentIds);
 
       const resource = await prisma.loanResource.create({
@@ -619,14 +629,33 @@ loansRouter.patch('/resources/:id',
       if (!existing) return res.status(404).json({ error: 'Ressource introuvable' });
 
       const totalUnits = req.body.totalUnits !== undefined ? Number(req.body.totalUnits) : existing.totalUnits;
-      const bundleSize = req.body.bundleSize !== undefined ? Math.min(totalUnits, Number(req.body.bundleSize) || 1) : existing.bundleSize;
+      const usesBundles = req.body.usesBundles !== undefined ? !!req.body.usesBundles : (existing.usesBundles ?? true);
+
+      // Calculer bundleSize intelligemment
+      let bundleSize;
+      if (req.body.bundleSize !== undefined) {
+        // Bundlesize fourni explicitement
+        bundleSize = Math.max(1, Math.min(totalUnits, Number(req.body.bundleSize) || 1));
+      } else if (req.body.totalUnits !== undefined || req.body.usesBundles !== undefined) {
+        // totalUnits ou usesBundles ont changé : recalculer bundleSize
+        if (usesBundles) {
+          // Mode avec lots : garder la proportion existante si possible
+          bundleSize = existing.bundleSize ? Math.max(1, Math.min(totalUnits, existing.bundleSize)) : 1;
+        } else {
+          // Mode sans lots : bundleSize = totalUnits pour avoir 1 seul lot
+          bundleSize = totalUnits;
+        }
+      } else {
+        // Rien n'a changé sur bundleSize : garder l'existant
+        bundleSize = existing.bundleSize;
+      }
 
       const updateData = {
         ...(req.body.name !== undefined ? { name: req.body.name } : {}),
         ...(req.body.category !== undefined ? { category: req.body.category || null } : {}),
         ...(req.body.description !== undefined ? { description: req.body.description || null } : {}),
         ...(req.body.totalUnits !== undefined ? { totalUnits } : {}),
-        ...(req.body.bundleSize !== undefined || req.body.totalUnits !== undefined ? { bundleSize } : {}),
+        ...(req.body.bundleSize !== undefined || req.body.totalUnits !== undefined || req.body.usesBundles !== undefined ? { bundleSize } : {}),
         ...(req.body.location !== undefined ? { location: req.body.location || null } : {}),
         ...(req.body.instructions !== undefined ? { instructions: req.body.instructions || null } : {}),
         ...(req.body.color !== undefined ? { color: req.body.color || null } : {}),
