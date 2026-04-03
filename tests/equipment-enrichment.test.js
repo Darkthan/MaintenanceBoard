@@ -65,7 +65,7 @@ const mockEquip = {
   warrantyEnd: null,
   purchasePrice: 1200.00,
   supplierId: 'sup-1',
-  supplier: { id: 'sup-1', name: 'Dell France' },
+  supplierRef: { id: 'sup-1', name: 'Dell France' },
   attachments: [],
   interventions: [],
   room: null,
@@ -95,18 +95,40 @@ beforeEach(() => {
 // ─── GET /api/equipment/:id — inclut supplier et attachments ─────────────────
 describe('GET /api/equipment/:id (enriched)', () => {
   it('retourne 200 avec supplier et attachments', async () => {
-    prisma.equipment.findUnique.mockResolvedValue(mockEquip);
+    prisma.equipment.findUnique.mockResolvedValue({
+      ...mockEquip,
+      loanResources: [
+        {
+          lotNumber: 2,
+          loanResource: { id: 'loan-1', name: 'Valise PC', isActive: true }
+        }
+      ]
+    });
     const res = await request(app).get('/api/equipment/equip-1');
     expect(res.status).toBe(200);
     expect(res.body.supplier).toBeDefined();
     expect(res.body.supplier.name).toBe('Dell France');
-    expect(Array.isArray(res.body.attachments)).toBe(true);
+    expect(res.body.loanResources).toEqual([
+      { id: 'loan-1', name: 'Valise PC', isActive: true, lotNumber: 2 }
+    ]);
   });
 
   it('retourne 404 si équipement introuvable', async () => {
     prisma.equipment.findUnique.mockResolvedValue(null);
     const res = await request(app).get('/api/equipment/notfound');
     expect(res.status).toBe(404);
+  });
+
+  it('retourne quand meme 200 si la table de liaison de pret n existe pas', async () => {
+    prisma.equipment.findUnique
+      .mockRejectedValueOnce({ code: 'P2021' })
+      .mockResolvedValueOnce(mockEquip);
+
+    const res = await request(app).get('/api/equipment/equip-1');
+
+    expect(res.status).toBe(200);
+    expect(prisma.equipment.findUnique).toHaveBeenCalledTimes(2);
+    expect(res.body.loanResources).toEqual([]);
   });
 });
 

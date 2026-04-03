@@ -44,6 +44,28 @@ function serializeEquipmentAttachment(attachment) {
   };
 }
 
+function serializeEquipmentDetail(equipment) {
+  if (!equipment) return equipment;
+
+  const loanResources = Array.isArray(equipment.loanResources)
+    ? equipment.loanResources.map(link => {
+        const resource = link.loanResource || link;
+        return resource ? {
+          id: resource.id,
+          name: resource.name,
+          isActive: resource.isActive,
+          lotNumber: link.lotNumber ?? 1
+        } : null;
+      }).filter(Boolean)
+    : [];
+
+  return {
+    ...equipment,
+    supplier: equipment.supplier || equipment.supplierRef || null,
+    loanResources
+  };
+}
+
 // GET /api/equipment - Liste avec filtres
 router.get('/', requireAuth, async (req, res, next) => {
   try {
@@ -151,21 +173,45 @@ router.get('/print-list', requireAuth, async (req, res, next) => {
 // GET /api/equipment/:id - Détail avec interventions
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
-    const equip = await prisma.equipment.findUnique({
-      where: { id: req.params.id },
-      include: {
-        room: { select: { id: true, name: true, number: true, building: true } },
-        supplierRef: { select: { id: true, name: true } },
-        interventions: {
-          orderBy: { createdAt: 'desc' },
-          include: { tech: { select: { id: true, name: true } } }
-        },
-        loanResources: { select: { id: true, name: true, isActive: true } },
-        _count: { select: { interventions: true } }
-      }
-    });
+    let equip;
+    try {
+      equip = await prisma.equipment.findUnique({
+        where: { id: req.params.id },
+        include: {
+          room: { select: { id: true, name: true, number: true, building: true } },
+          supplierRef: { select: { id: true, name: true } },
+          interventions: {
+            orderBy: { createdAt: 'desc' },
+            include: { tech: { select: { id: true, name: true } } }
+          },
+          loanResources: {
+            select: {
+              lotNumber: true,
+              loanResource: {
+                select: { id: true, name: true, isActive: true }
+              }
+            }
+          },
+          _count: { select: { interventions: true } }
+        }
+      });
+    } catch (err) {
+      if (!tableMissing(err)) throw err;
+      equip = await prisma.equipment.findUnique({
+        where: { id: req.params.id },
+        include: {
+          room: { select: { id: true, name: true, number: true, building: true } },
+          supplierRef: { select: { id: true, name: true } },
+          interventions: {
+            orderBy: { createdAt: 'desc' },
+            include: { tech: { select: { id: true, name: true } } }
+          },
+          _count: { select: { interventions: true } }
+        }
+      });
+    }
     if (!equip) return res.status(404).json({ error: 'Équipement introuvable' });
-    res.json(equip);
+    res.json(serializeEquipmentDetail(equip));
   } catch (err) { next(err); }
 });
 
