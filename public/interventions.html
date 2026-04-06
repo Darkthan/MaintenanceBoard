@@ -259,6 +259,25 @@
       <div id="detail-checkup-list" class="space-y-3"></div>
     </div>
 
+    <div class="px-5 py-4 border-b border-slate-100 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Tâches à faire</p>
+          <p class="text-xs text-slate-400">Listez les actions à effectuer pour cette intervention.</p>
+        </div>
+        <span id="detail-todos-progress" class="text-xs text-slate-400"></span>
+      </div>
+      <div id="detail-todos-list" class="space-y-1.5"></div>
+      <form id="detail-todo-form" onsubmit="addInterventionTodo(event)" class="flex gap-2">
+        <input id="detail-todo-input" type="text" maxlength="500" placeholder="Nouvelle tâche..."
+          class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button type="submit"
+          class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition flex-shrink-0">
+          Ajouter
+        </button>
+      </form>
+    </div>
+
     <div class="px-5 py-4 space-y-3">
       <div class="flex items-center justify-between gap-3">
         <div>
@@ -2050,6 +2069,7 @@ const sharedDetailController = createInterventionDetailController({
     detailInterventionData = intervention;
     const panel = document.getElementById('detail-panel');
     panel.classList.remove('hidden');
+    loadInterventionTodos(intervention.id);
     const checkupSection = document.getElementById('detail-checkup-section');
     if (intervention.kind === 'CHECKUP') {
       detailCheckupFilters.search = '';
@@ -2110,6 +2130,84 @@ document.getElementById('detail-message-input').addEventListener('keydown', e =>
     sendTechMessage();
   }
 });
+
+// ─── Todos ────────────────────────────────────────────────────────────────────
+
+async function loadInterventionTodos(interventionId) {
+  const list = document.getElementById('detail-todos-list');
+  const progress = document.getElementById('detail-todos-progress');
+  try {
+    const todos = await api.get(`/interventions/${interventionId}/todos`);
+    renderInterventionTodos(todos);
+  } catch {
+    list.innerHTML = '<p class="text-xs text-slate-400">Impossible de charger les tâches.</p>';
+    progress.textContent = '';
+  }
+}
+
+function renderInterventionTodos(todos) {
+  const list = document.getElementById('detail-todos-list');
+  const progress = document.getElementById('detail-todos-progress');
+  const done = todos.filter(t => t.done).length;
+  progress.textContent = todos.length ? `${done}/${todos.length}` : '';
+
+  if (!todos.length) {
+    list.innerHTML = '<p class="text-xs text-slate-400 italic">Aucune tâche pour le moment.</p>';
+    return;
+  }
+
+  list.innerHTML = todos.map(todo => `
+    <div class="flex items-center gap-2 group px-2 py-1.5 rounded-lg hover:bg-slate-50 transition">
+      <input type="checkbox" ${todo.done ? 'checked' : ''}
+        onchange="toggleInterventionTodo('${todo.id}', this.checked)"
+        class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer flex-shrink-0" />
+      <span class="flex-1 text-sm ${todo.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(todo.title)}</span>
+      <button onclick="deleteInterventionTodo('${todo.id}')"
+        class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition flex-shrink-0"
+        title="Supprimer">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+  `).join('');
+}
+
+async function addInterventionTodo(event) {
+  event.preventDefault();
+  if (!detailInterventionId) return;
+  const input = document.getElementById('detail-todo-input');
+  const title = input.value.trim();
+  if (!title) return;
+  try {
+    await api.post(`/interventions/${detailInterventionId}/todos`, { title });
+    input.value = '';
+    await loadInterventionTodos(detailInterventionId);
+  } catch (err) {
+    showToast(err.message || 'Impossible d\'ajouter la tâche', 'error');
+  }
+}
+
+async function toggleInterventionTodo(todoId, done) {
+  if (!detailInterventionId) return;
+  try {
+    await api.patch(`/interventions/${detailInterventionId}/todos/${todoId}`, { done });
+    await loadInterventionTodos(detailInterventionId);
+  } catch (err) {
+    showToast(err.message || 'Impossible de mettre à jour la tâche', 'error');
+    await loadInterventionTodos(detailInterventionId);
+  }
+}
+
+async function deleteInterventionTodo(todoId) {
+  if (!detailInterventionId) return;
+  try {
+    await api.delete(`/interventions/${detailInterventionId}/todos/${todoId}`);
+    await loadInterventionTodos(detailInterventionId);
+  } catch (err) {
+    showToast(err.message || 'Impossible de supprimer la tâche', 'error');
+  }
+}
 
 requireLogin().then(() => {
   loadInterventions();
