@@ -1175,6 +1175,35 @@ router.post('/:id/approve-equipment', requireAuth, requireAdmin, async (req, res
 
 // ─── Todos ────────────────────────────────────────────────────────────────────
 
+// GET /api/interventions/todos — vue globale (doit être avant /:id/todos)
+router.get('/todos', requireAuth, async (req, res, next) => {
+  try {
+    const where = {};
+    if (req.query.done === 'true') where.done = true;
+    if (req.query.done === 'false') where.done = false;
+    if (req.query.overdue === 'true') {
+      where.done = false;
+      where.dueAt = { not: null, lt: new Date() };
+    }
+
+    const todos = await prisma.interventionTodo.findMany({
+      where,
+      orderBy: [{ done: 'asc' }, { dueAt: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        intervention: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            room: { select: { name: true } }
+          }
+        }
+      }
+    });
+    res.json(todos);
+  } catch (err) { next(err); }
+});
+
 // GET /api/interventions/:id/todos
 router.get('/:id/todos', requireAuth, async (req, res, next) => {
   try {
@@ -1193,6 +1222,8 @@ router.get('/:id/todos', requireAuth, async (req, res, next) => {
 router.post('/:id/todos',
   requireAuth,
   body('title').trim().notEmpty().withMessage('Le titre est requis').isLength({ max: 500 }),
+  body('description').optional().trim().isLength({ max: 2000 }),
+  body('dueAt').optional({ nullable: true }).isISO8601().withMessage('Date invalide'),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
@@ -1203,7 +1234,9 @@ router.post('/:id/todos',
       const todo = await prisma.interventionTodo.create({
         data: {
           interventionId: req.params.id,
-          title: req.body.title.trim()
+          title: req.body.title.trim(),
+          description: req.body.description?.trim() || null,
+          dueAt: req.body.dueAt ? new Date(req.body.dueAt) : null
         }
       });
       res.status(201).json(todo);
@@ -1228,6 +1261,12 @@ router.patch('/:id/todos/:todoId', requireAuth, async (req, res, next) => {
       const title = req.body.title.trim();
       if (!title) return res.status(400).json({ error: 'Le titre est requis' });
       data.title = title;
+    }
+    if (req.body.description !== undefined) {
+      data.description = typeof req.body.description === 'string' ? req.body.description.trim() || null : null;
+    }
+    if (req.body.dueAt !== undefined) {
+      data.dueAt = req.body.dueAt ? new Date(req.body.dueAt) : null;
     }
 
     const updated = await prisma.interventionTodo.update({

@@ -195,6 +195,8 @@ model InterventionTodo {
   id             String       @id @default(uuid())
   interventionId String
   title          String
+  description    String?
+  dueAt          DateTime?
   done           Boolean      @default(false)
   doneAt         DateTime?
   createdAt      DateTime     @default(now())

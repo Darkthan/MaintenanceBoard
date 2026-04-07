@@ -268,13 +268,19 @@
         <span id="detail-todos-progress" class="text-xs text-slate-400"></span>
       </div>
       <div id="detail-todos-list" class="space-y-1.5"></div>
-      <form id="detail-todo-form" onsubmit="addInterventionTodo(event)" class="flex gap-2">
-        <input id="detail-todo-input" type="text" maxlength="500" placeholder="Nouvelle tâche..."
-          class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <button type="submit"
-          class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition flex-shrink-0">
-          Ajouter
-        </button>
+      <form id="detail-todo-form" onsubmit="addInterventionTodo(event)" class="space-y-2">
+        <div class="flex gap-2">
+          <input id="detail-todo-input" type="text" maxlength="500" placeholder="Nouvelle tâche..."
+            class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <input id="detail-todo-due" type="date"
+            class="border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-600 w-36" />
+          <button type="submit"
+            class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition flex-shrink-0">
+            Ajouter
+          </button>
+        </div>
+        <textarea id="detail-todo-desc" rows="1" placeholder="Description (optionnel)…"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-slate-600"></textarea>
       </form>
     </div>
 
@@ -2156,12 +2162,25 @@ function renderInterventionTodos(todos) {
     return;
   }
 
-  list.innerHTML = todos.map(todo => `
-    <div class="flex items-center gap-2 group px-2 py-1.5 rounded-lg hover:bg-slate-50 transition">
+  list.innerHTML = todos.map(todo => {
+    const now = new Date();
+    const due = todo.dueAt ? new Date(todo.dueAt) : null;
+    const overdue = due && !todo.done && due < now;
+    const dueBadge = due
+      ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium ${overdue ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}">${due.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}</span>`
+      : '';
+    return `
+    <div class="flex items-start gap-2 group px-2 py-1.5 rounded-lg hover:bg-slate-50 transition">
       <input type="checkbox" ${todo.done ? 'checked' : ''}
         onchange="toggleInterventionTodo('${todo.id}', this.checked)"
-        class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer flex-shrink-0" />
-      <span class="flex-1 text-sm ${todo.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(todo.title)}</span>
+        class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer flex-shrink-0 mt-0.5" />
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-sm ${todo.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(todo.title)}</span>
+          ${dueBadge}
+        </div>
+        ${todo.description ? `<p class="text-xs text-slate-400 mt-0.5 truncate">${escapeHtml(todo.description)}</p>` : ''}
+      </div>
       <button onclick="deleteInterventionTodo('${todo.id}')"
         class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition flex-shrink-0"
         title="Supprimer">
@@ -2170,7 +2189,8 @@ function renderInterventionTodos(todos) {
         </svg>
       </button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 async function addInterventionTodo(event) {
@@ -2179,9 +2199,17 @@ async function addInterventionTodo(event) {
   const input = document.getElementById('detail-todo-input');
   const title = input.value.trim();
   if (!title) return;
+  const dueVal = document.getElementById('detail-todo-due').value;
+  const descVal = document.getElementById('detail-todo-desc').value.trim();
   try {
-    await api.post(`/interventions/${detailInterventionId}/todos`, { title });
+    await api.post(`/interventions/${detailInterventionId}/todos`, {
+      title,
+      description: descVal || null,
+      dueAt: dueVal ? new Date(dueVal).toISOString() : null
+    });
     input.value = '';
+    document.getElementById('detail-todo-due').value = '';
+    document.getElementById('detail-todo-desc').value = '';
     await loadInterventionTodos(detailInterventionId);
   } catch (err) {
     showToast(err.message || 'Impossible d\'ajouter la tâche', 'error');
