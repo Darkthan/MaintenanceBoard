@@ -1173,36 +1173,7 @@ router.post('/:id/approve-equipment', requireAuth, requireAdmin, async (req, res
   } catch (err) { next(err); }
 });
 
-// ─── Todos ────────────────────────────────────────────────────────────────────
-
-// GET /api/interventions/todos — vue globale (doit être avant /:id/todos)
-router.get('/todos', requireAuth, async (req, res, next) => {
-  try {
-    const where = {};
-    if (req.query.done === 'true') where.done = true;
-    if (req.query.done === 'false') where.done = false;
-    if (req.query.overdue === 'true') {
-      where.done = false;
-      where.dueAt = { not: null, lt: new Date() };
-    }
-
-    const todos = await prisma.interventionTodo.findMany({
-      where,
-      orderBy: [{ done: 'asc' }, { dueAt: 'asc' }, { createdAt: 'asc' }],
-      include: {
-        intervention: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            room: { select: { name: true } }
-          }
-        }
-      }
-    });
-    res.json(todos);
-  } catch (err) { next(err); }
-});
+// ─── Todos liés à une intervention (délègue au modèle Todo) ──────────────────
 
 // GET /api/interventions/:id/todos
 router.get('/:id/todos', requireAuth, async (req, res, next) => {
@@ -1210,7 +1181,7 @@ router.get('/:id/todos', requireAuth, async (req, res, next) => {
     const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
     if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
 
-    const todos = await prisma.interventionTodo.findMany({
+    const todos = await prisma.todo.findMany({
       where: { interventionId: req.params.id },
       orderBy: { createdAt: 'asc' }
     });
@@ -1222,7 +1193,7 @@ router.get('/:id/todos', requireAuth, async (req, res, next) => {
 router.post('/:id/todos',
   requireAuth,
   body('title').trim().notEmpty().withMessage('Le titre est requis').isLength({ max: 500 }),
-  body('description').optional().trim().isLength({ max: 2000 }),
+  body('description').optional({ nullable: true }).trim().isLength({ max: 2000 }),
   body('dueAt').optional({ nullable: true }).isISO8601().withMessage('Date invalide'),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -1231,7 +1202,7 @@ router.post('/:id/todos',
       const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
       if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
 
-      const todo = await prisma.interventionTodo.create({
+      const todo = await prisma.todo.create({
         data: {
           interventionId: req.params.id,
           title: req.body.title.trim(),
@@ -1247,10 +1218,10 @@ router.post('/:id/todos',
 // PATCH /api/interventions/:id/todos/:todoId
 router.patch('/:id/todos/:todoId', requireAuth, async (req, res, next) => {
   try {
-    const todo = await prisma.interventionTodo.findFirst({
+    const todo = await prisma.todo.findFirst({
       where: { id: req.params.todoId, interventionId: req.params.id }
     });
-    if (!todo) return res.status(404).json({ error: 'Todo introuvable' });
+    if (!todo) return res.status(404).json({ error: 'Tâche introuvable' });
 
     const data = {};
     if (typeof req.body.done === 'boolean') {
@@ -1269,10 +1240,7 @@ router.patch('/:id/todos/:todoId', requireAuth, async (req, res, next) => {
       data.dueAt = req.body.dueAt ? new Date(req.body.dueAt) : null;
     }
 
-    const updated = await prisma.interventionTodo.update({
-      where: { id: req.params.todoId },
-      data
-    });
+    const updated = await prisma.todo.update({ where: { id: req.params.todoId }, data });
     res.json(updated);
   } catch (err) { next(err); }
 });
@@ -1280,13 +1248,13 @@ router.patch('/:id/todos/:todoId', requireAuth, async (req, res, next) => {
 // DELETE /api/interventions/:id/todos/:todoId
 router.delete('/:id/todos/:todoId', requireAuth, async (req, res, next) => {
   try {
-    const todo = await prisma.interventionTodo.findFirst({
+    const todo = await prisma.todo.findFirst({
       where: { id: req.params.todoId, interventionId: req.params.id }
     });
-    if (!todo) return res.status(404).json({ error: 'Todo introuvable' });
+    if (!todo) return res.status(404).json({ error: 'Tâche introuvable' });
 
-    await prisma.interventionTodo.delete({ where: { id: req.params.todoId } });
-    res.json({ message: 'Todo supprimé' });
+    await prisma.todo.delete({ where: { id: req.params.todoId } });
+    res.json({ message: 'Tâche supprimée' });
   } catch (err) { next(err); }
 });
 

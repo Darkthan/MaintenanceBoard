@@ -210,25 +210,25 @@ model Intervention {
   stockMovements StockMovement[]
   messages       TicketMessage[]
   checkupItems   InterventionCheckupItem[]
-  todos          InterventionTodo[]
+  todos          Todo[]
 
   @@map("interventions")
 }
 
-model InterventionTodo {
-  id             String       @id @default(uuid())
-  interventionId String
+model Todo {
+  id             String        @id @default(uuid())
+  interventionId String?
   title          String
   description    String?
   dueAt          DateTime?
-  done           Boolean      @default(false)
+  done           Boolean       @default(false)
   doneAt         DateTime?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime      @default(now())
 
-  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
 
   @@index([interventionId])
-  @@map("intervention_todos")
+  @@map("todos")
 }
 
 model InterventionCheckupItem {

@@ -50,7 +50,7 @@
         </button>
         <div>
           <h1 class="text-xl font-semibold text-slate-800">Tâches</h1>
-          <p class="text-sm text-slate-500">Vue globale des tâches liées aux interventions.</p>
+          <p class="text-sm text-slate-500">Gérez vos tâches, liées ou non à une intervention.</p>
         </div>
       </div>
       <button onclick="openTodoModal()" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition shadow-sm">
@@ -104,7 +104,7 @@
     <form id="todo-form" onsubmit="submitTodoForm(event)" class="px-6 py-5 space-y-4">
       <!-- Intervention picker -->
       <div id="intervention-picker-group">
-        <label class="block text-sm font-medium text-slate-700 mb-1">Intervention <span class="text-red-500">*</span></label>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Intervention <span class="text-slate-400 font-normal text-xs">(optionnel)</span></label>
         <div class="relative">
           <input id="todo-intervention-search" type="text" placeholder="Rechercher une intervention…"
             autocomplete="off"
@@ -184,7 +184,7 @@ async function loadTodos() {
   else if (currentFilter === 'overdue') params = '?overdue=true';
 
   try {
-    allTodos = await api.get('/interventions/todos' + params);
+    allTodos = await api.get('/todos' + params);
     renderTodos(allTodos);
   } catch (err) {
     list.innerHTML = `<div class="text-center py-12 text-red-400 text-sm">${escHtml(err.message || 'Erreur de chargement')}</div>`;
@@ -213,21 +213,21 @@ function renderTodos(todos) {
     return `
     <div class="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-start gap-3 hover:shadow-sm transition group">
       <input type="checkbox" ${todo.done ? 'checked' : ''}
-        onchange="toggleTodo('${escHtml(todo.interventionId)}', '${escHtml(todo.id)}', this.checked)"
+        onchange="toggleTodo('${escHtml(todo.id)}', this.checked)"
         class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer flex-shrink-0 mt-1" />
       <div class="flex-1 min-w-0">
         <div class="flex items-start justify-between gap-2">
           <span class="text-sm font-medium ${todo.done ? 'line-through text-slate-400' : 'text-slate-800'} leading-snug">${escHtml(todo.title)}</span>
           <div class="flex items-center gap-2 flex-shrink-0 ml-2">
             ${dueBadge}
-            <button onclick="openTodoModal('${escHtml(todo.interventionId)}', '${escHtml(todo.id)}')"
+            <button onclick="openTodoModal(null, '${escHtml(todo.id)}')"
               class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-500 transition"
               title="Modifier">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
               </svg>
             </button>
-            <button onclick="deleteTodo('${escHtml(todo.interventionId)}', '${escHtml(todo.id)}')"
+            <button onclick="deleteTodo('${escHtml(todo.id)}')"
               class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition"
               title="Supprimer">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -250,9 +250,9 @@ function renderTodos(todos) {
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 
-async function toggleTodo(interventionId, todoId, done) {
+async function toggleTodo(todoId, done) {
   try {
-    await api.patch(`/interventions/${interventionId}/todos/${todoId}`, { done });
+    await api.patch(`/todos/${todoId}`, { done });
     await loadTodos();
   } catch (err) {
     showToast(err.message || 'Erreur', 'error');
@@ -260,10 +260,10 @@ async function toggleTodo(interventionId, todoId, done) {
   }
 }
 
-async function deleteTodo(interventionId, todoId) {
+async function deleteTodo(todoId) {
   if (!confirm('Supprimer cette tâche ?')) return;
   try {
-    await api.delete(`/interventions/${interventionId}/todos/${todoId}`);
+    await api.delete(`/todos/${todoId}`);
     await loadTodos();
   } catch (err) {
     showToast(err.message || 'Erreur', 'error');
@@ -294,8 +294,13 @@ async function openTodoModal(interventionId, todoId) {
     document.getElementById('todo-title').value = todo.title;
     document.getElementById('todo-description').value = todo.description || '';
     document.getElementById('todo-due').value = todo.dueAt ? todo.dueAt.slice(0, 10) : '';
-    document.getElementById('todo-intervention-id').value = todo.interventionId;
-    document.getElementById('intervention-picker-group').classList.add('hidden');
+    document.getElementById('todo-intervention-id').value = todo.interventionId || '';
+    if (todo.intervention) {
+      document.getElementById('todo-intervention-search').value = todo.intervention.title;
+      const sel = document.getElementById('todo-intervention-selected');
+      sel.textContent = todo.intervention.title;
+      sel.classList.remove('hidden');
+    }
   } else if (interventionId) {
     document.getElementById('todo-intervention-id').value = interventionId;
     document.getElementById('intervention-picker-group').classList.add('hidden');
@@ -323,16 +328,15 @@ async function submitTodoForm(event) {
   const interventionId = document.getElementById('todo-intervention-id').value;
 
   if (!title) { errEl.textContent = 'Le titre est requis.'; errEl.classList.remove('hidden'); return; }
-  if (!interventionId && !editingTodo) { errEl.textContent = 'Veuillez sélectionner une intervention.'; errEl.classList.remove('hidden'); return; }
 
   const btn = document.getElementById('todo-submit-btn');
   btn.disabled = true;
 
   try {
     if (editingTodo) {
-      await api.patch(`/interventions/${editingTodo.interventionId}/todos/${editingTodo.id}`, { title, description, dueAt });
+      await api.patch(`/todos/${editingTodo.id}`, { title, description, dueAt, interventionId: interventionId || null });
     } else {
-      await api.post(`/interventions/${interventionId}/todos`, { title, description, dueAt });
+      await api.post(`/todos`, { title, description, dueAt, interventionId: interventionId || null });
     }
     closeTodoModal();
     await loadTodos();
