@@ -186,8 +186,23 @@ model Intervention {
   messages       TicketMessage[]
   reporters      InterventionReporter[]
   checkupItems   InterventionCheckupItem[]
+  todos          InterventionTodo[]
 
   @@map("interventions")
+}
+
+model InterventionTodo {
+  id             String       @id @default(uuid())
+  interventionId String
+  title          String
+  done           Boolean      @default(false)
+  doneAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  @@index([interventionId])
+  @@map("intervention_todos")
 }
 
 model InterventionCheckupItem {

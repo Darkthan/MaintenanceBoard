@@ -1173,4 +1173,82 @@ router.post('/:id/approve-equipment', requireAuth, requireAdmin, async (req, res
   } catch (err) { next(err); }
 });
 
+// ─── Todos ────────────────────────────────────────────────────────────────────
+
+// GET /api/interventions/:id/todos
+router.get('/:id/todos', requireAuth, async (req, res, next) => {
+  try {
+    const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+
+    const todos = await prisma.interventionTodo.findMany({
+      where: { interventionId: req.params.id },
+      orderBy: { createdAt: 'asc' }
+    });
+    res.json(todos);
+  } catch (err) { next(err); }
+});
+
+// POST /api/interventions/:id/todos
+router.post('/:id/todos',
+  requireAuth,
+  body('title').trim().notEmpty().withMessage('Le titre est requis').isLength({ max: 500 }),
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    try {
+      const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
+      if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+
+      const todo = await prisma.interventionTodo.create({
+        data: {
+          interventionId: req.params.id,
+          title: req.body.title.trim()
+        }
+      });
+      res.status(201).json(todo);
+    } catch (err) { next(err); }
+  }
+);
+
+// PATCH /api/interventions/:id/todos/:todoId
+router.patch('/:id/todos/:todoId', requireAuth, async (req, res, next) => {
+  try {
+    const todo = await prisma.interventionTodo.findFirst({
+      where: { id: req.params.todoId, interventionId: req.params.id }
+    });
+    if (!todo) return res.status(404).json({ error: 'Todo introuvable' });
+
+    const data = {};
+    if (typeof req.body.done === 'boolean') {
+      data.done = req.body.done;
+      data.doneAt = req.body.done ? new Date() : null;
+    }
+    if (typeof req.body.title === 'string') {
+      const title = req.body.title.trim();
+      if (!title) return res.status(400).json({ error: 'Le titre est requis' });
+      data.title = title;
+    }
+
+    const updated = await prisma.interventionTodo.update({
+      where: { id: req.params.todoId },
+      data
+    });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/interventions/:id/todos/:todoId
+router.delete('/:id/todos/:todoId', requireAuth, async (req, res, next) => {
+  try {
+    const todo = await prisma.interventionTodo.findFirst({
+      where: { id: req.params.todoId, interventionId: req.params.id }
+    });
+    if (!todo) return res.status(404).json({ error: 'Todo introuvable' });
+
+    await prisma.interventionTodo.delete({ where: { id: req.params.todoId } });
+    res.json({ message: 'Todo supprimé' });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
