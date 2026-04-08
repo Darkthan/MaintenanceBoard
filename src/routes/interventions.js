@@ -331,6 +331,12 @@ router.get('/', requireAuth, async (req, res, next) => {
     const { status, priority, roomId, equipmentId, techId, dateFrom, dateTo, search, source } = req.query;
 
     const clauses = [{ mergedIntoId: null }];
+    // Par défaut on exclut les archivées, sauf si archived=true est explicitement demandé
+    if (req.query.archived === 'true') {
+      clauses.push({ archivedAt: { not: null } });
+    } else {
+      clauses.push({ archivedAt: null });
+    }
     if (status) {
       const statuses = (Array.isArray(status) ? status : [status]).filter(value => VALID_STATUSES.includes(value));
       if (statuses.length === 1) clauses.push({ status: statuses[0] });
@@ -909,6 +915,20 @@ router.post('/:id/photos',
     } catch (err) { next(err); }
   }
 );
+
+// PATCH /api/interventions/:id/archive — toggle archivage
+router.patch('/:id/archive', requireAuth, async (req, res, next) => {
+  try {
+    const intervention = await prisma.intervention.findUnique({ where: { id: req.params.id } });
+    if (!intervention) return res.status(404).json({ error: 'Intervention introuvable' });
+
+    const updated = await prisma.intervention.update({
+      where: { id: req.params.id },
+      data: { archivedAt: intervention.archivedAt ? null : new Date() }
+    });
+    res.json({ archived: !!updated.archivedAt, archivedAt: updated.archivedAt });
+  } catch (err) { next(err); }
+});
 
 // DELETE /api/interventions/:id
 router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {

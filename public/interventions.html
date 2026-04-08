@@ -87,6 +87,11 @@
             <option value="INTERNAL">Internes</option>
             <option value="PUBLIC">Publiques</option>
           </select>
+          <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer self-center">
+            <input type="checkbox" id="archived-filter" onchange="loadInterventions()"
+              class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+            Afficher archivées
+          </label>
         </div>
       </div>
 
@@ -144,6 +149,12 @@
           </select>
         </span>
         <span id="detail-source"></span>
+        <span id="detail-archived-badge" class="hidden text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Archivée</span>
+        <button id="detail-archive-btn" onclick="toggleArchiveIntervention(detailInterventionId)"
+          class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+          <span id="detail-archive-label">Archiver</span>
+        </button>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
         <div><span class="text-xs text-slate-400 block">Technicien</span><span id="detail-tech" class="font-medium text-slate-700"></span></div>
@@ -1139,6 +1150,7 @@ async function loadInterventions() {
     if (currentStatuses.length) params.status = currentStatuses;
     if (currentPriority) params.priority = currentPriority;
     if (currentSource) params.source = currentSource;
+    if (document.getElementById('archived-filter')?.checked) params.archived = 'true';
 
     const data = await api.get('/interventions', params);
 
@@ -1176,6 +1188,7 @@ async function loadInterventions() {
               ${kindBadge(i.kind)}
               ${statusBadge(i.status)}
               ${i.priority !== 'NORMAL' ? priorityBadge(i.priority) : ''}
+              ${i.archivedAt ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Archivée</span>` : ''}
               ${needsAttention ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Réponse attendue</span>` : ''}
             </div>
             ${i.description ? `<p class="text-sm text-slate-600 mt-1 line-clamp-2">${escapeHtml(typeof richTextToPlainText === 'function' ? richTextToPlainText(i.description) : i.description)}</p>` : ''}
@@ -1210,6 +1223,11 @@ async function loadInterventions() {
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0 self-stretch sm:self-auto">
+            <button onclick="event.stopPropagation(); toggleArchiveIntervention('${i.id}', ${!!i.archivedAt})"
+              class="p-1.5 rounded-lg hover:bg-slate-100 transition ${i.archivedAt ? 'text-amber-500 hover:text-amber-700' : 'text-slate-500 hover:text-amber-500'}"
+              title="${i.archivedAt ? 'Désarchiver' : 'Archiver'}">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+            </button>
             <button onclick="event.stopPropagation(); openPhotosModal('${i.id}')"
               class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition" title="Ajouter photos">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -1480,6 +1498,17 @@ async function openInterventionDetail(id) {
       equipSuggestEl.innerHTML = '';
       equipSuggestEl.classList.add('hidden');
     }
+    // Archivage
+    const archivedBadge = document.getElementById('detail-archived-badge');
+    const archiveLabel = document.getElementById('detail-archive-label');
+    if (intervention.archivedAt) {
+      archivedBadge.classList.remove('hidden');
+      archiveLabel.textContent = 'Désarchiver';
+    } else {
+      archivedBadge.classList.add('hidden');
+      archiveLabel.textContent = 'Archiver';
+    }
+
     document.getElementById('detail-notes').value = intervention.notes || '';
     renderReporters(intervention.reporters || []);
 
@@ -1809,6 +1838,27 @@ async function deleteIntervention(id) {
     showToast('Intervention supprimée');
     loadInterventions();
   } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function toggleArchiveIntervention(id, currentlyArchived) {
+  try {
+    const result = await api.patch(`/interventions/${id}/archive`);
+    const label = result.archived ? 'archivée' : 'désarchivée';
+    showToast(`Intervention ${label}`);
+    await loadInterventions();
+    // Mettre à jour le panneau de détail si ouvert
+    if (detailInterventionId === id) {
+      const archivedBadge = document.getElementById('detail-archived-badge');
+      const archiveLabel = document.getElementById('detail-archive-label');
+      if (result.archived) {
+        archivedBadge.classList.remove('hidden');
+        archiveLabel.textContent = 'Désarchiver';
+      } else {
+        archivedBadge.classList.add('hidden');
+        archiveLabel.textContent = 'Archiver';
+      }
+    }
+  } catch (err) { showToast(err.message || 'Erreur', 'error'); }
 }
 
 // Photos

@@ -189,6 +189,7 @@ model Intervention {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   closedAt    DateTime?
+  archivedAt  DateTime?
   scheduledStartAt DateTime?
   scheduledEndAt   DateTime?
   dueAt            DateTime?
