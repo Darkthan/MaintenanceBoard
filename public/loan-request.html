@@ -99,10 +99,18 @@
               <div id="lrdp-start-time-section" class="space-y-1.5">
                 <p class="text-xs font-semibold text-slate-600">Heure de début — <span id="lrdp-start-date-label" class="font-normal text-slate-400"></span></p>
                 <div id="lrdp-start-time-grid" class="grid grid-cols-8 gap-1"></div>
+                <div id="lrdp-start-minute-section" class="hidden space-y-1 pt-1">
+                  <p class="text-xs text-slate-500">Minutes de début</p>
+                  <div id="lrdp-start-minute-grid" class="grid grid-cols-6 gap-1"></div>
+                </div>
               </div>
               <div id="lrdp-end-time-section" class="hidden space-y-1.5">
                 <p class="text-xs font-semibold text-slate-600">Heure de fin — <span id="lrdp-end-date-label" class="font-normal text-slate-400"></span></p>
                 <div id="lrdp-end-time-grid" class="grid grid-cols-8 gap-1"></div>
+                <div id="lrdp-end-minute-section" class="hidden space-y-1 pt-1">
+                  <p class="text-xs text-slate-500">Minutes de fin</p>
+                  <div id="lrdp-end-minute-grid" class="grid grid-cols-6 gap-1"></div>
+                </div>
               </div>
             </div>
             <div id="lrdp-selection-display" class="hidden rounded-xl bg-sky-50 border border-sky-200 px-3 py-2 text-sm text-sky-900 text-center font-medium"></div>
@@ -141,12 +149,22 @@ let lrdpStartDate = null;
 let lrdpEndDate = null;
 let lrdpStartHour = null;
 let lrdpEndHour = null;
+let lrdpStartMinute = 0;
+let lrdpEndMinute = 0;
 
 function lrdpDayKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function lrdpUsedSlotsForHour(dateKey, hour) {
+function lrdpGetReservationsForDay(dateKey) {
+  const dayStart = new Date(`${dateKey}T00:00:00`);
+  const dayEnd = new Date(`${dateKey}T23:59:59`);
+  return (lrdpSchedule.reservations || []).filter(r =>
+    new Date(r.startAt) <= dayEnd && new Date(r.endAt) >= dayStart
+  );
+}
+
+function lrdpGetUsedSlotsForHour(dateKey, hour) {
   const slotStart = new Date(`${dateKey}T${String(hour).padStart(2, '0')}:00:00`);
   const slotEnd = new Date(`${dateKey}T${String(hour).padStart(2, '0')}:59:59`);
   return (lrdpSchedule.reservations || [])
@@ -154,15 +172,7 @@ function lrdpUsedSlotsForHour(dateKey, hour) {
     .reduce((sum, r) => sum + (r.reservedSlots || 0), 0);
 }
 
-function lrdpHasReservationsForDay(dateKey) {
-  const dayStart = new Date(`${dateKey}T00:00:00`);
-  const dayEnd = new Date(`${dateKey}T23:59:59`);
-  return (lrdpSchedule.reservations || []).some(r =>
-    new Date(r.startAt) <= dayEnd && new Date(r.endAt) >= dayStart
-  );
-}
-
-function lrdpRender() {
+function lrdpRenderCalendar() {
   const monthLabel = document.getElementById('lrdp-month-label');
   const gridEl = document.getElementById('lrdp-grid');
   if (!monthLabel || !gridEl) return;
@@ -175,6 +185,7 @@ function lrdpRender() {
   const firstDay = new Date(year, month, 1);
   let startDow = firstDay.getDay();
   startDow = startDow === 0 ? 6 : startDow - 1;
+
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells = [];
   for (let i = 0; i < startDow; i++) cells.push(null);
@@ -188,208 +199,249 @@ function lrdpRender() {
   gridEl.innerHTML = cells.map(date => {
     if (!date) return `<div class="min-h-[30px]"></div>`;
     const key = lrdpDayKey(date);
-    const hasBkg = lrdpHasReservationsForDay(key);
+    const hasReservations = lrdpGetReservationsForDay(key).length > 0;
     const isPast = date < today;
     const isStart = key === startKey;
     const isEnd = key === endKey;
     const inRange = startKey && endKey && key > startKey && key < endKey;
-    let maxUsed = 0;
-    if (hasBkg) for (let h = 0; h < 24; h++) maxUsed = Math.max(maxUsed, lrdpUsedSlotsForHour(key, h));
-    const isFull = maxUsed >= totalSlots;
+
+    let isFullyBooked = false;
+    if (hasReservations) {
+      isFullyBooked = Array.from({ length: 24 }, (_, h) => h)
+        .every(h => lrdpGetUsedSlotsForHour(key, h) >= totalSlots);
+    }
 
     let cls = 'min-h-[30px] flex items-center justify-center rounded-lg text-xs font-medium relative select-none transition ';
     if (isPast) cls += 'opacity-35 cursor-default text-slate-400 ';
-    else if (isStart || isEnd) cls += 'bg-sky-600 text-white cursor-pointer ';
-    else if (inRange) cls += 'bg-sky-100 text-sky-800 cursor-pointer ';
-    else if (isFull) cls += 'bg-red-100 text-red-600 hover:bg-red-200 cursor-pointer ';
-    else if (hasBkg) cls += 'bg-orange-50 text-orange-700 hover:bg-orange-100 cursor-pointer ';
+    else if (isStart || isEnd) cls += 'bg-blue-600 text-white cursor-pointer ';
+    else if (inRange) cls += 'bg-blue-100 text-blue-800 cursor-pointer ';
+    else if (isFullyBooked) cls += 'bg-red-100 text-red-600 hover:bg-red-200 cursor-pointer ';
+    else if (hasReservations) cls += 'bg-orange-50 text-orange-700 hover:bg-orange-100 cursor-pointer ';
     else cls += 'hover:bg-slate-200 text-slate-700 cursor-pointer ';
 
-    const dot = hasBkg && !isStart && !isEnd
-      ? `<span class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isFull ? 'bg-red-400' : 'bg-orange-400'}"></span>`
+    const dot = hasReservations && !isStart && !isEnd
+      ? `<span class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isFullyBooked ? 'bg-red-400' : 'bg-orange-400'}"></span>`
       : '';
+
     return `<div class="${cls}" ${isPast ? '' : `onclick="lrdpSelectDay('${key}')"`}>${date.getDate()}${dot}</div>`;
   }).join('');
 
-  const el = document.getElementById('lrdp-hint');
-  if (el) {
-    const hints = {
-      'pick-start-date': 'Cliquez sur un jour pour définir la date de début',
-      'pick-start-time': 'Sélectionnez l\'heure de début',
-      'pick-end-date': 'Cliquez sur un jour pour définir la date de fin',
-      'pick-end-time': 'Sélectionnez l\'heure de fin',
-      'done': 'Cliquez sur un jour pour modifier la période'
-    };
-    el.textContent = hints[lrdpStep] || '';
-  }
+  lrdpUpdateHint();
 }
 
 function lrdpSelectDay(key) {
   const date = new Date(`${key}T00:00:00`);
-  if (lrdpStep === 'pick-start-date' || lrdpStep === 'done') {
-    lrdpStartDate = date; lrdpEndDate = null; lrdpStartHour = null; lrdpEndHour = null;
-    lrdpStep = 'pick-start-time';
-    ['start-date','start-time','end-date','end-time'].forEach(id => document.getElementById(id).value = '');
+  if (!lrdpStartDate || lrdpStep === 'done') {
+    lrdpStartDate = date; lrdpEndDate = null;
+    lrdpStartHour = null; lrdpEndHour = null;
+    lrdpStartMinute = 0; lrdpEndMinute = 0;
+    lrdpStep = 'pick-end-date';
+    document.getElementById('loan-start').value = '';
+    document.getElementById('loan-end').value = '';
     document.getElementById('lrdp-selection-display').classList.add('hidden');
-    lrdpRender();
-    lrdpShowStart();
+    document.getElementById('lrdp-time-section').classList.add('hidden');
+    document.getElementById('lrdp-start-time-section').classList.add('hidden');
+    document.getElementById('lrdp-end-time-section').classList.add('hidden');
+    const sm = document.getElementById('lrdp-start-minute-section');
+    const em = document.getElementById('lrdp-end-minute-section');
+    if (sm) sm.classList.add('hidden');
+    if (em) em.classList.add('hidden');
+    lrdpRenderCalendar();
   } else if (lrdpStep === 'pick-end-date') {
     if (key < lrdpDayKey(lrdpStartDate)) {
-      lrdpStartDate = date; lrdpEndDate = null; lrdpStartHour = null; lrdpEndHour = null;
-      lrdpStep = 'pick-start-time';
-      ['start-date','start-time','end-date','end-time'].forEach(id => document.getElementById(id).value = '');
+      lrdpStartDate = date; lrdpEndDate = null;
+      lrdpStartHour = null; lrdpEndHour = null;
+      lrdpStartMinute = 0; lrdpEndMinute = 0;
+      lrdpStep = 'pick-end-date';
+      document.getElementById('loan-start').value = '';
+      document.getElementById('loan-end').value = '';
       document.getElementById('lrdp-selection-display').classList.add('hidden');
-      lrdpRender();
-      lrdpShowStart();
+      document.getElementById('lrdp-time-section').classList.add('hidden');
+      lrdpRenderCalendar();
     } else {
-      lrdpEndDate = date; lrdpEndHour = null;
-      lrdpStep = 'pick-end-time';
-      lrdpRender();
-      lrdpShowEnd();
+      lrdpEndDate = date; lrdpEndHour = null; lrdpEndMinute = 0;
+      lrdpStep = 'pick-start-time';
+      lrdpRenderCalendar();
+      lrdpShowStartTimeGrid();
     }
   }
 }
 
-function lrdpTimeGrid(dateKey, selectedHour, onClickFn, minHour = null) {
+function lrdpBuildTimeGrid(dateKey, selectedHour, onClickFn, minHour = null) {
   const totalSlots = lrdpSchedule.totalSlots || 1;
   return Array.from({ length: 24 }, (_, h) => {
-    const used = lrdpUsedSlotsForHour(dateKey, h);
-    const isFull = used >= totalSlots;
+    const used = lrdpGetUsedSlotsForHour(dateKey, h);
+    const isFullyBooked = used >= totalSlots;
     const isPartial = used > 0 && used < totalSlots;
     const isSelected = selectedHour === h;
-    const isTooEarly = minHour !== null && h <= minHour;
-    const disabled = isFull || isTooEarly;
+    const isTooEarly = minHour !== null && h < minHour;
+    const disabled = isFullyBooked || isTooEarly;
     let cls = 'rounded-lg py-1 text-xs font-mono text-center border transition ';
-    if (isSelected) cls += 'bg-sky-600 text-white border-sky-700 ';
-    else if (isFull) cls += 'bg-red-100 text-red-500 border-red-200 cursor-not-allowed ';
+    if (isSelected) cls += 'bg-blue-600 text-white border-blue-700 ';
+    else if (isFullyBooked) cls += 'bg-red-100 text-red-500 border-red-200 cursor-not-allowed ';
     else if (isTooEarly) cls += 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed ';
     else if (isPartial) cls += 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200 cursor-pointer ';
-    else cls += 'bg-white text-slate-700 border-slate-200 hover:bg-sky-50 hover:border-sky-300 cursor-pointer ';
+    else cls += 'bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:border-blue-300 cursor-pointer ';
     return `<button type="button" class="${cls}" ${disabled ? 'disabled' : ''} onclick="${onClickFn}(${h})">${String(h).padStart(2, '0')}h</button>`;
   }).join('');
 }
 
-function lrdpShowStart() {
+function lrdpBuildMinuteGrid(selectedMinute, onClickFn) {
+  return Array.from({ length: 12 }, (_, i) => {
+    const m = i * 5;
+    const isSelected = selectedMinute === m;
+    let cls = 'rounded-lg py-1 text-xs font-mono text-center border transition ';
+    cls += isSelected
+      ? 'bg-blue-600 text-white border-blue-700 '
+      : 'bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:border-blue-300 cursor-pointer ';
+    return `<button type="button" class="${cls}" onclick="${onClickFn}(${m})">${String(m).padStart(2, '0')}</button>`;
+  }).join('');
+}
+
+function lrdpShowStartTimeGrid() {
   const key = lrdpDayKey(lrdpStartDate);
   document.getElementById('lrdp-start-date-label').textContent =
     lrdpStartDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-  document.getElementById('lrdp-start-time-grid').innerHTML = lrdpTimeGrid(key, lrdpStartHour, 'lrdpSelectStartHour');
+  document.getElementById('lrdp-start-time-grid').innerHTML = lrdpBuildTimeGrid(key, lrdpStartHour, 'lrdpSelectStartHour');
   document.getElementById('lrdp-time-section').classList.remove('hidden');
   document.getElementById('lrdp-start-time-section').classList.remove('hidden');
   document.getElementById('lrdp-end-time-section').classList.add('hidden');
+  const sm = document.getElementById('lrdp-start-minute-section');
+  const em = document.getElementById('lrdp-end-minute-section');
+  if (sm) sm.classList.add('hidden');
+  if (em) em.classList.add('hidden');
 }
 
-function lrdpShowEnd() {
+function lrdpShowEndTimeGrid() {
   const startKey = lrdpDayKey(lrdpStartDate);
   const endKey = lrdpDayKey(lrdpEndDate);
   const minHour = startKey === endKey ? lrdpStartHour : null;
   document.getElementById('lrdp-end-date-label').textContent =
     lrdpEndDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-  document.getElementById('lrdp-end-time-grid').innerHTML = lrdpTimeGrid(endKey, lrdpEndHour, 'lrdpSelectEndHour', minHour);
+  document.getElementById('lrdp-end-time-grid').innerHTML = lrdpBuildTimeGrid(endKey, lrdpEndHour, 'lrdpSelectEndHour', minHour);
   document.getElementById('lrdp-time-section').classList.remove('hidden');
   document.getElementById('lrdp-start-time-section').classList.remove('hidden');
   document.getElementById('lrdp-end-time-section').classList.remove('hidden');
+  const em = document.getElementById('lrdp-end-minute-section');
+  if (em) em.classList.add('hidden');
 }
 
 function lrdpSelectStartHour(h) {
   lrdpStartHour = h;
-  lrdpStep = 'pick-end-date';
-  document.getElementById('start-date').value = lrdpDayKey(lrdpStartDate);
-  document.getElementById('start-time').value = `${String(h).padStart(2, '0')}:00`;
-  document.getElementById('lrdp-start-time-grid').innerHTML = lrdpTimeGrid(lrdpDayKey(lrdpStartDate), h, 'lrdpSelectStartHour');
-  lrdpRender();
+  lrdpStartMinute = 0;
+  lrdpStep = 'pick-start-min';
+  document.getElementById('lrdp-start-time-grid').innerHTML = lrdpBuildTimeGrid(lrdpDayKey(lrdpStartDate), h, 'lrdpSelectStartHour');
+  const sm = document.getElementById('lrdp-start-minute-section');
+  if (sm) {
+    document.getElementById('lrdp-start-minute-grid').innerHTML = lrdpBuildMinuteGrid(0, 'lrdpSelectStartMinute');
+    sm.classList.remove('hidden');
+  }
+  lrdpUpdateHint();
+}
+
+function lrdpSelectStartMinute(m) {
+  lrdpStartMinute = m;
+  lrdpStep = 'pick-end-time';
+  document.getElementById('lrdp-start-minute-grid').innerHTML = lrdpBuildMinuteGrid(m, 'lrdpSelectStartMinute');
+  document.getElementById('loan-start').value =
+    new Date(lrdpStartDate.getFullYear(), lrdpStartDate.getMonth(), lrdpStartDate.getDate(), lrdpStartHour, m, 0).toISOString();
+  lrdpRenderCalendar();
+  lrdpShowEndTimeGrid();
 }
 
 function lrdpSelectEndHour(h) {
   lrdpEndHour = h;
-  lrdpStep = 'done';
-  document.getElementById('end-date').value = lrdpDayKey(lrdpEndDate);
-  document.getElementById('end-time').value = `${String(h).padStart(2, '0')}:00`;
+  lrdpEndMinute = 0;
+  lrdpStep = 'pick-end-min';
   const startKey = lrdpDayKey(lrdpStartDate);
   const endKey = lrdpDayKey(lrdpEndDate);
   document.getElementById('lrdp-end-time-grid').innerHTML =
-    lrdpTimeGrid(endKey, h, 'lrdpSelectEndHour', startKey === endKey ? lrdpStartHour : null);
-  lrdpRender();
-  const el = document.getElementById('lrdp-selection-display');
-  if (el) {
-    const fmt = d => d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-    el.innerHTML = `<strong>Du</strong> ${fmt(lrdpStartDate)} à ${String(lrdpStartHour).padStart(2, '0')}:00 &nbsp;→&nbsp; <strong>au</strong> ${fmt(lrdpEndDate)} à ${String(h).padStart(2, '0')}:00`;
-    el.classList.remove('hidden');
+    lrdpBuildTimeGrid(endKey, h, 'lrdpSelectEndHour', startKey === endKey ? lrdpStartHour : null);
+  const em = document.getElementById('lrdp-end-minute-section');
+  if (em) {
+    document.getElementById('lrdp-end-minute-grid').innerHTML = lrdpBuildMinuteGrid(0, 'lrdpSelectEndMinute');
+    em.classList.remove('hidden');
   }
+  lrdpUpdateHint();
+}
+
+function lrdpSelectEndMinute(m) {
+  lrdpEndMinute = m;
+  lrdpStep = 'done';
+  document.getElementById('lrdp-end-minute-grid').innerHTML = lrdpBuildMinuteGrid(m, 'lrdpSelectEndMinute');
+  document.getElementById('loan-end').value =
+    new Date(lrdpEndDate.getFullYear(), lrdpEndDate.getMonth(), lrdpEndDate.getDate(), lrdpEndHour, m, 0).toISOString();
+  lrdpRenderCalendar();
+  lrdpUpdateSelection();
+}
+
+function lrdpUpdateSelection() {
+  const el = document.getElementById('lrdp-selection-display');
+  if (!el) return;
+  if (lrdpStep === 'done' && lrdpStartDate && lrdpEndDate && lrdpStartHour !== null && lrdpEndHour !== null) {
+    const fmt = d => d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    const sh = String(lrdpStartHour).padStart(2, '0');
+    const sm = String(lrdpStartMinute).padStart(2, '0');
+    const eh = String(lrdpEndHour).padStart(2, '0');
+    const em = String(lrdpEndMinute).padStart(2, '0');
+    el.innerHTML = `<strong>Du</strong> ${fmt(lrdpStartDate)} à ${sh}:${sm} &nbsp;→&nbsp; <strong>au</strong> ${fmt(lrdpEndDate)} à ${eh}:${em}`;
+    el.classList.remove('hidden');
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
+function lrdpUpdateHint() {
+  const el = document.getElementById('lrdp-hint');
+  if (!el) return;
+  const hints = {
+    'pick-start-date': 'Cliquez sur un jour pour définir la date de début',
+    'pick-end-date': 'Cliquez sur un autre jour pour définir la date de fin',
+    'pick-start-time': 'Sélectionnez l\'heure de début',
+    'pick-start-min': 'Sélectionnez les minutes de début',
+    'pick-end-time': 'Sélectionnez l\'heure de fin',
+    'pick-end-min': 'Sélectionnez les minutes de fin',
+    'done': 'Cliquez sur un jour pour modifier la période'
+  };
+  el.textContent = hints[lrdpStep] || '';
 }
 
 function lrdpInit() {
   lrdpCurrentMonth = new Date(); lrdpCurrentMonth.setDate(1); lrdpCurrentMonth.setHours(0, 0, 0, 0);
   lrdpStep = 'pick-start-date';
-  lrdpStartDate = null; lrdpEndDate = null; lrdpStartHour = null; lrdpEndHour = null;
+  lrdpStartDate = null; lrdpEndDate = null;
+  lrdpStartHour = null; lrdpEndHour = null;
+  lrdpStartMinute = 0; lrdpEndMinute = 0;
   lrdpSchedule = { totalSlots: 1, reservations: [] };
-  ['lrdp-time-section','lrdp-selection-display','lrdp-end-time-section'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('hidden');
-  });
-  lrdpRender();
+  const ts = document.getElementById('lrdp-time-section');
+  const sd = document.getElementById('lrdp-selection-display');
+  const es = document.getElementById('lrdp-end-time-section');
+  const sm = document.getElementById('lrdp-start-minute-section');
+  const em = document.getElementById('lrdp-end-minute-section');
+  if (ts) ts.classList.add('hidden');
+  if (sd) sd.classList.add('hidden');
+  if (es) es.classList.add('hidden');
+  if (sm) sm.classList.add('hidden');
+  if (em) em.classList.add('hidden');
+  lrdpRenderCalendar();
 }
 
 async function lrdpLoadSchedule(resourceId) {
-  if (!resourceId) { lrdpSchedule = { totalSlots: 1, reservations: [] }; lrdpRender(); return; }
+  if (!resourceId) {
+    lrdpSchedule = { totalSlots: 1, reservations: [] };
+    lrdpRenderCalendar();
+    return;
+  }
   try {
     const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
     const end = new Date(start); end.setMonth(end.getMonth() + 6);
-    const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() });
-    const res = await fetch(`/api/loan-request/resources/${encodeURIComponent(resourceId)}/schedule?${params}`);
-    if (res.ok) lrdpSchedule = await res.json();
-    else lrdpSchedule = { totalSlots: 1, reservations: [] };
+    lrdpSchedule = await apiFetch(`/loan-request/resources/${resourceId}/schedule?start=${start.toISOString()}&end=${end.toISOString()}`);
   } catch (_) {
     lrdpSchedule = { totalSlots: 1, reservations: [] };
   }
-  lrdpRender();
+  lrdpRenderCalendar();
 }
 
-function getToken() {
-  return new URLSearchParams(window.location.search).get('token');
-}
-
-function getAccessToken() {
-  return new URLSearchParams(window.location.search).get('access');
-}
-
-function combineLocalDateTime(dateValue, timeValue) {
-  if (!dateValue || !timeValue) throw new Error('La date et l’heure sont requises.');
-  const localValue = `${dateValue}T${timeValue}`;
-  const date = new Date(localValue);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error('Date ou heure invalide.');
-  }
-  return date.toISOString();
-}
-
-function setFeedback(elementId, tone, message) {
-  const element = document.getElementById(elementId);
-  const styles = {
-    success: 'rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700',
-    error: 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700',
-    info: 'rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700'
-  };
-  element.className = styles[tone] || styles.info;
-  element.textContent = message;
-  element.classList.remove('hidden');
-}
-
-function renderResourceSummary() {
-  const resource = resources.find(item => item.id === document.getElementById('resource-id').value);
-  const summary = document.getElementById('resource-summary');
-  if (!resource) {
-    summary.textContent = 'Aucune ressource disponible.';
-    return;
-  }
-  summary.innerHTML = `
-    <p><strong>${resource.name}</strong>${resource.category ? ` · ${resource.category}` : ''}</p>
-    <p class="mt-1">${resource.description || 'Aucune description fournie.'}</p>
-    <p class="mt-2 text-slate-500">Capacité totale : ${resource.totalUnits} unité(s) · lot verrouillé : ${resource.bundleSize} unité(s) · ${resource.totalSlots} lot(s)</p>
-    <p class="mt-1 text-slate-500">${resource.instructions || 'Aucune consigne particulière.'}</p>
-  `;
-  document.getElementById('requested-units').max = resource.totalUnits;
-}
 
 async function loadLink() {
   currentToken = getToken();
