@@ -71,10 +71,8 @@
               <input id="requester-organization" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
             </div>
           </div>
-          <input type="hidden" id="start-date" />
-          <input type="hidden" id="start-time" />
-          <input type="hidden" id="end-date" />
-          <input type="hidden" id="end-time" />
+          <input type="hidden" id="loan-start" />
+          <input type="hidden" id="loan-end" />
           <div class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <div class="flex items-center justify-between">
               <button type="button" id="lrdp-prev" class="p-1 rounded-lg hover:bg-slate-200 transition text-slate-600">
@@ -286,15 +284,17 @@ function lrdpBuildTimeGrid(dateKey, selectedHour, onClickFn, minHour = null) {
   }).join('');
 }
 
-function lrdpBuildMinuteGrid(selectedMinute, onClickFn) {
+function lrdpBuildMinuteGrid(selectedMinute, onClickFn, minMinute = null) {
   return Array.from({ length: 12 }, (_, i) => {
     const m = i * 5;
     const isSelected = selectedMinute === m;
+    const isTooEarly = minMinute !== null && m <= minMinute;
+    const disabled = isTooEarly;
     let cls = 'rounded-lg py-1 text-xs font-mono text-center border transition ';
-    cls += isSelected
-      ? 'bg-blue-600 text-white border-blue-700 '
-      : 'bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:border-blue-300 cursor-pointer ';
-    return `<button type="button" class="${cls}" onclick="${onClickFn}(${m})">${String(m).padStart(2, '0')}</button>`;
+    if (isSelected) cls += 'bg-blue-600 text-white border-blue-700 ';
+    else if (isTooEarly) cls += 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed ';
+    else cls += 'bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:border-blue-300 cursor-pointer ';
+    return `<button type="button" class="${cls}" ${disabled ? 'disabled' : ''} onclick="${disabled ? '' : `${onClickFn}(${m})`}">${String(m).padStart(2, '0')}</button>`;
   }).join('');
 }
 
@@ -355,11 +355,13 @@ function lrdpSelectEndHour(h) {
   lrdpStep = 'pick-end-min';
   const startKey = lrdpDayKey(lrdpStartDate);
   const endKey = lrdpDayKey(lrdpEndDate);
+  const sameDay = startKey === endKey;
   document.getElementById('lrdp-end-time-grid').innerHTML =
-    lrdpBuildTimeGrid(endKey, h, 'lrdpSelectEndHour', startKey === endKey ? lrdpStartHour : null);
+    lrdpBuildTimeGrid(endKey, h, 'lrdpSelectEndHour', sameDay ? lrdpStartHour : null);
   const em = document.getElementById('lrdp-end-minute-section');
   if (em) {
-    document.getElementById('lrdp-end-minute-grid').innerHTML = lrdpBuildMinuteGrid(0, 'lrdpSelectEndMinute');
+    const minMin = sameDay && h === lrdpStartHour ? lrdpStartMinute : null;
+    document.getElementById('lrdp-end-minute-grid').innerHTML = lrdpBuildMinuteGrid(0, 'lrdpSelectEndMinute', minMin);
     em.classList.remove('hidden');
   }
   lrdpUpdateHint();
@@ -531,15 +533,14 @@ document.getElementById('request-form').addEventListener('submit', async event =
   feedback.classList.add('hidden');
 
   try {
-    const startDateVal = document.getElementById('start-date').value;
-    const startTimeVal = document.getElementById('start-time').value;
-    const endDateVal = document.getElementById('end-date').value;
-    const endTimeVal = document.getElementById('end-time').value;
-    if (!startDateVal || !startTimeVal || !endDateVal || !endTimeVal) {
+    const startAt = document.getElementById('loan-start').value;
+    const endAt = document.getElementById('loan-end').value;
+    if (!startAt || !endAt) {
       throw new Error('Veuillez sélectionner une période complète (début et fin) dans le calendrier.');
     }
-    const startAt = combineLocalDateTime(startDateVal, startTimeVal);
-    const endAt = combineLocalDateTime(endDateVal, endTimeVal);
+    if (new Date(endAt) <= new Date(startAt)) {
+      throw new Error('La date de fin doit être après la date de début.');
+    }
 
     const res = await fetch(`/api/loan-request/${encodeURIComponent(currentToken)}/requests`, {
       method: 'POST',

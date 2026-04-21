@@ -1616,6 +1616,11 @@ document.getElementById('reservation-form').addEventListener('submit', async eve
     errorEl.classList.remove('hidden');
     return;
   }
+  if (new Date(endVal) <= new Date(startVal)) {
+    errorEl.textContent = 'La date de fin doit être après la date de début.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
   const recurrenceType = document.getElementById('resv-recurrence-type').value;
   const payload = {
     resourceId: document.getElementById('resv-resource').value,
@@ -1829,15 +1834,17 @@ function dpBuildTimeGrid(dateKey, selectedHour, onClickFn, minHour = null) {
   }).join('');
 }
 
-function dpBuildMinuteGrid(selectedMinute, onClickFn) {
+function dpBuildMinuteGrid(selectedMinute, onClickFn, minMinute = null) {
   return Array.from({ length: 12 }, (_, i) => {
     const m = i * 5;
     const isSelected = selectedMinute === m;
+    const isTooEarly = minMinute !== null && m <= minMinute;
+    const disabled = isTooEarly;
     let cls = 'rounded-lg py-1 text-xs font-mono text-center border transition ';
-    cls += isSelected
-      ? 'bg-blue-600 text-white border-blue-700 '
-      : 'bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:border-blue-300 cursor-pointer ';
-    return `<button type="button" class="${cls}" onclick="${onClickFn}(${m})">${String(m).padStart(2, '0')}</button>`;
+    if (isSelected) cls += 'bg-blue-600 text-white border-blue-700 ';
+    else if (isTooEarly) cls += 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed ';
+    else cls += 'bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:border-blue-300 cursor-pointer ';
+    return `<button type="button" class="${cls}" ${disabled ? 'disabled' : ''} onclick="${disabled ? '' : `${onClickFn}(${m})`}">${String(m).padStart(2, '0')}</button>`;
   }).join('');
 }
 
@@ -1898,11 +1905,13 @@ function dpSelectEndHour(h) {
   dpStep = 'pick-end-min';
   const startKey = dpGetDayKey(dpStartDate);
   const endKey = dpGetDayKey(dpEndDate);
+  const sameDay = startKey === endKey;
   document.getElementById('dp-end-time-grid').innerHTML =
-    dpBuildTimeGrid(endKey, h, 'dpSelectEndHour', startKey === endKey ? dpStartHour : null);
+    dpBuildTimeGrid(endKey, h, 'dpSelectEndHour', sameDay ? dpStartHour : null);
   const em = document.getElementById('dp-end-minute-section');
   if (em) {
-    document.getElementById('dp-end-minute-grid').innerHTML = dpBuildMinuteGrid(0, 'dpSelectEndMinute');
+    const minMin = sameDay && h === dpStartHour ? dpStartMinute : null;
+    document.getElementById('dp-end-minute-grid').innerHTML = dpBuildMinuteGrid(0, 'dpSelectEndMinute', minMin);
     em.classList.remove('hidden');
   }
   dpUpdateHint();
