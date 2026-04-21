@@ -397,15 +397,39 @@
           <input id="resv-org" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
         </div>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Début *</label>
-          <input id="resv-start" type="datetime-local" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+      <input type="hidden" id="resv-start" />
+      <input type="hidden" id="resv-end" />
+      <div id="resv-date-picker" class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <div class="flex items-center justify-between">
+          <button type="button" id="dp-prev" class="p-1 rounded-lg hover:bg-slate-200 transition text-slate-600">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <span id="dp-month-label" class="text-sm font-semibold text-slate-800 capitalize"></span>
+          <button type="button" id="dp-next" class="p-1 rounded-lg hover:bg-slate-200 transition text-slate-600">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Fin *</label>
-          <input id="resv-end" type="datetime-local" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        <div class="grid grid-cols-7 text-center">
+          <div class="text-xs text-slate-400 py-0.5">L</div><div class="text-xs text-slate-400 py-0.5">M</div><div class="text-xs text-slate-400 py-0.5">M</div><div class="text-xs text-slate-400 py-0.5">J</div><div class="text-xs text-slate-400 py-0.5">V</div><div class="text-xs text-slate-400 py-0.5">S</div><div class="text-xs text-slate-400 py-0.5">D</div>
         </div>
+        <div id="dp-grid" class="grid grid-cols-7 gap-0.5"></div>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-500 pt-1">
+          <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-orange-400"></span>Prêt(s) ce jour</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span>Complet</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-blue-600"></span>Sélectionné</span>
+        </div>
+        <p id="dp-hint" class="text-xs text-slate-400 text-center italic pt-1"></p>
+        <div id="dp-time-section" class="hidden space-y-3 pt-2 border-t border-slate-200">
+          <div id="dp-start-time-section" class="space-y-1.5">
+            <p class="text-xs font-semibold text-slate-600">Heure de début — <span id="dp-start-date-label" class="font-normal text-slate-400"></span></p>
+            <div id="dp-start-time-grid" class="grid grid-cols-8 gap-1"></div>
+          </div>
+          <div id="dp-end-time-section" class="hidden space-y-1.5">
+            <p class="text-xs font-semibold text-slate-600">Heure de fin — <span id="dp-end-date-label" class="font-normal text-slate-400"></span></p>
+            <div id="dp-end-time-grid" class="grid grid-cols-8 gap-1"></div>
+          </div>
+        </div>
+        <div id="dp-selection-display" class="hidden rounded-xl bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-900 text-center font-medium"></div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -808,7 +832,9 @@ function openReservationModal(reservation = null) {
   document.getElementById('resv-recurrence-panel').classList.toggle('hidden', !!reservation);
   document.getElementById('reservation-modal-title').textContent = reservation ? 'Modifier la réservation' : 'Nouvelle réservation';
   document.getElementById('reservation-submit-btn').textContent = reservation ? 'Enregistrer les modifications' : 'Enregistrer';
-  // Remplir le select ressources
+
+  dpInit();
+
   const sel = document.getElementById('resv-resource');
   sel.innerHTML = '<option value="">-- Choisir une ressource --</option>';
   loanResources.filter(r => r.isActive || r.id === reservation?.resourceId || r.id === reservation?.resource?.id).forEach(r => {
@@ -820,16 +846,21 @@ function openReservationModal(reservation = null) {
     sel.appendChild(opt);
   });
   if (reservation) {
-    document.getElementById('resv-resource').value = reservation.resourceId || reservation.resource?.id || '';
+    const resourceId = reservation.resourceId || reservation.resource?.id || '';
+    document.getElementById('resv-resource').value = resourceId;
     document.getElementById('resv-name').value = reservation.requesterName || '';
     document.getElementById('resv-email').value = reservation.requesterEmail || '';
     document.getElementById('resv-phone').value = reservation.requesterPhone || '';
     document.getElementById('resv-org').value = reservation.requesterOrganization || '';
-    document.getElementById('resv-start').value = toDatetimeLocalValue(reservation.startAt);
-    document.getElementById('resv-end').value = toDatetimeLocalValue(reservation.endAt);
     document.getElementById('resv-units').value = reservation.requestedUnits || 1;
     document.getElementById('resv-status').value = reservation.status || 'APPROVED';
     document.getElementById('resv-notes').value = reservation.internalNotes || '';
+    dpSetFromExisting(reservation.startAt, reservation.endAt);
+    dpRenderCalendar();
+    dpShowStartTimeGrid();
+    dpShowEndTimeGrid();
+    dpUpdateSelection();
+    if (resourceId) dpLoadSchedule(resourceId);
   }
   const resm = document.getElementById('reservation-modal');
   resm.classList.remove('hidden');
@@ -1446,6 +1477,19 @@ function bindLoansPageEvents() {
     renderCalendar();
   });
 
+  document.getElementById('dp-prev').addEventListener('click', () => {
+    dpCurrentMonth.setMonth(dpCurrentMonth.getMonth() - 1);
+    dpRenderCalendar();
+  });
+  document.getElementById('dp-next').addEventListener('click', () => {
+    dpCurrentMonth.setMonth(dpCurrentMonth.getMonth() + 1);
+    dpRenderCalendar();
+  });
+  document.getElementById('resv-resource').addEventListener('change', async e => {
+    dpInit();
+    if (e.target.value) await dpLoadSchedule(e.target.value);
+  });
+
   document.querySelectorAll('[data-action="calendar-view"]').forEach(button => {
     button.addEventListener('click', event => {
       event.preventDefault();
@@ -1557,6 +1601,13 @@ document.getElementById('reservation-form').addEventListener('submit', async eve
   const errorEl = document.getElementById('reservation-error');
   errorEl.classList.add('hidden');
   const reservationId = document.getElementById('resv-id').value;
+  const startVal = document.getElementById('resv-start').value;
+  const endVal = document.getElementById('resv-end').value;
+  if (!startVal || !endVal) {
+    errorEl.textContent = 'Veuillez sélectionner une période complète (début et fin) dans le calendrier.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
   const recurrenceType = document.getElementById('resv-recurrence-type').value;
   const payload = {
     resourceId: document.getElementById('resv-resource').value,
@@ -1564,8 +1615,8 @@ document.getElementById('reservation-form').addEventListener('submit', async eve
     requesterEmail: document.getElementById('resv-email').value.trim(),
     requesterPhone: document.getElementById('resv-phone').value.trim() || null,
     requesterOrganization: document.getElementById('resv-org').value.trim() || null,
-    startAt: new Date(document.getElementById('resv-start').value).toISOString(),
-    endAt: new Date(document.getElementById('resv-end').value).toISOString(),
+    startAt: startVal,
+    endAt: endVal,
     requestedUnits: parseInt(document.getElementById('resv-units').value, 10),
     status: document.getElementById('resv-status').value,
     internalNotes: document.getElementById('resv-notes').value.trim() || null
@@ -1621,6 +1672,255 @@ document.getElementById('link-form').addEventListener('submit', async event => {
     errorEl.classList.remove('hidden');
   }
 });
+
+// ── Date Picker pour modale réservation ──────────────────────────────────────
+let dpSchedule = { totalSlots: 1, reservations: [] };
+let dpCurrentMonth = new Date();
+let dpStep = 'pick-start-date';
+let dpStartDate = null;
+let dpEndDate = null;
+let dpStartHour = null;
+let dpEndHour = null;
+
+function dpGetDayKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function dpGetReservationsForDay(dateKey) {
+  const dayStart = new Date(`${dateKey}T00:00:00`);
+  const dayEnd = new Date(`${dateKey}T23:59:59`);
+  return (dpSchedule.reservations || []).filter(r =>
+    new Date(r.startAt) <= dayEnd && new Date(r.endAt) >= dayStart
+  );
+}
+
+function dpGetUsedSlotsForHour(dateKey, hour) {
+  const slotStart = new Date(`${dateKey}T${String(hour).padStart(2, '0')}:00:00`);
+  const slotEnd = new Date(`${dateKey}T${String(hour).padStart(2, '0')}:59:59`);
+  return (dpSchedule.reservations || [])
+    .filter(r => new Date(r.startAt) < slotEnd && new Date(r.endAt) > slotStart)
+    .reduce((sum, r) => sum + (r.reservedSlots || 0), 0);
+}
+
+function dpRenderCalendar() {
+  const monthLabel = document.getElementById('dp-month-label');
+  const gridEl = document.getElementById('dp-grid');
+  if (!monthLabel || !gridEl) return;
+
+  const year = dpCurrentMonth.getFullYear();
+  const month = dpCurrentMonth.getMonth();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  monthLabel.textContent = dpCurrentMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+  const firstDay = new Date(year, month, 1);
+  let startDow = firstDay.getDay();
+  startDow = startDow === 0 ? 6 : startDow - 1;
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const startKey = dpStartDate ? dpGetDayKey(dpStartDate) : null;
+  const endKey = dpEndDate ? dpGetDayKey(dpEndDate) : null;
+  const totalSlots = dpSchedule.totalSlots || 1;
+
+  gridEl.innerHTML = cells.map(date => {
+    if (!date) return `<div class="min-h-[30px]"></div>`;
+    const key = dpGetDayKey(date);
+    const hasReservations = dpGetReservationsForDay(key).length > 0;
+    const isPast = date < today;
+    const isStart = key === startKey;
+    const isEnd = key === endKey;
+    const inRange = startKey && endKey && key > startKey && key < endKey;
+
+    let maxUsed = 0;
+    if (hasReservations) {
+      for (let h = 0; h < 24; h++) maxUsed = Math.max(maxUsed, dpGetUsedSlotsForHour(key, h));
+    }
+    const isFullyBooked = maxUsed >= totalSlots;
+
+    let cls = 'min-h-[30px] flex items-center justify-center rounded-lg text-xs font-medium relative select-none transition ';
+    if (isPast) cls += 'opacity-35 cursor-default text-slate-400 ';
+    else if (isStart || isEnd) cls += 'bg-blue-600 text-white cursor-pointer ';
+    else if (inRange) cls += 'bg-blue-100 text-blue-800 cursor-pointer ';
+    else if (isFullyBooked) cls += 'bg-red-100 text-red-600 hover:bg-red-200 cursor-pointer ';
+    else if (hasReservations) cls += 'bg-orange-50 text-orange-700 hover:bg-orange-100 cursor-pointer ';
+    else cls += 'hover:bg-slate-200 text-slate-700 cursor-pointer ';
+
+    const dot = hasReservations && !isStart && !isEnd
+      ? `<span class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isFullyBooked ? 'bg-red-400' : 'bg-orange-400'}"></span>`
+      : '';
+
+    return `<div class="${cls}" ${isPast ? '' : `onclick="dpSelectDay('${key}')"`}>${date.getDate()}${dot}</div>`;
+  }).join('');
+
+  dpUpdateHint();
+}
+
+function dpSelectDay(key) {
+  const date = new Date(`${key}T00:00:00`);
+  if (dpStep === 'pick-start-date' || dpStep === 'done') {
+    dpStartDate = date; dpEndDate = null; dpStartHour = null; dpEndHour = null;
+    dpStep = 'pick-start-time';
+    document.getElementById('resv-start').value = '';
+    document.getElementById('resv-end').value = '';
+    document.getElementById('dp-selection-display').classList.add('hidden');
+    dpRenderCalendar();
+    dpShowStartTimeGrid();
+  } else if (dpStep === 'pick-end-date') {
+    if (key < dpGetDayKey(dpStartDate)) {
+      dpStartDate = date; dpEndDate = null; dpStartHour = null; dpEndHour = null;
+      dpStep = 'pick-start-time';
+      document.getElementById('resv-start').value = '';
+      document.getElementById('resv-end').value = '';
+      document.getElementById('dp-selection-display').classList.add('hidden');
+      dpRenderCalendar();
+      dpShowStartTimeGrid();
+    } else {
+      dpEndDate = date; dpEndHour = null;
+      dpStep = 'pick-end-time';
+      dpRenderCalendar();
+      dpShowEndTimeGrid();
+    }
+  }
+}
+
+function dpBuildTimeGrid(dateKey, selectedHour, onClickFn, minHour = null) {
+  const totalSlots = dpSchedule.totalSlots || 1;
+  return Array.from({ length: 24 }, (_, h) => {
+    const used = dpGetUsedSlotsForHour(dateKey, h);
+    const isFullyBooked = used >= totalSlots;
+    const isPartial = used > 0 && used < totalSlots;
+    const isSelected = selectedHour === h;
+    const isTooEarly = minHour !== null && h <= minHour;
+    const disabled = isFullyBooked || isTooEarly;
+    let cls = 'rounded-lg py-1 text-xs font-mono text-center border transition ';
+    if (isSelected) cls += 'bg-blue-600 text-white border-blue-700 ';
+    else if (isFullyBooked) cls += 'bg-red-100 text-red-500 border-red-200 cursor-not-allowed ';
+    else if (isTooEarly) cls += 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed ';
+    else if (isPartial) cls += 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200 cursor-pointer ';
+    else cls += 'bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:border-blue-300 cursor-pointer ';
+    return `<button type="button" class="${cls}" ${disabled ? 'disabled' : ''} onclick="${onClickFn}(${h})">${String(h).padStart(2, '0')}h</button>`;
+  }).join('');
+}
+
+function dpShowStartTimeGrid() {
+  const key = dpGetDayKey(dpStartDate);
+  document.getElementById('dp-start-date-label').textContent =
+    dpStartDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  document.getElementById('dp-start-time-grid').innerHTML = dpBuildTimeGrid(key, dpStartHour, 'dpSelectStartHour');
+  document.getElementById('dp-time-section').classList.remove('hidden');
+  document.getElementById('dp-start-time-section').classList.remove('hidden');
+  document.getElementById('dp-end-time-section').classList.add('hidden');
+}
+
+function dpShowEndTimeGrid() {
+  const startKey = dpGetDayKey(dpStartDate);
+  const endKey = dpGetDayKey(dpEndDate);
+  const minHour = startKey === endKey ? dpStartHour : null;
+  document.getElementById('dp-end-date-label').textContent =
+    dpEndDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  document.getElementById('dp-end-time-grid').innerHTML = dpBuildTimeGrid(endKey, dpEndHour, 'dpSelectEndHour', minHour);
+  document.getElementById('dp-time-section').classList.remove('hidden');
+  document.getElementById('dp-start-time-section').classList.remove('hidden');
+  document.getElementById('dp-end-time-section').classList.remove('hidden');
+}
+
+function dpSelectStartHour(h) {
+  dpStartHour = h;
+  dpStep = 'pick-end-date';
+  document.getElementById('resv-start').value =
+    new Date(dpStartDate.getFullYear(), dpStartDate.getMonth(), dpStartDate.getDate(), h, 0, 0).toISOString();
+  document.getElementById('dp-start-time-grid').innerHTML = dpBuildTimeGrid(dpGetDayKey(dpStartDate), h, 'dpSelectStartHour');
+  dpRenderCalendar();
+}
+
+function dpSelectEndHour(h) {
+  dpEndHour = h;
+  dpStep = 'done';
+  document.getElementById('resv-end').value =
+    new Date(dpEndDate.getFullYear(), dpEndDate.getMonth(), dpEndDate.getDate(), h, 0, 0).toISOString();
+  const startKey = dpGetDayKey(dpStartDate);
+  const endKey = dpGetDayKey(dpEndDate);
+  document.getElementById('dp-end-time-grid').innerHTML =
+    dpBuildTimeGrid(endKey, h, 'dpSelectEndHour', startKey === endKey ? dpStartHour : null);
+  dpRenderCalendar();
+  dpUpdateSelection();
+}
+
+function dpUpdateSelection() {
+  const el = document.getElementById('dp-selection-display');
+  if (!el) return;
+  if (dpStep === 'done' && dpStartDate && dpEndDate && dpStartHour !== null && dpEndHour !== null) {
+    const fmt = d => d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    el.innerHTML = `<strong>Du</strong> ${fmt(dpStartDate)} à ${String(dpStartHour).padStart(2, '0')}:00 &nbsp;→&nbsp; <strong>au</strong> ${fmt(dpEndDate)} à ${String(dpEndHour).padStart(2, '0')}:00`;
+    el.classList.remove('hidden');
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
+function dpUpdateHint() {
+  const el = document.getElementById('dp-hint');
+  if (!el) return;
+  const hints = {
+    'pick-start-date': 'Cliquez sur un jour pour définir la date de début',
+    'pick-start-time': 'Sélectionnez l\'heure de début',
+    'pick-end-date': 'Cliquez sur un jour pour définir la date de fin',
+    'pick-end-time': 'Sélectionnez l\'heure de fin',
+    'done': 'Cliquez sur un jour pour modifier la période'
+  };
+  el.textContent = hints[dpStep] || '';
+}
+
+function dpInit() {
+  dpCurrentMonth = new Date(); dpCurrentMonth.setDate(1); dpCurrentMonth.setHours(0, 0, 0, 0);
+  dpStep = 'pick-start-date';
+  dpStartDate = null; dpEndDate = null; dpStartHour = null; dpEndHour = null;
+  dpSchedule = { totalSlots: 1, reservations: [] };
+  const ts = document.getElementById('dp-time-section');
+  const sd = document.getElementById('dp-selection-display');
+  const es = document.getElementById('dp-end-time-section');
+  if (ts) ts.classList.add('hidden');
+  if (sd) sd.classList.add('hidden');
+  if (es) es.classList.add('hidden');
+  dpRenderCalendar();
+}
+
+function dpSetFromExisting(startAt, endAt) {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  dpStartDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  dpEndDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  dpStartHour = start.getHours();
+  dpEndHour = end.getHours();
+  dpCurrentMonth = new Date(dpStartDate.getFullYear(), dpStartDate.getMonth(), 1);
+  dpStep = 'done';
+  document.getElementById('resv-start').value = start.toISOString();
+  document.getElementById('resv-end').value = end.toISOString();
+}
+
+async function dpLoadSchedule(resourceId) {
+  if (!resourceId) {
+    dpSchedule = { totalSlots: 1, reservations: [] };
+    dpRenderCalendar();
+    return;
+  }
+  try {
+    const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setMonth(end.getMonth() + 6);
+    dpSchedule = await api.get(`/loans/resources/${resourceId}/schedule`, { start: start.toISOString(), end: end.toISOString() });
+  } catch (_) {
+    dpSchedule = { totalSlots: 1, reservations: [] };
+  }
+  dpRenderCalendar();
+  if (dpStep !== 'pick-start-date' && dpStartDate) {
+    dpShowStartTimeGrid();
+    if ((dpStep === 'pick-end-time' || dpStep === 'done') && dpEndDate) dpShowEndTimeGrid();
+  }
+}
 
 async function initLoansPage({ forceReload = false } = {}) {
   if (loansPageInitPromise && !forceReload) return loansPageInitPromise;

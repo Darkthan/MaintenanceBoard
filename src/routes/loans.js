@@ -93,6 +93,23 @@ function fmtLoanDate(d) {
   });
 }
 
+async function getResourceSchedule(resourceId, start, end) {
+  const resource = await prisma.loanResource.findUnique({ where: { id: resourceId } });
+  if (!resource) return null;
+  const bundle = getBundleInfo(resource);
+  const reservations = await prisma.loanReservation.findMany({
+    where: {
+      resourceId,
+      status: { in: ACTIVE_LOAN_STATUSES },
+      startAt: { lt: end },
+      endAt: { gt: start }
+    },
+    select: { id: true, startAt: true, endAt: true, reservedSlots: true, status: true },
+    orderBy: { startAt: 'asc' }
+  });
+  return { totalSlots: bundle.totalSlots, reservations };
+}
+
 async function sendLoanConfirmationEmail(reservation) {
   try {
     const { transporter, from } = createSmtpTransporter();
@@ -467,6 +484,16 @@ loanPublicRouter.post('/:token/requests',
   }
 );
 
+loanPublicRouter.get('/resources/:id/schedule', async (req, res, next) => {
+  try {
+    const start = req.query.start ? new Date(req.query.start) : new Date();
+    const end = req.query.end ? new Date(req.query.end) : new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
+    const result = await getResourceSchedule(req.params.id, start, end);
+    if (!result) return res.status(404).json({ error: 'Ressource introuvable' });
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 loansRouter.get('/calendar.ics', async (req, res, next) => {
   try {
     if (req.query.token !== getCalendarFeedToken()) {
@@ -491,6 +518,16 @@ loansRouter.get('/calendar-feed', (req, res) => {
     token,
     url: `${config.appUrl}/api/loans/calendar.ics?token=${encodeURIComponent(token)}`
   });
+});
+
+loansRouter.get('/resources/:id/schedule', async (req, res, next) => {
+  try {
+    const start = req.query.start ? new Date(req.query.start) : new Date();
+    const end = req.query.end ? new Date(req.query.end) : new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
+    const result = await getResourceSchedule(req.params.id, start, end);
+    if (!result) return res.status(404).json({ error: 'Ressource introuvable' });
+    res.json(result);
+  } catch (err) { next(err); }
 });
 
 loansRouter.get('/resources', async (_req, res, next) => {

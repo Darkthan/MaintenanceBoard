@@ -71,29 +71,45 @@
               <input id="requester-organization" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
             </div>
           </div>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label class="mb-1 block text-sm font-medium text-slate-700">Date de début</label>
-              <input id="start-date" type="date" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+          <input type="hidden" id="start-date" />
+          <input type="hidden" id="start-time" />
+          <input type="hidden" id="end-date" />
+          <input type="hidden" id="end-time" />
+          <div class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div class="flex items-center justify-between">
+              <button type="button" id="lrdp-prev" class="p-1 rounded-lg hover:bg-slate-200 transition text-slate-600">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+              </button>
+              <span id="lrdp-month-label" class="text-sm font-semibold text-slate-800 capitalize"></span>
+              <button type="button" id="lrdp-next" class="p-1 rounded-lg hover:bg-slate-200 transition text-slate-600">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </button>
             </div>
-            <div>
-              <label class="mb-1 block text-sm font-medium text-slate-700">Heure de début</label>
-              <input id="start-time" type="time" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+            <div class="grid grid-cols-7 text-center">
+              <div class="text-xs text-slate-400 py-0.5">L</div><div class="text-xs text-slate-400 py-0.5">M</div><div class="text-xs text-slate-400 py-0.5">M</div><div class="text-xs text-slate-400 py-0.5">J</div><div class="text-xs text-slate-400 py-0.5">V</div><div class="text-xs text-slate-400 py-0.5">S</div><div class="text-xs text-slate-400 py-0.5">D</div>
             </div>
+            <div id="lrdp-grid" class="grid grid-cols-7 gap-0.5"></div>
+            <div class="flex flex-wrap gap-3 text-xs text-slate-500 pt-1">
+              <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-orange-400"></span>Prêt(s) ce jour</span>
+              <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span>Complet</span>
+              <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-blue-600"></span>Sélectionné</span>
+            </div>
+            <p id="lrdp-hint" class="text-xs text-slate-400 text-center italic pt-1"></p>
+            <div id="lrdp-time-section" class="hidden space-y-3 pt-2 border-t border-slate-200">
+              <div id="lrdp-start-time-section" class="space-y-1.5">
+                <p class="text-xs font-semibold text-slate-600">Heure de début — <span id="lrdp-start-date-label" class="font-normal text-slate-400"></span></p>
+                <div id="lrdp-start-time-grid" class="grid grid-cols-8 gap-1"></div>
+              </div>
+              <div id="lrdp-end-time-section" class="hidden space-y-1.5">
+                <p class="text-xs font-semibold text-slate-600">Heure de fin — <span id="lrdp-end-date-label" class="font-normal text-slate-400"></span></p>
+                <div id="lrdp-end-time-grid" class="grid grid-cols-8 gap-1"></div>
+              </div>
+            </div>
+            <div id="lrdp-selection-display" class="hidden rounded-xl bg-sky-50 border border-sky-200 px-3 py-2 text-sm text-sky-900 text-center font-medium"></div>
           </div>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label class="mb-1 block text-sm font-medium text-slate-700">Date de fin</label>
-              <input id="end-date" type="date" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-medium text-slate-700">Heure de fin</label>
-              <input id="end-time" type="time" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-medium text-slate-700">Quantité souhaitée</label>
-              <input id="requested-units" type="number" min="1" value="1" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-            </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium text-slate-700">Quantité souhaitée</label>
+            <input id="requested-units" type="number" min="1" value="1" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
           </div>
           <div>
             <label class="mb-1 block text-sm font-medium text-slate-700">Besoins complémentaires</label>
@@ -116,6 +132,218 @@
 let currentToken = null;
 let currentAccessToken = null;
 let resources = [];
+
+// ── Date Picker public ────────────────────────────────────────────────────────
+let lrdpSchedule = { totalSlots: 1, reservations: [] };
+let lrdpCurrentMonth = new Date();
+let lrdpStep = 'pick-start-date';
+let lrdpStartDate = null;
+let lrdpEndDate = null;
+let lrdpStartHour = null;
+let lrdpEndHour = null;
+
+function lrdpDayKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function lrdpUsedSlotsForHour(dateKey, hour) {
+  const slotStart = new Date(`${dateKey}T${String(hour).padStart(2, '0')}:00:00`);
+  const slotEnd = new Date(`${dateKey}T${String(hour).padStart(2, '0')}:59:59`);
+  return (lrdpSchedule.reservations || [])
+    .filter(r => new Date(r.startAt) < slotEnd && new Date(r.endAt) > slotStart)
+    .reduce((sum, r) => sum + (r.reservedSlots || 0), 0);
+}
+
+function lrdpHasReservationsForDay(dateKey) {
+  const dayStart = new Date(`${dateKey}T00:00:00`);
+  const dayEnd = new Date(`${dateKey}T23:59:59`);
+  return (lrdpSchedule.reservations || []).some(r =>
+    new Date(r.startAt) <= dayEnd && new Date(r.endAt) >= dayStart
+  );
+}
+
+function lrdpRender() {
+  const monthLabel = document.getElementById('lrdp-month-label');
+  const gridEl = document.getElementById('lrdp-grid');
+  if (!monthLabel || !gridEl) return;
+
+  const year = lrdpCurrentMonth.getFullYear();
+  const month = lrdpCurrentMonth.getMonth();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  monthLabel.textContent = lrdpCurrentMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+  const firstDay = new Date(year, month, 1);
+  let startDow = firstDay.getDay();
+  startDow = startDow === 0 ? 6 : startDow - 1;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const startKey = lrdpStartDate ? lrdpDayKey(lrdpStartDate) : null;
+  const endKey = lrdpEndDate ? lrdpDayKey(lrdpEndDate) : null;
+  const totalSlots = lrdpSchedule.totalSlots || 1;
+
+  gridEl.innerHTML = cells.map(date => {
+    if (!date) return `<div class="min-h-[30px]"></div>`;
+    const key = lrdpDayKey(date);
+    const hasBkg = lrdpHasReservationsForDay(key);
+    const isPast = date < today;
+    const isStart = key === startKey;
+    const isEnd = key === endKey;
+    const inRange = startKey && endKey && key > startKey && key < endKey;
+    let maxUsed = 0;
+    if (hasBkg) for (let h = 0; h < 24; h++) maxUsed = Math.max(maxUsed, lrdpUsedSlotsForHour(key, h));
+    const isFull = maxUsed >= totalSlots;
+
+    let cls = 'min-h-[30px] flex items-center justify-center rounded-lg text-xs font-medium relative select-none transition ';
+    if (isPast) cls += 'opacity-35 cursor-default text-slate-400 ';
+    else if (isStart || isEnd) cls += 'bg-sky-600 text-white cursor-pointer ';
+    else if (inRange) cls += 'bg-sky-100 text-sky-800 cursor-pointer ';
+    else if (isFull) cls += 'bg-red-100 text-red-600 hover:bg-red-200 cursor-pointer ';
+    else if (hasBkg) cls += 'bg-orange-50 text-orange-700 hover:bg-orange-100 cursor-pointer ';
+    else cls += 'hover:bg-slate-200 text-slate-700 cursor-pointer ';
+
+    const dot = hasBkg && !isStart && !isEnd
+      ? `<span class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isFull ? 'bg-red-400' : 'bg-orange-400'}"></span>`
+      : '';
+    return `<div class="${cls}" ${isPast ? '' : `onclick="lrdpSelectDay('${key}')"`}>${date.getDate()}${dot}</div>`;
+  }).join('');
+
+  const el = document.getElementById('lrdp-hint');
+  if (el) {
+    const hints = {
+      'pick-start-date': 'Cliquez sur un jour pour définir la date de début',
+      'pick-start-time': 'Sélectionnez l\'heure de début',
+      'pick-end-date': 'Cliquez sur un jour pour définir la date de fin',
+      'pick-end-time': 'Sélectionnez l\'heure de fin',
+      'done': 'Cliquez sur un jour pour modifier la période'
+    };
+    el.textContent = hints[lrdpStep] || '';
+  }
+}
+
+function lrdpSelectDay(key) {
+  const date = new Date(`${key}T00:00:00`);
+  if (lrdpStep === 'pick-start-date' || lrdpStep === 'done') {
+    lrdpStartDate = date; lrdpEndDate = null; lrdpStartHour = null; lrdpEndHour = null;
+    lrdpStep = 'pick-start-time';
+    ['start-date','start-time','end-date','end-time'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('lrdp-selection-display').classList.add('hidden');
+    lrdpRender();
+    lrdpShowStart();
+  } else if (lrdpStep === 'pick-end-date') {
+    if (key < lrdpDayKey(lrdpStartDate)) {
+      lrdpStartDate = date; lrdpEndDate = null; lrdpStartHour = null; lrdpEndHour = null;
+      lrdpStep = 'pick-start-time';
+      ['start-date','start-time','end-date','end-time'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('lrdp-selection-display').classList.add('hidden');
+      lrdpRender();
+      lrdpShowStart();
+    } else {
+      lrdpEndDate = date; lrdpEndHour = null;
+      lrdpStep = 'pick-end-time';
+      lrdpRender();
+      lrdpShowEnd();
+    }
+  }
+}
+
+function lrdpTimeGrid(dateKey, selectedHour, onClickFn, minHour = null) {
+  const totalSlots = lrdpSchedule.totalSlots || 1;
+  return Array.from({ length: 24 }, (_, h) => {
+    const used = lrdpUsedSlotsForHour(dateKey, h);
+    const isFull = used >= totalSlots;
+    const isPartial = used > 0 && used < totalSlots;
+    const isSelected = selectedHour === h;
+    const isTooEarly = minHour !== null && h <= minHour;
+    const disabled = isFull || isTooEarly;
+    let cls = 'rounded-lg py-1 text-xs font-mono text-center border transition ';
+    if (isSelected) cls += 'bg-sky-600 text-white border-sky-700 ';
+    else if (isFull) cls += 'bg-red-100 text-red-500 border-red-200 cursor-not-allowed ';
+    else if (isTooEarly) cls += 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed ';
+    else if (isPartial) cls += 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200 cursor-pointer ';
+    else cls += 'bg-white text-slate-700 border-slate-200 hover:bg-sky-50 hover:border-sky-300 cursor-pointer ';
+    return `<button type="button" class="${cls}" ${disabled ? 'disabled' : ''} onclick="${onClickFn}(${h})">${String(h).padStart(2, '0')}h</button>`;
+  }).join('');
+}
+
+function lrdpShowStart() {
+  const key = lrdpDayKey(lrdpStartDate);
+  document.getElementById('lrdp-start-date-label').textContent =
+    lrdpStartDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  document.getElementById('lrdp-start-time-grid').innerHTML = lrdpTimeGrid(key, lrdpStartHour, 'lrdpSelectStartHour');
+  document.getElementById('lrdp-time-section').classList.remove('hidden');
+  document.getElementById('lrdp-start-time-section').classList.remove('hidden');
+  document.getElementById('lrdp-end-time-section').classList.add('hidden');
+}
+
+function lrdpShowEnd() {
+  const startKey = lrdpDayKey(lrdpStartDate);
+  const endKey = lrdpDayKey(lrdpEndDate);
+  const minHour = startKey === endKey ? lrdpStartHour : null;
+  document.getElementById('lrdp-end-date-label').textContent =
+    lrdpEndDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  document.getElementById('lrdp-end-time-grid').innerHTML = lrdpTimeGrid(endKey, lrdpEndHour, 'lrdpSelectEndHour', minHour);
+  document.getElementById('lrdp-time-section').classList.remove('hidden');
+  document.getElementById('lrdp-start-time-section').classList.remove('hidden');
+  document.getElementById('lrdp-end-time-section').classList.remove('hidden');
+}
+
+function lrdpSelectStartHour(h) {
+  lrdpStartHour = h;
+  lrdpStep = 'pick-end-date';
+  document.getElementById('start-date').value = lrdpDayKey(lrdpStartDate);
+  document.getElementById('start-time').value = `${String(h).padStart(2, '0')}:00`;
+  document.getElementById('lrdp-start-time-grid').innerHTML = lrdpTimeGrid(lrdpDayKey(lrdpStartDate), h, 'lrdpSelectStartHour');
+  lrdpRender();
+}
+
+function lrdpSelectEndHour(h) {
+  lrdpEndHour = h;
+  lrdpStep = 'done';
+  document.getElementById('end-date').value = lrdpDayKey(lrdpEndDate);
+  document.getElementById('end-time').value = `${String(h).padStart(2, '0')}:00`;
+  const startKey = lrdpDayKey(lrdpStartDate);
+  const endKey = lrdpDayKey(lrdpEndDate);
+  document.getElementById('lrdp-end-time-grid').innerHTML =
+    lrdpTimeGrid(endKey, h, 'lrdpSelectEndHour', startKey === endKey ? lrdpStartHour : null);
+  lrdpRender();
+  const el = document.getElementById('lrdp-selection-display');
+  if (el) {
+    const fmt = d => d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    el.innerHTML = `<strong>Du</strong> ${fmt(lrdpStartDate)} à ${String(lrdpStartHour).padStart(2, '0')}:00 &nbsp;→&nbsp; <strong>au</strong> ${fmt(lrdpEndDate)} à ${String(h).padStart(2, '0')}:00`;
+    el.classList.remove('hidden');
+  }
+}
+
+function lrdpInit() {
+  lrdpCurrentMonth = new Date(); lrdpCurrentMonth.setDate(1); lrdpCurrentMonth.setHours(0, 0, 0, 0);
+  lrdpStep = 'pick-start-date';
+  lrdpStartDate = null; lrdpEndDate = null; lrdpStartHour = null; lrdpEndHour = null;
+  lrdpSchedule = { totalSlots: 1, reservations: [] };
+  ['lrdp-time-section','lrdp-selection-display','lrdp-end-time-section'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  lrdpRender();
+}
+
+async function lrdpLoadSchedule(resourceId) {
+  if (!resourceId) { lrdpSchedule = { totalSlots: 1, reservations: [] }; lrdpRender(); return; }
+  try {
+    const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setMonth(end.getMonth() + 6);
+    const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() });
+    const res = await fetch(`/api/loan-request/resources/${encodeURIComponent(resourceId)}/schedule?${params}`);
+    if (res.ok) lrdpSchedule = await res.json();
+    else lrdpSchedule = { totalSlots: 1, reservations: [] };
+  } catch (_) {
+    lrdpSchedule = { totalSlots: 1, reservations: [] };
+  }
+  lrdpRender();
+}
 
 function getToken() {
   return new URLSearchParams(window.location.search).get('token');
@@ -202,12 +430,27 @@ async function loadLink() {
     renderResourceSummary();
 
     document.getElementById('request-form').classList.remove('hidden');
+    lrdpInit();
+    if (select.value) lrdpLoadSchedule(select.value);
   } catch (err) {
     document.getElementById('loading').textContent = err.message;
   }
 }
 
-document.getElementById('resource-id').addEventListener('change', renderResourceSummary);
+document.getElementById('resource-id').addEventListener('change', e => {
+  renderResourceSummary();
+  lrdpInit();
+  if (e.target.value) lrdpLoadSchedule(e.target.value);
+});
+
+document.getElementById('lrdp-prev').addEventListener('click', () => {
+  lrdpCurrentMonth.setMonth(lrdpCurrentMonth.getMonth() - 1);
+  lrdpRender();
+});
+document.getElementById('lrdp-next').addEventListener('click', () => {
+  lrdpCurrentMonth.setMonth(lrdpCurrentMonth.getMonth() + 1);
+  lrdpRender();
+});
 
 document.getElementById('send-auth-link-btn').addEventListener('click', async () => {
   const requesterEmail = document.getElementById('auth-requester-email').value.trim();
@@ -236,14 +479,15 @@ document.getElementById('request-form').addEventListener('submit', async event =
   feedback.classList.add('hidden');
 
   try {
-    const startAt = combineLocalDateTime(
-      document.getElementById('start-date').value,
-      document.getElementById('start-time').value
-    );
-    const endAt = combineLocalDateTime(
-      document.getElementById('end-date').value,
-      document.getElementById('end-time').value
-    );
+    const startDateVal = document.getElementById('start-date').value;
+    const startTimeVal = document.getElementById('start-time').value;
+    const endDateVal = document.getElementById('end-date').value;
+    const endTimeVal = document.getElementById('end-time').value;
+    if (!startDateVal || !startTimeVal || !endDateVal || !endTimeVal) {
+      throw new Error('Veuillez sélectionner une période complète (début et fin) dans le calendrier.');
+    }
+    const startAt = combineLocalDateTime(startDateVal, startTimeVal);
+    const endAt = combineLocalDateTime(endDateVal, endTimeVal);
 
     const res = await fetch(`/api/loan-request/${encodeURIComponent(currentToken)}/requests`, {
       method: 'POST',
