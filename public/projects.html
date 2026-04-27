@@ -286,7 +286,8 @@ let dragOverIndicator = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
-  await requireAuthAndInit();
+  const user = await requireLogin();
+  if (user.role === 'ADMIN') document.getElementById('admin-delete-wrap').classList.remove('hidden');
   renderNav('projects');
   buildColorSwatches();
   await loadUsers();
@@ -297,12 +298,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 });
-
-async function requireAuthAndInit() {
-  const user = await getUser();
-  if (!user) { window.location.href = '/login.html'; return; }
-  if (user.role === 'ADMIN') document.getElementById('admin-delete-wrap').classList.remove('hidden');
-}
 
 async function loadUsers() {
   try {
