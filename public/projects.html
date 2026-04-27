@@ -211,9 +211,16 @@
         </select>
       </div>
     </div>
-    <div class="px-6 py-4 border-t border-slate-100 flex justify-between items-center">
+    <div class="px-6 py-4 border-t border-slate-100 flex justify-between items-center gap-2">
       <button id="card-delete-btn" class="hidden text-sm text-red-500 hover:text-red-700 transition" onclick="deleteCard()">Supprimer</button>
       <div class="flex gap-2 ml-auto">
+        <a id="card-note-link" href="#" target="_blank"
+          class="hidden items-center gap-1.5 px-3 py-2 text-sm text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition font-medium">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Notes
+        </a>
         <button onclick="closeCardModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition">Annuler</button>
         <button onclick="saveCard()" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">Enregistrer</button>
       </div>
@@ -634,6 +641,8 @@ function openNewCardModal(colId) {
   document.getElementById('card-priority').value = 'NORMAL';
   document.getElementById('card-due').value = '';
   document.getElementById('card-delete-btn').classList.add('hidden');
+  const noteLink = document.getElementById('card-note-link');
+  noteLink.classList.add('hidden'); noteLink.classList.remove('inline-flex');
   populateAssigneeSelect(null);
   document.getElementById('card-modal').classList.remove('hidden');
   setTimeout(() => document.getElementById('card-title').focus(), 50);
@@ -652,6 +661,9 @@ function openEditCardModal(cardId, colId) {
   document.getElementById('card-priority').value = card.priority;
   document.getElementById('card-due').value = card.dueDate ? card.dueDate.slice(0, 10) : '';
   document.getElementById('card-delete-btn').classList.remove('hidden');
+  const noteLink = document.getElementById('card-note-link');
+  noteLink.href = `/card-note.html?projectId=${currentProject.id}&cardId=${cardId}`;
+  noteLink.classList.remove('hidden'); noteLink.classList.add('inline-flex');
   populateAssigneeSelect(card.assigneeId);
   document.getElementById('card-modal').classList.remove('hidden');
   setTimeout(() => document.getElementById('card-title').focus(), 50);
