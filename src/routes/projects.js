@@ -9,6 +9,11 @@ const CARD_INCLUDE = {
   assignee: { select: { id: true, name: true } }
 };
 
+const CARD_INCLUDE_NOTE = {
+  assignee: { select: { id: true, name: true } },
+  column: { select: { id: true, title: true, project: { select: { id: true, title: true, color: true } } } }
+};
+
 const PROJECT_FULL_INCLUDE = {
   creator: { select: { id: true, name: true } },
   columns: {
@@ -265,11 +270,40 @@ router.patch('/:id/cards/:cardId', requireAuth, async (req, res, next) => {
     }
     if (req.body.dueDate !== undefined) data.dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
     if (req.body.assigneeId !== undefined) data.assigneeId = req.body.assigneeId || null;
+    if (req.body.note !== undefined) data.note = req.body.note || null;
 
     const updated = await prisma.kanbanCard.update({
       where: { id: req.params.cardId },
       data,
       include: CARD_INCLUDE
+    });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// GET /api/projects/:id/cards/:cardId/note — page note indépendante
+router.get('/:id/cards/:cardId/note', requireAuth, async (req, res, next) => {
+  try {
+    const card = await prisma.kanbanCard.findFirst({
+      where: { id: req.params.cardId, projectId: req.params.id },
+      include: CARD_INCLUDE_NOTE
+    });
+    if (!card) return res.status(404).json({ error: 'Carte introuvable' });
+    res.json(card);
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/projects/:id/cards/:cardId/note — sauvegarde note uniquement
+router.patch('/:id/cards/:cardId/note', requireAuth, async (req, res, next) => {
+  try {
+    const card = await prisma.kanbanCard.findFirst({
+      where: { id: req.params.cardId, projectId: req.params.id }
+    });
+    if (!card) return res.status(404).json({ error: 'Carte introuvable' });
+    const updated = await prisma.kanbanCard.update({
+      where: { id: req.params.cardId },
+      data: { note: typeof req.body.note === 'string' ? req.body.note || null : null },
+      include: CARD_INCLUDE_NOTE
     });
     res.json(updated);
   } catch (err) { next(err); }

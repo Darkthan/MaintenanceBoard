@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notes – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Editor */
+    #editor {
+      font-family: 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      resize: none;
+      outline: none;
+      tab-size: 2;
+    }
+    /* Preview prose */
+    .prose { line-height: 1.75; color: #334155; }
+    .prose h1 { font-size: 1.5rem; font-weight: 700; margin: 1.25rem 0 0.5rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.4rem; }
+    .prose h2 { font-size: 1.25rem; font-weight: 700; margin: 1.1rem 0 0.4rem; color: #0f172a; }
+    .prose h3 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.3rem; color: #1e293b; }
+    .prose p  { margin: 0.6rem 0; }
+    .prose ul { list-style: disc; padding-left: 1.4rem; margin: 0.5rem 0; }
+    .prose ol { list-style: decimal; padding-left: 1.4rem; margin: 0.5rem 0; }
+    .prose li { margin: 0.2rem 0; }
+    .prose a  { color: #3b82f6; text-decoration: underline; }
+    .prose code { background: #f1f5f9; color: #be185d; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.85em; font-family: monospace; }
+    .prose pre  { background: #1e293b; color: #e2e8f0; padding: 1rem 1.25rem; border-radius: 8px; overflow-x: auto; margin: 0.75rem 0; }
+    .prose pre code { background: none; color: inherit; padding: 0; font-size: 0.875rem; }
+    .prose blockquote { border-left: 4px solid #3b82f6; padding-left: 1rem; color: #64748b; margin: 0.75rem 0; font-style: italic; }
+    .prose hr { border: none; border-top: 1px solid #e2e8f0; margin: 1.25rem 0; }
+    .prose table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+    .prose th, .prose td { border: 1px solid #e2e8f0; padding: 0.4rem 0.75rem; text-align: left; }
+    .prose th { background: #f8fafc; font-weight: 600; }
+    /* Checkboxes */
+    .prose input[type=checkbox] { margin-right: 0.4rem; accent-color: #3b82f6; }
+    /* Toolbar button */
+    .tb-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; border: none; background: none; transition: background 0.15s, color 0.15s; }
+    .tb-btn:hover { background: #f1f5f9; color: #1e293b; }
+    .tb-btn.active { background: #dbeafe; color: #2563eb; }
+    /* Saved indicator */
+    #save-indicator { transition: opacity 0.3s; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col">
+
+  <!-- Top bar -->
+  <header class="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 sticky top-0 z-20">
+    <!-- Back -->
+    <a id="back-link" href="/projects.html" class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition shrink-0">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Retour
+    </a>
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-1.5 text-sm text-slate-400 min-w-0 flex-1">
+      <span id="bc-project" class="truncate"></span>
+      <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      <span id="bc-card" class="text-slate-700 font-medium truncate"></span>
+    </div>
+
+    <!-- Saved state -->
+    <span id="save-indicator" class="text-xs text-slate-400 shrink-0 opacity-0">Enregistré</span>
+
+    <!-- Mode toggle (editor / preview / split) -->
+    <div class="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5 shrink-0">
+      <button onclick="setMode('editor')" id="btn-mode-editor" class="tb-btn active px-2 text-xs" style="width:auto">Éditeur</button>
+      <button onclick="setMode('split')"  id="btn-mode-split"  class="tb-btn px-2 text-xs" style="width:auto">Côte à côte</button>
+      <button onclick="setMode('preview')" id="btn-mode-preview" class="tb-btn px-2 text-xs" style="width:auto">Aperçu</button>
+    </div>
+
+    <!-- Save -->
+    <button onclick="saveNote()" id="save-btn"
+      class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+      Enregistrer
+    </button>
+  </header>
+
+  <!-- Toolbar -->
+  <div class="bg-white border-b border-slate-200 px-4 py-1.5 flex items-center gap-0.5 flex-wrap">
+    <button class="tb-btn font-bold" onclick="insertMd('**','**')" title="Gras (Ctrl+B)"><b>B</b></button>
+    <button class="tb-btn italic" onclick="insertMd('*','*')" title="Italique (Ctrl+I)"><i>I</i></button>
+    <button class="tb-btn line-through" onclick="insertMd('~~','~~')" title="Barré"><s>S</s></button>
+    <div class="w-px h-5 bg-slate-200 mx-1"></div>
+    <button class="tb-btn text-base" onclick="insertHeading(1)" title="Titre H1">H1</button>
+    <button class="tb-btn text-sm"  onclick="insertHeading(2)" title="Titre H2">H2</button>
+    <button class="tb-btn text-xs"  onclick="insertHeading(3)" title="Titre H3">H3</button>
+    <div class="w-px h-5 bg-slate-200 mx-1"></div>
+    <button class="tb-btn" onclick="insertLine('- ')" title="Liste à puces">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <button class="tb-btn" onclick="insertLine('1. ')" title="Liste numérotée">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+    </button>
+    <button class="tb-btn" onclick="insertLine('- [ ] ')" title="Case à cocher">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </button>
+    <div class="w-px h-5 bg-slate-200 mx-1"></div>
+    <button class="tb-btn" onclick="insertMd('`','`')" title="Code inline">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+    </button>
+    <button class="tb-btn" onclick="insertBlock('```\n','\n```')" title="Bloc de code">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+    </button>
+    <button class="tb-btn" onclick="insertMd('[','](url)')" title="Lien">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+    </button>
+    <button class="tb-btn" onclick="insertLine('> ')" title="Citation">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z"/></svg>
+    </button>
+    <button class="tb-btn" onclick="insertLine('---')" title="Séparateur">—</button>
+  </div>
+
+  <!-- Content area -->
+  <div id="content-area" class="flex-1 flex overflow-hidden">
+
+    <!-- Editor pane -->
+    <div id="pane-editor" class="flex-1 flex flex-col overflow-hidden">
+      <textarea id="editor"
+        class="flex-1 w-full p-5 bg-white text-slate-800 border-r border-slate-100"
+        placeholder="Commencez à écrire en Markdown…&#10;&#10;# Titre&#10;**Gras**, *italique*, `code`&#10;&#10;- Liste&#10;- [ ] Checklist"
+        spellcheck="true"
+        oninput="onEditorInput()"></textarea>
+    </div>
+
+    <!-- Divider (split mode) -->
+    <div id="pane-divider" class="hidden w-px bg-slate-200 flex-shrink-0"></div>
+
+    <!-- Preview pane -->
+    <div id="pane-preview" class="hidden flex-1 overflow-y-auto bg-white">
+      <div id="preview-content" class="prose max-w-none p-5 sm:p-8"></div>
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/vendor/markdown-it.min.js"></script>
+  <script src="/js/rich-text.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+<script>
+const params = new URLSearchParams(window.location.search);
+const projectId = params.get('projectId');
+const cardId    = params.get('cardId');
+
+let card = null;
+let currentMode = 'editor';
+let dirty = false;
+let autoSaveTimer = null;
+
+// Markdown renderer (markdown-it via rich-text.js)
+function renderMarkdown(text) {
+  if (typeof window.renderRichText === 'function') {
+    return window.renderRichText(text || '');
+  }
+  if (typeof window.markdownit === 'function') {
+    const md = window.markdownit({ html: false, breaks: true, linkify: true });
+    return md.render(text || '');
+  }
+  return `<pre>${escHtml(text)}</pre>`;
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  await requireLogin();
+
+  if (!projectId || !cardId) {
+    document.body.innerHTML = '<p class="p-8 text-red-600">Paramètres manquants.</p>';
+    return;
+  }
+
+  try {
+    card = await api.get(`/projects/${projectId}/cards/${cardId}/note`);
+  } catch {
+    document.body.innerHTML = '<p class="p-8 text-red-600">Carte introuvable.</p>';
+    return;
+  }
+
+  // Breadcrumb
+  document.title = `${card.title} – Notes`;
+  const project = card.column?.project;
+  document.getElementById('bc-project').textContent = project?.title || 'Projet';
+  document.getElementById('bc-card').textContent = card.title;
+  if (project) {
+    document.getElementById('back-link').href = `/projects.html`;
+  }
+
+  // Couleur du projet dans le breadcrumb
+  if (project?.color) {
+    document.getElementById('bc-project').style.color = project.color;
+  }
+
+  // Load content
+  const editor = document.getElementById('editor');
+  editor.value = card.note || '';
+  updatePreview();
+
+  // Keyboard shortcuts
+  editor.addEventListener('keydown', onEditorKeydown);
+
+  // Auto-save on idle
+  editor.addEventListener('input', scheduleAutoSave);
+});
+
+// ── Mode (editor / split / preview) ──────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  const pEditor  = document.getElementById('pane-editor');
+  const pDivider = document.getElementById('pane-divider');
+  const pPreview = document.getElementById('pane-preview');
+
+  const btnE = document.getElementById('btn-mode-editor');
+  const btnS = document.getElementById('btn-mode-split');
+  const btnP = document.getElementById('btn-mode-preview');
+  [btnE, btnS, btnP].forEach(b => b.classList.remove('active'));
+
+  if (mode === 'editor') {
+    pEditor.classList.remove('hidden'); pEditor.style.flex = '1';
+    pDivider.classList.add('hidden');
+    pPreview.classList.add('hidden');
+    btnE.classList.add('active');
+    document.getElementById('editor').focus();
+  } else if (mode === 'split') {
+    pEditor.classList.remove('hidden'); pEditor.style.flex = '1';
+    pDivider.classList.remove('hidden');
+    pPreview.classList.remove('hidden'); pPreview.style.flex = '1';
+    btnS.classList.add('active');
+    updatePreview();
+  } else {
+    pEditor.classList.add('hidden');
+    pDivider.classList.add('hidden');
+    pPreview.classList.remove('hidden'); pPreview.style.flex = '1';
+    btnP.classList.add('active');
+    updatePreview();
+  }
+}
+
+// ── Editor events ─────────────────────────────────────────────────────────────
+function onEditorInput() {
+  dirty = true;
+  if (currentMode === 'split') updatePreview();
+}
+
+function updatePreview() {
+  const text = document.getElementById('editor').value;
+  const html = renderMarkdown(text);
+  document.getElementById('preview-content').innerHTML = html;
+
+  // Rendre les checkboxes interactives
+  document.getElementById('preview-content').querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const editor = document.getElementById('editor');
+      const lines = editor.value.split('\n');
+      let count = 0;
+      editor.value = lines.map(line => {
+        if (/^- \[[ x]\] /.test(line)) {
+          if (count === Array.from(document.getElementById('preview-content').querySelectorAll('input[type=checkbox]')).indexOf(cb)) {
+            count++;
+            return cb.checked ? line.replace('- [ ] ', '- [x] ') : line.replace('- [x] ', '- [ ] ');
+          }
+          count++;
+        }
+        return line;
+      }).join('\n');
+      updatePreview();
+      scheduleAutoSave();
+    });
+  });
+}
+
+function onEditorKeydown(e) {
+  // Tab → indentation
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const ta = e.target;
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    ta.value = ta.value.slice(0, start) + '  ' + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = start + 2;
+    onEditorInput();
+    return;
+  }
+  // Ctrl+S → save
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveNote();
+    return;
+  }
+  // Ctrl+B → bold
+  if ((e.ctrlKey || e.metaKey) && e.key === 'b') { e.preventDefault(); insertMd('**','**'); return; }
+  // Ctrl+I → italic
+  if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); insertMd('*','*'); return; }
+}
+
+// ── Toolbar helpers ───────────────────────────────────────────────────────────
+function insertMd(before, after) {
+  const ta = document.getElementById('editor');
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  const sel   = ta.value.slice(start, end);
+  const replacement = before + (sel || 'texte') + after;
+  ta.value = ta.value.slice(0, start) + replacement + ta.value.slice(end);
+  ta.selectionStart = start + before.length;
+  ta.selectionEnd   = start + before.length + (sel || 'texte').length;
+  ta.focus();
+  onEditorInput();
+}
+
+function insertBlock(before, after) {
+  const ta = document.getElementById('editor');
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  const sel   = ta.value.slice(start, end);
+  const nl = ta.value[start - 1] !== '\n' && start > 0 ? '\n' : '';
+  const replacement = nl + before + (sel || '') + after + '\n';
+  ta.value = ta.value.slice(0, start) + replacement + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + nl.length + before.length + (sel || '').length;
+  ta.focus();
+  onEditorInput();
+}
+
+function insertLine(prefix) {
+  const ta = document.getElementById('editor');
+  const start = ta.selectionStart;
+  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+  const nl = lineStart === 0 ? '' : '';
+  ta.value = ta.value.slice(0, lineStart) + prefix + ta.value.slice(lineStart);
+  ta.selectionStart = ta.selectionEnd = lineStart + prefix.length;
+  ta.focus();
+  onEditorInput();
+}
+
+function insertHeading(level) {
+  insertLine('#'.repeat(level) + ' ');
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+function scheduleAutoSave() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => {
+    if (dirty) saveNote(true);
+  }, 2000);
+}
+
+async function saveNote(silent = false) {
+  clearTimeout(autoSaveTimer);
+  const note = document.getElementById('editor').value;
+  try {
+    await api.patch(`/projects/${projectId}/cards/${cardId}/note`, { note });
+    dirty = false;
+    const ind = document.getElementById('save-indicator');
+    ind.textContent = '✓ Enregistré';
+    ind.style.opacity = '1';
+    setTimeout(() => { ind.style.opacity = '0'; }, 2000);
+  } catch (err) {
+    if (!silent) alert('Erreur lors de la sauvegarde');
+  }
+}
+
+// Warn on leave if unsaved
+window.addEventListener('beforeunload', e => {
+  if (dirty) { e.preventDefault(); e.returnValue = ''; }
+});
+</script>
+</body>
+</html>

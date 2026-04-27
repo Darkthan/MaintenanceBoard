@@ -660,6 +660,7 @@ model KanbanCard {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  note        String?
   column   KanbanColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
   assignee User?        @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
 
