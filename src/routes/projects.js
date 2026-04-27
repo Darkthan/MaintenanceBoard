@@ -29,7 +29,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
       include: {
         creator: { select: { id: true, name: true } },
-        columns: { select: { id: true, _count: { select: { cards: true } } } }
+        _count: { select: { columns: true } }
       }
     });
     res.json(projects);
