@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projets – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .kanban-card { cursor: grab; }
+    .kanban-card:active { cursor: grabbing; }
+    .kanban-card.dragging { opacity: 0.4; }
+    .drop-indicator {
+      height: 3px;
+      background: #3b82f6;
+      border-radius: 2px;
+      margin: 4px 8px;
+      pointer-events: none;
+    }
+    .column-drag-over .cards-area {
+      background: rgba(59,130,246,0.06);
+      border-radius: 6px;
+    }
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    /* Scrollbar fin pour le board */
+    #board::-webkit-scrollbar { height: 6px; }
+    #board::-webkit-scrollbar-track { background: transparent; }
+    #board::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-slate-100">
+<div class="min-h-screen flex">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-800 flex flex-col transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
+    <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-700">
+      <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      </div>
+      <span class="font-semibold text-white text-sm">MaintenanceBoard</span>
+    </div>
+    <nav id="main-nav" class="flex-1 px-3 py-4 space-y-1 overflow-y-auto"></nav>
+    <div class="px-4 py-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 cursor-pointer" id="account-settings-btn">
+        <div id="user-avatar" class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">?</div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-sm font-medium text-white truncate"></p>
+          <p id="user-role" class="text-xs text-slate-400 truncate"></p>
+        </div>
+        <button id="logout-btn" class="text-slate-400 hover:text-white transition" title="Déconnexion">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 lg:ml-64 flex flex-col min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 py-3 flex items-center gap-3">
+      <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      <!-- Project selector -->
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <div class="relative" id="project-selector-wrap">
+          <button id="project-selector-btn" onclick="toggleProjectDropdown()"
+            class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-slate-700 transition max-w-xs">
+            <span id="project-dot" class="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-blue-500"></span>
+            <span id="project-selector-label" class="truncate">Chargement…</span>
+            <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <div id="project-dropdown" class="hidden absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-xl shadow-lg z-30 py-1 max-h-64 overflow-y-auto"></div>
+        </div>
+        <button onclick="openProjectModal()" title="Nouveau projet"
+          class="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Actions projet courant -->
+      <div id="project-actions" class="hidden flex items-center gap-2">
+        <button onclick="openEditProjectModal()" class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Modifier
+        </button>
+        <span id="admin-delete-wrap" class="hidden">
+          <button onclick="confirmDeleteProject()" class="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 px-2 py-1.5 rounded-lg hover:bg-red-50 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Supprimer
+          </button>
+        </span>
+      </div>
+    </header>
+
+    <!-- Empty state (no projects) -->
+    <div id="empty-state" class="hidden flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
+      <div class="w-20 h-20 bg-slate-200 rounded-2xl flex items-center justify-center">
+        <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-xl font-semibold text-slate-700 mb-1">Aucun projet</h2>
+        <p class="text-slate-500 text-sm">Créez votre premier projet pour commencer à organiser votre travail en Kanban.</p>
+      </div>
+      <button onclick="openProjectModal()" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 transition">
+        Créer un projet
+      </button>
+    </div>
+
+    <!-- Board area -->
+    <div id="board-wrap" class="hidden flex-1 overflow-hidden flex flex-col">
+      <div id="board" class="flex-1 flex gap-4 overflow-x-auto p-4 items-start"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════ MODALS ═══════════════════════════════════════════════ -->
+
+<!-- Modal : Nouveau / éditer projet -->
+<div id="project-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h2 id="project-modal-title" class="text-base font-semibold text-slate-800">Nouveau projet</h2>
+      <button onclick="closeProjectModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 py-4 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Nom du projet <span class="text-red-500">*</span></label>
+        <input id="project-title" type="text" maxlength="200" placeholder="Ex: Refonte réseau salle A" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+        <textarea id="project-desc" rows="2" maxlength="1000" placeholder="Décrivez l'objectif du projet…" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-2">Couleur</label>
+        <div class="flex gap-2 flex-wrap" id="color-swatches">
+          <!-- Injected by JS -->
+        </div>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+      <button onclick="closeProjectModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition">Annuler</button>
+      <button id="project-modal-save" onclick="saveProject()" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal : Carte (créer / éditer) -->
+<div id="card-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h2 id="card-modal-title" class="text-base font-semibold text-slate-800">Nouvelle carte</h2>
+      <button onclick="closeCardModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 py-4 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Titre <span class="text-red-500">*</span></label>
+        <input id="card-title" type="text" maxlength="300" placeholder="Titre de la tâche" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+        <textarea id="card-desc" rows="3" maxlength="2000" placeholder="Détails, notes…" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Priorité</label>
+          <select id="card-priority" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="LOW">Basse</option>
+            <option value="NORMAL" selected>Normale</option>
+            <option value="HIGH">Haute</option>
+            <option value="CRITICAL">Critique</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Échéance</label>
+          <input id="card-due" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Assigné à</label>
+        <select id="card-assignee" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">— Non assigné —</option>
+        </select>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-slate-100 flex justify-between items-center">
+      <button id="card-delete-btn" class="hidden text-sm text-red-500 hover:text-red-700 transition" onclick="deleteCard()">Supprimer</button>
+      <div class="flex gap-2 ml-auto">
+        <button onclick="closeCardModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition">Annuler</button>
+        <button onclick="saveCard()" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal : Renommer colonne -->
+<div id="col-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h2 id="col-modal-title" class="text-base font-semibold text-slate-800">Renommer la colonne</h2>
+      <button onclick="closeColModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 py-4">
+      <input id="col-title-input" type="text" maxlength="100" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+    <div class="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+      <button onclick="closeColModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition">Annuler</button>
+      <button onclick="saveColTitle()" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+const PROJECT_COLORS = [
+  { hex: '#3b82f6', name: 'Bleu' },
+  { hex: '#8b5cf6', name: 'Violet' },
+  { hex: '#10b981', name: 'Vert' },
+  { hex: '#f59e0b', name: 'Ambre' },
+  { hex: '#ef4444', name: 'Rouge' },
+  { hex: '#ec4899', name: 'Rose' },
+  { hex: '#06b6d4', name: 'Cyan' },
+  { hex: '#64748b', name: 'Gris' },
+];
+
+const PRIORITY_LABELS = { LOW: 'Basse', NORMAL: 'Normale', HIGH: 'Haute', CRITICAL: 'Critique' };
+const PRIORITY_COLORS = {
+  LOW:      'bg-slate-100 text-slate-500',
+  NORMAL:   'bg-blue-100 text-blue-700',
+  HIGH:     'bg-amber-100 text-amber-700',
+  CRITICAL: 'bg-red-100 text-red-700',
+};
+const PRIORITY_BORDER = {
+  LOW:      'border-l-slate-300',
+  NORMAL:   'border-l-blue-400',
+  HIGH:     'border-l-amber-400',
+  CRITICAL: 'border-l-red-500',
+};
+
+let currentProject = null;
+let projects = [];
+let allUsers = [];
+let selectedColor = '#3b82f6';
+let editingProjectId = null;
+let editingCardId = null;
+let editingCardColumnId = null;
+let editingColId = null;
+
+// ── Drag & Drop state ─────────────────────────────────────────────────────────
+let draggedCardId = null;
+let draggedCardEl = null;
+let dragOverIndicator = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  await requireAuthAndInit();
+  renderNav('projects');
+  buildColorSwatches();
+  await loadUsers();
+  await loadProjects();
+  document.addEventListener('click', e => {
+    if (!document.getElementById('project-selector-wrap').contains(e.target)) {
+      document.getElementById('project-dropdown').classList.add('hidden');
+    }
+  });
+});
+
+async function requireAuthAndInit() {
+  const user = await getUser();
+  if (!user) { window.location.href = '/login.html'; return; }
+  if (user.role === 'ADMIN') document.getElementById('admin-delete-wrap').classList.remove('hidden');
+}
+
+async function loadUsers() {
+  try {
+    allUsers = await api.get('/api/users');
+  } catch { allUsers = []; }
+}
+
+async function loadProjects() {
+  try {
+    projects = await api.get('/api/projects');
+  } catch { projects = []; }
+
+  if (projects.length === 0) {
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('empty-state').classList.add('flex');
+    document.getElementById('board-wrap').classList.add('hidden');
+    document.getElementById('project-selector-label').textContent = 'Aucun projet';
+    document.getElementById('project-actions').classList.add('hidden');
+    return;
+  }
+
+  document.getElementById('empty-state').classList.add('hidden');
+  document.getElementById('empty-state').classList.remove('flex');
+  document.getElementById('board-wrap').classList.remove('hidden');
+
+  if (!currentProject || !projects.find(p => p.id === currentProject.id)) {
+    await selectProject(projects[0].id);
+  } else {
+    await selectProject(currentProject.id);
+  }
+}
+
+async function selectProject(id) {
+  try {
+    currentProject = await api.get(`/api/projects/${id}`);
+    const dot = document.getElementById('project-dot');
+    dot.style.background = currentProject.color;
+    document.getElementById('project-selector-label').textContent = currentProject.title;
+    document.getElementById('project-actions').classList.remove('hidden');
+    renderBoard();
+  } catch (err) {
+    showToast('Erreur lors du chargement du projet', 'error');
+  }
+}
+
+// ── Board rendering ───────────────────────────────────────────────────────────
+function renderBoard() {
+  const board = document.getElementById('board');
+  const sorted = [...currentProject.columns].sort((a, b) => a.position - b.position);
+  board.innerHTML = sorted.map(col => renderColumn(col)).join('') + renderAddColumnBtn();
+  initDragDrop();
+}
+
+function renderColumn(col) {
+  const cards = [...col.cards].sort((a, b) => a.position - b.position);
+  return `
+    <div class="kanban-column flex-shrink-0 w-72 flex flex-col" data-col-id="${col.id}">
+      <!-- Column header -->
+      <div class="flex items-center gap-2 mb-2 px-1">
+        <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${col.color}"></span>
+        <span class="text-sm font-semibold text-slate-700 flex-1 truncate">${escHtml(col.title)}</span>
+        <span class="text-xs text-slate-400 font-medium">${cards.length}</span>
+        <button class="p-1 rounded hover:bg-slate-200 transition text-slate-400 hover:text-slate-600"
+          onclick="openColMenu(event,'${col.id}')" title="Options colonne">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Cards area -->
+      <div class="cards-area flex-1 flex flex-col gap-2 min-h-16 rounded-xl bg-slate-200/60 p-2"
+        data-col-id="${col.id}"
+        ondragover="onColDragOver(event,this)"
+        ondragleave="onColDragLeave(event,this)"
+        ondrop="onColDrop(event,this)">
+        ${cards.map(c => renderCard(c)).join('')}
+      </div>
+
+      <!-- Add card -->
+      <button onclick="openNewCardModal('${col.id}')"
+        class="mt-2 flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 px-2 py-1.5 rounded-lg hover:bg-slate-200 transition w-full">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Ajouter une carte
+      </button>
+    </div>
+  `;
+}
+
+function renderCard(card) {
+  const overdue = card.dueDate && !card.done && new Date(card.dueDate) < new Date();
+  const dueFmt = card.dueDate ? new Date(card.dueDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : null;
+  const initials = card.assignee ? card.assignee.name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0,2) : null;
+  return `
+    <div class="kanban-card bg-white rounded-lg border border-slate-200 p-3 shadow-sm border-l-4 ${PRIORITY_BORDER[card.priority] || 'border-l-blue-400'}
+      hover:shadow-md transition-shadow select-none"
+      draggable="true"
+      data-card-id="${card.id}"
+      data-col-id="${card.columnId}"
+      ondragstart="onCardDragStart(event,this)"
+      ondragend="onCardDragEnd(event,this)"
+      onclick="openEditCardModal('${card.id}','${card.columnId}')">
+      <div class="text-sm font-medium text-slate-800 mb-1 leading-snug">${escHtml(card.title)}</div>
+      ${card.description ? `<div class="text-xs text-slate-500 mb-2 line-clamp-2">${escHtml(card.description)}</div>` : ''}
+      <div class="flex items-center justify-between gap-2 mt-2">
+        <span class="text-[11px] px-1.5 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[card.priority] || 'bg-blue-100 text-blue-700'}">${PRIORITY_LABELS[card.priority]}</span>
+        <div class="flex items-center gap-2">
+          ${dueFmt ? `<span class="text-[11px] ${overdue ? 'text-red-500 font-semibold' : 'text-slate-400'}">${dueFmt}</span>` : ''}
+          ${initials ? `<div class="w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center text-[9px] font-bold text-white" title="${escHtml(card.assignee.name)}">${initials}</div>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderAddColumnBtn() {
+  return `
+    <div class="flex-shrink-0 w-64">
+      <button onclick="openAddColumnModal()"
+        class="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-500 hover:text-slate-700 bg-slate-200/50 hover:bg-slate-200 rounded-xl border-2 border-dashed border-slate-300 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Ajouter une colonne
+      </button>
+    </div>
+  `;
+}
+
+// ── Project dropdown ──────────────────────────────────────────────────────────
+function toggleProjectDropdown() {
+  const dd = document.getElementById('project-dropdown');
+  dd.classList.toggle('hidden');
+  if (!dd.classList.contains('hidden')) renderProjectDropdown();
+}
+
+function renderProjectDropdown() {
+  const dd = document.getElementById('project-dropdown');
+  dd.innerHTML = projects.map(p => `
+    <button onclick="selectProject('${p.id}');document.getElementById('project-dropdown').classList.add('hidden')"
+      class="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-slate-50 text-left ${currentProject?.id === p.id ? 'font-semibold text-blue-600' : 'text-slate-700'}">
+      <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${p.color}"></span>
+      <span class="flex-1 truncate">${escHtml(p.title)}</span>
+    </button>
+  `).join('') + `
+    <div class="border-t border-slate-100 mt-1 pt-1">
+      <button onclick="openProjectModal();document.getElementById('project-dropdown').classList.add('hidden')"
+        class="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Nouveau projet
+      </button>
+    </div>
+  `;
+}
+
+// ── Color swatches ────────────────────────────────────────────────────────────
+function buildColorSwatches() {
+  const container = document.getElementById('color-swatches');
+  container.innerHTML = PROJECT_COLORS.map(c => `
+    <button type="button" onclick="selectColor('${c.hex}')"
+      class="color-swatch w-7 h-7 rounded-full border-2 border-transparent transition hover:scale-110"
+      data-color="${c.hex}" style="background:${c.hex}" title="${c.name}"></button>
+  `).join('');
+}
+
+function selectColor(hex) {
+  selectedColor = hex;
+  document.querySelectorAll('.color-swatch').forEach(b => {
+    b.classList.toggle('border-slate-800', b.dataset.color === hex);
+    b.classList.toggle('scale-110', b.dataset.color === hex);
+  });
+}
+
+// ── Project modal ─────────────────────────────────────────────────────────────
+function openProjectModal() {
+  editingProjectId = null;
+  document.getElementById('project-modal-title').textContent = 'Nouveau projet';
+  document.getElementById('project-modal-save').textContent = 'Créer';
+  document.getElementById('project-title').value = '';
+  document.getElementById('project-desc').value = '';
+  selectColor('#3b82f6');
+  document.getElementById('project-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('project-title').focus(), 50);
+}
+
+function openEditProjectModal() {
+  if (!currentProject) return;
+  editingProjectId = currentProject.id;
+  document.getElementById('project-modal-title').textContent = 'Modifier le projet';
+  document.getElementById('project-modal-save').textContent = 'Enregistrer';
+  document.getElementById('project-title').value = currentProject.title;
+  document.getElementById('project-desc').value = currentProject.description || '';
+  selectColor(currentProject.color);
+  document.getElementById('project-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('project-title').focus(), 50);
+}
+
+function closeProjectModal() {
+  document.getElementById('project-modal').classList.add('hidden');
+}
+
+async function saveProject() {
+  const title = document.getElementById('project-title').value.trim();
+  if (!title) { showToast('Le titre est requis', 'error'); return; }
+  try {
+    const payload = { title, description: document.getElementById('project-desc').value.trim() || null, color: selectedColor };
+    if (editingProjectId) {
+      await api.patch(`/api/projects/${editingProjectId}`, payload);
+    } else {
+      const proj = await api.post('/api/projects', payload);
+      currentProject = proj;
+    }
+    closeProjectModal();
+    await loadProjects();
+    if (!editingProjectId && currentProject) await selectProject(currentProject.id);
+    showToast(editingProjectId ? 'Projet mis à jour' : 'Projet créé');
+  } catch (err) {
+    showToast(err.message || 'Erreur lors de la sauvegarde', 'error');
+  }
+}
+
+async function confirmDeleteProject() {
+  if (!currentProject) return;
+  if (!confirm(`Supprimer le projet "${currentProject.title}" et toutes ses cartes ?`)) return;
+  try {
+    await api.delete(`/api/projects/${currentProject.id}`);
+    currentProject = null;
+    showToast('Projet supprimé');
+    await loadProjects();
+  } catch (err) {
+    showToast(err.message || 'Erreur lors de la suppression', 'error');
+  }
+}
+
+// ── Column modal ──────────────────────────────────────────────────────────────
+function openAddColumnModal() {
+  editingColId = null;
+  document.getElementById('col-modal-title').textContent = 'Nouvelle colonne';
+  document.getElementById('col-title-input').value = '';
+  document.getElementById('col-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('col-title-input').focus(), 50);
+}
+
+function openColMenu(e, colId) {
+  e.stopPropagation();
+  // Supprimer tout menu existant
+  document.querySelectorAll('.col-context-menu').forEach(m => m.remove());
+
+  const col = currentProject.columns.find(c => c.id === colId);
+  const btn = e.currentTarget;
+  const rect = btn.getBoundingClientRect();
+
+  const menu = document.createElement('div');
+  menu.className = 'col-context-menu fixed z-50 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-40';
+  menu.style.top = (rect.bottom + 4) + 'px';
+  menu.style.left = Math.min(rect.left, window.innerWidth - 176) + 'px';
+  menu.innerHTML = `
+    <button class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onclick="openRenameColModal('${colId}')">
+      Renommer
+    </button>
+    <button class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50" onclick="deleteColumn('${colId}')">
+      Supprimer
+    </button>
+  `;
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 10);
+}
+
+function openRenameColModal(colId) {
+  editingColId = colId;
+  const col = currentProject.columns.find(c => c.id === colId);
+  document.getElementById('col-modal-title').textContent = 'Renommer la colonne';
+  document.getElementById('col-title-input').value = col?.title || '';
+  document.getElementById('col-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('col-title-input').focus(), 50);
+}
+
+function closeColModal() {
+  document.getElementById('col-modal').classList.add('hidden');
+}
+
+async function saveColTitle() {
+  const title = document.getElementById('col-title-input').value.trim();
+  if (!title) { showToast('Le titre est requis', 'error'); return; }
+  try {
+    if (editingColId) {
+      await api.patch(`/api/projects/${currentProject.id}/columns/${editingColId}`, { title });
+    } else {
+      await api.post(`/api/projects/${currentProject.id}/columns`, { title });
+    }
+    closeColModal();
+    await selectProject(currentProject.id);
+    showToast(editingColId ? 'Colonne renommée' : 'Colonne ajoutée');
+  } catch (err) {
+    showToast(err.message || 'Erreur', 'error');
+  }
+}
+
+async function deleteColumn(colId) {
+  const col = currentProject.columns.find(c => c.id === colId);
+  if (!confirm(`Supprimer la colonne "${col?.title}" et toutes ses cartes ?`)) return;
+  try {
+    await api.delete(`/api/projects/${currentProject.id}/columns/${colId}`);
+    await selectProject(currentProject.id);
+    showToast('Colonne supprimée');
+  } catch (err) {
+    showToast(err.message || 'Erreur', 'error');
+  }
+}
+
+// ── Card modal ────────────────────────────────────────────────────────────────
+function populateAssigneeSelect(selectedId) {
+  const sel = document.getElementById('card-assignee');
+  sel.innerHTML = '<option value="">— Non assigné —</option>' +
+    allUsers.map(u => `<option value="${u.id}" ${u.id === selectedId ? 'selected' : ''}>${escHtml(u.name)}</option>`).join('');
+}
+
+function openNewCardModal(colId) {
+  editingCardId = null;
+  editingCardColumnId = colId;
+  document.getElementById('card-modal-title').textContent = 'Nouvelle carte';
+  document.getElementById('card-title').value = '';
+  document.getElementById('card-desc').value = '';
+  document.getElementById('card-priority').value = 'NORMAL';
+  document.getElementById('card-due').value = '';
+  document.getElementById('card-delete-btn').classList.add('hidden');
+  populateAssigneeSelect(null);
+  document.getElementById('card-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('card-title').focus(), 50);
+}
+
+function openEditCardModal(cardId, colId) {
+  const col = currentProject.columns.find(c => c.id === colId);
+  const card = col?.cards.find(c => c.id === cardId);
+  if (!card) return;
+
+  editingCardId = cardId;
+  editingCardColumnId = colId;
+  document.getElementById('card-modal-title').textContent = 'Modifier la carte';
+  document.getElementById('card-title').value = card.title;
+  document.getElementById('card-desc').value = card.description || '';
+  document.getElementById('card-priority').value = card.priority;
+  document.getElementById('card-due').value = card.dueDate ? card.dueDate.slice(0, 10) : '';
+  document.getElementById('card-delete-btn').classList.remove('hidden');
+  populateAssigneeSelect(card.assigneeId);
+  document.getElementById('card-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('card-title').focus(), 50);
+}
+
+function closeCardModal() {
+  document.getElementById('card-modal').classList.add('hidden');
+}
+
+async function saveCard() {
+  const title = document.getElementById('card-title').value.trim();
+  if (!title) { showToast('Le titre est requis', 'error'); return; }
+  const payload = {
+    title,
+    description: document.getElementById('card-desc').value.trim() || null,
+    priority: document.getElementById('card-priority').value,
+    dueDate: document.getElementById('card-due').value || null,
+    assigneeId: document.getElementById('card-assignee').value || null,
+  };
+  try {
+    if (editingCardId) {
+      await api.patch(`/api/projects/${currentProject.id}/cards/${editingCardId}`, payload);
+    } else {
+      payload.columnId = editingCardColumnId;
+      await api.post(`/api/projects/${currentProject.id}/cards`, payload);
+    }
+    closeCardModal();
+    await selectProject(currentProject.id);
+    showToast(editingCardId ? 'Carte mise à jour' : 'Carte ajoutée');
+  } catch (err) {
+    showToast(err.message || 'Erreur', 'error');
+  }
+}
+
+async function deleteCard() {
+  if (!editingCardId) return;
+  if (!confirm('Supprimer cette carte ?')) return;
+  try {
+    await api.delete(`/api/projects/${currentProject.id}/cards/${editingCardId}`);
+    closeCardModal();
+    await selectProject(currentProject.id);
+    showToast('Carte supprimée');
+  } catch (err) {
+    showToast(err.message || 'Erreur', 'error');
+  }
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+function onCardDragStart(e, el) {
+  draggedCardId = el.dataset.cardId;
+  draggedCardEl = el;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', draggedCardId);
+  setTimeout(() => el.classList.add('dragging'), 0);
+}
+
+function onCardDragEnd(e, el) {
+  el.classList.remove('dragging');
+  document.querySelectorAll('.drop-indicator').forEach(i => i.remove());
+  draggedCardId = null;
+  draggedCardEl = null;
+}
+
+function onColDragOver(e, area) {
+  if (!draggedCardId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  area.closest('.kanban-column').classList.add('column-drag-over');
+
+  // Indicateur de position
+  area.querySelectorAll('.drop-indicator').forEach(i => i.remove());
+  const cards = [...area.querySelectorAll('.kanban-card:not(.dragging)')];
+  let insertBefore = null;
+  for (const card of cards) {
+    const rect = card.getBoundingClientRect();
+    if (e.clientY < rect.top + rect.height / 2) { insertBefore = card; break; }
+  }
+  const indicator = document.createElement('div');
+  indicator.className = 'drop-indicator';
+  if (insertBefore) area.insertBefore(indicator, insertBefore);
+  else area.appendChild(indicator);
+}
+
+function onColDragLeave(e, area) {
+  if (!area.contains(e.relatedTarget)) {
+    area.closest('.kanban-column').classList.remove('column-drag-over');
+    area.querySelectorAll('.drop-indicator').forEach(i => i.remove());
+  }
+}
+
+async function onColDrop(e, area) {
+  e.preventDefault();
+  area.closest('.kanban-column').classList.remove('column-drag-over');
+  area.querySelectorAll('.drop-indicator').forEach(i => i.remove());
+
+  if (!draggedCardId) return;
+
+  const toColumnId = area.dataset.colId;
+  const cards = [...area.querySelectorAll('.kanban-card:not(.dragging)')];
+  const dropY = e.clientY;
+  let position = cards.length;
+  for (let i = 0; i < cards.length; i++) {
+    const rect = cards[i].getBoundingClientRect();
+    if (dropY < rect.top + rect.height / 2) { position = i; break; }
+  }
+
+  // Construit la liste ordonnée des IDs dans la colonne cible après insertion
+  const cardIds = cards.map(c => c.dataset.cardId);
+  cardIds.splice(position, 0, draggedCardId);
+
+  try {
+    await api.post(`/api/projects/${currentProject.id}/cards/move`, {
+      cardId: draggedCardId,
+      toColumnId,
+      cardIds
+    });
+    await selectProject(currentProject.id);
+  } catch (err) {
+    showToast('Erreur lors du déplacement', 'error');
+  }
+}
+
+function initDragDrop() {
+  // Les handlers sont inline via ondragstart/ondragend/ondragover/ondrop
+  // La fonction est conservée pour éventuelles initialisations futures
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimeout;
+function showToast(msg, type = 'success') {
+  clearTimeout(toastTimeout);
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.className = 'fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium transition-all';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.className = `fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium
+    ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white'}`;
+  toastTimeout = setTimeout(() => toast.remove(), 3000);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeProjectModal();
+    closeCardModal();
+    closeColModal();
+  }
+});
+</script>
+</body>
+</html>

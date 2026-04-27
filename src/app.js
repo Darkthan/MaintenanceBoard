@@ -117,6 +117,7 @@ app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/interventions', require('./routes/interventions'));
 app.use('/api/todos', require('./routes/todos'));
+app.use('/api/projects', require('./routes/projects'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/knowledge-base', require('./routes/knowledgeBase'));
 app.use('/api/orders', require('./routes/orders'));
