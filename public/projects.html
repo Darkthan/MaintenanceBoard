@@ -301,13 +301,13 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 async function loadUsers() {
   try {
-    allUsers = await api.get('/api/users');
+    allUsers = await api.get('/users');
   } catch { allUsers = []; }
 }
 
 async function loadProjects() {
   try {
-    projects = await api.get('/api/projects');
+    projects = await api.get('/projects');
   } catch { projects = []; }
 
   if (projects.length === 0) {
@@ -332,7 +332,7 @@ async function loadProjects() {
 
 async function selectProject(id) {
   try {
-    currentProject = await api.get(`/api/projects/${id}`);
+    currentProject = await api.get(`/projects/${id}`);
     const dot = document.getElementById('project-dot');
     dot.style.background = currentProject.color;
     document.getElementById('project-selector-label').textContent = currentProject.title;
@@ -507,9 +507,9 @@ async function saveProject() {
   try {
     const payload = { title, description: document.getElementById('project-desc').value.trim() || null, color: selectedColor };
     if (editingProjectId) {
-      await api.patch(`/api/projects/${editingProjectId}`, payload);
+      await api.patch(`/projects/${editingProjectId}`, payload);
     } else {
-      const proj = await api.post('/api/projects', payload);
+      const proj = await api.post('/projects', payload);
       currentProject = proj;
     }
     closeProjectModal();
@@ -525,7 +525,7 @@ async function confirmDeleteProject() {
   if (!currentProject) return;
   if (!confirm(`Supprimer le projet "${currentProject.title}" et toutes ses cartes ?`)) return;
   try {
-    await api.delete(`/api/projects/${currentProject.id}`);
+    await api.delete(`/projects/${currentProject.id}`);
     currentProject = null;
     showToast('Projet supprimé');
     await loadProjects();
@@ -586,9 +586,9 @@ async function saveColTitle() {
   if (!title) { showToast('Le titre est requis', 'error'); return; }
   try {
     if (editingColId) {
-      await api.patch(`/api/projects/${currentProject.id}/columns/${editingColId}`, { title });
+      await api.patch(`/projects/${currentProject.id}/columns/${editingColId}`, { title });
     } else {
-      await api.post(`/api/projects/${currentProject.id}/columns`, { title });
+      await api.post(`/projects/${currentProject.id}/columns`, { title });
     }
     closeColModal();
     await selectProject(currentProject.id);
@@ -602,7 +602,7 @@ async function deleteColumn(colId) {
   const col = currentProject.columns.find(c => c.id === colId);
   if (!confirm(`Supprimer la colonne "${col?.title}" et toutes ses cartes ?`)) return;
   try {
-    await api.delete(`/api/projects/${currentProject.id}/columns/${colId}`);
+    await api.delete(`/projects/${currentProject.id}/columns/${colId}`);
     await selectProject(currentProject.id);
     showToast('Colonne supprimée');
   } catch (err) {
@@ -665,10 +665,10 @@ async function saveCard() {
   };
   try {
     if (editingCardId) {
-      await api.patch(`/api/projects/${currentProject.id}/cards/${editingCardId}`, payload);
+      await api.patch(`/projects/${currentProject.id}/cards/${editingCardId}`, payload);
     } else {
       payload.columnId = editingCardColumnId;
-      await api.post(`/api/projects/${currentProject.id}/cards`, payload);
+      await api.post(`/projects/${currentProject.id}/cards`, payload);
     }
     closeCardModal();
     await selectProject(currentProject.id);
@@ -682,7 +682,7 @@ async function deleteCard() {
   if (!editingCardId) return;
   if (!confirm('Supprimer cette carte ?')) return;
   try {
-    await api.delete(`/api/projects/${currentProject.id}/cards/${editingCardId}`);
+    await api.delete(`/projects/${currentProject.id}/cards/${editingCardId}`);
     closeCardModal();
     await selectProject(currentProject.id);
     showToast('Carte supprimée');
@@ -755,7 +755,7 @@ async function onColDrop(e, area) {
   cardIds.splice(position, 0, draggedCardId);
 
   try {
-    await api.post(`/api/projects/${currentProject.id}/cards/move`, {
+    await api.post(`/projects/${currentProject.id}/cards/move`, {
       cardId: draggedCardId,
       toColumnId,
       cardIds
