@@ -6,6 +6,21 @@
   <title>Base de connaissance – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+  <style>
+    mark.knowledge-highlight {
+      background: #fef08a;
+      color: inherit;
+      padding: 0 0.08em;
+      border-radius: 0.25rem;
+      box-shadow: 0 0 0 1px rgba(202, 138, 4, 0.18);
+    }
+
+    mark.knowledge-highlight--active {
+      background: #fde047;
+      box-shadow: 0 0 0 2px rgba(202, 138, 4, 0.3);
+    }
+  </style>
 </head>
 <body class="bg-slate-50">
 
@@ -308,9 +323,11 @@ let knowledgeArticles = [];
 let availableCategories = [];
 let selectedArticleId = '';
 let selectedCategory = '';
-let currentSearch = '';
+const initialUrlParams = new URLSearchParams(window.location.search);
+let currentSearch = String(initialUrlParams.get('q') || '').trim();
 let editorArticleId = '';
 let selectedArticle = null;
+let articleHighlightResetId = null;
 
 const searchInputEl = document.getElementById('knowledge-search-input');
 const articleListEl = document.getElementById('knowledge-article-list');
@@ -343,6 +360,8 @@ const editorDocumentInputEl = document.getElementById('editor-document-input');
 const addImageBtnEl = document.getElementById('add-image-btn');
 const addDocumentBtnEl = document.getElementById('add-document-btn');
 
+searchInputEl.value = currentSearch;
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -369,6 +388,174 @@ function formatFileSize(value) {
   if (size < 1024) return `${size} o`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1).replace('.0', '')} Ko`;
   return `${(size / (1024 * 1024)).toFixed(1).replace('.0', '')} Mo`;
+}
+
+function normalizeSearchText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function buildNormalizedIndex(value) {
+  const source = String(value || '');
+  let normalized = '';
+  const indexMap = [];
+
+  for (let index = 0; index < source.length; index += 1) {
+    const pieces = source[index]
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    for (const piece of pieces) {
+      normalized += piece;
+      indexMap.push(index);
+    }
+  }
+
+  return { normalized, indexMap };
+}
+
+function mergeHighlightRanges(ranges) {
+  return ranges
+    .slice()
+    .sort((a, b) => a.start - b.start)
+    .reduce((merged, range) => {
+      const previous = merged[merged.length - 1];
+      if (!previous || range.start > previous.end) {
+        merged.push({ ...range });
+        return merged;
+      }
+      previous.end = Math.max(previous.end, range.end);
+      return merged;
+    }, []);
+}
+
+function findHighlightRanges(text, query) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return [];
+
+  const indexedText = buildNormalizedIndex(text);
+  if (!indexedText.normalized) return [];
+
+  const exactMatches = [];
+  let cursor = 0;
+
+  while (cursor < indexedText.normalized.length) {
+    const foundAt = indexedText.normalized.indexOf(normalizedQuery, cursor);
+    if (foundAt === -1) break;
+    exactMatches.push({
+      start: indexedText.indexMap[foundAt],
+      end: indexedText.indexMap[foundAt + normalizedQuery.length - 1] + 1
+    });
+    cursor = foundAt + normalizedQuery.length;
+  }
+
+  if (exactMatches.length) return exactMatches;
+
+  const words = Array.from(new Set(normalizedQuery.split(/\s+/).filter(word => word.length >= 3)));
+  const wordMatches = [];
+
+  words.forEach(word => {
+    let startAt = 0;
+    while (startAt < indexedText.normalized.length) {
+      const foundAt = indexedText.normalized.indexOf(word, startAt);
+      if (foundAt === -1) break;
+      wordMatches.push({
+        start: indexedText.indexMap[foundAt],
+        end: indexedText.indexMap[foundAt + word.length - 1] + 1
+      });
+      startAt = foundAt + word.length;
+    }
+  });
+
+  return mergeHighlightRanges(wordMatches);
+}
+
+function highlightContainerText(container, query) {
+  if (!container) return [];
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const text = String(node.nodeValue || '');
+      if (!text.trim()) return NodeFilter.FILTER_REJECT;
+      const parent = node.parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+      if (parent.closest('mark')) return NodeFilter.FILTER_REJECT;
+      if (['SCRIPT', 'STYLE'].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+
+  const textNodes = [];
+  let currentNode = walker.nextNode();
+  while (currentNode) {
+    textNodes.push(currentNode);
+    currentNode = walker.nextNode();
+  }
+
+  const highlights = [];
+
+  textNodes.forEach(node => {
+    const text = String(node.nodeValue || '');
+    const ranges = findHighlightRanges(text, query);
+    if (!ranges.length) return;
+
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+
+    ranges.forEach(range => {
+      if (range.start > cursor) {
+        fragment.appendChild(document.createTextNode(text.slice(cursor, range.start)));
+      }
+
+      const mark = document.createElement('mark');
+      mark.dataset.knowledgeHighlight = 'true';
+      mark.className = 'knowledge-highlight';
+      mark.textContent = text.slice(range.start, range.end);
+      fragment.appendChild(mark);
+      highlights.push(mark);
+      cursor = range.end;
+    });
+
+    if (cursor < text.length) {
+      fragment.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+
+    node.parentNode.replaceChild(fragment, node);
+  });
+
+  return highlights;
+}
+
+function applyArticleSearchHighlight() {
+  const query = currentSearch.trim();
+  if (!query) return;
+
+  const highlights = [
+    ...highlightContainerText(articleTitleEl, query),
+    ...highlightContainerText(articleSummaryEl, query),
+    ...(selectedArticle?.type === 'network-diagram' ? [] : highlightContainerText(articleContentEl, query))
+  ];
+
+  if (!highlights.length) return;
+
+  const firstHighlight = highlights[0];
+  firstHighlight.classList.add('knowledge-highlight--active');
+  window.clearTimeout(articleHighlightResetId);
+  articleHighlightResetId = window.setTimeout(() => {
+    firstHighlight.classList.remove('knowledge-highlight--active');
+  }, 2400);
+
+  requestAnimationFrame(() => {
+    firstHighlight.scrollIntoView({
+      block: 'center',
+      inline: 'nearest',
+      behavior: 'smooth'
+    });
+  });
 }
 
 function isImageAttachment(attachment) {
@@ -543,6 +730,8 @@ function updateUrl(articleId) {
   const url = new URL(window.location.href);
   if (articleId) url.searchParams.set('article', articleId);
   else url.searchParams.delete('article');
+  if (currentSearch) url.searchParams.set('q', currentSearch);
+  else url.searchParams.delete('q');
   window.history.replaceState({}, '', url);
 }
 
@@ -639,7 +828,7 @@ async function selectArticle(articleId) {
 
     if (isNetworkDiagram) {
       if (article.diagramSvg) {
-        articleContentEl.innerHTML = `<div class="w-full overflow-auto rounded-xl border border-slate-200 bg-white p-3">${article.diagramSvg}</div>`;
+        articleContentEl.innerHTML = `<div class="w-full overflow-auto rounded-xl border border-slate-200 bg-white p-3">${DOMPurify.sanitize(article.diagramSvg, { USE_PROFILES: { svg: true, svgFilters: true } })}</div>`;
       } else {
         articleContentEl.innerHTML = '<p class="text-slate-400 text-sm italic">Aucun diagramme enregistré. Cliquez sur Modifier pour créer le plan.</p>';
       }
@@ -648,6 +837,7 @@ async function selectArticle(articleId) {
       initMermaidInEl(articleContentEl);
     }
     renderArticleDocuments(article);
+    applyArticleSearchHighlight();
 
     if (isAdmin()) {
       articleAdminActionsEl.classList.remove('hidden');
@@ -718,6 +908,7 @@ async function deleteArticle(articleId, articleTitle) {
 let searchDebounceId = null;
 searchInputEl.addEventListener('input', () => {
   currentSearch = searchInputEl.value.trim();
+  updateUrl(selectedArticleId);
   clearTimeout(searchDebounceId);
   searchDebounceId = setTimeout(loadKnowledgeArticles, 180);
 });
