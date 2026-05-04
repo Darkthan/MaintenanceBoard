@@ -145,6 +145,7 @@ model Equipment {
   sessionLogs     MachineSessionLog[]
   supplierRef     Supplier?   @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   loanResources   LoanResourceEquipment[]
+  loanReservationSelections LoanReservationEquipment[]
   checkupItems    InterventionCheckupItem[]
 
   @@map("equipment")
@@ -459,6 +460,7 @@ model SignatureRequest {
 
   order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
   creator User    @relation(fields: [createdBy], references: [id])
+  loanReservationContracts LoanReservation[] @relation("LoanReservationContractSignature")
 
   @@map("signature_requests")
 }
@@ -673,6 +675,7 @@ model LoanReservation {
   id                    String    @id @default(uuid())
   resourceId            String
   requestLinkId         String?
+  contractSignatureRequestId String? @unique
   status                String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED | RETURNED
   requesterName         String
   requesterEmail        String
@@ -685,17 +688,41 @@ model LoanReservation {
   additionalNeeds       String?
   notes                 String?
   internalNotes         String?
+  contractBody          String?
+  contractGeneratedAt   DateTime?
   createdById           String?
   approvedById          String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  resource    LoanResource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  requestLink LoanMagicLink? @relation(fields: [requestLinkId], references: [id], onDelete: SetNull)
-  createdBy   User?         @relation("LoanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  approvedBy  User?         @relation("LoanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  resource                 LoanResource      @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  requestLink              LoanMagicLink?    @relation(fields: [requestLinkId], references: [id], onDelete: SetNull)
+  contractSignatureRequest SignatureRequest? @relation("LoanReservationContractSignature", fields: [contractSignatureRequestId], references: [id], onDelete: SetNull)
+  createdBy                User?             @relation("LoanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy               User?             @relation("LoanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  selectedEquipments       LoanReservationEquipment[]
 
   @@index([resourceId, startAt, endAt])
   @@index([status])
   @@map("loan_reservations")
+}
+
+model LoanReservationEquipment {
+  id                    String   @id @default(uuid())
+  loanReservationId     String
+  equipmentId           String?
+  equipmentName         String
+  equipmentType         String?
+  equipmentBrand        String?
+  equipmentModel        String?
+  equipmentSerialNumber String?
+  lotNumber             Int?
+  createdAt             DateTime @default(now())
+
+  reservation LoanReservation @relation(fields: [loanReservationId], references: [id], onDelete: Cascade)
+  equipment   Equipment?      @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+
+  @@index([loanReservationId])
+  @@index([equipmentId])
+  @@map("loan_reservation_equipments")
 }

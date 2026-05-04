@@ -23,6 +23,9 @@ describe('loans page', () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('Agenda des prêts');
+    expect(res.text).toContain('Paragraphe principal du contrat');
+    expect(res.text).toContain('Appareils prêtés');
+    expect(res.text).toContain('Générer la fiche');
     expect(res.text).toContain('function getLocalDayKey(value)');
     expect(res.text).toContain("const key = getLocalDayKey(date);");
     expect(res.text).toContain("const key = getLocalDayKey(item.startAt);");

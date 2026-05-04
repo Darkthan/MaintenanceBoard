@@ -455,6 +455,16 @@
           </select>
         </div>
       </div>
+      <div id="reservation-equipment-panel" class="hidden rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-medium text-slate-700">Appareils prêtés</p>
+            <p class="text-xs text-slate-500">Optionnel. Sélectionne les appareils réellement remis pour les intégrer à la fiche de prêt.</p>
+          </div>
+          <span id="resv-equip-count" class="hidden rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700"></span>
+        </div>
+        <div id="resv-equip-list" class="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white divide-y divide-slate-100"></div>
+      </div>
       <!-- Récurrence -->
       <div id="resv-recurrence-panel" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
         <div>
@@ -475,6 +485,11 @@
       <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Notes internes</label>
         <textarea id="resv-notes" rows="2" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Paragraphe principal du contrat</label>
+        <textarea id="resv-contract-body" rows="4" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></textarea>
+        <p class="mt-1 text-xs text-slate-500">Ce texte sera inséré dans la fiche de prêt avant la liste des appareils et la zone de signature.</p>
       </div>
       <div id="reservation-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
       <div class="flex justify-end gap-3">
@@ -528,6 +543,7 @@ let loanResources = [];
 let loanLinks = [];
 let loanReservations = [];
 let currentReservationEditId = null;
+let reservationEquipmentSelection = new Set();
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -559,6 +575,81 @@ function formatStatus(status) {
     CANCELLED: '<span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Annulé</span>',
     RETURNED: '<span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Restitué</span>'
   }[status] || status;
+}
+
+function formatContractStatus(status) {
+  return {
+    PENDING: '<span class="inline-flex items-center rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">Signature en attente</span>',
+    SIGNED: '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Fiche signée</span>',
+    CANCELLED: '<span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Fiche annulée</span>',
+    EXPIRED: '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Lien expiré</span>'
+  }[status] || '<span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Sans fiche</span>';
+}
+
+function getLoanResourceById(resourceId) {
+  return loanResources.find(item => item.id === resourceId) || null;
+}
+
+function buildReservationContractDefaultText(resource) {
+  const resourceLabel = resource?.name || 'le matériel concerné';
+  return `Je reconnais recevoir en prêt ${resourceLabel} et m'engage à l'utiliser conformément aux consignes, à en prendre soin, puis à restituer l'ensemble du matériel complet et en bon état à la date prévue.`;
+}
+
+function updateReservationEquipmentCount() {
+  const countEl = document.getElementById('resv-equip-count');
+  if (!countEl) return;
+  if (reservationEquipmentSelection.size > 0) {
+    countEl.textContent = `${reservationEquipmentSelection.size} sélectionné(s)`;
+    countEl.classList.remove('hidden');
+  } else {
+    countEl.classList.add('hidden');
+  }
+}
+
+function toggleReservationEquipment(id) {
+  if (reservationEquipmentSelection.has(id)) {
+    reservationEquipmentSelection.delete(id);
+  } else {
+    reservationEquipmentSelection.add(id);
+  }
+  renderReservationEquipmentSelector();
+}
+
+function renderReservationEquipmentSelector() {
+  const panel = document.getElementById('reservation-equipment-panel');
+  const list = document.getElementById('resv-equip-list');
+  const resource = getLoanResourceById(document.getElementById('resv-resource').value);
+  const equipments = Array.isArray(resource?.equipments) ? resource.equipments : [];
+
+  if (!equipments.length) {
+    reservationEquipmentSelection = new Set();
+    panel.classList.add('hidden');
+    list.innerHTML = '';
+    updateReservationEquipmentCount();
+    return;
+  }
+
+  panel.classList.remove('hidden');
+  list.innerHTML = equipments.map(eq => {
+    const selected = reservationEquipmentSelection.has(eq.id);
+    const label = [eq.type, eq.brand, eq.model].filter(Boolean).join(' · ');
+    return `
+      <button type="button" onclick="toggleReservationEquipment('${eq.id}')"
+        class="flex w-full items-start gap-3 px-3 py-3 text-left transition ${selected ? 'bg-blue-50' : 'hover:bg-slate-50'}">
+        <span class="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white'}">
+          ${selected ? '<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm font-medium ${selected ? 'text-blue-900' : 'text-slate-700'}">${escapeHtml(eq.name)}</span>
+          <span class="mt-0.5 block text-xs text-slate-500">
+            ${label ? escapeHtml(label) : 'Appareil lié à la ressource'}
+            ${eq.serialNumber ? ` · <span class="font-mono">${escapeHtml(eq.serialNumber)}</span>` : ''}
+            ${eq.lotNumber ? ` · Lot ${eq.lotNumber}` : ''}
+          </span>
+        </span>
+      </button>`;
+  }).join('');
+  updateReservationEquipmentCount();
 }
 
 function closeResourceModal() {
@@ -833,6 +924,7 @@ async function openResourceModal(resource = null) {
 function openReservationModal(reservation = null) {
   document.getElementById('reservation-form').reset();
   document.getElementById('reservation-error').classList.add('hidden');
+  reservationEquipmentSelection = new Set();
   currentReservationEditId = reservation?.id || null;
   document.getElementById('resv-id').value = currentReservationEditId || '';
   document.getElementById('resv-recurrence-type').value = 'none';
@@ -863,13 +955,19 @@ function openReservationModal(reservation = null) {
     document.getElementById('resv-units').value = reservation.requestedUnits || 1;
     document.getElementById('resv-status').value = reservation.status || 'APPROVED';
     document.getElementById('resv-notes').value = reservation.internalNotes || '';
+    reservationEquipmentSelection = new Set((reservation.selectedEquipments || []).map(item => item.equipmentId).filter(Boolean));
+    document.getElementById('resv-contract-body').value = reservation.contractBody || buildReservationContractDefaultText(getLoanResourceById(resourceId));
     dpSetFromExisting(reservation.startAt, reservation.endAt);
     dpRenderCalendar();
     dpShowStartTimeGrid();
     dpShowEndTimeGrid();
     dpUpdateSelection();
     if (resourceId) dpLoadSchedule(resourceId);
+  } else {
+    const currentResource = getLoanResourceById(sel.value);
+    document.getElementById('resv-contract-body').value = buildReservationContractDefaultText(currentResource);
   }
+  renderReservationEquipmentSelector();
   const resm = document.getElementById('reservation-modal');
   resm.classList.remove('hidden');
   resm.classList.add('flex');
@@ -1272,6 +1370,17 @@ function updateArchivedReservationsButton(count) {
 }
 
 function renderReservationCard(item, { archived = false } = {}) {
+  const contractState = item.contractSignatureRequest
+    ? formatContractStatus(item.contractSignatureRequest.status)
+    : '<span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Sans fiche</span>';
+  const selectedSummary = Array.isArray(item.selectedEquipments) && item.selectedEquipments.length
+    ? item.selectedEquipments.map(eq => `${escapeHtml(eq.name)}${eq.serialNumber ? ` <span class="font-mono text-slate-400">${escapeHtml(eq.serialNumber)}</span>` : ''}`).join(' · ')
+    : 'Aucun appareil nominatif sélectionné.';
+  const contractAction = item.contractSignatureRequest?.status === 'SIGNED'
+    ? `<button type="button" data-action="reservation-contract-download" data-signature-id="${item.contractSignatureRequest.id}" class="px-3 py-2 border border-emerald-300 text-emerald-700 rounded-lg text-xs hover:bg-emerald-50 transition">Télécharger la fiche</button>`
+    : item.contractSignatureRequest?.status === 'PENDING'
+      ? `<span class="px-3 py-2 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-medium border border-cyan-200">Fiche envoyée</span>`
+      : `<button type="button" data-action="reservation-contract-generate" data-id="${item.id}" class="px-3 py-2 border border-cyan-300 text-cyan-700 rounded-lg text-xs hover:bg-cyan-50 transition">Générer la fiche</button>`;
   return `
       <article class="rounded-2xl border border-slate-200 ${archived ? 'bg-slate-100' : 'bg-slate-50'} p-4 space-y-3">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1289,6 +1398,7 @@ function renderReservationCard(item, { archived = false } = {}) {
             ${item.status !== 'REJECTED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="REJECTED" class="px-3 py-2 border border-red-300 text-red-700 rounded-lg text-xs hover:bg-red-50 transition">Refuser</button>` : ''}
             ${item.status !== 'RETURNED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="RETURNED" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Restitué</button>` : ''}
             ${item.status !== 'CANCELLED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="CANCELLED" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Annuler</button>` : ''}
+            ${contractAction}
             <button
               type="button"
               data-action="reservation-edit"
@@ -1321,6 +1431,19 @@ function renderReservationCard(item, { archived = false } = {}) {
           <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
             <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Notes</p>
             <p class="mt-1 text-slate-600">${item.notes || 'Aucune note.'}</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Fiche de prêt</p>
+              ${contractState}
+            </div>
+            <p class="mt-1 text-slate-600">${item.contractBody ? escapeHtml(item.contractBody) : 'Le paragraphe par défaut sera utilisé lors de la génération.'}</p>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Appareils sélectionnés</p>
+            <p class="mt-1 text-slate-600">${selectedSummary}</p>
           </div>
         </div>
       </article>
@@ -1472,6 +1595,31 @@ async function deleteReservation(id, triggerButton = null) {
   }
 }
 
+async function generateReservationContract(id, triggerButton = null) {
+  const requestKey = `contract:${id}`;
+  if (reservationUpdatesInFlight.has(requestKey)) return;
+  reservationUpdatesInFlight.add(requestKey);
+
+  if (triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.classList.add('opacity-60', 'cursor-not-allowed');
+  }
+
+  try {
+    await api.post(`/loans/reservations/${id}/contract-signature`, {});
+    await loadReservations();
+    showToast('Fiche de prêt envoyée en signature', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    reservationUpdatesInFlight.delete(requestKey);
+    if (triggerButton && document.body.contains(triggerButton)) {
+      triggerButton.disabled = false;
+      triggerButton.classList.remove('opacity-60', 'cursor-not-allowed');
+    }
+  }
+}
+
 function bindLoansPageEvents() {
   if (loansPageEventsBound) return;
   loansPageEventsBound = true;
@@ -1494,6 +1642,11 @@ function bindLoansPageEvents() {
     dpRenderCalendar();
   });
   document.getElementById('resv-resource').addEventListener('change', async e => {
+    if (!document.getElementById('resv-contract-body').value.trim()) {
+      document.getElementById('resv-contract-body').value = buildReservationContractDefaultText(getLoanResourceById(e.target.value));
+    }
+    reservationEquipmentSelection = new Set();
+    renderReservationEquipmentSelector();
     dpInit();
     if (e.target.value) await dpLoadSchedule(e.target.value);
   });
@@ -1519,6 +1672,22 @@ function bindLoansPageEvents() {
       event.preventDefault();
       event.stopPropagation();
       editReservation(editBtn.dataset.id);
+      return;
+    }
+
+    const contractBtn = event.target.closest('[data-action="reservation-contract-generate"]');
+    if (contractBtn && !contractBtn.disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      generateReservationContract(contractBtn.dataset.id, contractBtn);
+      return;
+    }
+
+    const downloadBtn = event.target.closest('[data-action="reservation-contract-download"]');
+    if (downloadBtn && !downloadBtn.disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      window.open(`/api/signatures/${downloadBtn.dataset.signatureId}/download`, '_blank', 'noopener');
       return;
     }
 
@@ -1632,7 +1801,9 @@ document.getElementById('reservation-form').addEventListener('submit', async eve
     endAt: endVal,
     requestedUnits: parseInt(document.getElementById('resv-units').value, 10),
     status: document.getElementById('resv-status').value,
-    internalNotes: document.getElementById('resv-notes').value.trim() || null
+    internalNotes: document.getElementById('resv-notes').value.trim() || null,
+    contractBody: document.getElementById('resv-contract-body').value.trim() || null,
+    selectedEquipmentIds: [...reservationEquipmentSelection]
   };
   try {
     if (reservationId) {

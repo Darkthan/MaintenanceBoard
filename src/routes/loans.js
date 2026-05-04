@@ -1,5 +1,9 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
+const PDFDocument = require('pdfkit');
+const { randomUUID } = require('crypto');
 const { body, query, validationResult } = require('express-validator');
 const prisma = require('../lib/prisma');
 const config = require('../config');
@@ -59,10 +63,379 @@ function normalizeEquipmentList(raw) {
 const EQUIPMENT_SELECT = {
   equipments: {
     include: {
-      equipment: { select: { id: true, name: true, serialNumber: true, status: true, type: true } }
+      equipment: {
+        select: {
+          id: true,
+          name: true,
+          serialNumber: true,
+          status: true,
+          type: true,
+          brand: true,
+          model: true
+        }
+      }
     }
   }
 };
+
+const CONTRACT_SIGNATURE_SELECT = {
+  select: {
+    id: true,
+    status: true,
+    signatureId: true,
+    signedAt: true,
+    expiresAt: true,
+    documentTitle: true,
+    signedFilename: true
+  }
+};
+
+const RESERVATION_INCLUDE = {
+  resource: { include: { ...EQUIPMENT_SELECT } },
+  requestLink: { select: { id: true, title: true, token: true } },
+  createdBy: { select: { id: true, name: true } },
+  approvedBy: { select: { id: true, name: true } },
+  contractSignatureRequest: CONTRACT_SIGNATURE_SELECT,
+  selectedEquipments: {
+    include: {
+      equipment: {
+        select: {
+          id: true,
+          name: true,
+          serialNumber: true,
+          type: true,
+          brand: true,
+          model: true
+        }
+      }
+    },
+    orderBy: [{ lotNumber: 'asc' }, { equipmentName: 'asc' }]
+  }
+};
+
+function normalizeSelectedEquipmentIds(raw) {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.map(item => String(item || '').trim()).filter(Boolean))];
+}
+
+function mapSelectedEquipment(item) {
+  return {
+    id: item.id,
+    equipmentId: item.equipmentId || item.equipment?.id || null,
+    name: item.equipmentName || item.equipment?.name || 'Équipement',
+    type: item.equipmentType || item.equipment?.type || null,
+    brand: item.equipmentBrand || item.equipment?.brand || null,
+    model: item.equipmentModel || item.equipment?.model || null,
+    serialNumber: item.equipmentSerialNumber || item.equipment?.serialNumber || null,
+    lotNumber: item.lotNumber ?? null
+  };
+}
+
+function mapContractSignatureRequest(item) {
+  if (!item) return null;
+  return {
+    id: item.id,
+    status: item.status,
+    signatureId: item.signatureId,
+    signedAt: item.signedAt,
+    expiresAt: item.expiresAt,
+    documentTitle: item.documentTitle,
+    signedFilename: item.signedFilename
+  };
+}
+
+function mapReservation(item) {
+  return {
+    ...item,
+    resource: item.resource ? mapResource(item.resource) : null,
+    selectedEquipments: Array.isArray(item.selectedEquipments)
+      ? item.selectedEquipments.map(mapSelectedEquipment)
+      : [],
+    contractSignatureRequest: mapContractSignatureRequest(item.contractSignatureRequest)
+  };
+}
+
+function getResourceEquipmentEntries(resource) {
+  return (resource?.equipments || [])
+    .map(link => {
+      const equipment = link.equipment || link;
+      if (!equipment?.id) return null;
+      return {
+        id: equipment.id,
+        name: equipment.name,
+        type: equipment.type || null,
+        brand: equipment.brand || null,
+        model: equipment.model || null,
+        serialNumber: equipment.serialNumber || null,
+        status: equipment.status || null,
+        lotNumber: link.lotNumber ?? 1
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildSelectedEquipmentSnapshots(resource, selectedEquipmentIds) {
+  const selectedIds = normalizeSelectedEquipmentIds(selectedEquipmentIds);
+  if (!selectedIds.length) return [];
+
+  const equipmentMap = new Map(getResourceEquipmentEntries(resource).map(item => [item.id, item]));
+  const snapshots = selectedIds.map(id => {
+    const equipment = equipmentMap.get(id);
+    if (!equipment) {
+      throw Object.assign(new Error('Un appareil sélectionné ne fait pas partie de cette ressource de prêt.'), { status: 400 });
+    }
+    return {
+      equipmentId: equipment.id,
+      equipmentName: equipment.name,
+      equipmentType: equipment.type,
+      equipmentBrand: equipment.brand,
+      equipmentModel: equipment.model,
+      equipmentSerialNumber: equipment.serialNumber,
+      lotNumber: equipment.lotNumber
+    };
+  });
+
+  return snapshots.sort((a, b) => {
+    const lotA = a.lotNumber ?? 9999;
+    const lotB = b.lotNumber ?? 9999;
+    if (lotA !== lotB) return lotA - lotB;
+    return a.equipmentName.localeCompare(b.equipmentName, 'fr');
+  });
+}
+
+function sameEquipmentSelection(current = [], next = []) {
+  const currentIds = current.map(item => item.equipmentId).filter(Boolean).sort();
+  const nextIds = normalizeSelectedEquipmentIds(next).sort();
+  if (currentIds.length !== nextIds.length) return false;
+  return currentIds.every((id, index) => id === nextIds[index]);
+}
+
+function buildDefaultLoanContractBody(reservation, resource) {
+  const orgPart = reservation.requesterOrganization ? ` pour ${reservation.requesterOrganization}` : '';
+  return `Je soussigné(e) ${reservation.requesterName}${orgPart}, reconnais recevoir en prêt le matériel décrit ci-dessous pour la période du ${fmtLoanDate(reservation.startAt)} au ${fmtLoanDate(reservation.endAt)}. Je m'engage à en prendre soin, à respecter les consignes de prêt et à restituer l'ensemble du matériel complet et en bon état à la date prévue.`;
+}
+
+function getEffectiveContractBody(reservation, resource) {
+  const contractBody = String(reservation.contractBody || '').trim();
+  return contractBody || buildDefaultLoanContractBody(reservation, resource);
+}
+
+function hasContractRelevantChange(existing, nextData, options = {}) {
+  const startChanged = new Date(nextData.startAt).getTime() !== new Date(existing.startAt).getTime();
+  const endChanged = new Date(nextData.endAt).getTime() !== new Date(existing.endAt).getTime();
+  const contractBodyChanged = options.contractBodyProvided
+    ? (String(nextData.contractBody || '').trim() || null) !== (String(existing.contractBody || '').trim() || null)
+    : false;
+  const equipmentSelectionChanged = options.selectedEquipmentProvided
+    ? !sameEquipmentSelection(existing.selectedEquipments, options.selectedEquipmentIds)
+    : false;
+
+  return (
+    nextData.resourceId !== existing.resourceId ||
+    nextData.requesterName !== existing.requesterName ||
+    nextData.requesterEmail !== existing.requesterEmail ||
+    (nextData.requesterOrganization || null) !== (existing.requesterOrganization || null) ||
+    Number(nextData.requestedUnits) !== Number(existing.requestedUnits) ||
+    startChanged ||
+    endChanged ||
+    contractBodyChanged ||
+    equipmentSelectionChanged
+  );
+}
+
+function getLoanContractDocumentTitle(reservation, resource) {
+  return `Fiche de prêt - ${resource.name} - ${reservation.requesterName}`;
+}
+
+function getLoanContractDocumentNotes(reservation, resource) {
+  return [
+    `Période : ${fmtLoanDate(reservation.startAt)} → ${fmtLoanDate(reservation.endAt)}`,
+    reservation.requesterOrganization ? `Organisation : ${reservation.requesterOrganization}` : null,
+    `Ressource : ${resource.name}`
+  ].filter(Boolean).join(' · ');
+}
+
+function getLoanSignatureLink(token) {
+  return `${config.appUrl.replace(/\/$/, '')}/sign.html?token=${encodeURIComponent(token)}`;
+}
+
+async function sendLoanContractSignatureEmail(signatureRequest, reservation, documentTitle, documentNotes) {
+  const { transporter, from, orgName } = createSmtpTransporter();
+  if (!transporter) {
+    throw new Error('SMTP non configuré (voir Paramètres → Emails)');
+  }
+
+  const signLink = getLoanSignatureLink(signatureRequest.token);
+  await transporter.sendMail({
+    from,
+    to: signatureRequest.recipientEmail,
+    subject: `[Signature requise] ${documentTitle} — ${orgName || 'MaintenanceBoard'}`,
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:580px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)">
+        <div style="background:linear-gradient(135deg,#0f766e,#0f172a);padding:28px 32px">
+          <p style="color:rgba(255,255,255,.85);font-size:12px;margin:0 0 4px;text-transform:uppercase;letter-spacing:1px">${orgName || 'MaintenanceBoard'}</p>
+          <h1 style="color:#fff;font-size:22px;margin:0;font-weight:700">Fiche de prêt à signer</h1>
+        </div>
+        <div style="padding:32px">
+          <p style="font-size:15px;color:#1e293b;margin:0 0 16px">Bonjour <strong>${signatureRequest.recipientName}</strong>,</p>
+          <p style="font-size:14px;color:#475569;margin:0 0 20px">Merci de signer électroniquement votre fiche de prêt avant le retrait du matériel.</p>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:24px">
+            <p style="margin:0 0 6px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Document à signer</p>
+            <p style="margin:0 0 4px;font-size:17px;font-weight:700;color:#0f172a">${documentTitle}</p>
+            <p style="margin:0;font-size:13px;color:#475569">${documentNotes}</p>
+            <p style="margin:12px 0 0;font-size:12px;color:#64748b">Demandeur : ${reservation.requesterName}${reservation.requesterOrganization ? ` · ${reservation.requesterOrganization}` : ''}</p>
+          </div>
+          <div style="text-align:center;margin:28px 0">
+            <a href="${signLink}" style="display:inline-block;background:#0f766e;color:#fff;font-weight:700;font-size:15px;padding:14px 36px;border-radius:10px;text-decoration:none;letter-spacing:.3px">
+              Signer la fiche de prêt
+            </a>
+          </div>
+          <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0 0 6px">Ce lien est valable 7 jours. Votre identité sera vérifiée par un code envoyé à cette adresse email.</p>
+          <p style="font-size:11px;color:#cbd5e1;text-align:center;margin:0">Si vous n'étiez pas attendu(e), ignorez ce message.</p>
+        </div>
+      </div>`
+  });
+}
+
+function buildLoanContractPdf({ reservation, resource, contractBody, selectedEquipments }) {
+  return new Promise((resolve, reject) => {
+    let signaturePlacement = null;
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50,
+      info: {
+        Title: getLoanContractDocumentTitle(reservation, resource),
+        Author: 'MaintenanceBoard',
+        Subject: 'Fiche de prêt à signer',
+        Creator: 'MaintenanceBoard'
+      }
+    });
+
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve({
+      buffer: Buffer.concat(chunks),
+      signaturePlacement
+    }));
+    doc.on('error', reject);
+
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
+    const DARK = '#0f172a';
+    const TEAL = '#0f766e';
+    const SLATE = '#475569';
+    const LIGHT = '#cbd5e1';
+
+    doc.rect(0, 0, pageWidth, 88).fill(TEAL);
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(20).text('Fiche de prêt', 50, 22);
+    doc.font('Helvetica').fontSize(10).fillColor('#d1fae5').text('Document préparé pour signature électronique', 50, 48);
+
+    doc.y = 110;
+    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(16).text(resource.name, 50, doc.y);
+    doc.y += 18;
+    doc.font('Helvetica').fontSize(10).fillColor(SLATE)
+      .text(`Emprunteur : ${reservation.requesterName}`, 50, doc.y);
+    doc.y += 14;
+    doc.text(`Email : ${reservation.requesterEmail}`, 50, doc.y);
+    doc.y += 14;
+    if (reservation.requesterOrganization) {
+      doc.text(`Organisation : ${reservation.requesterOrganization}`, 50, doc.y);
+      doc.y += 14;
+    }
+    doc.text(`Période : ${fmtLoanDate(reservation.startAt)} → ${fmtLoanDate(reservation.endAt)}`, 50, doc.y);
+    doc.y += 14;
+    doc.text(`Quantité demandée : ${reservation.requestedUnits} unité(s)`, 50, doc.y);
+    doc.y += 20;
+
+    doc.moveTo(50, doc.y).lineTo(pageWidth - 50, doc.y).strokeColor(LIGHT).lineWidth(0.7).stroke();
+    doc.y += 18;
+
+    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(12).text('Engagement', 50, doc.y);
+    doc.y += 18;
+    doc.font('Helvetica').fontSize(10).fillColor(SLATE)
+      .text(contractBody, 50, doc.y, { width: pageWidth - 100, align: 'justify' });
+    doc.y += doc.heightOfString(contractBody, { width: pageWidth - 100, align: 'justify' }) + 18;
+
+    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(12).text('Appareils concernés', 50, doc.y);
+    doc.y += 14;
+
+    if (!selectedEquipments.length) {
+      const note = 'Aucun appareil nominatif n’a été sélectionné pour ce prêt au moment de la génération du document.';
+      doc.font('Helvetica').fontSize(10).fillColor(SLATE).text(note, 50, doc.y, { width: pageWidth - 100 });
+      doc.y += doc.heightOfString(note, { width: pageWidth - 100 }) + 14;
+    } else {
+      const headers = ['Appareil', 'Type', 'N° de série', 'Lot'];
+      const columns = [50, 245, 355, 515];
+      doc.rect(50, doc.y, pageWidth - 100, 22).fill('#f1f5f9');
+      doc.fillColor(SLATE).font('Helvetica-Bold').fontSize(8)
+        .text(headers[0], columns[0] + 6, doc.y + 7)
+        .text(headers[1], columns[1] + 6, doc.y + 7)
+        .text(headers[2], columns[2] + 6, doc.y + 7)
+        .text(headers[3], columns[3] + 6, doc.y + 7, { width: 24, align: 'center' });
+      doc.y += 24;
+
+      selectedEquipments.forEach((equipment, index) => {
+        if (doc.y > pageHeight - 170) {
+          doc.addPage();
+          doc.y = 60;
+        }
+        if (index % 2 === 0) {
+          doc.rect(50, doc.y, pageWidth - 100, 22).fill('#fafafa');
+        }
+        doc.fillColor(DARK).font('Helvetica').fontSize(8.5)
+          .text(equipment.name || 'Équipement', columns[0] + 6, doc.y + 7, { width: 180, ellipsis: true })
+          .text(equipment.type || '—', columns[1] + 6, doc.y + 7, { width: 95, ellipsis: true })
+          .text(equipment.serialNumber || '—', columns[2] + 6, doc.y + 7, { width: 145, ellipsis: true })
+          .text(equipment.lotNumber != null ? String(equipment.lotNumber) : '—', columns[3] + 6, doc.y + 7, { width: 24, align: 'center' });
+        doc.y += 22;
+        doc.moveTo(50, doc.y).lineTo(pageWidth - 50, doc.y).strokeColor(LIGHT).lineWidth(0.35).stroke();
+      });
+
+      doc.y += 12;
+    }
+
+    if (resource.instructions) {
+      doc.fillColor(DARK).font('Helvetica-Bold').fontSize(12).text('Consignes', 50, doc.y);
+      doc.y += 16;
+      doc.font('Helvetica').fontSize(10).fillColor(SLATE)
+        .text(resource.instructions, 50, doc.y, { width: pageWidth - 100, align: 'justify' });
+      doc.y += doc.heightOfString(resource.instructions, { width: pageWidth - 100, align: 'justify' }) + 14;
+    }
+
+    let signatureTop = Math.max(doc.y + 12, 560);
+    if (signatureTop > pageHeight - 160) {
+      doc.addPage();
+      signatureTop = 540;
+    }
+
+    const sigX = 315;
+    const sigY = signatureTop;
+    const sigW = 230;
+    const sigH = 92;
+
+    doc.roundedRect(50, sigY, 235, sigH, 10).strokeColor(LIGHT).lineWidth(1).stroke();
+    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(11).text('Cadre établissement', 66, sigY + 12);
+    doc.font('Helvetica').fontSize(9).fillColor(SLATE)
+      .text('Nom, cachet, préparation du matériel et remise au bénéficiaire.', 66, sigY + 34, { width: 200 });
+
+    doc.roundedRect(sigX, sigY, sigW, sigH, 10).strokeColor(TEAL).lineWidth(1.2).stroke();
+    doc.fillColor(TEAL).font('Helvetica-Bold').fontSize(11).text('Signature de l’emprunteur', sigX + 14, sigY + 12);
+    doc.font('Helvetica').fontSize(9).fillColor(SLATE)
+      .text('La signature électronique sera apposée dans cet encadré.', sigX + 14, sigY + 34, { width: sigW - 28 });
+    doc.moveTo(sigX + 14, sigY + sigH - 18).lineTo(sigX + sigW - 14, sigY + sigH - 18).strokeColor(LIGHT).lineWidth(0.7).stroke();
+    doc.font('Helvetica').fontSize(8).fillColor(SLATE)
+      .text(`${reservation.requesterName} · ${new Date(reservation.startAt).toLocaleDateString('fr-FR')}`, sigX + 14, sigY + sigH - 14, { width: sigW - 28 });
+
+    signaturePlacement = {
+      posX: sigX / pageWidth,
+      posY: sigY / pageHeight,
+      sigWidth: sigW / pageWidth,
+      sigHeight: sigH / pageHeight
+    };
+
+    doc.end();
+  });
+}
 
 function computeOccurrences(startAt, endAt, recurrence) {
   const occurrences = [{ startAt: new Date(startAt), endAt: new Date(endAt) }];
@@ -247,7 +620,7 @@ function hasReservationScheduleChange(existing, nextData) {
 async function ensureAvailable(resourceId, startAt, endAt, requestedUnits, excludeReservationId = null) {
   const resource = await prisma.loanResource.findUnique({
     where: { id: resourceId },
-    include: { equipments: { include: { equipment: { select: { id: true, status: true } } } } }
+    include: { ...EQUIPMENT_SELECT }
   });
   if (!resource || !resource.isActive) {
     throw Object.assign(new Error('Ressource de prêt introuvable'), { status: 404 });
@@ -824,18 +1197,10 @@ loansRouter.get('/reservations',
       const reservations = await prisma.loanReservation.findMany({
         where,
         orderBy: [{ startAt: 'asc' }, { createdAt: 'desc' }],
-        include: {
-          resource: true,
-          requestLink: { select: { id: true, title: true, token: true } },
-          createdBy: { select: { id: true, name: true } },
-          approvedBy: { select: { id: true, name: true } }
-        }
+        include: RESERVATION_INCLUDE
       });
 
-      res.json(reservations.map(item => ({
-        ...item,
-        resource: mapResource(item.resource)
-      })));
+      res.json(reservations.map(mapReservation));
     } catch (err) {
       next(err);
     }
@@ -868,6 +1233,8 @@ loansRouter.post('/reservations',
     body('requestedUnits').isInt({ min: 1, max: 500 }),
     body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('internalNotes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
+    body('contractBody').optional({ values: 'falsy' }).trim().isLength({ max: 5000 }),
+    body('selectedEquipmentIds').optional().isArray({ max: 500 }),
     body('status').optional().isIn(['PENDING', 'APPROVED']),
     body('recurrence.type').optional().isIn(['none', 'daily', 'weekly', 'biweekly', 'monthly']),
     body('recurrence.until').optional().isISO8601()
@@ -879,8 +1246,10 @@ loansRouter.post('/reservations',
       const occurrences = computeOccurrences(start, end, req.body.recurrence);
 
       const created = [];
+      const selectedEquipmentIds = normalizeSelectedEquipmentIds(req.body.selectedEquipmentIds);
       for (const occ of occurrences) {
         const availability = await ensureAvailable(req.body.resourceId, occ.startAt, occ.endAt, req.body.requestedUnits);
+        const selectedEquipments = buildSelectedEquipmentSnapshots(availability.resource, selectedEquipmentIds);
         const reservation = await prisma.loanReservation.create({
           data: {
             resourceId: availability.resource.id,
@@ -894,17 +1263,21 @@ loansRouter.post('/reservations',
             reservedSlots: availability.reservedSlots,
             notes: req.body.notes || null,
             internalNotes: req.body.internalNotes || null,
+            contractBody: req.body.contractBody ? String(req.body.contractBody).trim() : null,
             status: req.body.status || 'APPROVED',
-            createdById: req.user.id
+            createdById: req.user.id,
+            selectedEquipments: selectedEquipments.length
+              ? { create: selectedEquipments }
+              : undefined
           },
-          include: { resource: true }
+          include: RESERVATION_INCLUDE
         });
         created.push(reservation);
       }
 
       res.status(201).json({
         count: created.length,
-        reservations: created.map(r => ({ ...r, resource: mapResource(r.resource) }))
+        reservations: created.map(mapReservation)
       });
     } catch (err) {
       next(err);
@@ -926,6 +1299,8 @@ loansRouter.patch('/reservations/:id',
     body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('internalNotes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('additionalNeeds').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
+    body('contractBody').optional({ values: 'falsy' }).trim().isLength({ max: 5000 }),
+    body('selectedEquipmentIds').optional().isArray({ max: 500 }),
     body('skipNotification').optional().isBoolean()
   ],
   async (req, res, next) => {
@@ -934,7 +1309,7 @@ loansRouter.patch('/reservations/:id',
 
       const existing = await prisma.loanReservation.findUnique({
         where: { id: req.params.id },
-        include: { resource: true }
+        include: RESERVATION_INCLUDE
       });
       if (!existing) return res.status(404).json({ error: 'Réservation introuvable' });
 
@@ -947,6 +1322,7 @@ loansRouter.patch('/reservations/:id',
         notes: req.body.notes !== undefined ? (req.body.notes || null) : existing.notes,
         internalNotes: req.body.internalNotes !== undefined ? (req.body.internalNotes || null) : existing.internalNotes,
         additionalNeeds: req.body.additionalNeeds !== undefined ? (req.body.additionalNeeds || null) : existing.additionalNeeds,
+        contractBody: req.body.contractBody !== undefined ? (String(req.body.contractBody || '').trim() || null) : existing.contractBody,
         status: req.body.status !== undefined ? req.body.status : existing.status
       };
 
@@ -971,6 +1347,8 @@ loansRouter.patch('/reservations/:id',
       const scheduleChanged = hasReservationScheduleChange(existing, nextData);
       const shouldRecheckAvailability = scheduleChanged || (req.body.status === 'APPROVED' && existing.status !== 'APPROVED');
       let availability = null;
+      const selectedEquipmentProvided = req.body.selectedEquipmentIds !== undefined;
+      let selectedEquipmentSnapshots = null;
 
       if (shouldRecheckAvailability) {
         availability = await ensureAvailable(
@@ -997,6 +1375,42 @@ loansRouter.patch('/reservations/:id',
         };
       }
 
+      let selectionResource = availability?.resource || existing.resource;
+      if ((selectedEquipmentProvided || nextData.resourceId !== existing.resourceId) && !selectionResource?.id) {
+        selectionResource = await prisma.loanResource.findUnique({
+          where: { id: nextData.resourceId },
+          include: { ...EQUIPMENT_SELECT }
+        });
+      }
+
+      if (selectedEquipmentProvided || nextData.resourceId !== existing.resourceId) {
+        selectedEquipmentSnapshots = buildSelectedEquipmentSnapshots(
+          selectionResource,
+          selectedEquipmentProvided ? req.body.selectedEquipmentIds : []
+        );
+      }
+
+      const contractRelevantChange = existing.contractSignatureRequestId
+        ? hasContractRelevantChange(existing, nextData, {
+            contractBodyProvided: req.body.contractBody !== undefined,
+            selectedEquipmentProvided,
+            selectedEquipmentIds: selectedEquipmentProvided ? req.body.selectedEquipmentIds : []
+          })
+        : false;
+
+      if (contractRelevantChange && existing.contractSignatureRequest?.status === 'SIGNED') {
+        return res.status(409).json({
+          error: 'Ce prêt possède déjà une fiche signée. Modifiez d’abord la fiche contractuelle ou créez une nouvelle réservation.'
+        });
+      }
+
+      if (contractRelevantChange && existing.contractSignatureRequest?.status === 'PENDING') {
+        await prisma.signatureRequest.update({
+          where: { id: existing.contractSignatureRequest.id },
+          data: { status: 'CANCELLED' }
+        });
+      }
+
       const reservation = await prisma.loanReservation.update({
         where: { id: req.params.id },
         data: {
@@ -1012,14 +1426,30 @@ loansRouter.patch('/reservations/:id',
           ...(req.body.notes !== undefined ? { notes: nextData.notes } : {}),
           ...(req.body.status !== undefined ? { status: nextData.status, approvedById: nextData.status === 'APPROVED' ? req.user.id : existing.approvedById } : {}),
           ...(req.body.internalNotes !== undefined ? { internalNotes: nextData.internalNotes } : {}),
-          ...(req.body.additionalNeeds !== undefined ? { additionalNeeds: nextData.additionalNeeds } : {})
+          ...(req.body.additionalNeeds !== undefined ? { additionalNeeds: nextData.additionalNeeds } : {}),
+          ...(req.body.contractBody !== undefined ? { contractBody: nextData.contractBody } : {}),
+          ...(contractRelevantChange ? { contractSignatureRequestId: null, contractGeneratedAt: null } : {})
         },
-        include: {
-          resource: true,
-          requestLink: { select: { id: true, title: true, token: true } },
-          createdBy: { select: { id: true, name: true } },
-          approvedBy: { select: { id: true, name: true } }
+        include: RESERVATION_INCLUDE
+      });
+
+      if (selectedEquipmentSnapshots !== null) {
+        await prisma.loanReservationEquipment.deleteMany({
+          where: { loanReservationId: reservation.id }
+        });
+        if (selectedEquipmentSnapshots.length) {
+          await prisma.loanReservationEquipment.createMany({
+            data: selectedEquipmentSnapshots.map(item => ({
+              loanReservationId: reservation.id,
+              ...item
+            }))
+          });
         }
+      }
+
+      const refreshedReservation = await prisma.loanReservation.findUnique({
+        where: { id: reservation.id },
+        include: RESERVATION_INCLUDE
       });
 
       // Email si statut changé vers APPROVED ou REJECTED
@@ -1027,11 +1457,109 @@ loansRouter.patch('/reservations/:id',
         sendLoanStatusEmail(reservation, req.body.status).catch(() => {});
       }
 
-      res.json({
-        ...reservation,
-        resource: mapResource(reservation.resource)
+      res.json(mapReservation(refreshedReservation || reservation));
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+loansRouter.post('/reservations/:id/contract-signature',
+  [
+    body('message').optional({ values: 'falsy' }).trim().isLength({ max: 2000 })
+  ],
+  async (req, res, next) => {
+    try {
+      if (!validate(req, res)) return;
+
+      const reservation = await prisma.loanReservation.findUnique({
+        where: { id: req.params.id },
+        include: RESERVATION_INCLUDE
+      });
+      if (!reservation) {
+        return res.status(404).json({ error: 'Réservation introuvable' });
+      }
+
+      if (reservation.contractSignatureRequest && ['PENDING', 'SIGNED'].includes(reservation.contractSignatureRequest.status)) {
+        return res.status(409).json({
+          error: reservation.contractSignatureRequest.status === 'SIGNED'
+            ? 'Une fiche signée existe déjà pour cette réservation.'
+            : 'Une fiche de prêt est déjà en attente de signature pour cette réservation.',
+          signatureRequest: mapContractSignatureRequest(reservation.contractSignatureRequest)
+        });
+      }
+
+      const resource = reservation.resource;
+      const contractBody = getEffectiveContractBody(reservation, resource);
+      const selectedEquipments = Array.isArray(reservation.selectedEquipments)
+        ? reservation.selectedEquipments.map(mapSelectedEquipment)
+        : [];
+      const documentTitle = getLoanContractDocumentTitle(reservation, resource);
+      const documentNotes = getLoanContractDocumentNotes(reservation, resource);
+      const { buffer, signaturePlacement } = await buildLoanContractPdf({
+        reservation,
+        resource,
+        contractBody,
+        selectedEquipments
+      });
+
+      const sigReq = await prisma.signatureRequest.create({
+        data: {
+          orderId: null,
+          token: randomUUID(),
+          documentTitle,
+          documentNotes,
+          recipientEmail: reservation.requesterEmail,
+          recipientName: reservation.requesterName,
+          message: req.body.message ? String(req.body.message).trim() : 'Merci de signer cette fiche de prêt avant le retrait du matériel.',
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          createdBy: req.user.id,
+          posX: signaturePlacement?.posX ?? null,
+          posY: signaturePlacement?.posY ?? null,
+          sigWidth: signaturePlacement?.sigWidth ?? null,
+          sigHeight: signaturePlacement?.sigHeight ?? null
+        }
+      });
+
+      const srcDir = path.join(process.cwd(), 'uploads', 'signatures', 'source', sigReq.id);
+      if (!fs.existsSync(srcDir)) fs.mkdirSync(srcDir, { recursive: true });
+
+      const sourceFileStoredAs = `${randomUUID()}.pdf`;
+      fs.writeFileSync(path.join(srcDir, sourceFileStoredAs), buffer);
+
+      await prisma.signatureRequest.update({
+        where: { id: sigReq.id },
+        data: {
+          sourceFileStoredAs,
+          sourceFilename: `${documentTitle}.pdf`,
+          sourceFileMimetype: 'application/pdf'
+        }
+      });
+
+      await prisma.loanReservation.update({
+        where: { id: reservation.id },
+        data: {
+          contractBody,
+          contractGeneratedAt: new Date(),
+          contractSignatureRequestId: sigReq.id
+        }
+      });
+
+      await sendLoanContractSignatureEmail(sigReq, reservation, documentTitle, documentNotes);
+
+      res.status(201).json({
+        success: true,
+        message: 'Fiche de prêt générée et envoyée en signature.',
+        signatureRequest: {
+          id: sigReq.id,
+          status: sigReq.status,
+          documentTitle
+        }
       });
     } catch (err) {
+      if (err.message?.includes('SMTP')) {
+        return res.status(400).json({ error: err.message });
+      }
       next(err);
     }
   }
@@ -1041,11 +1569,22 @@ loansRouter.delete('/reservations/:id', async (req, res, next) => {
   try {
     const existing = await prisma.loanReservation.findUnique({
       where: { id: req.params.id },
-      select: { id: true }
+      include: {
+        contractSignatureRequest: {
+          select: { id: true, status: true }
+        }
+      }
     });
 
     if (!existing) {
       return res.status(404).json({ error: 'Réservation introuvable' });
+    }
+
+    if (existing.contractSignatureRequest?.status === 'PENDING') {
+      await prisma.signatureRequest.update({
+        where: { id: existing.contractSignatureRequest.id },
+        data: { status: 'CANCELLED' }
+      });
     }
 
     await prisma.loanReservation.delete({

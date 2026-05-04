@@ -27,6 +27,10 @@ jest.mock('../src/lib/prisma', () => ({
     create: jest.fn(),
     update: jest.fn()
   },
+  loanReservationEquipment: {
+    deleteMany: jest.fn(),
+    createMany: jest.fn()
+  },
   loanMagicLink: {
     findUnique: jest.fn(),
     findMany: jest.fn(),
@@ -43,6 +47,10 @@ jest.mock('../src/lib/prisma', () => ({
     findUnique: jest.fn(),
     update: jest.fn(),
     delete: jest.fn()
+  },
+  signatureRequest: {
+    create: jest.fn(),
+    update: jest.fn()
   }
 }));
 
@@ -267,6 +275,7 @@ describe('loan requests', () => {
     prisma.loanReservation.findUnique.mockResolvedValue({
       id: 'reservation-2',
       resourceId: 'resource-1',
+      contractSignatureRequestId: null,
       requesterName: 'Jean Dupont',
       requesterEmail: 'jean@example.com',
       requesterPhone: null,
@@ -279,14 +288,18 @@ describe('loan requests', () => {
       notes: null,
       internalNotes: null,
       additionalNeeds: null,
+      contractBody: null,
       approvedById: null,
       resource: {
         id: 'resource-1',
         name: 'Chariot iPad',
         totalUnits: 10,
         bundleSize: 5,
-        isActive: true
-      }
+        isActive: true,
+        equipments: []
+      },
+      selectedEquipments: [],
+      contractSignatureRequest: null
     });
     prisma.loanResource.findUnique.mockResolvedValue({
       id: 'resource-1',
@@ -300,6 +313,7 @@ describe('loan requests', () => {
     prisma.loanReservation.update.mockImplementation(async ({ data }) => ({
       id: 'reservation-2',
       resourceId: data.resourceId || 'resource-1',
+      contractSignatureRequestId: null,
       requesterName: data.requesterName,
       requesterEmail: data.requesterEmail,
       requesterPhone: data.requesterPhone,
@@ -312,14 +326,74 @@ describe('loan requests', () => {
       notes: data.notes,
       internalNotes: data.internalNotes,
       additionalNeeds: data.additionalNeeds,
+      contractBody: data.contractBody || null,
       resource: {
         id: 'resource-1',
         name: 'Chariot iPad',
         totalUnits: 10,
         bundleSize: 5,
-        isActive: true
-      }
+        isActive: true,
+        equipments: []
+      },
+      selectedEquipments: [],
+      contractSignatureRequest: null
     }));
+    prisma.loanReservation.findUnique.mockResolvedValueOnce({
+      id: 'reservation-2',
+      resourceId: 'resource-1',
+      contractSignatureRequestId: null,
+      requesterName: 'Jean Dupont',
+      requesterEmail: 'jean@example.com',
+      requesterPhone: null,
+      requesterOrganization: null,
+      startAt: new Date('2026-04-02T08:00:00.000Z'),
+      endAt: new Date('2026-04-02T10:00:00.000Z'),
+      requestedUnits: 1,
+      reservedSlots: 1,
+      status: 'PENDING',
+      notes: null,
+      internalNotes: null,
+      additionalNeeds: null,
+      contractBody: null,
+      approvedById: null,
+      resource: {
+        id: 'resource-1',
+        name: 'Chariot iPad',
+        totalUnits: 10,
+        bundleSize: 5,
+        isActive: true,
+        equipments: []
+      },
+      selectedEquipments: [],
+      contractSignatureRequest: null
+    }).mockResolvedValueOnce({
+      id: 'reservation-2',
+      resourceId: 'resource-1',
+      contractSignatureRequestId: null,
+      requesterName: 'Jean Martin',
+      requesterEmail: 'jean.martin@example.com',
+      requesterPhone: '0102030405',
+      requesterOrganization: 'Lycée Beaupeyrat',
+      startAt: new Date('2026-04-03T09:00:00.000Z'),
+      endAt: new Date('2026-04-03T11:00:00.000Z'),
+      requestedUnits: 3,
+      reservedSlots: 1,
+      status: 'APPROVED',
+      notes: null,
+      internalNotes: 'Préparer les chargeurs',
+      additionalNeeds: null,
+      contractBody: null,
+      resource: {
+        id: 'resource-1',
+        name: 'Chariot iPad',
+        totalUnits: 10,
+        bundleSize: 5,
+        isActive: true,
+        equipments: []
+      },
+      selectedEquipments: [],
+      contractSignatureRequest: null
+    });
 
     const res = await request(buildApp())
       .patch('/api/loans/reservations/reservation-2')
@@ -351,5 +425,88 @@ describe('loan requests', () => {
       })
     }));
     expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('genere une fiche de pret a signer avec les appareils selectionnes', async () => {
+    const sendMail = jest.fn().mockResolvedValue({});
+    createSmtpTransporter.mockReturnValue({
+      transporter: { sendMail },
+      from: 'noreply@test.local',
+      orgName: 'MaintenanceBoard'
+    });
+
+    prisma.loanReservation.findUnique.mockResolvedValue({
+      id: 'reservation-3',
+      resourceId: 'resource-1',
+      contractSignatureRequestId: null,
+      requesterName: 'Marie Martin',
+      requesterEmail: 'marie@example.com',
+      requesterPhone: null,
+      requesterOrganization: 'Collège Demo',
+      startAt: new Date('2026-04-10T08:00:00.000Z'),
+      endAt: new Date('2026-04-10T12:00:00.000Z'),
+      requestedUnits: 2,
+      reservedSlots: 1,
+      status: 'APPROVED',
+      notes: null,
+      internalNotes: null,
+      additionalNeeds: null,
+      contractBody: 'Texte personnalisé de contrat.',
+      resource: {
+        id: 'resource-1',
+        name: 'Valise iPad',
+        totalUnits: 10,
+        bundleSize: 5,
+        isActive: true,
+        instructions: 'Rendre les chargeurs.',
+        equipments: [
+          { lotNumber: 1, equipment: { id: 'eq-1', name: 'iPad 1', serialNumber: 'SER-001', type: 'Tablette', brand: 'Apple', model: 'Air', status: 'ACTIVE' } }
+        ]
+      },
+      selectedEquipments: [
+        {
+          id: 'sel-1',
+          equipmentId: 'eq-1',
+          equipmentName: 'iPad 1',
+          equipmentType: 'Tablette',
+          equipmentBrand: 'Apple',
+          equipmentModel: 'Air',
+          equipmentSerialNumber: 'SER-001',
+          lotNumber: 1
+        }
+      ],
+      contractSignatureRequest: null
+    });
+
+    prisma.signatureRequest.create.mockResolvedValue({
+      id: 'sig-1',
+      token: 'token-signature',
+      recipientEmail: 'marie@example.com',
+      recipientName: 'Marie Martin',
+      status: 'PENDING'
+    });
+    prisma.signatureRequest.update.mockResolvedValue({});
+    prisma.loanReservation.update.mockResolvedValue({});
+
+    const res = await request(buildApp())
+      .post('/api/loans/reservations/reservation-3/contract-signature')
+      .send({});
+
+    expect(res.status).toBe(201);
+    expect(prisma.signatureRequest.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        documentTitle: expect.stringContaining('Valise iPad'),
+        recipientEmail: 'marie@example.com',
+        recipientName: 'Marie Martin'
+      })
+    }));
+    expect(prisma.loanReservation.update).toHaveBeenCalledWith({
+      where: { id: 'reservation-3' },
+      data: expect.objectContaining({
+        contractBody: 'Texte personnalisé de contrat.',
+        contractSignatureRequestId: 'sig-1'
+      })
+    });
+    expect(sendMail).toHaveBeenCalled();
   });
 });
