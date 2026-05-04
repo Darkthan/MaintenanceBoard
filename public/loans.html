@@ -1675,7 +1675,7 @@ document.getElementById('link-form').addEventListener('submit', async event => {
     const link = await api.post('/loans/magic-links', {
       title: document.getElementById('link-title').value.trim() || null,
       resourceId: document.getElementById('link-scope-resource').checked ? selectedResourceId : null,
-      expiresAt: document.getElementById('link-expires-at').value || null
+      expiresAt: document.getElementById('link-expires-at').value ? new Date(document.getElementById('link-expires-at').value).toISOString() : null
     });
     closeLinkModal();
     await loadMagicLinks();

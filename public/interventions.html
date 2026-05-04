@@ -737,6 +737,11 @@ function toDatetimeLocalValue(value) {
   return local.toISOString().slice(0, 16);
 }
 
+function fromDatetimeLocalValue(value) {
+  if (!value) return null;
+  return new Date(value).toISOString();
+}
+
 function formatDateTimeLabel(value) {
   if (!value) return '—';
   return new Date(value).toLocaleString('fr-FR', {
@@ -1771,9 +1776,9 @@ document.getElementById('intervention-form').addEventListener('submit', async e 
     priority: document.getElementById('int-priority').value,
     description: document.getElementById('int-description').value || null,
     resolution: document.getElementById('int-resolution').value || null,
-    scheduledStartAt: document.getElementById('int-scheduled-start').value || null,
-    scheduledEndAt: document.getElementById('int-scheduled-end').value || null,
-    dueAt: document.getElementById('int-due-at').value || null,
+    scheduledStartAt: fromDatetimeLocalValue(document.getElementById('int-scheduled-start').value),
+    scheduledEndAt: fromDatetimeLocalValue(document.getElementById('int-scheduled-end').value),
+    dueAt: fromDatetimeLocalValue(document.getElementById('int-due-at').value),
     roomId: (roomVal && roomVal !== '__suggest__') ? roomVal : null,
     equipmentId: (equipVal && equipVal !== '__suggest__') ? equipVal : null,
     suggestedRoom: roomVal === '__suggest__' ? (document.getElementById('int-room-suggestion').value.trim() || null) : null,
@@ -1811,9 +1816,9 @@ document.getElementById('checkup-form').addEventListener('submit', async event =
     description: document.getElementById('checkup-description').value.trim() || null,
     checkupTemplate: template,
     checkupEquipmentIds: [...selectedCheckupEquipmentIds],
-    scheduledStartAt: document.getElementById('checkup-scheduled-start').value || null,
-    scheduledEndAt: document.getElementById('checkup-scheduled-end').value || null,
-    dueAt: document.getElementById('checkup-due-at').value || null
+    scheduledStartAt: fromDatetimeLocalValue(document.getElementById('checkup-scheduled-start').value),
+    scheduledEndAt: fromDatetimeLocalValue(document.getElementById('checkup-scheduled-end').value),
+    dueAt: fromDatetimeLocalValue(document.getElementById('checkup-due-at').value)
   };
 
   submitBtn.disabled = true;
