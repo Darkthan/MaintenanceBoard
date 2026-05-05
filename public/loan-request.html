@@ -137,7 +137,60 @@
 <script>
 let currentToken = null;
 let currentAccessToken = null;
+let currentRequesterName = '';
 let resources = [];
+
+function getToken() {
+  return new URLSearchParams(window.location.search).get('token') || '';
+}
+
+function getAccessToken() {
+  return new URLSearchParams(window.location.search).get('access') || '';
+}
+
+async function apiFetch(pathname) {
+  const response = await fetch(`/api${pathname}`);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Erreur lors du chargement');
+  }
+  return payload;
+}
+
+function setFeedback(elementId, tone, message) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  el.className = tone === 'success'
+    ? 'rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700'
+    : 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700';
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+
+function getSelectedResource() {
+  const selectedId = document.getElementById('resource-id').value;
+  return resources.find(resource => resource.id === selectedId) || null;
+}
+
+function renderResourceSummary() {
+  const summary = document.getElementById('resource-summary');
+  const resource = getSelectedResource();
+  if (!resource) {
+    summary.textContent = 'Aucune ressource disponible pour ce lien.';
+    return;
+  }
+
+  const details = [];
+  if (resource.category) details.push(resource.category);
+  if (resource.location) details.push(resource.location);
+  if (resource.instructions) details.push(resource.instructions);
+
+  const bundleText = resource.usesBundles === false
+    ? `${resource.totalUnits || 1} unité(s) disponibles`
+    : `${resource.totalUnits || 1} unité(s) • lot de ${resource.bundleSize || 1}`;
+
+  summary.textContent = [bundleText, ...details].join(' • ');
+}
 
 // ── Date Picker public ────────────────────────────────────────────────────────
 let lrdpSchedule = { totalSlots: 1, reservations: [] };
@@ -437,7 +490,11 @@ async function lrdpLoadSchedule(resourceId) {
   try {
     const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
     const end = new Date(start); end.setMonth(end.getMonth() + 6);
-    lrdpSchedule = await apiFetch(`/loan-request/resources/${resourceId}/schedule?start=${start.toISOString()}&end=${end.toISOString()}`);
+    const params = new URLSearchParams({
+      start: start.toISOString(),
+      end: end.toISOString()
+    });
+    lrdpSchedule = await apiFetch(`/loan-request/resources/${encodeURIComponent(resourceId)}/schedule?${params.toString()}`);
   } catch (_) {
     lrdpSchedule = { totalSlots: 1, reservations: [] };
   }
@@ -474,8 +531,9 @@ async function loadLink() {
 
     resources = Array.isArray(data.resources) ? data.resources : [];
     currentAccessToken = data.accessToken || currentAccessToken;
+    currentRequesterName = data.requesterName || '';
     document.getElementById('requester-email').value = data.requesterEmail || '';
-    document.getElementById('requester-name').value = data.requesterName || '';
+    document.getElementById('requester-name').value = currentRequesterName;
     document.getElementById('authenticated-email').textContent = data.requesterEmail || 'email inconnu';
 
     const select = document.getElementById('resource-id');
@@ -499,11 +557,11 @@ document.getElementById('resource-id').addEventListener('change', e => {
 
 document.getElementById('lrdp-prev').addEventListener('click', () => {
   lrdpCurrentMonth.setMonth(lrdpCurrentMonth.getMonth() - 1);
-  lrdpRender();
+  lrdpRenderCalendar();
 });
 document.getElementById('lrdp-next').addEventListener('click', () => {
   lrdpCurrentMonth.setMonth(lrdpCurrentMonth.getMonth() + 1);
-  lrdpRender();
+  lrdpRenderCalendar();
 });
 
 document.getElementById('send-auth-link-btn').addEventListener('click', async () => {
@@ -566,7 +624,10 @@ document.getElementById('request-form').addEventListener('submit', async event =
     feedback.textContent = payload.message || 'Demande envoyée.';
     feedback.classList.remove('hidden');
     event.target.reset();
+    document.getElementById('requester-name').value = currentRequesterName;
     document.getElementById('requester-email').value = document.getElementById('authenticated-email').textContent;
+    lrdpInit();
+    if (document.getElementById('resource-id').value) lrdpLoadSchedule(document.getElementById('resource-id').value);
     renderResourceSummary();
   } catch (err) {
     feedback.className = 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700';
