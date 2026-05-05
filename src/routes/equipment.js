@@ -36,6 +36,19 @@ const validate = (req, res) => {
 
 const VALID_STATUSES = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED'];
 const tableMissing = err => err?.code === 'P2021';
+const supportsInsensitiveMode = !(process.env.DATABASE_URL ?? 'file:./prisma/dev.db').startsWith('file:');
+
+function containsFilter(value) {
+  return supportsInsensitiveMode
+    ? { contains: value, mode: 'insensitive' }
+    : { contains: value };
+}
+
+function equalsFilter(value) {
+  return supportsInsensitiveMode
+    ? { equals: value, mode: 'insensitive' }
+    : { equals: value };
+}
 
 function serializeEquipmentAttachment(attachment) {
   return {
@@ -77,16 +90,16 @@ router.get('/', requireAuth, async (req, res, next) => {
     const where = {};
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { serialNumber: { contains: search, mode: 'insensitive' } },
-        { brand: { contains: search, mode: 'insensitive' } },
-        { model: { contains: search, mode: 'insensitive' } },
-        { agentHostname: { contains: search, mode: 'insensitive' } },
-        { agentInfo: { contains: search, mode: 'insensitive' } }
+        { name: containsFilter(search) },
+        { serialNumber: containsFilter(search) },
+        { brand: containsFilter(search) },
+        { model: containsFilter(search) },
+        { agentHostname: containsFilter(search) },
+        { agentInfo: containsFilter(search) }
       ];
     }
     if (status && VALID_STATUSES.includes(status)) where.status = status;
-    if (type) where.type = { contains: type, mode: 'insensitive' };
+    if (type) where.type = containsFilter(type);
     if (roomId) where.roomId = roomId === 'null' ? null : roomId;
     if (discoverySource && ['MANUAL', 'AGENT'].includes(discoverySource)) where.discoverySource = discoverySource;
     if (discoveryStatus && ['PENDING', 'CONFIRMED'].includes(discoveryStatus)) where.discoveryStatus = discoveryStatus;
@@ -147,10 +160,10 @@ router.get('/print-list', requireAuth, async (req, res, next) => {
 
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { type: { contains: search, mode: 'insensitive' } },
-        { serialNumber: { contains: search, mode: 'insensitive' } },
-        { room: { name: { contains: search, mode: 'insensitive' } } }
+        { name: containsFilter(search) },
+        { type: containsFilter(search) },
+        { serialNumber: containsFilter(search) },
+        { room: { name: containsFilter(search) } }
       ];
     }
 
@@ -419,14 +432,14 @@ router.post('/import',
 
           if (roomNumber) {
             const room = await tx.room.findFirst({
-              where: { number: { equals: roomNumber, mode: 'insensitive' } }
+              where: { number: equalsFilter(roomNumber) }
             });
             if (room) roomId = room.id;
           }
 
           if (suggestedRoomNumber) {
             const suggestedRoom = await tx.room.findFirst({
-              where: { number: { equals: suggestedRoomNumber, mode: 'insensitive' } }
+              where: { number: equalsFilter(suggestedRoomNumber) }
             });
             if (suggestedRoom) suggestedRoomId = suggestedRoom.id;
           }

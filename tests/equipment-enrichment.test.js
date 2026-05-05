@@ -108,8 +108,8 @@ describe('GET /api/equipment', () => {
     expect(prisma.equipment.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         OR: expect.arrayContaining([
-          { agentHostname: { contains: '10.0.0.15', mode: 'insensitive' } },
-          { agentInfo: { contains: '10.0.0.15', mode: 'insensitive' } }
+          { agentHostname: { contains: '10.0.0.15' } },
+          { agentInfo: { contains: '10.0.0.15' } }
         ])
       })
     }));
