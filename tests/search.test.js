@@ -275,7 +275,7 @@ describe('GET /api/search', () => {
 
     const res = await request(app).get('/api/search?q=vpn');
     expect(res.status).toBe(200);
-    expect(res.body.results.some(r => r.type === 'knowledge' && r.href === '/knowledge-base.html?article=kb-1')).toBe(true);
+    expect(res.body.results.some(r => r.type === 'knowledge' && r.href === '/knowledge-base.html?article=kb-1&q=vpn')).toBe(true);
   });
 
   it('retrouve un article a partir d un mot present dans le contenu', async () => {
@@ -301,7 +301,8 @@ describe('GET /api/search', () => {
     expect(res.status).toBe(200);
     expect(res.body.results[0]).toEqual(expect.objectContaining({
       type: 'knowledge',
-      href: '/knowledge-base.html?article=kb-2'
+      href: '/knowledge-base.html?article=kb-2&q=module+de+fusion'
     }));
+    expect(res.body.results[0].subtitle).toContain('module de fusion');
   });
 });

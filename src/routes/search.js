@@ -481,6 +481,94 @@ function buildSearchBlob(parts) {
   return normalizeText(parts.filter(Boolean).join(' '));
 }
 
+function buildNormalizedIndex(value) {
+  const source = String(value || '');
+  let normalized = '';
+  const indexMap = [];
+
+  for (let index = 0; index < source.length; index += 1) {
+    const pieces = source[index]
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    for (const piece of pieces) {
+      normalized += piece;
+      indexMap.push(index);
+    }
+  }
+
+  return { source, normalized, indexMap };
+}
+
+function collectNormalizedMatches(text, rawQuery) {
+  const normalizedQuery = normalizeText(rawQuery);
+  if (!normalizedQuery) return [];
+
+  const indexedText = buildNormalizedIndex(String(text || '').replace(/\s+/g, ' ').trim());
+  if (!indexedText.normalized) return [];
+
+  const exactMatches = [];
+  let cursor = 0;
+
+  while (cursor < indexedText.normalized.length) {
+    const foundAt = indexedText.normalized.indexOf(normalizedQuery, cursor);
+    if (foundAt === -1) break;
+    exactMatches.push({
+      start: indexedText.indexMap[foundAt],
+      end: indexedText.indexMap[foundAt + normalizedQuery.length - 1] + 1
+    });
+    cursor = foundAt + normalizedQuery.length;
+  }
+
+  if (exactMatches.length) {
+    return exactMatches.map(range => ({
+      ...range,
+      exact: true,
+      text: indexedText.source.slice(range.start, range.end)
+    }));
+  }
+
+  const words = Array.from(new Set(normalizedQuery.split(/\s+/).filter(word => word.length >= 3)))
+    .sort((a, b) => b.length - a.length);
+
+  for (const word of words) {
+    const wordIndex = indexedText.normalized.indexOf(word);
+    if (wordIndex === -1) continue;
+    return [{
+      start: indexedText.indexMap[wordIndex],
+      end: indexedText.indexMap[wordIndex + word.length - 1] + 1,
+      exact: false,
+      text: indexedText.source.slice(
+        indexedText.indexMap[wordIndex],
+        indexedText.indexMap[wordIndex + word.length - 1] + 1
+      )
+    }];
+  }
+
+  return [];
+}
+
+function buildKnowledgeSnippet(text, rawQuery, radius = 72) {
+  const source = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!source) return '';
+
+  const [match] = collectNormalizedMatches(source, rawQuery);
+  if (!match) {
+    return source.length > radius * 2 ? `${source.slice(0, radius * 2).trim()}...` : source;
+  }
+
+  const start = Math.max(0, match.start - radius);
+  const end = Math.min(source.length, match.end + radius);
+  return `${start > 0 ? '... ' : ''}${source.slice(start, end).trim()}${end < source.length ? ' ...' : ''}`;
+}
+
+function buildKnowledgeArticleHref(articleId, rawQuery) {
+  const params = new URLSearchParams({ article: String(articleId || '') });
+  if (rawQuery) params.set('q', rawQuery);
+  return `/knowledge-base.html?${params.toString()}`;
+}
+
 function scoreMatch(query, ...parts) {
   if (!query) return 0;
   const haystack = buildSearchBlob(parts);
@@ -1200,35 +1288,46 @@ router.get('/', requireAuth, async (req, res, next) => {
       ].filter(Boolean).join(' ')
     })), query, limit);
 
-    const knowledgeResults = filterAndRank(knowledgeArticles.map(article => ({
-      id: `knowledge:${article.id}`,
-      type: 'knowledge',
-      group: 'Documentation',
-      title: article.title,
-      subtitle: [article.category, article.summary || stripMarkdown(article.content).slice(0, 120), formatDate(article.updatedAt)]
-        .filter(Boolean)
-        .join(' · ') || 'Article de documentation',
-      href: `/knowledge-base.html?article=${encodeURIComponent(article.id)}`,
-      openMode: 'preview',
-      boost: 20,
-      preview: {
+    const knowledgeResults = filterAndRank(knowledgeArticles.map(article => {
+      const plainContent = stripMarkdown(article.content);
+      const summaryHasMatch = collectNormalizedMatches(article.summary, rawQuery).length > 0;
+      const contentHasMatch = collectNormalizedMatches(plainContent, rawQuery).length > 0;
+      const snippet = summaryHasMatch
+        ? buildKnowledgeSnippet(article.summary, rawQuery)
+        : contentHasMatch
+          ? buildKnowledgeSnippet(plainContent, rawQuery)
+          : (article.summary || buildKnowledgeSnippet(plainContent, rawQuery));
+
+      return {
+        id: `knowledge:${article.id}`,
+        type: 'knowledge',
+        group: 'Documentation',
         title: article.title,
-        description: article.summary || 'Ouvre l article de la base de connaissance.',
-        lines: [
-          article.category ? `Categorie : ${article.category}` : null,
-          Array.isArray(article.tags) && article.tags.length ? `Tags : ${article.tags.join(', ')}` : null,
-          article.updatedByName ? `Mis a jour par : ${article.updatedByName}` : null
-        ].filter(Boolean),
-        badges: [...(article.category ? [article.category] : []), ...(Array.isArray(article.tags) ? article.tags.slice(0, 2) : [])]
-      },
-      searchText: [
-        article.title,
-        article.summary,
-        article.category,
-        ...(Array.isArray(article.tags) ? article.tags : []),
-        stripMarkdown(article.content)
-      ].filter(Boolean).join(' ')
-    })), query, limit);
+        subtitle: [article.category, snippet, formatDate(article.updatedAt)]
+          .filter(Boolean)
+          .join(' · ') || 'Article de documentation',
+        href: buildKnowledgeArticleHref(article.id, rawQuery),
+        openMode: 'preview',
+        boost: 20,
+        preview: {
+          title: article.title,
+          description: snippet || article.summary || 'Ouvre l article de la base de connaissance.',
+          lines: [
+            article.category ? `Categorie : ${article.category}` : null,
+            Array.isArray(article.tags) && article.tags.length ? `Tags : ${article.tags.join(', ')}` : null,
+            article.updatedByName ? `Mis a jour par : ${article.updatedByName}` : null
+          ].filter(Boolean),
+          badges: [...(article.category ? [article.category] : []), ...(Array.isArray(article.tags) ? article.tags.slice(0, 2) : [])]
+        },
+        searchText: [
+          article.title,
+          article.summary,
+          article.category,
+          ...(Array.isArray(article.tags) ? article.tags : []),
+          plainContent
+        ].filter(Boolean).join(' ')
+      };
+    }), query, limit);
 
     const userResults = req.user.role === 'ADMIN'
       ? filterAndRank(users.map(user => ({
