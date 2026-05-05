@@ -92,6 +92,32 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
+describe('GET /api/equipment', () => {
+  it('recherche aussi sur le hostname et les metadonnees agent', async () => {
+    prisma.equipment.findMany.mockResolvedValue([{
+      ...mockEquip,
+      name: 'Poste CDI',
+      agentHostname: 'pc-cdi-01',
+      agentInfo: JSON.stringify({ ips: ['10.0.0.15'], user: 'prof.cdi' })
+    }]);
+    prisma.equipment.count.mockResolvedValue(1);
+
+    const res = await request(app).get('/api/equipment?search=10.0.0.15');
+
+    expect(res.status).toBe(200);
+    expect(prisma.equipment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        OR: expect.arrayContaining([
+          { agentHostname: { contains: '10.0.0.15', mode: 'insensitive' } },
+          { agentInfo: { contains: '10.0.0.15', mode: 'insensitive' } }
+        ])
+      })
+    }));
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].agentHostname).toBe('pc-cdi-01');
+  });
+});
+
 // ─── GET /api/equipment/:id — inclut supplier et attachments ─────────────────
 describe('GET /api/equipment/:id (enriched)', () => {
   it('retourne 200 avec supplier et attachments', async () => {

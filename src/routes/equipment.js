@@ -80,7 +80,9 @@ router.get('/', requireAuth, async (req, res, next) => {
         { name: { contains: search, mode: 'insensitive' } },
         { serialNumber: { contains: search, mode: 'insensitive' } },
         { brand: { contains: search, mode: 'insensitive' } },
-        { model: { contains: search, mode: 'insensitive' } }
+        { model: { contains: search, mode: 'insensitive' } },
+        { agentHostname: { contains: search, mode: 'insensitive' } },
+        { agentInfo: { contains: search, mode: 'insensitive' } }
       ];
     }
     if (status && VALID_STATUSES.includes(status)) where.status = status;
