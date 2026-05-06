@@ -167,10 +167,10 @@ describe('equipment import route', () => {
 
     expect(res.status).toBe(200);
     expect(roomLookup).toHaveBeenNthCalledWith(1, {
-      where: { number: { equals: '101', mode: 'insensitive' } }
+      where: { number: { equals: '101' } }
     });
     expect(roomLookup).toHaveBeenNthCalledWith(2, {
-      where: { number: { equals: '202', mode: 'insensitive' } }
+      where: { number: { equals: '202' } }
     });
     expect(createdEquipment).toHaveBeenCalledWith({
       data: {
