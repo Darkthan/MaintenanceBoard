@@ -636,7 +636,7 @@ async function loadEquipment() {
     `).join('');
 
     const { page, totalPages, total } = data.pagination;
-    document.getElementById('pagination').innerHTML = `
+    document.getElementById('pagination').innerHTML = totalPages <= 1 ? '' : `
       <span>Affichage de ${Math.min((page-1)*20+1,total)} à ${Math.min(page*20,total)} sur ${total} équipements</span>
       <div class="flex gap-2">
         <button onclick="changePage(${page-1})" ${page<=1?'disabled':''} class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs disabled:opacity-40 hover:bg-slate-50">Précédent</button>
