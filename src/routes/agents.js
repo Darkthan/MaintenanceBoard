@@ -15,6 +15,19 @@ const {
 
 const prisma = require('../lib/prisma');
 
+async function logUserCheckin(equipmentId, user) {
+  if (!user) return;
+  await prisma.machineSessionLog.create({
+    data: {
+      id: require('crypto').randomUUID(),
+      equipmentId,
+      winUser: String(user).slice(0, 100),
+      event: 'CHECKIN',
+      occurredAt: new Date()
+    }
+  }).catch(() => {});
+}
+
 function sanitizeDisks(disks) {
   if (!Array.isArray(disks)) return [];
   return disks.slice(0, 20).map(disk => ({
@@ -169,6 +182,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
           data: updateData
         });
         await maybeCreateLowDiskIntervention(equipment, sanitized);
+        await logUserCheckin(equipment.id, sanitized.user);
         return res.json({ agentToken: machineToken, equipmentId: equipment.id, existing: true });
       }
 
@@ -199,6 +213,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
       });
 
       await maybeCreateLowDiskIntervention(newEquipment, sanitized);
+      await logUserCheckin(newEquipment.id, sanitized.user);
 
       return res.status(201).json({
         agentToken: machineToken,
@@ -221,6 +236,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
         }
       });
       await maybeCreateLowDiskIntervention(updatedEquipment, sanitized);
+      await logUserCheckin(updatedEquipment.id, sanitized.user);
       return res.json({ ok: true, equipmentId: req.equipmentRecord.id });
     }
 
