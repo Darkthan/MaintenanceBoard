@@ -28,6 +28,10 @@ describe('loan request public page', () => {
     expect(res.text).toContain('function apiFetch(pathname)');
     expect(res.text).toContain('function renderResourceSummary()');
     expect(res.text).toContain("lrdpRenderCalendar();");
+    expect(res.text).toContain("lrdpEditStep('start-date')");
+    expect(res.text).toContain('function lrdpEditStep(target)');
+    expect(res.text).toContain('Date de début');
+    expect(res.text).toContain('Heure de fin');
     expect(res.text).toContain("/loan-request/resources/${encodeURIComponent(resourceId)}/schedule?");
   });
 });

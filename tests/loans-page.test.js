@@ -29,6 +29,9 @@ describe('loans page', () => {
     expect(res.text).toContain('function getLocalDayKey(value)');
     expect(res.text).toContain("const key = getLocalDayKey(date);");
     expect(res.text).toContain("const key = getLocalDayKey(item.startAt);");
+    expect(res.text).toContain("dpEditStep('start-date')");
+    expect(res.text).toContain('function dpEditStep(target)');
+    expect(res.text).toContain('Date de fin');
     expect(res.text).toContain('aria-label="Modifier la demande"');
     expect(res.text).not.toContain('data-action="reservation-edit" data-id="${item.id}" class="px-3 py-2');
   });

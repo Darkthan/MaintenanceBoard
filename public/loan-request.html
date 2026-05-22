@@ -92,6 +92,24 @@
               <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span>Complet</span>
               <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-blue-600"></span>Sélectionné</span>
             </div>
+            <div class="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+              <button type="button" id="lrdp-start-date-btn" onclick="lrdpEditStep('start-date')" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-left transition">
+                <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">1. Date de début</span>
+                <span id="lrdp-start-date-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+              </button>
+              <button type="button" id="lrdp-start-time-btn" onclick="lrdpEditStep('start-time')" class="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left transition" disabled>
+                <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">2. Heure de début</span>
+                <span id="lrdp-start-time-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+              </button>
+              <button type="button" id="lrdp-end-date-btn" onclick="lrdpEditStep('end-date')" class="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left transition" disabled>
+                <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">3. Date de fin</span>
+                <span id="lrdp-end-date-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+              </button>
+              <button type="button" id="lrdp-end-time-btn" onclick="lrdpEditStep('end-time')" class="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left transition" disabled>
+                <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">4. Heure de fin</span>
+                <span id="lrdp-end-time-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+              </button>
+            </div>
             <p id="lrdp-hint" class="text-xs text-slate-400 text-center italic pt-1"></p>
             <div id="lrdp-time-section" class="hidden space-y-3 pt-2 border-t border-slate-200">
               <div id="lrdp-start-time-section" class="space-y-1.5">
@@ -202,6 +220,8 @@ let lrdpStartHour = null;
 let lrdpEndHour = null;
 let lrdpStartMinute = 0;
 let lrdpEndMinute = 0;
+let lrdpStartValue = '';
+let lrdpEndValue = '';
 
 function lrdpDayKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -221,6 +241,75 @@ function lrdpGetUsedSlotsForHour(dateKey, hour) {
   return (lrdpSchedule.reservations || [])
     .filter(r => new Date(r.startAt) < slotEnd && new Date(r.endAt) > slotStart)
     .reduce((sum, r) => sum + (r.reservedSlots || 0), 0);
+}
+
+function lrdpFormatControlDate(date) {
+  return date
+    ? date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : 'Choisir';
+}
+
+function lrdpFormatControlTime(hour, minute) {
+  return hour !== null ? `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}` : 'Choisir';
+}
+
+function lrdpRefreshHiddenValues() {
+  document.getElementById('loan-start').value = lrdpStartValue;
+  document.getElementById('loan-end').value = lrdpEndValue;
+}
+
+function lrdpUpdateStepControls() {
+  const activeStep = {
+    startDate: lrdpStep === 'pick-start-date',
+    startTime: ['pick-start-time', 'pick-start-min'].includes(lrdpStep),
+    endDate: lrdpStep === 'pick-end-date',
+    endTime: ['pick-end-time', 'pick-end-min'].includes(lrdpStep)
+  };
+  const states = [
+    {
+      buttonId: 'lrdp-start-date-btn',
+      valueId: 'lrdp-start-date-value',
+      active: activeStep.startDate,
+      enabled: true,
+      value: lrdpFormatControlDate(lrdpStartDate)
+    },
+    {
+      buttonId: 'lrdp-start-time-btn',
+      valueId: 'lrdp-start-time-value',
+      active: activeStep.startTime,
+      enabled: !!lrdpStartDate,
+      value: lrdpFormatControlTime(lrdpStartHour, lrdpStartMinute)
+    },
+    {
+      buttonId: 'lrdp-end-date-btn',
+      valueId: 'lrdp-end-date-value',
+      active: activeStep.endDate,
+      enabled: !!lrdpStartDate && lrdpStartHour !== null,
+      value: lrdpFormatControlDate(lrdpEndDate)
+    },
+    {
+      buttonId: 'lrdp-end-time-btn',
+      valueId: 'lrdp-end-time-value',
+      active: activeStep.endTime,
+      enabled: !!lrdpEndDate,
+      value: lrdpFormatControlTime(lrdpEndHour, lrdpEndMinute)
+    }
+  ];
+
+  states.forEach(({ buttonId, valueId, active, enabled, value }) => {
+    const button = document.getElementById(buttonId);
+    const valueEl = document.getElementById(valueId);
+    if (!button || !valueEl) return;
+    valueEl.textContent = value;
+    button.disabled = !enabled;
+    if (active) {
+      button.className = 'rounded-xl border border-blue-500 bg-blue-50 px-3 py-2 text-left text-blue-900 shadow-sm transition';
+    } else if (enabled) {
+      button.className = 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-slate-700 transition hover:border-blue-300 hover:bg-blue-50';
+    } else {
+      button.className = 'rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left text-slate-400 transition cursor-not-allowed';
+    }
+  });
 }
 
 function lrdpRenderCalendar() {
@@ -278,42 +367,44 @@ function lrdpRenderCalendar() {
   }).join('');
 
   lrdpUpdateHint();
+  lrdpUpdateStepControls();
 }
 
 function lrdpSelectDay(key) {
   const date = new Date(`${key}T00:00:00`);
-  if (!lrdpStartDate || lrdpStep === 'done') {
-    lrdpStartDate = date; lrdpEndDate = null;
-    lrdpStartHour = null; lrdpEndHour = null;
-    lrdpStartMinute = 0; lrdpEndMinute = 0;
-    lrdpStep = 'pick-end-date';
-    document.getElementById('loan-start').value = '';
-    document.getElementById('loan-end').value = '';
-    document.getElementById('lrdp-selection-display').classList.add('hidden');
-    document.getElementById('lrdp-time-section').classList.add('hidden');
-    document.getElementById('lrdp-start-time-section').classList.add('hidden');
-    document.getElementById('lrdp-end-time-section').classList.add('hidden');
-    const sm = document.getElementById('lrdp-start-minute-section');
-    const em = document.getElementById('lrdp-end-minute-section');
-    if (sm) sm.classList.add('hidden');
-    if (em) em.classList.add('hidden');
+  if (!lrdpStartDate || lrdpStep === 'pick-start-date' || lrdpStep === 'done') {
+    lrdpStartDate = date;
+    lrdpEndDate = null;
+    lrdpStartHour = null;
+    lrdpEndHour = null;
+    lrdpStartMinute = 0;
+    lrdpEndMinute = 0;
+    lrdpStartValue = '';
+    lrdpEndValue = '';
+    lrdpStep = 'pick-start-time';
     lrdpRenderCalendar();
+    lrdpSyncUi();
   } else if (lrdpStep === 'pick-end-date') {
     if (key < lrdpDayKey(lrdpStartDate)) {
-      lrdpStartDate = date; lrdpEndDate = null;
-      lrdpStartHour = null; lrdpEndHour = null;
-      lrdpStartMinute = 0; lrdpEndMinute = 0;
-      lrdpStep = 'pick-end-date';
-      document.getElementById('loan-start').value = '';
-      document.getElementById('loan-end').value = '';
-      document.getElementById('lrdp-selection-display').classList.add('hidden');
-      document.getElementById('lrdp-time-section').classList.add('hidden');
-      lrdpRenderCalendar();
-    } else {
-      lrdpEndDate = date; lrdpEndHour = null; lrdpEndMinute = 0;
+      lrdpStartDate = date;
+      lrdpEndDate = null;
+      lrdpStartHour = null;
+      lrdpEndHour = null;
+      lrdpStartMinute = 0;
+      lrdpEndMinute = 0;
+      lrdpStartValue = '';
+      lrdpEndValue = '';
       lrdpStep = 'pick-start-time';
       lrdpRenderCalendar();
-      lrdpShowStartTimeGrid();
+      lrdpSyncUi();
+    } else {
+      lrdpEndDate = date;
+      lrdpEndHour = null;
+      lrdpEndMinute = 0;
+      lrdpEndValue = '';
+      lrdpStep = 'pick-end-time';
+      lrdpRenderCalendar();
+      lrdpSyncUi();
     }
   }
 }
@@ -383,51 +474,54 @@ function lrdpSelectStartHour(h) {
   lrdpStartHour = h;
   lrdpStartMinute = 0;
   lrdpStep = 'pick-start-min';
-  document.getElementById('lrdp-start-time-grid').innerHTML = lrdpBuildTimeGrid(lrdpDayKey(lrdpStartDate), h, 'lrdpSelectStartHour');
-  const sm = document.getElementById('lrdp-start-minute-section');
-  if (sm) {
-    document.getElementById('lrdp-start-minute-grid').innerHTML = lrdpBuildMinuteGrid(0, 'lrdpSelectStartMinute');
-    sm.classList.remove('hidden');
-  }
-  lrdpUpdateHint();
+  lrdpStartValue = '';
+  lrdpEndDate = null;
+  lrdpEndHour = null;
+  lrdpEndMinute = 0;
+  lrdpEndValue = '';
+  lrdpSyncUi();
 }
 
 function lrdpSelectStartMinute(m) {
   lrdpStartMinute = m;
-  lrdpStep = 'pick-end-time';
-  document.getElementById('lrdp-start-minute-grid').innerHTML = lrdpBuildMinuteGrid(m, 'lrdpSelectStartMinute');
-  document.getElementById('loan-start').value =
-    new Date(lrdpStartDate.getFullYear(), lrdpStartDate.getMonth(), lrdpStartDate.getDate(), lrdpStartHour, m, 0).toISOString();
+  lrdpStep = 'pick-end-date';
+  lrdpStartValue = new Date(
+    lrdpStartDate.getFullYear(),
+    lrdpStartDate.getMonth(),
+    lrdpStartDate.getDate(),
+    lrdpStartHour,
+    m,
+    0
+  ).toISOString();
+  lrdpEndDate = null;
+  lrdpEndHour = null;
+  lrdpEndMinute = 0;
+  lrdpEndValue = '';
   lrdpRenderCalendar();
-  lrdpShowEndTimeGrid();
+  lrdpSyncUi();
 }
 
 function lrdpSelectEndHour(h) {
   lrdpEndHour = h;
   lrdpEndMinute = 0;
   lrdpStep = 'pick-end-min';
-  const startKey = lrdpDayKey(lrdpStartDate);
-  const endKey = lrdpDayKey(lrdpEndDate);
-  const sameDay = startKey === endKey;
-  document.getElementById('lrdp-end-time-grid').innerHTML =
-    lrdpBuildTimeGrid(endKey, h, 'lrdpSelectEndHour', sameDay ? lrdpStartHour : null);
-  const em = document.getElementById('lrdp-end-minute-section');
-  if (em) {
-    const minMin = sameDay && h === lrdpStartHour ? lrdpStartMinute : null;
-    document.getElementById('lrdp-end-minute-grid').innerHTML = lrdpBuildMinuteGrid(0, 'lrdpSelectEndMinute', minMin);
-    em.classList.remove('hidden');
-  }
-  lrdpUpdateHint();
+  lrdpEndValue = '';
+  lrdpSyncUi();
 }
 
 function lrdpSelectEndMinute(m) {
   lrdpEndMinute = m;
   lrdpStep = 'done';
-  document.getElementById('lrdp-end-minute-grid').innerHTML = lrdpBuildMinuteGrid(m, 'lrdpSelectEndMinute');
-  document.getElementById('loan-end').value =
-    new Date(lrdpEndDate.getFullYear(), lrdpEndDate.getMonth(), lrdpEndDate.getDate(), lrdpEndHour, m, 0).toISOString();
+  lrdpEndValue = new Date(
+    lrdpEndDate.getFullYear(),
+    lrdpEndDate.getMonth(),
+    lrdpEndDate.getDate(),
+    lrdpEndHour,
+    m,
+    0
+  ).toISOString();
   lrdpRenderCalendar();
-  lrdpUpdateSelection();
+  lrdpSyncUi();
 }
 
 function lrdpUpdateSelection() {
@@ -451,14 +545,101 @@ function lrdpUpdateHint() {
   if (!el) return;
   const hints = {
     'pick-start-date': 'Cliquez sur un jour pour définir la date de début',
-    'pick-end-date': 'Cliquez sur un autre jour pour définir la date de fin',
     'pick-start-time': 'Sélectionnez l\'heure de début',
     'pick-start-min': 'Sélectionnez les minutes de début',
+    'pick-end-date': 'Sélectionnez ensuite la date de fin',
     'pick-end-time': 'Sélectionnez l\'heure de fin',
     'pick-end-min': 'Sélectionnez les minutes de fin',
-    'done': 'Cliquez sur un jour pour modifier la période'
+    'done': 'Utilisez les quatre étapes ci-dessus pour corriger facilement la période'
   };
   el.textContent = hints[lrdpStep] || '';
+}
+
+function lrdpSyncUi() {
+  const timeSection = document.getElementById('lrdp-time-section');
+  const startSection = document.getElementById('lrdp-start-time-section');
+  const endSection = document.getElementById('lrdp-end-time-section');
+  const startMinuteSection = document.getElementById('lrdp-start-minute-section');
+  const endMinuteSection = document.getElementById('lrdp-end-minute-section');
+
+  if (timeSection) timeSection.classList.add('hidden');
+  if (startSection) startSection.classList.add('hidden');
+  if (endSection) endSection.classList.add('hidden');
+  if (startMinuteSection) startMinuteSection.classList.add('hidden');
+  if (endMinuteSection) endMinuteSection.classList.add('hidden');
+
+  if (lrdpStartDate && ['pick-start-time', 'pick-start-min', 'pick-end-date', 'pick-end-time', 'pick-end-min', 'done'].includes(lrdpStep)) {
+    lrdpShowStartTimeGrid();
+    if (lrdpStartHour !== null && startMinuteSection && lrdpStep !== 'pick-start-time') {
+      document.getElementById('lrdp-start-minute-grid').innerHTML =
+        lrdpBuildMinuteGrid(lrdpStartMinute, 'lrdpSelectStartMinute');
+      startMinuteSection.classList.remove('hidden');
+    }
+  }
+
+  if (lrdpEndDate && ['pick-end-time', 'pick-end-min', 'done'].includes(lrdpStep)) {
+    lrdpShowEndTimeGrid();
+    if (lrdpEndHour !== null && endMinuteSection && lrdpStep !== 'pick-end-time') {
+      const sameDay = lrdpDayKey(lrdpStartDate) === lrdpDayKey(lrdpEndDate);
+      const minMinute = sameDay && lrdpEndHour === lrdpStartHour ? lrdpStartMinute : null;
+      document.getElementById('lrdp-end-minute-grid').innerHTML =
+        lrdpBuildMinuteGrid(lrdpEndMinute, 'lrdpSelectEndMinute', minMinute);
+      endMinuteSection.classList.remove('hidden');
+    }
+  }
+
+  lrdpRefreshHiddenValues();
+  lrdpUpdateSelection();
+  lrdpUpdateHint();
+  lrdpUpdateStepControls();
+}
+
+function lrdpEditStep(target) {
+  if (target === 'start-date') {
+    lrdpStep = 'pick-start-date';
+    lrdpStartHour = null;
+    lrdpStartMinute = 0;
+    lrdpEndDate = null;
+    lrdpEndHour = null;
+    lrdpEndMinute = 0;
+    lrdpStartValue = '';
+    lrdpEndValue = '';
+  } else if (target === 'start-time') {
+    if (!lrdpStartDate) {
+      lrdpStep = 'pick-start-date';
+    } else {
+      lrdpStep = 'pick-start-time';
+      lrdpStartHour = null;
+      lrdpStartMinute = 0;
+      lrdpEndDate = null;
+      lrdpEndHour = null;
+      lrdpEndMinute = 0;
+      lrdpStartValue = '';
+      lrdpEndValue = '';
+    }
+  } else if (target === 'end-date') {
+    if (!lrdpStartDate || lrdpStartHour === null) {
+      lrdpEditStep(lrdpStartDate ? 'start-time' : 'start-date');
+      return;
+    }
+    lrdpStep = 'pick-end-date';
+    lrdpEndDate = null;
+    lrdpEndHour = null;
+    lrdpEndMinute = 0;
+    lrdpEndValue = '';
+  } else if (target === 'end-time') {
+    if (!lrdpEndDate) {
+      lrdpEditStep('end-date');
+      return;
+    }
+    lrdpStep = 'pick-end-time';
+    lrdpEndHour = null;
+    lrdpEndMinute = 0;
+    lrdpEndValue = '';
+  }
+
+  lrdpRenderCalendar();
+  lrdpSyncUi();
 }
 
 function lrdpInit() {
@@ -467,18 +648,10 @@ function lrdpInit() {
   lrdpStartDate = null; lrdpEndDate = null;
   lrdpStartHour = null; lrdpEndHour = null;
   lrdpStartMinute = 0; lrdpEndMinute = 0;
+  lrdpStartValue = ''; lrdpEndValue = '';
   lrdpSchedule = { totalSlots: 1, reservations: [] };
-  const ts = document.getElementById('lrdp-time-section');
-  const sd = document.getElementById('lrdp-selection-display');
-  const es = document.getElementById('lrdp-end-time-section');
-  const sm = document.getElementById('lrdp-start-minute-section');
-  const em = document.getElementById('lrdp-end-minute-section');
-  if (ts) ts.classList.add('hidden');
-  if (sd) sd.classList.add('hidden');
-  if (es) es.classList.add('hidden');
-  if (sm) sm.classList.add('hidden');
-  if (em) em.classList.add('hidden');
   lrdpRenderCalendar();
+  lrdpSyncUi();
 }
 
 async function lrdpLoadSchedule(resourceId) {
@@ -499,6 +672,7 @@ async function lrdpLoadSchedule(resourceId) {
     lrdpSchedule = { totalSlots: 1, reservations: [] };
   }
   lrdpRenderCalendar();
+  lrdpSyncUi();
 }
 
 

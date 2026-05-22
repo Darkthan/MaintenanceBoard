@@ -418,6 +418,24 @@
           <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span>Complet</span>
           <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-blue-600"></span>Sélectionné</span>
         </div>
+        <div class="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+          <button type="button" id="dp-start-date-btn" onclick="dpEditStep('start-date')" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-left transition">
+            <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">1. Date de début</span>
+            <span id="dp-start-date-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+          </button>
+          <button type="button" id="dp-start-time-btn" onclick="dpEditStep('start-time')" class="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left transition" disabled>
+            <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">2. Heure de début</span>
+            <span id="dp-start-time-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+          </button>
+          <button type="button" id="dp-end-date-btn" onclick="dpEditStep('end-date')" class="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left transition" disabled>
+            <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">3. Date de fin</span>
+            <span id="dp-end-date-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+          </button>
+          <button type="button" id="dp-end-time-btn" onclick="dpEditStep('end-time')" class="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left transition" disabled>
+            <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">4. Heure de fin</span>
+            <span id="dp-end-time-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+          </button>
+        </div>
         <p id="dp-hint" class="text-xs text-slate-400 text-center italic pt-1"></p>
         <div id="dp-time-section" class="hidden space-y-3 pt-2 border-t border-slate-200">
           <div id="dp-start-time-section" class="space-y-1.5">
@@ -1867,6 +1885,8 @@ let dpStartHour = null;
 let dpEndHour = null;
 let dpStartMinute = 0;
 let dpEndMinute = 0;
+let dpStartValue = '';
+let dpEndValue = '';
 
 function dpGetDayKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -1886,6 +1906,75 @@ function dpGetUsedSlotsForHour(dateKey, hour) {
   return (dpSchedule.reservations || [])
     .filter(r => new Date(r.startAt) < slotEnd && new Date(r.endAt) > slotStart)
     .reduce((sum, r) => sum + (r.reservedSlots || 0), 0);
+}
+
+function dpFormatControlDate(date) {
+  return date
+    ? date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : 'Choisir';
+}
+
+function dpFormatControlTime(hour, minute) {
+  return hour !== null ? `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}` : 'Choisir';
+}
+
+function dpRefreshHiddenValues() {
+  document.getElementById('resv-start').value = dpStartValue;
+  document.getElementById('resv-end').value = dpEndValue;
+}
+
+function dpUpdateStepControls() {
+  const activeStep = {
+    startDate: dpStep === 'pick-start-date',
+    startTime: ['pick-start-time', 'pick-start-min'].includes(dpStep),
+    endDate: dpStep === 'pick-end-date',
+    endTime: ['pick-end-time', 'pick-end-min'].includes(dpStep)
+  };
+  const states = [
+    {
+      buttonId: 'dp-start-date-btn',
+      valueId: 'dp-start-date-value',
+      active: activeStep.startDate,
+      enabled: true,
+      value: dpFormatControlDate(dpStartDate)
+    },
+    {
+      buttonId: 'dp-start-time-btn',
+      valueId: 'dp-start-time-value',
+      active: activeStep.startTime,
+      enabled: !!dpStartDate,
+      value: dpFormatControlTime(dpStartHour, dpStartMinute)
+    },
+    {
+      buttonId: 'dp-end-date-btn',
+      valueId: 'dp-end-date-value',
+      active: activeStep.endDate,
+      enabled: !!dpStartDate && dpStartHour !== null,
+      value: dpFormatControlDate(dpEndDate)
+    },
+    {
+      buttonId: 'dp-end-time-btn',
+      valueId: 'dp-end-time-value',
+      active: activeStep.endTime,
+      enabled: !!dpEndDate,
+      value: dpFormatControlTime(dpEndHour, dpEndMinute)
+    }
+  ];
+
+  states.forEach(({ buttonId, valueId, active, enabled, value }) => {
+    const button = document.getElementById(buttonId);
+    const valueEl = document.getElementById(valueId);
+    if (!button || !valueEl) return;
+    valueEl.textContent = value;
+    button.disabled = !enabled;
+    if (active) {
+      button.className = 'rounded-xl border border-blue-500 bg-blue-50 px-3 py-2 text-left text-blue-900 shadow-sm transition';
+    } else if (enabled) {
+      button.className = 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-slate-700 transition hover:border-blue-300 hover:bg-blue-50';
+    } else {
+      button.className = 'rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left text-slate-400 transition cursor-not-allowed';
+    }
+  });
 }
 
 function dpRenderCalendar() {
@@ -1943,45 +2032,44 @@ function dpRenderCalendar() {
   }).join('');
 
   dpUpdateHint();
+  dpUpdateStepControls();
 }
 
 function dpSelectDay(key) {
   const date = new Date(`${key}T00:00:00`);
-  if (!dpStartDate || dpStep === 'done') {
-    // Premier clic ou reset : on choisit la date de début
-    dpStartDate = date; dpEndDate = null;
-    dpStartHour = null; dpEndHour = null;
-    dpStartMinute = 0; dpEndMinute = 0;
-    dpStep = 'pick-end-date';
-    document.getElementById('resv-start').value = '';
-    document.getElementById('resv-end').value = '';
-    document.getElementById('dp-selection-display').classList.add('hidden');
-    document.getElementById('dp-time-section').classList.add('hidden');
-    document.getElementById('dp-start-time-section').classList.add('hidden');
-    document.getElementById('dp-end-time-section').classList.add('hidden');
-    const sm = document.getElementById('dp-start-minute-section');
-    const em = document.getElementById('dp-end-minute-section');
-    if (sm) sm.classList.add('hidden');
-    if (em) em.classList.add('hidden');
+  if (!dpStartDate || dpStep === 'pick-start-date' || dpStep === 'done') {
+    dpStartDate = date;
+    dpEndDate = null;
+    dpStartHour = null;
+    dpEndHour = null;
+    dpStartMinute = 0;
+    dpEndMinute = 0;
+    dpStartValue = '';
+    dpEndValue = '';
+    dpStep = 'pick-start-time';
     dpRenderCalendar();
+    dpSyncUi();
   } else if (dpStep === 'pick-end-date') {
     if (key < dpGetDayKey(dpStartDate)) {
-      // Date de fin antérieure : reset, la date cliquée devient le début
-      dpStartDate = date; dpEndDate = null;
-      dpStartHour = null; dpEndHour = null;
-      dpStartMinute = 0; dpEndMinute = 0;
-      dpStep = 'pick-end-date';
-      document.getElementById('resv-start').value = '';
-      document.getElementById('resv-end').value = '';
-      document.getElementById('dp-selection-display').classList.add('hidden');
-      document.getElementById('dp-time-section').classList.add('hidden');
-      dpRenderCalendar();
-    } else {
-      // Deuxième clic : date de fin, puis sélection heure de début
-      dpEndDate = date; dpEndHour = null; dpEndMinute = 0;
+      dpStartDate = date;
+      dpEndDate = null;
+      dpStartHour = null;
+      dpEndHour = null;
+      dpStartMinute = 0;
+      dpEndMinute = 0;
+      dpStartValue = '';
+      dpEndValue = '';
       dpStep = 'pick-start-time';
       dpRenderCalendar();
-      dpShowStartTimeGrid();
+      dpSyncUi();
+    } else {
+      dpEndDate = date;
+      dpEndHour = null;
+      dpEndMinute = 0;
+      dpEndValue = '';
+      dpStep = 'pick-end-time';
+      dpRenderCalendar();
+      dpSyncUi();
     }
   }
 }
@@ -2051,51 +2139,54 @@ function dpSelectStartHour(h) {
   dpStartHour = h;
   dpStartMinute = 0;
   dpStep = 'pick-start-min';
-  document.getElementById('dp-start-time-grid').innerHTML = dpBuildTimeGrid(dpGetDayKey(dpStartDate), h, 'dpSelectStartHour');
-  const sm = document.getElementById('dp-start-minute-section');
-  if (sm) {
-    document.getElementById('dp-start-minute-grid').innerHTML = dpBuildMinuteGrid(0, 'dpSelectStartMinute');
-    sm.classList.remove('hidden');
-  }
-  dpUpdateHint();
+  dpStartValue = '';
+  dpEndDate = null;
+  dpEndHour = null;
+  dpEndMinute = 0;
+  dpEndValue = '';
+  dpSyncUi();
 }
 
 function dpSelectStartMinute(m) {
   dpStartMinute = m;
-  dpStep = 'pick-end-time';
-  document.getElementById('dp-start-minute-grid').innerHTML = dpBuildMinuteGrid(m, 'dpSelectStartMinute');
-  document.getElementById('resv-start').value =
-    new Date(dpStartDate.getFullYear(), dpStartDate.getMonth(), dpStartDate.getDate(), dpStartHour, m, 0).toISOString();
+  dpStep = 'pick-end-date';
+  dpStartValue = new Date(
+    dpStartDate.getFullYear(),
+    dpStartDate.getMonth(),
+    dpStartDate.getDate(),
+    dpStartHour,
+    m,
+    0
+  ).toISOString();
+  dpEndDate = null;
+  dpEndHour = null;
+  dpEndMinute = 0;
+  dpEndValue = '';
   dpRenderCalendar();
-  dpShowEndTimeGrid();
+  dpSyncUi();
 }
 
 function dpSelectEndHour(h) {
   dpEndHour = h;
   dpEndMinute = 0;
   dpStep = 'pick-end-min';
-  const startKey = dpGetDayKey(dpStartDate);
-  const endKey = dpGetDayKey(dpEndDate);
-  const sameDay = startKey === endKey;
-  document.getElementById('dp-end-time-grid').innerHTML =
-    dpBuildTimeGrid(endKey, h, 'dpSelectEndHour', sameDay ? dpStartHour : null);
-  const em = document.getElementById('dp-end-minute-section');
-  if (em) {
-    const minMin = sameDay && h === dpStartHour ? dpStartMinute : null;
-    document.getElementById('dp-end-minute-grid').innerHTML = dpBuildMinuteGrid(0, 'dpSelectEndMinute', minMin);
-    em.classList.remove('hidden');
-  }
-  dpUpdateHint();
+  dpEndValue = '';
+  dpSyncUi();
 }
 
 function dpSelectEndMinute(m) {
   dpEndMinute = m;
   dpStep = 'done';
-  document.getElementById('dp-end-minute-grid').innerHTML = dpBuildMinuteGrid(m, 'dpSelectEndMinute');
-  document.getElementById('resv-end').value =
-    new Date(dpEndDate.getFullYear(), dpEndDate.getMonth(), dpEndDate.getDate(), dpEndHour, m, 0).toISOString();
+  dpEndValue = new Date(
+    dpEndDate.getFullYear(),
+    dpEndDate.getMonth(),
+    dpEndDate.getDate(),
+    dpEndHour,
+    m,
+    0
+  ).toISOString();
   dpRenderCalendar();
-  dpUpdateSelection();
+  dpSyncUi();
 }
 
 function dpUpdateSelection() {
@@ -2119,14 +2210,101 @@ function dpUpdateHint() {
   if (!el) return;
   const hints = {
     'pick-start-date': 'Cliquez sur un jour pour définir la date de début',
-    'pick-end-date': 'Cliquez sur un autre jour pour définir la date de fin',
     'pick-start-time': 'Sélectionnez l\'heure de début',
     'pick-start-min': 'Sélectionnez les minutes de début',
+    'pick-end-date': 'Sélectionnez ensuite la date de fin',
     'pick-end-time': 'Sélectionnez l\'heure de fin',
     'pick-end-min': 'Sélectionnez les minutes de fin',
-    'done': 'Cliquez sur un jour pour modifier la période'
+    'done': 'Utilisez les quatre étapes ci-dessus pour corriger facilement la période'
   };
   el.textContent = hints[dpStep] || '';
+}
+
+function dpSyncUi() {
+  const timeSection = document.getElementById('dp-time-section');
+  const startSection = document.getElementById('dp-start-time-section');
+  const endSection = document.getElementById('dp-end-time-section');
+  const startMinuteSection = document.getElementById('dp-start-minute-section');
+  const endMinuteSection = document.getElementById('dp-end-minute-section');
+
+  if (timeSection) timeSection.classList.add('hidden');
+  if (startSection) startSection.classList.add('hidden');
+  if (endSection) endSection.classList.add('hidden');
+  if (startMinuteSection) startMinuteSection.classList.add('hidden');
+  if (endMinuteSection) endMinuteSection.classList.add('hidden');
+
+  if (dpStartDate && ['pick-start-time', 'pick-start-min', 'pick-end-date', 'pick-end-time', 'pick-end-min', 'done'].includes(dpStep)) {
+    dpShowStartTimeGrid();
+    if (dpStartHour !== null && startMinuteSection && dpStep !== 'pick-start-time') {
+      document.getElementById('dp-start-minute-grid').innerHTML =
+        dpBuildMinuteGrid(dpStartMinute, 'dpSelectStartMinute');
+      startMinuteSection.classList.remove('hidden');
+    }
+  }
+
+  if (dpEndDate && ['pick-end-time', 'pick-end-min', 'done'].includes(dpStep)) {
+    dpShowEndTimeGrid();
+    if (dpEndHour !== null && endMinuteSection && dpStep !== 'pick-end-time') {
+      const sameDay = dpGetDayKey(dpStartDate) === dpGetDayKey(dpEndDate);
+      const minMinute = sameDay && dpEndHour === dpStartHour ? dpStartMinute : null;
+      document.getElementById('dp-end-minute-grid').innerHTML =
+        dpBuildMinuteGrid(dpEndMinute, 'dpSelectEndMinute', minMinute);
+      endMinuteSection.classList.remove('hidden');
+    }
+  }
+
+  dpRefreshHiddenValues();
+  dpUpdateSelection();
+  dpUpdateHint();
+  dpUpdateStepControls();
+}
+
+function dpEditStep(target) {
+  if (target === 'start-date') {
+    dpStep = 'pick-start-date';
+    dpStartHour = null;
+    dpStartMinute = 0;
+    dpEndDate = null;
+    dpEndHour = null;
+    dpEndMinute = 0;
+    dpStartValue = '';
+    dpEndValue = '';
+  } else if (target === 'start-time') {
+    if (!dpStartDate) {
+      dpStep = 'pick-start-date';
+    } else {
+      dpStep = 'pick-start-time';
+      dpStartHour = null;
+      dpStartMinute = 0;
+      dpEndDate = null;
+      dpEndHour = null;
+      dpEndMinute = 0;
+      dpStartValue = '';
+      dpEndValue = '';
+    }
+  } else if (target === 'end-date') {
+    if (!dpStartDate || dpStartHour === null) {
+      dpEditStep(dpStartDate ? 'start-time' : 'start-date');
+      return;
+    }
+    dpStep = 'pick-end-date';
+    dpEndDate = null;
+    dpEndHour = null;
+    dpEndMinute = 0;
+    dpEndValue = '';
+  } else if (target === 'end-time') {
+    if (!dpEndDate) {
+      dpEditStep('end-date');
+      return;
+    }
+    dpStep = 'pick-end-time';
+    dpEndHour = null;
+    dpEndMinute = 0;
+    dpEndValue = '';
+  }
+
+  dpRenderCalendar();
+  dpSyncUi();
 }
 
 function dpInit() {
@@ -2135,18 +2313,10 @@ function dpInit() {
   dpStartDate = null; dpEndDate = null;
   dpStartHour = null; dpEndHour = null;
   dpStartMinute = 0; dpEndMinute = 0;
+  dpStartValue = ''; dpEndValue = '';
   dpSchedule = { totalSlots: 1, reservations: [] };
-  const ts = document.getElementById('dp-time-section');
-  const sd = document.getElementById('dp-selection-display');
-  const es = document.getElementById('dp-end-time-section');
-  const sm = document.getElementById('dp-start-minute-section');
-  const em = document.getElementById('dp-end-minute-section');
-  if (ts) ts.classList.add('hidden');
-  if (sd) sd.classList.add('hidden');
-  if (es) es.classList.add('hidden');
-  if (sm) sm.classList.add('hidden');
-  if (em) em.classList.add('hidden');
   dpRenderCalendar();
+  dpSyncUi();
 }
 
 function dpSetFromExisting(startAt, endAt) {
@@ -2158,10 +2328,12 @@ function dpSetFromExisting(startAt, endAt) {
   dpEndHour = end.getHours();
   dpStartMinute = Math.round(start.getMinutes() / 5) * 5 % 60;
   dpEndMinute = Math.round(end.getMinutes() / 5) * 5 % 60;
+  dpStartValue = start.toISOString();
+  dpEndValue = end.toISOString();
   dpCurrentMonth = new Date(dpStartDate.getFullYear(), dpStartDate.getMonth(), 1);
   dpStep = 'done';
-  document.getElementById('resv-start').value = start.toISOString();
-  document.getElementById('resv-end').value = end.toISOString();
+  dpRefreshHiddenValues();
+  dpSyncUi();
 }
 
 async function dpLoadSchedule(resourceId) {
@@ -2178,27 +2350,7 @@ async function dpLoadSchedule(resourceId) {
     dpSchedule = { totalSlots: 1, reservations: [] };
   }
   dpRenderCalendar();
-  if (dpStep !== 'pick-start-date' && dpStartDate) {
-    dpShowStartTimeGrid();
-    if (dpStartHour !== null) {
-      const sm = document.getElementById('dp-start-minute-section');
-      if (sm) {
-        document.getElementById('dp-start-minute-grid').innerHTML = dpBuildMinuteGrid(dpStartMinute, 'dpSelectStartMinute');
-        sm.classList.remove('hidden');
-      }
-    }
-    if ((dpStep === 'pick-end-time' || dpStep === 'pick-end-min' || dpStep === 'done') && dpEndDate) {
-      dpShowEndTimeGrid();
-      if (dpEndHour !== null) {
-        const em = document.getElementById('dp-end-minute-section');
-        if (em) {
-          document.getElementById('dp-end-minute-grid').innerHTML = dpBuildMinuteGrid(dpEndMinute, 'dpSelectEndMinute');
-          em.classList.remove('hidden');
-        }
-      }
-    }
-    if (dpStep === 'done') dpUpdateSelection();
-  }
+  dpSyncUi();
 }
 
 async function initLoansPage({ forceReload = false } = {}) {
