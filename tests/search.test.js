@@ -251,6 +251,18 @@ describe('GET /api/search', () => {
       take: expect.any(Number),
       where: expect.objectContaining({ OR: expect.any(Array) })
     }));
+    expect(prisma.order.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        OR: expect.arrayContaining([
+          { title: expect.any(Object) },
+          { supplier: expect.any(Object) },
+          { description: expect.any(Object) },
+          { requester: { name: expect.any(Object) } }
+        ])
+      }
+    }));
+    const orderCall = prisma.order.findMany.mock.calls.at(-1)?.[0];
+    expect(JSON.stringify(orderCall.where)).not.toContain('deploymentTags');
   });
 
   it('retrouve les ressources et reservations de pret', async () => {

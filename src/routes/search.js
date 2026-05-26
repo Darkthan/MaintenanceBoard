@@ -799,7 +799,10 @@ router.get('/', requireAuth, async (req, res, next) => {
       };
     })();
     const orderWhere = (() => {
-      const or = buildContainsOr(rawQuery, ['title', 'supplier', 'description', 'requester.name', 'deploymentTags']);
+      // deploymentTags is a String[] on PostgreSQL in production and a serialized
+      // String on SQLite locally. Keep it out of the Prisma prefilter to avoid
+      // provider-specific filter errors; it still participates in in-memory ranking.
+      const or = buildContainsOr(rawQuery, ['title', 'supplier', 'description', 'requester.name']);
       return or?.length ? { OR: or } : {};
     })();
     const supplierWhere = (() => {
