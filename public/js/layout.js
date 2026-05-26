@@ -105,6 +105,14 @@ function ensureResponsiveStyles() {
         display: block !important;
       }
 
+      #mobile-tabbar-bar,
+      #mobile-tabbar-sheet {
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+      }
+
       body.app-mobile-refined .fixed.right-6.bottom-6,
       body.app-mobile-refined .fixed.bottom-6.right-6,
       body.app-mobile-refined [data-mobile-fab="true"] {
@@ -1864,7 +1872,7 @@ function renderMobileTabbar(navItems, activePage) {
 
   shell.innerHTML = `
     <div id="mobile-tabbar-overlay" class="hidden fixed inset-0 z-[35] bg-black/40"></div>
-    <div class="fixed inset-x-0 bottom-0 z-[40] lg:hidden px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-2">
+    <div id="mobile-tabbar-bar" class="fixed inset-x-0 bottom-0 z-[40] lg:hidden px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-2">
       <div class="rounded-[1.75rem] border border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10 backdrop-blur">
         <div class="grid grid-cols-5 gap-1 px-2 py-2">
           ${coreTabs.map(item => `
