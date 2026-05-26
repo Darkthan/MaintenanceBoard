@@ -151,8 +151,8 @@
         <div class="flex border-b border-slate-200 px-6 bg-white flex-shrink-0">
           <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600" data-tab="info" onclick="switchDetailTab('info')">Fiche</button>
           <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="sessions" onclick="switchDetailTab('sessions')">Sessions Windows</button>
-          <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="interventions" onclick="switchDetailTab('interventions')">Interventions <span id="detail-interv-count" class="ml-1 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full"></span></button>
-          <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="documents" onclick="switchDetailTab('documents')">Documents <span id="detail-attach-count" class="ml-1 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full"></span></button>
+          <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="interventions" onclick="switchDetailTab('interventions')">Interventions <span id="detail-interv-count" class="ml-1 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full hidden"></span></button>
+          <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="documents" onclick="switchDetailTab('documents')">Documents <span id="detail-attach-count" class="ml-1 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full hidden"></span></button>
           <button class="detail-tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="history" onclick="switchDetailTab('history'); loadEquipHistory()">Historique</button>
         </div>
 
@@ -1249,7 +1249,7 @@ async function openEquipDetail(equipId) {
     // Pièces jointes
     const attachments = e.attachments || [];
     const attachCount = document.getElementById('detail-attach-count');
-    if (attachCount) attachCount.textContent = attachments.length || '';
+    if (attachCount) { attachCount.textContent = attachments.length || ''; attachCount.classList.toggle('hidden', !attachments.length); }
     renderAttachments(attachments);
     // Afficher le formulaire upload si admin
     const uploadSection = document.getElementById('attach-upload-section');
@@ -1284,7 +1284,9 @@ async function openEquipDetail(equipId) {
 
     // Interventions
     const interventions = e.interventions || [];
-    document.getElementById('detail-interv-count').textContent = interventions.length || '';
+    const intervCount = document.getElementById('detail-interv-count');
+    intervCount.textContent = interventions.length || '';
+    intervCount.classList.toggle('hidden', !interventions.length);
 
     document.getElementById('detail-interventions').innerHTML = interventions.length === 0
       ? `<p class="text-sm text-slate-400 italic py-2">Aucune intervention enregistrée pour cet équipement.</p>`
@@ -1446,7 +1448,7 @@ async function uploadAttachment() {
     const attachments = await api.get(`/equipment/${detailCurrentEquip.id}/attachments`);
     renderAttachments(attachments);
     const countEl = document.getElementById('detail-attach-count');
-    if (countEl) countEl.textContent = attachments.length || '';
+    if (countEl) { countEl.textContent = attachments.length || ''; countEl.classList.toggle('hidden', !attachments.length); }
   } catch (err) { showToast(err.message, 'error'); }
 }
 
@@ -1459,7 +1461,7 @@ async function deleteAttachment(attachId) {
     const attachments = await api.get(`/equipment/${detailCurrentEquip.id}/attachments`);
     renderAttachments(attachments);
     const countEl = document.getElementById('detail-attach-count');
-    if (countEl) countEl.textContent = attachments.length || '';
+    if (countEl) { countEl.textContent = attachments.length || ''; countEl.classList.toggle('hidden', !attachments.length); }
   } catch (err) { showToast(err.message, 'error'); }
 }
 
