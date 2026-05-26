@@ -816,7 +816,8 @@ router.get('/', requireAuth, async (req, res, next) => {
       return or?.length ? { OR: or } : {};
     })();
     const userWhere = (() => {
-      const or = buildContainsOr(rawQuery, ['name', 'email', 'contactEmail', 'role']);
+      // 'role' est un enum (Role) sur PostgreSQL → exclure du filtre DB.
+      const or = buildContainsOr(rawQuery, ['name', 'email', 'contactEmail']);
       return or?.length ? { OR: or } : {};
     })();
     const conversationWhere = (() => {
@@ -835,7 +836,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         OR: [
           { participants: { some: { user: { name: containsFilter(rawQuery) } } } },
           { participants: { some: { user: { email: containsFilter(rawQuery) } } } },
-          { participants: { some: { user: { role: containsFilter(rawQuery) } } } },
+          // user.role est un enum (Role) sur PostgreSQL → contains invalide, retiré
           { messages: { some: { content: containsFilter(rawQuery) } } },
           { messages: { some: { attachmentName: containsFilter(rawQuery) } } },
           { messages: { some: { sender: { name: containsFilter(rawQuery) } } } }
