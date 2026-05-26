@@ -34,6 +34,7 @@ const linkedInterventionSelect = {
   title: true,
   status: true,
   priority: true,
+  archivedAt: true,
   createdAt: true,
   techId: true,
   room: { select: { id: true, name: true, number: true } },
@@ -210,9 +211,14 @@ router.get('/', requireAuth, async (req, res, next) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, parseInt(req.query.limit) || 20);
     const skip = (page - 1) * limit;
-    const { status, search } = req.query;
+    const { status, search, archived } = req.query;
 
     const where = {};
+    if (archived === 'true') {
+      where.archivedAt = { not: null };
+    } else {
+      where.archivedAt = null;
+    }
     if (status && VALID_STATUSES.includes(status)) where.status = status;
     if (search) {
       where.OR = [
@@ -361,6 +367,22 @@ router.patch('/:id',
     }
   }
 );
+
+// PATCH /api/orders/:id/archive - Archiver / désarchiver
+router.patch('/:id/archive', requireAuth, async (req, res, next) => {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      select: { archivedAt: true }
+    });
+    if (!order) return res.status(404).json({ error: 'Commande introuvable' });
+    const updated = await prisma.order.update({
+      where: { id: req.params.id },
+      data: { archivedAt: order.archivedAt ? null : new Date() }
+    });
+    res.json({ archived: !!updated.archivedAt, archivedAt: updated.archivedAt });
+  } catch (err) { next(err); }
+});
 
 // DELETE /api/orders/:id
 router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {

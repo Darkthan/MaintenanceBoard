@@ -108,6 +108,10 @@
           <option value="RECEIVED">Reçu</option>
           <option value="CANCELLED">Annulé</option>
         </select>
+        <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none sm:ml-1">
+          <input type="checkbox" id="archived-filter" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+          <span>Archivées</span>
+        </label>
       </div>
 
       <!-- Liste -->
@@ -142,6 +146,7 @@
     <div class="px-5 py-4 space-y-3 border-b border-slate-100">
       <div class="flex flex-wrap gap-2 items-center">
         <span id="dp-status"></span>
+        <span id="dp-archived-badge" class="hidden px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Archivée</span>
         <span id="dp-tags" class="flex flex-wrap gap-1"></span>
       </div>
       <div class="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
@@ -151,7 +156,11 @@
         <div><span class="text-xs text-slate-400 block">Commandé le</span><span id="dp-ordered" class="font-medium text-slate-700"></span></div>
         <div id="dp-intervention-wrap" class="hidden col-span-2">
           <span class="text-xs text-slate-400 block">Intervention liée</span>
-          <a id="dp-intervention-link" href="#" class="font-medium text-blue-600 hover:underline"></a>
+          <div class="flex items-center gap-2 flex-wrap mt-0.5">
+            <a id="dp-intervention-link" href="#" class="font-medium text-blue-600 hover:underline text-sm"></a>
+            <span id="dp-interv-archived-badge" class="hidden px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700">Archivée</span>
+            <button id="dp-interv-archive-btn" onclick="toggleArchiveLinkedIntervention()" class="hidden text-xs text-slate-400 hover:text-amber-600 transition underline">Archiver</button>
+          </div>
         </div>
       </div>
       <div id="dp-desc" class="hidden text-sm text-slate-500 bg-slate-50 rounded-lg px-3 py-2"></div>
@@ -241,6 +250,11 @@
       class="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 sm:w-auto">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
       Modifier
+    </button>
+    <button id="dp-archive-btn" onclick="toggleArchiveOrder(detailOrderId)"
+      class="flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 px-4 py-2 text-xs font-medium text-amber-700 transition hover:bg-amber-50 sm:w-auto sm:ml-auto">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+      <span id="dp-archive-label">Archiver</span>
     </button>
   </div>
   </div>
@@ -508,7 +522,7 @@ let user;
 requireLogin().then(u => { user = u; renderNav('orders'); });
 const orderSupplierPicker = new SupplierPicker('order-supplier-picker');
 
-let currentPage = 1, currentSearch = '', currentStatus = '';
+let currentPage = 1, currentSearch = '', currentStatus = '', currentArchived = false;
 const pageParams = new URLSearchParams(window.location.search);
 
 if (pageParams.get('search')) {
@@ -527,6 +541,7 @@ async function loadOrders() {
     const params = { page: currentPage, limit: 20 };
     if (currentSearch) params.search = currentSearch;
     if (currentStatus) params.status = currentStatus;
+    if (currentArchived) params.archived = 'true';
 
     const data = await api.get('/orders', params);
 
@@ -554,6 +569,7 @@ async function loadOrders() {
                 <span class="block truncate">${o.title}</span>
               </button>
               ${statusBadge(o.status)}
+              ${o.archivedAt ? `<span class="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700">Archivée</span>` : ''}
             </div>
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
               ${(o.supplierRef?.name || o.supplier) ? `<span>🏢 ${escapeHtml(o.supplierRef?.name || o.supplier)}</span>` : ''}
@@ -577,6 +593,10 @@ async function loadOrders() {
             <button onclick="editOrder(${JSON.stringify(o).replace(/"/g, '&quot;')})"
               class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </button>
+            <button onclick="toggleArchiveOrder('${o.id}')" title="${o.archivedAt ? 'Désarchiver' : 'Archiver'}"
+              class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-amber-600 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
             </button>
             ${user.role === 'ADMIN' ? `
             <button onclick="deleteOrder('${o.id}')"
@@ -606,6 +626,7 @@ function changePage(p) { currentPage = p; loadOrders(); }
 let searchTimeout;
 document.getElementById('search-input').addEventListener('input', e => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { currentSearch = e.target.value; currentPage = 1; loadOrders(); }, 400); });
 document.getElementById('status-filter').addEventListener('change', e => { currentStatus = e.target.value; currentPage = 1; loadOrders(); });
+document.getElementById('archived-filter').addEventListener('change', e => { currentArchived = e.target.checked; currentPage = 1; loadOrders(); });
 
 // Lignes de commande
 let itemCount = 0;
@@ -822,15 +843,26 @@ async function openDetail(id) {
     document.getElementById('dp-ordered').textContent = o.orderedAt ? formatDate(o.orderedAt) : '—';
     const interventionWrap = document.getElementById('dp-intervention-wrap');
     const interventionLink = document.getElementById('dp-intervention-link');
+    const intervArchivedBadge = document.getElementById('dp-interv-archived-badge');
+    const intervArchiveBtn = document.getElementById('dp-interv-archive-btn');
     if (o.intervention) {
       interventionLink.href = `/interventions.html?focus=${encodeURIComponent(o.intervention.id)}`;
       interventionLink.textContent = o.intervention.title;
       interventionWrap.classList.remove('hidden');
+      intervArchivedBadge.classList.toggle('hidden', !o.intervention.archivedAt);
+      intervArchiveBtn.classList.remove('hidden');
+      intervArchiveBtn.textContent = o.intervention.archivedAt ? 'Désarchiver' : 'Archiver';
     } else {
       interventionLink.href = '#';
       interventionLink.textContent = '';
       interventionWrap.classList.add('hidden');
+      intervArchivedBadge.classList.add('hidden');
+      intervArchiveBtn.classList.add('hidden');
     }
+
+    // Badge et bouton d'archivage de la commande
+    document.getElementById('dp-archived-badge').classList.toggle('hidden', !o.archivedAt);
+    document.getElementById('dp-archive-label').textContent = o.archivedAt ? 'Désarchiver' : 'Archiver';
 
     const descEl = document.getElementById('dp-desc');
     if (o.description) { descEl.textContent = o.description; descEl.classList.remove('hidden'); }
@@ -1241,6 +1273,30 @@ async function deleteOrder(id) {
     await api.delete(`/orders/${id}`);
     showToast('Commande supprimée');
     loadOrders();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function toggleArchiveOrder(id) {
+  try {
+    const res = await api.patch(`/orders/${id}/archive`, {});
+    if (detailOrderId === id) {
+      document.getElementById('dp-archived-badge').classList.toggle('hidden', !res.archived);
+      document.getElementById('dp-archive-label').textContent = res.archived ? 'Désarchiver' : 'Archiver';
+    }
+    showToast(res.archived ? 'Commande archivée' : 'Commande désarchivée');
+    loadOrders();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function toggleArchiveLinkedIntervention() {
+  if (!detailOrderId) return;
+  try {
+    const o = await api.get(`/orders/${detailOrderId}`);
+    if (!o.intervention) return;
+    const res = await api.patch(`/interventions/${o.intervention.id}/archive`, {});
+    document.getElementById('dp-interv-archived-badge').classList.toggle('hidden', !res.archived);
+    document.getElementById('dp-interv-archive-btn').textContent = res.archived ? 'Désarchiver' : 'Archiver';
+    showToast(res.archived ? 'Intervention archivée' : 'Intervention désarchivée');
   } catch (err) { showToast(err.message, 'error'); }
 }
 
