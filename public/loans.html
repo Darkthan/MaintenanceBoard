@@ -2129,7 +2129,7 @@ function dpShowEndTimeGrid() {
     dpEndDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
   document.getElementById('dp-end-time-grid').innerHTML = dpBuildTimeGrid(endKey, dpEndHour, 'dpSelectEndHour', minHour);
   document.getElementById('dp-time-section').classList.remove('hidden');
-  document.getElementById('dp-start-time-section').classList.remove('hidden');
+  document.getElementById('dp-start-time-section').classList.add('hidden');
   document.getElementById('dp-end-time-section').classList.remove('hidden');
   const em = document.getElementById('dp-end-minute-section');
   if (em) em.classList.add('hidden');
