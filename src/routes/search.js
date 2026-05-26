@@ -792,7 +792,9 @@ router.get('/', requireAuth, async (req, res, next) => {
       return or?.length ? { OR: or } : {};
     })();
     const interventionWhere = (() => {
-      const or = buildContainsOr(rawQuery, ['title', 'description', 'room.name', 'room.number', 'equipment.name', 'equipment.type', 'tech.name', 'status', 'priority']);
+      // 'status' est un enum (IntStatus) sur PostgreSQL → contains invalide, exclure du filtre DB.
+      // Le classement en mémoire utilise item.status dans searchText.
+      const or = buildContainsOr(rawQuery, ['title', 'description', 'room.name', 'room.number', 'equipment.name', 'equipment.type', 'tech.name', 'priority']);
       return {
         ...techRestriction,
         ...(or?.length ? { OR: or } : {})
