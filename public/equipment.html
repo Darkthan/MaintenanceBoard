@@ -1068,6 +1068,13 @@ async function loadSessionLogs(days) {
   try {
     currentSessionData = await api.get(`/equipment/${currentSessionEquipId}/sessions`, { days });
 
+    if (currentSessionData.tableExists === false) {
+      document.getElementById('sess-list').innerHTML = '<p class="text-sm text-orange-500 text-center py-6">Table de sessions non initialisée. Redémarrez le serveur pour appliquer les migrations.</p>';
+      document.getElementById('sess-histogram').innerHTML = '';
+      document.getElementById('sess-total').textContent = '';
+      return;
+    }
+
     // Histogramme (LOGIN + CHECKIN)
     const loginByHour = Array(24).fill(0);
     currentSessionData.logs.filter(l => l.event === 'LOGIN' || l.event === 'CHECKIN').forEach(l => {

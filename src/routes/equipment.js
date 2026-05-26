@@ -236,13 +236,19 @@ router.get('/:id/sessions', requireAuth, async (req, res, next) => {
     const days = Math.min(90, Math.max(1, parseInt(req.query.days) || 30));
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const logs = prisma.machineSessionLog?.findMany
-      ? await prisma.machineSessionLog.findMany({
+    let tableExists = !!prisma.machineSessionLog?.findMany;
+    let logs = [];
+
+    if (tableExists) {
+      logs = await prisma.machineSessionLog.findMany({
         where: { equipmentId: req.params.id, occurredAt: { gte: since } },
         orderBy: { occurredAt: 'desc' },
         select: { id: true, winUser: true, event: true, occurredAt: true }
-      }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
-      : [];
+      }).catch(err => {
+        if (tableMissing(err)) { tableExists = false; return []; }
+        return Promise.reject(err);
+      });
+    }
 
     // Histogramme par heure (0-23)
     const byHour = Array(24).fill(0);
@@ -251,7 +257,7 @@ router.get('/:id/sessions', requireAuth, async (req, res, next) => {
     // Utilisateurs distincts
     const users = [...new Set(logs.map(l => l.winUser))];
 
-    res.json({ logs, byHour, total: logs.length, days, users });
+    res.json({ logs, byHour, total: logs.length, days, users, tableExists });
   } catch (err) { next(err); }
 });
 

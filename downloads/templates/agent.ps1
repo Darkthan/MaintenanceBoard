@@ -78,6 +78,8 @@ function Send-CheckIn {
     $os   = (Get-WmiObject Win32_OperatingSystem).Caption
     $osVer= (Get-WmiObject Win32_OperatingSystem).Version
     $usr  = $cs.UserName
+    # Normaliser : retirer le préfixe domaine (DOMAINE\utilisateur → utilisateur)
+    if ($usr -match '^[^\\]+\\(.+)$') { $usr = $Matches[1] }
     $manufacturer = $cs.Manufacturer
     $model = $cs.Model
 
