@@ -844,7 +844,9 @@ router.get('/', requireAuth, async (req, res, next) => {
       };
     })();
     const loanResourceWhere = (() => {
-      const or = buildContainsOr(rawQuery, ['name', 'category', 'description', 'location', 'instructions', 'equipment.name', 'equipment.type']);
+      // LoanResource n'a pas de relation directe 'equipment' (jonction via LoanResourceEquipment).
+      // On filtre uniquement les champs scalaires directs.
+      const or = buildContainsOr(rawQuery, ['name', 'category', 'description', 'location', 'instructions']);
       return or?.length ? { OR: or } : {};
     })();
     const loanReservationWhere = (() => {
@@ -998,7 +1000,7 @@ router.get('/', requireAuth, async (req, res, next) => {
             take: candidateLimit,
             orderBy: [{ category: 'asc' }, { name: 'asc' }],
             include: {
-              equipment: { select: { id: true, name: true, type: true } },
+              equipments: { take: 1, include: { equipment: { select: { id: true, name: true, type: true } } } },
               _count: { select: { reservations: true } }
             }
           }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
@@ -1343,7 +1345,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       type: 'loan',
       group: 'Prets',
       title: resource.name,
-      subtitle: [resource.category, resource.location, resource.equipment?.name].filter(Boolean).join(' · ') || 'Ressource de pret',
+      subtitle: [resource.category, resource.location, resource.equipments?.[0]?.equipment?.name].filter(Boolean).join(' · ') || 'Ressource de pret',
       href: `/loans.html?focus=${encodeURIComponent(resource.id)}`,
       openMode: 'preview',
       preview: {
@@ -1354,7 +1356,7 @@ router.get('/', requireAuth, async (req, res, next) => {
           `Capacite : ${resource.totalUnits} unite(s)`,
           resource.bundleSize > 1 ? `Lot verrouille : ${resource.bundleSize} unite(s)` : null,
           resource.location ? `Emplacement : ${resource.location}` : null,
-          resource.equipment?.name ? `Equipement lie : ${resource.equipment.name}` : null,
+          resource.equipments?.[0]?.equipment?.name ? `Equipement lie : ${resource.equipments[0].equipment.name}` : null,
           `${resource._count?.reservations || 0} reservation(s)`
         ].filter(Boolean),
         badges: [resource.isActive ? 'Actif' : 'Archive']
@@ -1365,8 +1367,8 @@ router.get('/', requireAuth, async (req, res, next) => {
         resource.description,
         resource.location,
         resource.instructions,
-        resource.equipment?.name,
-        resource.equipment?.type
+        resource.equipments?.[0]?.equipment?.name,
+        resource.equipments?.[0]?.equipment?.type
       ].filter(Boolean).join(' ')
     })), query, limit);
 
