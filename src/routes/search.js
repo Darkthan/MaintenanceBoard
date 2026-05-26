@@ -64,6 +64,33 @@ const PRIORITY_LABELS = {
   CRITICAL: 'Critique'
 };
 
+const supportsInsensitiveMode = !(process.env.DATABASE_URL ?? 'file:./prisma/dev.db').startsWith('file:');
+
+function containsFilter(value) {
+  return supportsInsensitiveMode
+    ? { contains: value, mode: 'insensitive' }
+    : { contains: value };
+}
+
+function buildContainsOr(rawValue, fields) {
+  const value = String(rawValue || '').trim();
+  if (!value) return undefined;
+
+  return fields.map(field => {
+    const segments = String(field).split('.');
+    if (segments.length === 1) {
+      return { [segments[0]]: containsFilter(value) };
+    }
+
+    return segments.reverse().reduce((acc, segment, index) => {
+      if (index === 0) {
+        return { [segment]: containsFilter(value) };
+      }
+      return { [segment]: acc };
+    }, null);
+  });
+}
+
 function extractAgentIps(agentInfo) {
   if (!agentInfo) return [];
 
@@ -744,11 +771,8 @@ router.get('/', requireAuth, async (req, res, next) => {
     const documentIntent = /\b(document|documents|pdf|bons?|commandes?|bc|signature|signer|signe|signee|signes|devis|facture|piece|pieces|jointe|jointes|fichier|fichiers)\b/.test(query) || !!documentStateIntent;
     const limit = Math.min(8, Math.max(4, parseInt(req.query.limit, 10) || 6));
     const actionLimit = query ? Math.min(5, limit) : limit;
-    const floorQuery = parseInt(rawQuery, 10);
-    const orderSearchTerm = strippedQuery || rawQuery;
-    const broadDocumentMode = documentIntent && !strippedQuery;
     const attachmentCategoryFilter = getAttachmentCategoryFilter(documentStateIntent);
-    const candidateLimit = Math.min(160, Math.max(limit * 12, 72));
+    const candidateLimit = Math.min(120, Math.max(limit * 10, rawQuery.length <= 1 ? 30 : 72));
     const knowledgeArticles = listKnowledgeBaseArticles();
 
     const actions = buildActions(query, req.user.role, actionLimit);
@@ -759,9 +783,85 @@ router.get('/', requireAuth, async (req, res, next) => {
 
     const techRestriction = req.user.role === 'TECH' ? { techId: req.user.id } : {};
     const signatureWhereBase = req.user.role === 'ADMIN' ? { orderId: null } : { orderId: null, createdBy: req.user.id };
+    const roomWhere = (() => {
+      const or = buildContainsOr(rawQuery, ['name', 'building', 'number', 'description']);
+      return or?.length ? { OR: or } : {};
+    })();
+    const equipmentWhere = (() => {
+      const or = buildContainsOr(rawQuery, ['name', 'type', 'brand', 'model', 'serialNumber', 'agentHostname', 'agentInfo', 'room.name', 'room.number']);
+      return or?.length ? { OR: or } : {};
+    })();
+    const interventionWhere = (() => {
+      const or = buildContainsOr(rawQuery, ['title', 'description', 'room.name', 'room.number', 'equipment.name', 'equipment.type', 'tech.name', 'status', 'priority']);
+      return {
+        ...techRestriction,
+        ...(or?.length ? { OR: or } : {})
+      };
+    })();
+    const orderWhere = (() => {
+      const or = buildContainsOr(rawQuery, ['title', 'supplier', 'description', 'requester.name', 'deploymentTags']);
+      return or?.length ? { OR: or } : {};
+    })();
+    const supplierWhere = (() => {
+      const or = buildContainsOr(rawQuery, ['name', 'contact', 'email', 'phone', 'address', 'notes']);
+      return or?.length ? { OR: or } : {};
+    })();
+    const stockWhere = (() => {
+      const or = buildContainsOr(rawQuery, ['name', 'reference', 'category', 'description', 'location', 'supplier.name']);
+      return or?.length ? { OR: or } : {};
+    })();
+    const userWhere = (() => {
+      const or = buildContainsOr(rawQuery, ['name', 'email', 'contactEmail', 'role']);
+      return or?.length ? { OR: or } : {};
+    })();
+    const conversationWhere = (() => {
+      if (!rawQuery) {
+        return {
+          participants: {
+            some: { userId: req.user.id }
+          }
+        };
+      }
+
+      return {
+        participants: {
+          some: { userId: req.user.id }
+        },
+        OR: [
+          { participants: { some: { user: { name: containsFilter(rawQuery) } } } },
+          { participants: { some: { user: { email: containsFilter(rawQuery) } } } },
+          { participants: { some: { user: { role: containsFilter(rawQuery) } } } },
+          { messages: { some: { content: containsFilter(rawQuery) } } },
+          { messages: { some: { attachmentName: containsFilter(rawQuery) } } },
+          { messages: { some: { sender: { name: containsFilter(rawQuery) } } } }
+        ]
+      };
+    })();
+    const loanResourceWhere = (() => {
+      const or = buildContainsOr(rawQuery, ['name', 'category', 'description', 'location', 'instructions', 'equipment.name', 'equipment.type']);
+      return or?.length ? { OR: or } : {};
+    })();
+    const loanReservationWhere = (() => {
+      const or = buildContainsOr(rawQuery, [
+        'resource.name',
+        'resource.category',
+        'requesterName',
+        'requesterEmail',
+        'requesterPhone',
+        'requesterOrganization',
+        'additionalNeeds',
+        'notes',
+        'internalNotes',
+        'createdBy.name',
+        'approvedBy.name',
+        'status'
+      ]);
+      return or?.length ? { OR: or } : {};
+    })();
 
     const [rooms, equipment, interventions, orders, attachments, signatureDocuments, suppliers, stockItems, conversations, loanResources, loanReservations, users] = await Promise.all([
       prisma.room.findMany({
+        where: roomWhere,
         take: candidateLimit,
         orderBy: [{ building: 'asc' }, { number: 'asc' }],
         include: {
@@ -769,6 +869,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         }
       }),
       prisma.equipment.findMany({
+        where: equipmentWhere,
         take: candidateLimit,
         orderBy: { updatedAt: 'desc' },
         include: {
@@ -777,7 +878,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         }
       }),
       prisma.intervention.findMany({
-        where: techRestriction,
+        where: interventionWhere,
         take: candidateLimit,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -787,7 +888,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         }
       }),
       prisma.order.findMany({
-        where: {},
+        where: orderWhere,
         take: Math.max(candidateLimit, documentIntent ? limit + 12 : limit + 6),
         orderBy: { createdAt: 'desc' },
         include: {
@@ -798,6 +899,9 @@ router.get('/', requireAuth, async (req, res, next) => {
       orderAttachmentModel
         ? orderAttachmentModel.findMany({
             where: {
+              ...(documentIntent && rawQuery ? {
+                OR: buildContainsOr(rawQuery, ['filename', 'category', 'order.title', 'order.supplier', 'order.requester.name', 'uploader.name'])
+              } : {}),
               ...(attachmentCategoryFilter ? { category: { in: attachmentCategoryFilter } } : {})
             },
             take: Math.max(candidateLimit, documentIntent ? limit + 16 : limit + 8),
@@ -820,6 +924,18 @@ router.get('/', requireAuth, async (req, res, next) => {
         ? signatureRequestModel.findMany({
             where: {
               ...signatureWhereBase,
+              ...(documentIntent && rawQuery ? {
+                OR: buildContainsOr(rawQuery, [
+                  'documentTitle',
+                  'documentNotes',
+                  'sourceFilename',
+                  'signedFilename',
+                  'recipientName',
+                  'recipientEmail',
+                  'signatureId',
+                  'creator.name'
+                ])
+              } : {}),
               ...(documentStateIntent === 'signed'
                 ? { status: 'SIGNED' }
                 : documentStateIntent === 'unsigned'
@@ -834,6 +950,7 @@ router.get('/', requireAuth, async (req, res, next) => {
           }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
         : Promise.resolve([]),
       prisma.supplier.findMany({
+        where: supplierWhere,
         take: candidateLimit,
         orderBy: { name: 'asc' },
         include: {
@@ -841,6 +958,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         }
       }),
       prisma.stockItem.findMany({
+        where: stockWhere,
         take: candidateLimit,
         orderBy: { updatedAt: 'desc' },
         include: {
@@ -849,11 +967,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       }),
       internalConversationModel
         ? internalConversationModel.findMany({
-            where: {
-              participants: {
-                some: { userId: req.user.id }
-              }
-            },
+            where: conversationWhere,
             take: candidateLimit,
             orderBy: { updatedAt: 'desc' },
             include: {
@@ -874,6 +988,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         : Promise.resolve([]),
       loanResourceModel
         ? loanResourceModel.findMany({
+            where: loanResourceWhere,
             take: candidateLimit,
             orderBy: [{ category: 'asc' }, { name: 'asc' }],
             include: {
@@ -884,6 +999,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         : Promise.resolve([]),
       loanReservationModel
         ? loanReservationModel.findMany({
+            where: loanReservationWhere,
             take: candidateLimit,
             orderBy: { startAt: 'asc' },
             include: {
@@ -895,6 +1011,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         : Promise.resolve([]),
       req.user.role === 'ADMIN'
         ? prisma.user.findMany({
+            where: userWhere,
             take: candidateLimit,
             orderBy: { name: 'asc' },
             include: {

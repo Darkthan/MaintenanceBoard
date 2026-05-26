@@ -212,6 +212,47 @@ describe('GET /api/search', () => {
     expect(res.body.results.some(r => r.type === 'equipment' && r.id === 'equipment:eq-42')).toBe(true);
   });
 
+  it('retrouve un equipement meme s il n est pas dans une petite fenetre de candidats', async () => {
+    prisma.equipment.findMany.mockImplementation(args => {
+      if (typeof args?.take === 'number') {
+        return Promise.resolve([
+          {
+            id: 'eq-deep-1',
+            name: 'Projecteur Amphitheatre',
+            type: 'Video',
+            brand: 'Epson',
+            model: 'EB-X',
+            serialNumber: 'PJ-9001',
+            agentHostname: null,
+            agentInfo: null,
+            status: 'ACTIVE',
+            room: { id: 'room-amphi', name: 'Amphitheatre', number: 'A1' },
+            _count: { interventions: 1 }
+          }
+        ]);
+      }
+
+      return Promise.resolve([]);
+    });
+
+    const res = await request(app).get('/api/search?q=projecteur');
+    expect(res.status).toBe(200);
+    expect(res.body.results.some(r => r.type === 'equipment' && r.id === 'equipment:eq-deep-1')).toBe(true);
+  });
+
+  it('borne les requetes base quand la recherche globale est saisie', async () => {
+    const res = await request(app).get('/api/search?q=U&limit=6');
+    expect(res.status).toBe(200);
+    expect(prisma.room.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      take: expect.any(Number),
+      where: expect.objectContaining({ OR: expect.any(Array) })
+    }));
+    expect(prisma.equipment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      take: expect.any(Number),
+      where: expect.objectContaining({ OR: expect.any(Array) })
+    }));
+  });
+
   it('retrouve les ressources et reservations de pret', async () => {
     prisma.loanResource.findMany.mockResolvedValue([
       {
