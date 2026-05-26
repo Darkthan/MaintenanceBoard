@@ -51,7 +51,7 @@ const uploadKnowledgeAttachment = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    const allowedDocumentExts = ['.pdf', '.txt', '.md', '.csv', '.zip', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'];
+    const allowedDocumentExts = ['.pdf', '.txt', '.md', '.csv', '.zip', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.drawio'];
     if (
       ALLOWED_IMAGE_MIMES.includes(file.mimetype)
       || ALLOWED_DOCUMENT_MIMES.includes(file.mimetype)
@@ -130,11 +130,12 @@ function serializeKnowledgeArticle(article, { full = false } = {}) {
 async function compressKnowledgeAttachment(file) {
   if (!ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
     const ext = path.extname(file.originalname || '').toLowerCase() || '.bin';
+    const isDrawio = ext === '.drawio';
     return {
       buffer: file.buffer,
       ext,
-      mime: file.mimetype || 'application/octet-stream',
-      kind: 'file',
+      mime: isDrawio ? 'application/xml' : (file.mimetype || 'application/octet-stream'),
+      kind: isDrawio ? 'drawio' : 'file',
       width: null,
       height: null
     };
@@ -305,10 +306,11 @@ router.get('/:id/attachments/:attachmentId', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Fichier manquant sur le disque' });
   }
 
-  res.setHeader('Content-Type', attachment.mime || 'application/octet-stream');
+  const isInline = attachment.kind === 'image' || attachment.kind === 'drawio';
+  res.setHeader('Content-Type', attachment.kind === 'drawio' ? 'application/xml; charset=utf-8' : (attachment.mime || 'application/octet-stream'));
   res.setHeader(
     'Content-Disposition',
-    `${attachment.kind === 'image' ? 'inline' : 'attachment'}; filename="${encodeURIComponent(attachment.name || path.basename(filePath))}"`
+    `${isInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(attachment.name || path.basename(filePath))}"`
   );
   return fs.createReadStream(filePath).pipe(res);
 });

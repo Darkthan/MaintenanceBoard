@@ -216,7 +216,7 @@
                 <button id="add-image-btn" type="button" class="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 transition">
                   Ajouter une image
                 </button>
-                <input id="editor-document-input" type="file" accept=".pdf,.txt,.md,.csv,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" class="hidden" />
+                <input id="editor-document-input" type="file" accept=".pdf,.txt,.md,.csv,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.drawio" class="hidden" />
                 <button id="add-document-btn" type="button" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
                   Ajouter un document
                 </button>
@@ -307,6 +307,37 @@
           </div>
         </div>
         <iframe id="drawio-iframe" src="" class="w-full h-full border-0 hidden" title="Éditeur draw.io"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Viewer draw.io (fichiers .drawio attachés) -->
+<div id="drawio-viewer-modal" class="hidden fixed inset-0 z-[140] bg-slate-950/60 backdrop-blur-sm">
+  <div class="h-full flex flex-col p-4">
+    <div class="bg-white rounded-2xl flex flex-col h-full overflow-hidden shadow-2xl">
+      <div class="flex items-center gap-3 border-b border-slate-200 px-5 py-4 shrink-0 flex-wrap">
+        <div class="shrink-0">
+          <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Diagramme draw.io</p>
+          <h2 id="drawio-viewer-title" class="text-base font-semibold text-slate-900 truncate max-w-xs sm:max-w-lg"></h2>
+        </div>
+        <button id="close-drawio-viewer-btn" type="button" class="ml-auto rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="flex-1 min-h-0 relative">
+        <div id="drawio-viewer-loading" class="absolute inset-0 flex items-center justify-center bg-white z-10">
+          <div class="flex flex-col items-center gap-3 text-slate-400">
+            <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <p class="text-sm">Chargement du diagramme…</p>
+          </div>
+        </div>
+        <iframe id="drawio-viewer-iframe" src="" class="w-full h-full border-0 hidden" title="Visualisation draw.io"></iframe>
       </div>
     </div>
   </div>
@@ -562,6 +593,10 @@ function isImageAttachment(attachment) {
   return attachment?.kind === 'image' || String(attachment?.mime || '').startsWith('image/');
 }
 
+function isDrawioAttachment(attachment) {
+  return attachment?.kind === 'drawio' || String(attachment?.name || '').toLowerCase().endsWith('.drawio');
+}
+
 function getAttachmentMarkdown(attachment) {
   const label = String(attachment?.name || 'image').replace(/\.[^.]+$/, '').trim() || 'image';
   return `![${label}](${attachment.url})`;
@@ -613,16 +648,42 @@ function renderArticleDocuments(article) {
   }
 
   articleDocumentsWrapEl.classList.remove('hidden');
-  articleDocumentsEl.innerHTML = documents.map(attachment => `
-    <a href="${attachment.url}" target="_blank" rel="noopener noreferrer"
-      class="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:border-blue-200 hover:bg-blue-50 transition">
-      <div class="min-w-0">
-        <p class="truncate text-sm font-medium text-slate-800">${escapeHtml(attachment.name)}</p>
-        <p class="mt-1 text-xs text-slate-400">${escapeHtml(formatFileSize(attachment.size))}${attachment.uploadedByName ? ` · ${escapeHtml(attachment.uploadedByName)}` : ''}</p>
-      </div>
-      <span class="shrink-0 text-xs font-medium text-blue-700">Ouvrir</span>
-    </a>
-  `).join('');
+  articleDocumentsEl.innerHTML = documents.map(attachment => {
+    if (isDrawioAttachment(attachment)) {
+      return `
+        <div class="flex items-center justify-between gap-4 rounded-2xl border border-purple-200 bg-purple-50 px-4 py-3">
+          <div class="min-w-0 flex items-center gap-3">
+            <svg class="w-5 h-5 shrink-0 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+            </svg>
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-slate-800">${escapeHtml(attachment.name)}</p>
+              <p class="mt-0.5 text-xs text-slate-400">Diagramme draw.io · ${escapeHtml(formatFileSize(attachment.size))}${attachment.uploadedByName ? ` · ${escapeHtml(attachment.uploadedByName)}` : ''}</p>
+            </div>
+          </div>
+          <button type="button" data-view-drawio="${escapeHtml(attachment.id)}"
+            class="shrink-0 rounded-xl bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 transition">
+            Visualiser
+          </button>
+        </div>`;
+    }
+    return `
+      <a href="${attachment.url}" target="_blank" rel="noopener noreferrer"
+        class="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:border-blue-200 hover:bg-blue-50 transition">
+        <div class="min-w-0">
+          <p class="truncate text-sm font-medium text-slate-800">${escapeHtml(attachment.name)}</p>
+          <p class="mt-1 text-xs text-slate-400">${escapeHtml(formatFileSize(attachment.size))}${attachment.uploadedByName ? ` · ${escapeHtml(attachment.uploadedByName)}` : ''}</p>
+        </div>
+        <span class="shrink-0 text-xs font-medium text-blue-700">Ouvrir</span>
+      </a>`;
+  }).join('');
+
+  articleDocumentsEl.querySelectorAll('[data-view-drawio]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const attachment = (selectedArticle?.attachments || []).find(a => a.id === btn.dataset.viewDrawio);
+      if (attachment) openDrawioViewer(attachment);
+    });
+  });
 }
 
 function renderEditorAttachments(attachments = []) {
@@ -641,7 +702,7 @@ function renderEditorAttachments(attachments = []) {
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-medium text-slate-800">${escapeHtml(attachment.name)}</p>
           <p class="mt-1 text-xs text-slate-400">
-            ${isImageAttachment(attachment) ? 'Image compressée' : 'Document joint'}
+            ${isImageAttachment(attachment) ? 'Image compressée' : isDrawioAttachment(attachment) ? 'Diagramme draw.io' : 'Document joint'}
             · ${escapeHtml(formatFileSize(attachment.size))}
             ${attachment.uploadedByName ? ` · ${escapeHtml(attachment.uploadedByName)}` : ''}
           </p>
@@ -657,6 +718,12 @@ function renderEditorAttachments(attachments = []) {
               Insérer
             </button>
           ` : ''}
+          ${isDrawioAttachment(attachment) ? `
+            <button type="button" data-view-drawio-editor="${attachment.id}"
+              class="rounded-xl border border-purple-200 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50 transition">
+              Visualiser
+            </button>
+          ` : ''}
           ${isAdmin() ? `
             <button type="button" data-delete-attachment="${attachment.id}"
               class="rounded-xl border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition">
@@ -670,6 +737,13 @@ function renderEditorAttachments(attachments = []) {
       ` : ''}
     </div>
   `).join('');
+
+  editorAttachmentsListEl.querySelectorAll('[data-view-drawio-editor]').forEach(button => {
+    button.addEventListener('click', () => {
+      const attachment = (selectedArticle?.attachments || []).find(item => item.id === button.dataset.viewDrawioEditor);
+      if (attachment) openDrawioViewer(attachment);
+    });
+  });
 
   editorAttachmentsListEl.querySelectorAll('[data-insert-attachment]').forEach(button => {
     button.addEventListener('click', () => {
@@ -1041,7 +1115,8 @@ editorFormEl.addEventListener('submit', async event => {
 
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
-    if (!diagramEditorModalEl.classList.contains('hidden')) closeDiagramEditor();
+    if (!drawioViewerModalEl?.classList.contains('hidden')) closeDrawioViewer();
+    else if (!diagramEditorModalEl.classList.contains('hidden')) closeDiagramEditor();
     else if (!editorModalEl.classList.contains('hidden')) closeEditor();
   }
 });
@@ -1184,6 +1259,56 @@ async function saveDiagram(svgData) {
 
 document.getElementById('cancel-diagram-btn').addEventListener('click', closeDiagramEditor);
 document.getElementById('close-diagram-btn').addEventListener('click', closeDiagramEditor);
+
+// ── Viewer draw.io (fichiers .drawio attachés) ────────────────────────────────
+
+let _viewerCurrentXml = '';
+const drawioViewerModalEl = document.getElementById('drawio-viewer-modal');
+const drawioViewerIframeEl = document.getElementById('drawio-viewer-iframe');
+const drawioViewerLoadingEl = document.getElementById('drawio-viewer-loading');
+
+async function openDrawioViewer(attachment) {
+  document.getElementById('drawio-viewer-title').textContent = attachment.name || 'Diagramme';
+  drawioViewerLoadingEl.classList.remove('hidden');
+  drawioViewerIframeEl.classList.add('hidden');
+  drawioViewerIframeEl.src = '';
+  drawioViewerModalEl.classList.remove('hidden');
+  document.body.classList.add('overflow-hidden');
+
+  try {
+    const res = await fetch(attachment.url, { credentials: 'include' });
+    if (!res.ok) throw new Error('Impossible de charger le fichier');
+    _viewerCurrentXml = await res.text();
+    drawioViewerIframeEl.src = 'https://embed.diagrams.net/?embed=1&spin=1&proto=json&lang=fr&libraries=0';
+  } catch (err) {
+    drawioViewerLoadingEl.innerHTML = `<p class="text-red-500 text-sm">${err.message}</p>`;
+  }
+}
+
+function closeDrawioViewer() {
+  drawioViewerModalEl.classList.add('hidden');
+  document.body.classList.remove('overflow-hidden');
+  drawioViewerIframeEl.src = '';
+  drawioViewerIframeEl.classList.add('hidden');
+  drawioViewerLoadingEl.classList.remove('hidden');
+  _viewerCurrentXml = '';
+}
+
+window.addEventListener('message', event => {
+  if (event.source !== drawioViewerIframeEl.contentWindow) return;
+  let msg;
+  try { msg = JSON.parse(event.data); } catch { return; }
+  if (msg.event === 'init') {
+    drawioViewerLoadingEl.classList.add('hidden');
+    drawioViewerIframeEl.classList.remove('hidden');
+    drawioViewerIframeEl.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: _viewerCurrentXml }), '*');
+  } else if (msg.event === 'exit') {
+    closeDrawioViewer();
+  }
+});
+
+document.getElementById('close-drawio-viewer-btn').addEventListener('click', closeDrawioViewer);
+drawioViewerModalEl.addEventListener('click', event => { if (event.target === drawioViewerModalEl) closeDrawioViewer(); });
 
 const newDiagramBtnEl = document.getElementById('new-diagram-btn');
 newDiagramBtnEl.addEventListener('click', () => openDiagramEditor());
