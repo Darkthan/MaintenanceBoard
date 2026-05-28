@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
@@ -120,6 +121,23 @@ function setOAuthCsrfCookie(res, token) {
 
 function clearOAuthCsrfCookie(res) {
   res.clearCookie(OAUTH_CSRF_COOKIE, { path: '/oauth/authorize' });
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function sendAuthorizePage(res, csrfToken) {
+  const filePath = path.join(__dirname, '../../public/oauth-authorize.html');
+  fs.readFile(filePath, 'utf8', (err, html) => {
+    if (err) return res.status(500).send('Erreur interne.');
+    const meta = `  <meta name="oauth-csrf" content="${escapeHtml(csrfToken)}" />\n`;
+    res.type('html').send(html.replace('</head>', `${meta}</head>`));
+  });
 }
 
 async function userFromAccessCookie(req) {
@@ -343,12 +361,13 @@ router.get('/authorize', async (req, res) => {
     return res.redirect(`/login.html?next=${encodeURIComponent(next)}`);
   }
 
-  setOAuthCsrfCookie(res, signOAuthCsrfToken({
+  const csrfToken = signOAuthCsrfToken({
     clientId,
     redirectUri: String(redirect_uri),
     codeChallenge: String(code_challenge)
-  }));
-  res.sendFile(path.join(__dirname, '../../public/oauth-authorize.html'));
+  });
+  setOAuthCsrfCookie(res, csrfToken);
+  sendAuthorizePage(res, csrfToken);
 });
 
 // ── POST /oauth/authorize ────────────────────────────────────────────────────

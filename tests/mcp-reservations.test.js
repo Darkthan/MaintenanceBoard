@@ -227,6 +227,7 @@ describe('OAuth MCP refresh tokens', () => {
       .set('Cookie', [`accessToken=${accessToken}`])
       .query(authorizeQuery);
     expect(getRes.status).toBe(200);
+    expect(getRes.text).toContain('name="oauth-csrf"');
 
     const csrfCookie = getRes.headers['set-cookie'].find(c => c.startsWith('oauthCsrf='));
     const csrf = decodeURIComponent(csrfCookie.split(';')[0].slice('oauthCsrf='.length));
@@ -286,6 +287,7 @@ describe('OAuth MCP refresh tokens', () => {
       .set('Cookie', [`accessToken=${sessionToken}`])
       .query(authorizeQuery);
     expect(getRes.status).toBe(200);
+    expect(getRes.text).toContain('name="oauth-csrf"');
 
     const csrfCookie = getRes.headers['set-cookie'].find(c => c.startsWith('oauthCsrf='));
     const csrf = decodeURIComponent(csrfCookie.split(';')[0].slice('oauthCsrf='.length));

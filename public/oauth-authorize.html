@@ -144,7 +144,8 @@
     const state               = params.get('state')                 || '';
     const codeChallenge       = params.get('code_challenge')        || '';
     const codeChallengeMethod = params.get('code_challenge_method') || '';
-    const oauthCsrf           = document.cookie
+    const embeddedOauthCsrf   = document.querySelector('meta[name="oauth-csrf"]')?.content || '';
+    const oauthCsrf           = embeddedOauthCsrf || document.cookie
       .split(';')
       .map(part => part.trim())
       .find(part => part.startsWith('oauthCsrf='))
