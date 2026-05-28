@@ -141,7 +141,8 @@ app.use('/api/loan-request', loanPublicRouter);
 app.use('/api/nuget', require('./routes/nuget'));
 app.use('/api/mcp-tokens', require('./routes/mcpTokens'));
 
-// ── OAuth2 token endpoint (Client Credentials pour le MCP) ────────────────────
+// ── OAuth2 (discovery + token + authorize) ────────────────────────────────────
+app.use('/.well-known', require('./routes/wellKnown'));
 app.use('/oauth', require('./routes/oauth'));
 
 // ── Serveur MCP (Model Context Protocol) ───────────────────────────────────────

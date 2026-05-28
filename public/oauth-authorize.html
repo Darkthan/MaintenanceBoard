@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Autorisation – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+
+  <div class="w-full max-w-md">
+
+    <!-- Logo -->
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-2xl mb-3">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>
+        </svg>
+      </div>
+      <h1 class="text-lg font-bold text-slate-800">MaintenanceBoard</h1>
+    </div>
+
+    <!-- Carte principale -->
+    <div id="card" class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+
+      <!-- En-tête client -->
+      <div class="px-6 pt-6 pb-4 border-b border-slate-100 text-center">
+        <p class="text-sm text-slate-500">
+          <strong id="client-name" class="text-slate-800">…</strong>
+          <span> souhaite accéder à votre compte MaintenanceBoard</span>
+        </p>
+      </div>
+
+      <!-- Scopes demandés -->
+      <div class="px-6 py-4 border-b border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Accès demandé</p>
+        <ul id="scope-list" class="space-y-2.5 text-sm"></ul>
+      </div>
+
+      <!-- Formulaire de connexion -->
+      <form id="oauth-form" method="POST" action="/oauth/authorize" class="px-6 py-5 space-y-4">
+        <!-- Champs cachés — paramètres OAuth2 issus de l'URL -->
+        <input type="hidden" name="client_id"             id="f-client-id"/>
+        <input type="hidden" name="redirect_uri"          id="f-redirect-uri"/>
+        <input type="hidden" name="scope"                 id="f-scope"/>
+        <input type="hidden" name="state"                 id="f-state"/>
+        <input type="hidden" name="code_challenge"        id="f-code-challenge"/>
+        <input type="hidden" name="code_challenge_method" id="f-code-challenge-method"/>
+        <input type="hidden" name="action"                value="approve"/>
+
+        <p class="text-xs text-slate-500">Identifiez-vous pour autoriser l'accès.</p>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">Email</label>
+          <input name="email" type="email" required autocomplete="email"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">Mot de passe</label>
+          <input name="password" type="password" required autocomplete="current-password"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        </div>
+
+        <div class="flex flex-col gap-2 pt-1">
+          <button type="submit"
+            class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+            Autoriser l'accès
+          </button>
+          <button type="button" id="deny-btn"
+            class="w-full px-4 py-2.5 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition">
+            Refuser
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <p class="text-center text-xs text-slate-400 mt-4">
+      En autorisant, vous accordez à cette application l'accès aux ressources listées ci-dessus.
+    </p>
+  </div>
+
+  <script>
+    const SCOPE_LABELS = {
+      'reservations:read':  { label: 'Consulter les réservations',  desc: 'Lire les ressources, disponibilités et réservations existantes' },
+      'reservations:write': { label: 'Créer des réservations',      desc: 'Créer et modifier des réservations de matériel' }
+    };
+
+    const params             = new URLSearchParams(window.location.search);
+    const clientId           = params.get('client_id')             || '';
+    const redirectUri        = params.get('redirect_uri')          || '';
+    const scope              = params.get('scope')                 || '';
+    const state              = params.get('state')                 || '';
+    const codeChallenge      = params.get('code_challenge')        || '';
+    const codeChallengeMethod= params.get('code_challenge_method') || '';
+
+    // Remplir les champs cachés (valeurs brutes, jamais insérées en HTML)
+    document.getElementById('f-client-id').value              = clientId;
+    document.getElementById('f-redirect-uri').value           = redirectUri;
+    document.getElementById('f-scope').value                  = scope;
+    document.getElementById('f-state').value                  = state;
+    document.getElementById('f-code-challenge').value         = codeChallenge;
+    document.getElementById('f-code-challenge-method').value  = codeChallengeMethod;
+
+    // Bouton Refuser
+    document.getElementById('deny-btn').addEventListener('click', () => {
+      if (!redirectUri) return;
+      try {
+        const url = new URL(redirectUri);
+        url.searchParams.set('error', 'access_denied');
+        if (state) url.searchParams.set('state', state);
+        window.location.href = url.toString();
+      } catch { window.location.href = '/'; }
+    });
+
+    // Construire un élément scope sans innerHTML sur les données serveur
+    function buildScopeItem(scopeKey) {
+      const info = SCOPE_LABELS[scopeKey] || { label: scopeKey, desc: '' };
+
+      const li = document.createElement('li');
+      li.className = 'flex items-start gap-2.5';
+
+      // Icône SVG hardcodée (pas de données utilisateur)
+      const iconWrap = document.createElement('span');
+      iconWrap.className = 'flex-shrink-0 mt-0.5';
+      iconWrap.setAttribute('aria-hidden', 'true');
+      iconWrap.innerHTML = '<svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+
+      const textDiv = document.createElement('div');
+
+      const labelP = document.createElement('p');
+      labelP.className = 'font-medium text-slate-700';
+      labelP.textContent = info.label; // textContent — pas d'injection possible
+
+      textDiv.appendChild(labelP);
+
+      if (info.desc) {
+        const descP = document.createElement('p');
+        descP.className = 'text-xs text-slate-400 mt-0.5';
+        descP.textContent = info.desc; // textContent
+        textDiv.appendChild(descP);
+      }
+
+      li.appendChild(iconWrap);
+      li.appendChild(textDiv);
+      return li;
+    }
+
+    function showError(message) {
+      const card = document.getElementById('card');
+      card.textContent = ''; // vider sans innerHTML
+      const div = document.createElement('div');
+      div.className = 'p-8 text-center text-sm text-red-600';
+      div.textContent = message;
+      card.appendChild(div);
+    }
+
+    // Charger les infos du client OAuth (label + scopes autorisés)
+    fetch('/oauth/client-info?client_id=' + encodeURIComponent(clientId))
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => {
+        document.getElementById('client-name').textContent = data.label;
+
+        const requestedScopes = scope ? scope.split(' ').filter(Boolean) : data.scopes;
+        const granted = requestedScopes.filter(s => data.scopes.includes(s));
+        const list = document.getElementById('scope-list');
+        list.textContent = '';
+
+        if (granted.length) {
+          granted.forEach(s => list.appendChild(buildScopeItem(s)));
+        } else {
+          const li = document.createElement('li');
+          li.className = 'text-slate-400';
+          li.textContent = 'Aucun scope valide demandé.';
+          list.appendChild(li);
+        }
+      })
+      .catch(() => showError('Client OAuth invalide ou inactif.'));
+  </script>
+</body>
+</html>
