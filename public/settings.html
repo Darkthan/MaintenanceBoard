@@ -299,6 +299,10 @@
         class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
         Calendrier
       </button>
+      <button data-tab="mcp" onclick="showTab('mcp')"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
+        Tokens MCP
+      </button>
     </div>
 
     <!-- Contenu -->
@@ -1002,6 +1006,82 @@
         </section>
       </div><!-- /tab-calendar -->
 
+      <!-- ═══════════════════════════════════ TAB : TOKENS MCP -->
+      <div id="tab-mcp" class="hidden w-full max-w-5xl min-w-0 space-y-5">
+
+        <!-- Stats -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4">
+            <div class="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+              </svg>
+            </div>
+            <div>
+              <p id="mcp-stat-total" class="text-2xl font-bold text-slate-800">—</p>
+              <p class="text-xs text-slate-400 mt-0.5">Tokens créés</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4">
+            <div class="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <div>
+              <p id="mcp-stat-active" class="text-2xl font-bold text-slate-800">—</p>
+              <p class="text-xs text-slate-400 mt-0.5">Actifs</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4">
+            <div class="w-10 h-10 bg-rose-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+              </svg>
+            </div>
+            <div>
+              <p id="mcp-stat-revoked" class="text-2xl font-bold text-slate-800">—</p>
+              <p class="text-xs text-slate-400 mt-0.5">Révoqués</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Explication -->
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl px-5 py-4 flex items-start gap-3">
+          <svg class="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <p class="text-sm text-indigo-800">Les tokens MCP permettent à des agents IA (Claude, etc.) d'accéder à l'API de réservation via <code class="bg-indigo-100 px-1 rounded text-xs">POST /mcp</code>. Chaque token a des scopes précis et peut expirer. Le secret n'est affiché qu'une seule fois à la création.</p>
+        </div>
+
+        <!-- Tableau -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+          <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+            <div>
+              <h2 class="font-semibold text-slate-800">Tokens d'accès MCP</h2>
+              <p class="text-xs text-slate-400 mt-0.5">Les tokens révoqués restent visibles pour l'audit.</p>
+            </div>
+            <button onclick="loadMcpTokens()" class="text-xs text-blue-600 hover:underline">Rafraîchir</button>
+          </div>
+          <div id="mcp-loading" class="p-10 text-center text-sm text-slate-400">Chargement…</div>
+          <table id="mcp-table" class="hidden w-full text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Label / Préfixe</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Scopes</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Statut</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider hidden md:table-cell">Expiration</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider hidden lg:table-cell">Dernière utilisation</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider hidden xl:table-cell">Créé par</th>
+                <th class="px-5 py-3 w-8"></th>
+              </tr>
+            </thead>
+            <tbody id="mcp-tbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+          <div id="mcp-empty" class="hidden p-10 text-center text-sm text-slate-400">Aucun token MCP. Créez-en un pour commencer.</div>
+        </div>
+      </div><!-- /tab-mcp -->
+
     </div><!-- /contenu -->
   </main>
 </div>
@@ -1172,6 +1252,98 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════
+     MODAL — Créer un token MCP
+═══════════════════════════════════════════════════════════ -->
+<div id="modal-mcp-create" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h2 class="font-semibold text-slate-800">Nouveau token MCP</h2>
+      <button onclick="closeCreateToken()" class="p-1 text-slate-400 hover:text-slate-600 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <form id="mcp-create-form" class="p-6 space-y-5" onsubmit="submitCreateToken(event)">
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">Label <span class="text-red-400">*</span></label>
+        <input id="mcp-label" type="text" required minlength="2" maxlength="200" placeholder="Agent IA réservations"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        <p class="mt-1 text-xs text-slate-400">Nom lisible pour identifier l'usage de ce token.</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-2">Scopes <span class="text-red-400">*</span></label>
+        <div class="space-y-2">
+          <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+            <input type="checkbox" name="scopes" value="reservations:read" class="h-4 w-4 rounded text-blue-600" checked/>
+            <div>
+              <p class="text-sm font-medium text-slate-700">reservations:read</p>
+              <p class="text-xs text-slate-400">Lister ressources, vérifier disponibilité, lire les réservations</p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+            <input type="checkbox" name="scopes" value="reservations:write" class="h-4 w-4 rounded text-blue-600"/>
+            <div>
+              <p class="text-sm font-medium text-slate-700">reservations:write</p>
+              <p class="text-xs text-slate-400">Créer et modifier des réservations</p>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">Date d'expiration <span class="text-slate-400 font-normal">(optionnel)</span></label>
+        <input id="mcp-expires-at" type="datetime-local"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        <p class="mt-1 text-xs text-slate-400">Laisser vide pour un token sans expiration.</p>
+      </div>
+      <div id="mcp-create-error" class="hidden text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3"></div>
+      <div class="flex gap-2 pt-1">
+        <button type="button" onclick="closeCreateToken()" class="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" class="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition">Générer le token</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL — Secret du token MCP (one-time display)
+═══════════════════════════════════════════════════════════ -->
+<div id="modal-mcp-secret" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h2 class="font-semibold text-slate-800">Token généré</h2>
+    </div>
+    <div class="p-6 space-y-4">
+      <div class="flex items-start gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+        <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <p class="text-sm text-amber-800 font-medium">Ce secret ne sera plus jamais affiché. Copiez-le maintenant et conservez-le en lieu sûr.</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">Token secret</label>
+        <div class="flex gap-2">
+          <input id="mcp-secret-value" type="text" readonly
+            class="flex-1 font-mono text-sm border border-slate-300 rounded-lg px-3 py-2.5 bg-slate-50 text-slate-800 focus:outline-none select-all"/>
+          <button type="button" onclick="copyMcpSecret()"
+            class="px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition whitespace-nowrap">
+            Copier
+          </button>
+        </div>
+      </div>
+      <div id="mcp-secret-info" class="text-xs text-slate-500 space-y-1"></div>
+      <div class="pt-2">
+        <p class="text-xs text-slate-400 mb-3">Utilisez ce token dans l'en-tête HTTP de vos requêtes vers <code class="bg-slate-100 px-1 rounded">POST /mcp</code> :</p>
+        <code class="block bg-slate-900 text-slate-100 rounded-lg px-4 py-3 text-xs font-mono overflow-x-auto">Authorization: Bearer <span id="mcp-secret-preview"></span></code>
+      </div>
+      <button type="button" onclick="closeMcpSecret()" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition">
+        J'ai copié le token — Fermer
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
      Scripts
 ═══════════════════════════════════════════════════════════ -->
 <script src="/js/api.js"></script>
@@ -1213,7 +1385,7 @@ const SCREEN_WIDGET_DEFAULT_LAYOUTS = [
 // ─── Onglets principaux ────────────────────────────────────────────────────
 function showTab(name) {
   // Masquer tous les onglets de contenu
-  ['users', 'email', 'database', 'po', 'security', 'screens'].forEach(t => {
+  ['users', 'email', 'database', 'po', 'security', 'screens', 'calendar', 'mcp'].forEach(t => {
     document.getElementById('tab-' + t).classList.add('hidden');
   });
   document.getElementById('tab-' + name).classList.remove('hidden');
@@ -1242,7 +1414,15 @@ function showTab(name) {
           </svg>
           Nouvel écran
         </button>`
-      : '';
+      : name === 'mcp'
+        ? `<button onclick="openCreateToken()"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Nouveau token
+          </button>`
+        : '';
 
   // Chargement lazy
   if (name === 'users' && !users.length) loadUsers();
@@ -1254,6 +1434,7 @@ function showTab(name) {
     loadFail2ban();
   }
   if (name === 'screens') loadScreens();
+  if (name === 'mcp') loadMcpTokens();
 }
 
 // ─── Utilisateurs ──────────────────────────────────────────────────────────
@@ -1664,7 +1845,189 @@ document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   closePanel();
   closeCreate();
+  closeCreateToken();
+  closeMcpSecret();
 });
+
+// ─── Tokens MCP ────────────────────────────────────────────────────────────
+let mcpTokens = [];
+
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatMcpDate(iso) {
+  if (!iso) return '<span class="text-slate-300">—</span>';
+  return escHtml(new Date(iso).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }));
+}
+
+function isMcpExpired(token) {
+  return token.expiresAt && new Date(token.expiresAt) < new Date();
+}
+
+async function loadMcpTokens() {
+  document.getElementById('mcp-loading').classList.remove('hidden');
+  document.getElementById('mcp-table').classList.add('hidden');
+  document.getElementById('mcp-empty').classList.add('hidden');
+  try {
+    const res = await fetch('/api/mcp-tokens', { credentials: 'include' });
+    if (!res.ok) throw new Error('Erreur ' + res.status);
+    mcpTokens = await res.json();
+    document.getElementById('mcp-stat-total').textContent = mcpTokens.length;
+    document.getElementById('mcp-stat-active').textContent = mcpTokens.filter(t => t.isActive && !isMcpExpired(t)).length;
+    document.getElementById('mcp-stat-revoked').textContent = mcpTokens.filter(t => !t.isActive || isMcpExpired(t)).length;
+    renderMcpTokens();
+  } catch (err) {
+    document.getElementById('mcp-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+function renderMcpTokens() {
+  document.getElementById('mcp-loading').classList.add('hidden');
+  if (!mcpTokens.length) {
+    document.getElementById('mcp-empty').classList.remove('hidden');
+    return;
+  }
+  const tbody = document.getElementById('mcp-tbody');
+  tbody.innerHTML = mcpTokens.map(t => {
+    const expired = isMcpExpired(t);
+    const usable = t.isActive && !expired;
+    const scopeBadges = (t.scopes || []).map(s =>
+      `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">${escHtml(s)}</span>`
+    ).join(' ');
+    const statusBadge = !t.isActive
+      ? '<span class="inline-flex items-center gap-1 text-xs font-medium text-slate-400"><span class="w-1.5 h-1.5 rounded-full bg-slate-300 inline-block"></span>Révoqué</span>'
+      : expired
+        ? '<span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>Expiré</span>'
+        : '<span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>Actif</span>';
+    const actionToggle = t.isActive
+      ? `<button onclick="revokeMcpToken('${escHtml(t.id)}')" class="text-xs px-3 py-1.5 border border-rose-200 text-rose-700 rounded-lg hover:bg-rose-50 transition whitespace-nowrap">Révoquer</button>`
+      : `<button onclick="reactivateMcpToken('${escHtml(t.id)}')" class="text-xs px-3 py-1.5 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-50 transition whitespace-nowrap">Réactiver</button>`;
+    return `<tr class="hover:bg-slate-50 transition">
+      <td class="px-5 py-3.5">
+        <p class="font-medium text-slate-800">${escHtml(t.label)}</p>
+        <p class="text-xs text-slate-400 font-mono mt-0.5">${escHtml(t.tokenPrefix)}…</p>
+      </td>
+      <td class="px-5 py-3.5"><div class="flex flex-wrap gap-1">${scopeBadges}</div></td>
+      <td class="px-5 py-3.5">${statusBadge}</td>
+      <td class="px-5 py-3.5 text-sm hidden md:table-cell ${expired ? 'text-amber-600' : 'text-slate-500'}">${formatMcpDate(t.expiresAt)}</td>
+      <td class="px-5 py-3.5 text-sm text-slate-500 hidden lg:table-cell">${formatMcpDate(t.lastUsedAt)}</td>
+      <td class="px-5 py-3.5 text-sm text-slate-500 hidden xl:table-cell">${t.createdBy ? escHtml(t.createdBy.name) : '—'}</td>
+      <td class="px-5 py-3.5 text-right">${actionToggle}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('mcp-table').classList.remove('hidden');
+}
+
+function openCreateToken() {
+  document.getElementById('mcp-create-form').reset();
+  document.getElementById('mcp-create-error').classList.add('hidden');
+  // Cocher reservations:read par défaut
+  document.querySelector('#mcp-create-form input[value="reservations:read"]').checked = true;
+  document.getElementById('modal-mcp-create').classList.remove('hidden');
+}
+
+function closeCreateToken() {
+  document.getElementById('modal-mcp-create').classList.add('hidden');
+}
+
+async function submitCreateToken(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('mcp-create-error');
+  errEl.classList.add('hidden');
+
+  const scopes = [...document.querySelectorAll('#mcp-create-form input[name="scopes"]:checked')].map(cb => cb.value);
+  if (!scopes.length) {
+    errEl.textContent = 'Sélectionnez au moins un scope.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const expiresAt = document.getElementById('mcp-expires-at').value || null;
+  const body = {
+    label: document.getElementById('mcp-label').value.trim(),
+    scopes,
+    expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null
+  };
+
+  const res = await fetch('/api/mcp-tokens', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body)
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    errEl.textContent = json.error || json.errors?.[0]?.msg || 'Erreur';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  closeCreateToken();
+  showMcpSecret(json);
+  mcpTokens = [];
+  loadMcpTokens();
+}
+
+function showMcpSecret(tokenData) {
+  document.getElementById('mcp-secret-value').value = tokenData.token || '';
+  document.getElementById('mcp-secret-preview').textContent = tokenData.token || '';
+  const info = document.getElementById('mcp-secret-info');
+  const lines = [
+    `Label : ${tokenData.label}`,
+    `Préfixe : ${tokenData.tokenPrefix}`,
+    `Scopes : ${(tokenData.scopes || []).join(', ')}`,
+    tokenData.expiresAt ? `Expire le : ${new Date(tokenData.expiresAt).toLocaleString('fr-FR')}` : 'Pas d\'expiration'
+  ];
+  info.innerHTML = lines.map(l => `<p>${escHtml(l)}</p>`).join('');
+  document.getElementById('modal-mcp-secret').classList.remove('hidden');
+  // Sélectionner le token pour faciliter la copie manuelle
+  setTimeout(() => document.getElementById('mcp-secret-value').select(), 50);
+}
+
+function closeMcpSecret() {
+  document.getElementById('modal-mcp-secret').classList.add('hidden');
+  document.getElementById('mcp-secret-value').value = '';
+  document.getElementById('mcp-secret-preview').textContent = '';
+}
+
+async function copyMcpSecret() {
+  const val = document.getElementById('mcp-secret-value').value;
+  try {
+    await navigator.clipboard.writeText(val);
+    showToast('Token copié', 'success');
+  } catch {
+    document.getElementById('mcp-secret-value').select();
+    showToast('Sélectionnez et copiez manuellement (Ctrl+C)', 'error');
+  }
+}
+
+async function revokeMcpToken(id) {
+  const token = mcpTokens.find(t => t.id === id);
+  if (!token) return;
+  if (!confirm(`Révoquer le token "${token.label}" ? Il ne pourra plus être utilisé.`)) return;
+  const res = await fetch(`/api/mcp-tokens/${id}`, { method: 'DELETE', credentials: 'include' });
+  if (!res.ok) { showToast('Erreur lors de la révocation', 'error'); return; }
+  showToast('Token révoqué', 'success');
+  mcpTokens = [];
+  loadMcpTokens();
+}
+
+async function reactivateMcpToken(id) {
+  const token = mcpTokens.find(t => t.id === id);
+  if (!token) return;
+  if (!confirm(`Réactiver le token "${token.label}" ?`)) return;
+  const res = await fetch(`/api/mcp-tokens/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ isActive: true })
+  });
+  if (!res.ok) { showToast('Erreur lors de la réactivation', 'error'); return; }
+  showToast('Token réactivé', 'success');
+  mcpTokens = [];
+  loadMcpTokens();
+}
 
 // ─── Bon de commande — modèle ──────────────────────────────────────────────
 const PO_FIELDS = ['orgName', 'orgAddress', 'orgCity', 'orgPhone', 'orgEmail', 'orgSiret',
@@ -2294,7 +2657,7 @@ document.getElementById('copy-loans-calendar-feed-btn').addEventListener('click'
 
 requireLogin().then(() => {
   const tab = new URLSearchParams(window.location.search).get('tab');
-  const allowedTabs = new Set(['users', 'email', 'database', 'po', 'security', 'screens', 'calendar']);
+  const allowedTabs = new Set(['users', 'email', 'database', 'po', 'security', 'screens', 'calendar', 'mcp']);
   showTab(allowedTabs.has(tab) ? tab : 'users');
   loadGlobalCalendarFeed();
   loadLoansCalendarFeed();
