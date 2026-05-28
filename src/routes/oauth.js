@@ -6,7 +6,17 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const prisma = require('../lib/prisma');
 const config = require('../config');
-const { hashMcpToken, isMcpTokenUsable, parseScopes } = require('../utils/mcpTokens');
+const {
+  ALL_MCP_SCOPES,
+  DIRECT_MCP_CLIENT_ID,
+  DYNAMIC_MCP_CLIENT_PREFIX,
+  hashMcpToken,
+  isDirectMcpClientId,
+  isMcpTokenUsable,
+  parseScopes,
+  filterScopesForUser,
+  getUserMcpScopes
+} = require('../utils/mcpTokens');
 const { generateCode, storeCode, consumeCode } = require('../lib/oauthCodes');
 
 const router = express.Router();
@@ -16,6 +26,8 @@ const MCP_REFRESH_TOKEN_EXPIRES_IN = '30d';
 const OFFLINE_ACCESS_SCOPE = 'offline_access';
 const OAUTH_CSRF_COOKIE = 'oauthCsrf';
 const OAUTH_CSRF_EXPIRES_IN = 600; // 10 minutes
+const DIRECT_MCP_CLIENT_LABEL = 'MaintenanceBoard MCP';
+const dynamicOAuthClients = new Map();
 
 const tokenLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -56,17 +68,17 @@ function isValidRedirectUriFormat(uri) {
   } catch { return false; }
 }
 
-function signMcpUserAccessToken({ userId, mcpTokenId, scopes }) {
+function signMcpUserAccessToken({ userId, mcpTokenId, clientId, scopes }) {
   return jwt.sign(
-    { sub: userId, type: 'mcp_user_access', scopes, mcpTokenId },
+    { sub: userId, type: 'mcp_user_access', scopes, mcpTokenId, clientId },
     config.jwt.secret,
     { expiresIn: MCP_ACCESS_TOKEN_EXPIRES_IN }
   );
 }
 
-function signMcpRefreshToken({ userId, mcpTokenId, scopes }) {
+function signMcpRefreshToken({ userId, mcpTokenId, clientId, scopes }) {
   return jwt.sign(
-    { sub: userId, type: 'mcp_user_refresh', scopes, mcpTokenId },
+    { sub: userId, type: 'mcp_user_refresh', scopes, mcpTokenId, clientId },
     config.jwt.secret,
     { expiresIn: MCP_REFRESH_TOKEN_EXPIRES_IN }
   );
@@ -127,20 +139,95 @@ function verifyOAuthCsrf(req, { clientId, redirectUri, codeChallenge }) {
   }
 }
 
+function normalizeClientId(clientId) {
+  return String(clientId || DIRECT_MCP_CLIENT_ID);
+}
+
+function publicClientRecord(clientId, record) {
+  return {
+    type: 'direct',
+    id: clientId,
+    label: record?.clientName || DIRECT_MCP_CLIENT_LABEL,
+    scopes: ALL_MCP_SCOPES,
+    redirectUris: record?.redirectUris || null
+  };
+}
+
+async function resolveOAuthClient(clientId) {
+  const id = normalizeClientId(clientId);
+  if (isDirectMcpClientId(id)) {
+    return publicClientRecord(id, dynamicOAuthClients.get(id));
+  }
+
+  const mcpToken = await prisma.mcpToken.findUnique({ where: { id } });
+  if (!mcpToken || !isMcpTokenUsable(mcpToken)) return null;
+
+  return {
+    type: 'mcpToken',
+    id: mcpToken.id,
+    label: mcpToken.label,
+    scopes: parseScopes(mcpToken.scopes),
+    redirectUris: parseRedirectUris(mcpToken.redirectUris),
+    token: mcpToken
+  };
+}
+
+function isRedirectAllowedForClient(client, redirectUri) {
+  if (!redirectUri || !isValidRedirectUriFormat(redirectUri)) return false;
+  if (client.type === 'direct' && !client.redirectUris) return true;
+  return isRegisteredUri(client.redirectUris, redirectUri);
+}
+
+function dynamicClientResponse(client, req) {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    client_id: client.id,
+    client_name: client.label,
+    redirect_uris: client.redirectUris,
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+    scope: ALL_MCP_SCOPES.join(' '),
+    client_id_issued_at: now,
+    registration_client_uri: `${config.appUrl.replace(/\/$/, '')}/oauth/register/${encodeURIComponent(client.id)}`
+  };
+}
+
+// OAuth 2.0 Dynamic Client Registration minimal pour les clients MCP publics.
+router.post('/register', (req, res) => {
+  const redirectUris = Array.isArray(req.body.redirect_uris)
+    ? [...new Set(req.body.redirect_uris.map(uri => String(uri || '').trim()).filter(isValidRedirectUriFormat))]
+    : [];
+
+  if (!redirectUris.length) {
+    return res.status(400).json({ error: 'invalid_redirect_uri', error_description: 'redirect_uris doit contenir au moins une URL https:// ou localhost valide.' });
+  }
+
+  const client = {
+    id: `${DYNAMIC_MCP_CLIENT_PREFIX}${crypto.randomBytes(16).toString('base64url')}`,
+    label: String(req.body.client_name || DIRECT_MCP_CLIENT_LABEL).trim().slice(0, 200) || DIRECT_MCP_CLIENT_LABEL,
+    redirectUris
+  };
+  dynamicOAuthClients.set(client.id, client);
+  res.status(201).json(dynamicClientResponse(client, req));
+});
+
+router.get('/register/:clientId', (req, res) => {
+  const client = dynamicOAuthClients.get(req.params.clientId);
+  if (!client) return res.status(404).json({ error: 'invalid_client', error_description: 'Client dynamique inconnu ou expiré.' });
+  res.json(dynamicClientResponse(client, req));
+});
+
 // ── GET /oauth/client-info?client_id=xxx ────────────────────────────────────
 // Endpoint public : label + scopes d'un McpToken (sans secret, sans redirectUris).
 router.get('/client-info', async (req, res) => {
-  const { client_id } = req.query;
-  if (!client_id) return res.status(400).json({ error: 'client_id manquant' });
+  const clientId = normalizeClientId(req.query.client_id);
   try {
-    const record = await prisma.mcpToken.findUnique({
-      where: { id: String(client_id) },
-      select: { label: true, scopes: true, isActive: true, expiresAt: true }
-    });
-    if (!record || !isMcpTokenUsable(record)) {
+    const client = await resolveOAuthClient(clientId);
+    if (!client) {
       return res.status(404).json({ error: 'Client non trouvé ou inactif' });
     }
-    res.json({ label: record.label, scopes: parseScopes(record.scopes) });
+    res.json({ label: client.label, scopes: client.scopes });
   } catch {
     res.status(500).json({ error: 'Erreur interne' });
   }
@@ -152,12 +239,10 @@ router.get('/client-info', async (req, res) => {
 //            PKCE (code_challenge S256) obligatoire.
 router.get('/authorize', async (req, res) => {
   const { response_type, client_id, redirect_uri, code_challenge, code_challenge_method } = req.query;
+  const clientId = normalizeClientId(client_id);
 
   if (response_type !== 'code') {
     return res.status(400).send('response_type doit être "code".');
-  }
-  if (!client_id) {
-    return res.status(400).send('client_id manquant.');
   }
 
   // PKCE obligatoire — rejeté ici pour ne pas avoir à le gérer dans le POST
@@ -170,22 +255,18 @@ router.get('/authorize', async (req, res) => {
 
   // Résoudre le client et valider la redirect_uri AVANT de servir la page
   // (ne jamais rediriger vers une URI non enregistrée, même pour signaler une erreur)
-  let mcpToken;
+  let client;
   try {
-    mcpToken = await prisma.mcpToken.findUnique({
-      where: { id: String(client_id) },
-      select: { label: true, redirectUris: true, isActive: true, expiresAt: true }
-    });
+    client = await resolveOAuthClient(clientId);
   } catch {
     return res.status(500).send('Erreur interne.');
   }
 
-  if (!mcpToken || !isMcpTokenUsable(mcpToken)) {
+  if (!client) {
     return res.status(400).send('Client OAuth invalide ou inactif.');
   }
 
-  const registered = parseRedirectUris(mcpToken.redirectUris);
-  if (!redirect_uri || !isRegisteredUri(registered, redirect_uri)) {
+  if (!isRedirectAllowedForClient(client, redirect_uri)) {
     // Ne pas rediriger — afficher une page d'erreur avec l'URI tentée (pour que l'admin sache quoi ajouter)
     const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     return res.status(400).send(`<!DOCTYPE html>
@@ -218,7 +299,7 @@ router.get('/authorize', async (req, res) => {
     </svg>
     <div>
       <p class="banner-title">Redirect URI non enregistrée</p>
-      <p class="banner-desc">Le client <strong>${esc(mcpToken.label)}</strong> n'est pas autorisé à utiliser cette URI de redirection.</p>
+      <p class="banner-desc">Le client <strong>${esc(client.label)}</strong> n'est pas autorisé à utiliser cette URI de redirection.</p>
     </div>
   </div>
   <div class="body">
@@ -231,18 +312,18 @@ router.get('/authorize', async (req, res) => {
     </div>
     <ol>
       <li>Allez dans <strong>Paramètres → Tokens MCP</strong></li>
-      <li>Cliquez sur <strong>URIs</strong> à côté du token <em>${esc(mcpToken.label)}</em></li>
+      <li>Cliquez sur <strong>URIs</strong> à côté du token <em>${esc(client.label)}</em></li>
       <li>Collez l'URI ci-dessus et enregistrez</li>
       <li>Relancez la connexion depuis votre LLM</li>
     </ol>
-    <a href="/settings.html?tab=mcp&amp;openUris=${esc(String(client_id))}&amp;addUri=${encodeURIComponent(redirect_uri)}" class="btn-link">Ajouter cette URI et continuer →</a>
+    <a href="/settings.html?tab=mcp&amp;openUris=${esc(String(clientId))}&amp;addUri=${encodeURIComponent(redirect_uri)}" class="btn-link">Ajouter cette URI et continuer →</a>
   </div>
 </div>
 </body></html>`);
   }
 
   setOAuthCsrfCookie(res, signOAuthCsrfToken({
-    clientId: String(client_id),
+    clientId,
     redirectUri: String(redirect_uri),
     codeChallenge: String(code_challenge)
   }));
@@ -258,19 +339,17 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
     code_challenge, code_challenge_method,
     email, password, action
   } = req.body;
+  const clientId = normalizeClientId(client_id);
 
   // ── 1. Valider client et redirect_uri EN PREMIER (avant tout redirect) ──────
-  let mcpToken;
+  let client;
   try {
-    mcpToken = client_id
-      ? await prisma.mcpToken.findUnique({ where: { id: String(client_id) } })
-      : null;
+    client = await resolveOAuthClient(clientId);
   } catch {
     return res.status(500).send('Erreur interne.');
   }
 
-  const registered = parseRedirectUris(mcpToken?.redirectUris);
-  if (!mcpToken || !isMcpTokenUsable(mcpToken) || !redirect_uri || !isRegisteredUri(registered, redirect_uri)) {
+  if (!client || !isRedirectAllowedForClient(client, redirect_uri)) {
     // Erreur de configuration : afficher une page, ne pas rediriger
     return res.status(400).send('Paramètres OAuth2 invalides (client ou redirect_uri non enregistrée).');
   }
@@ -300,7 +379,7 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
       // l'application ChatGPT. On vérifie plutôt un double-submit token signé,
       // lié au client, à la redirect_uri déjà enregistrée et au challenge PKCE.
       if (!verifyOAuthCsrf(req, {
-        clientId: String(client_id),
+        clientId,
         redirectUri: String(redirect_uri),
         codeChallenge: String(code_challenge)
       })) {
@@ -325,10 +404,11 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
 
     if (!user || !user.isActive) return redirectError('access_denied', 'Compte inactif');
 
-    // Scopes accordés = intersection(demandés, autorisés par le token)
-    const allowedScopes = parseScopes(mcpToken.scopes);
-    const requestedScopes = scope ? scope.split(' ').filter(Boolean) : allowedScopes;
-    const grantedScopes = requestedScopes.filter(s => allowedScopes.includes(s));
+    // Scopes accordés = intersection(demandés, autorisés par le client, autorisés par le rôle utilisateur)
+    const clientAllowedScopes = client.scopes;
+    const userAllowedScopes = filterScopesForUser(clientAllowedScopes, user);
+    const requestedScopes = scope ? scope.split(' ').filter(Boolean) : userAllowedScopes;
+    const grantedScopes = requestedScopes.filter(s => userAllowedScopes.includes(s));
     const issueRefreshToken = requestedScopes.includes(OFFLINE_ACCESS_SCOPE);
     if (!grantedScopes.length) {
       return redirectError('invalid_scope', 'Aucun scope valide accordé');
@@ -337,7 +417,9 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
     const code = generateCode();
     storeCode(code, {
       userId: user.id,
-      mcpTokenId: mcpToken.id,
+      mcpTokenId: client.type === 'mcpToken' ? client.id : null,
+      clientId: client.id,
+      clientType: client.type,
       scopes: grantedScopes,
       redirectUri: redirect_uri,
       codeChallenge: code_challenge,        // toujours présent (PKCE obligatoire)
@@ -399,29 +481,42 @@ router.post('/token', tokenLimiter, async (req, res) => {
         return oauthError(res, 'invalid_grant', 'code_verifier invalide (PKCE)');
       }
 
+      const isTokenClient = codeData.clientType === 'mcpToken' || !!codeData.mcpTokenId;
+      const userSelect = { id: true, role: true, isActive: true };
       const [mcpToken, user] = await Promise.all([
-        prisma.mcpToken.findUnique({ where: { id: codeData.mcpTokenId } }),
-        prisma.user.findUnique({ where: { id: codeData.userId }, select: { id: true, isActive: true } })
+        isTokenClient
+          ? prisma.mcpToken.findUnique({ where: { id: codeData.mcpTokenId } })
+          : Promise.resolve(null),
+        prisma.user.findUnique({ where: { id: codeData.userId }, select: userSelect })
       ]);
-      if (!mcpToken || !isMcpTokenUsable(mcpToken)) return oauthError(res, 'invalid_client', 'Client révoqué');
+      if (isTokenClient && (!mcpToken || !isMcpTokenUsable(mcpToken))) {
+        return oauthError(res, 'invalid_client', 'Client révoqué');
+      }
       if (!user || !user.isActive) return oauthError(res, 'access_denied', 'Compte désactivé');
+
+      const scopes = filterScopesForUser(codeData.scopes, user);
+      if (!scopes.length) return oauthError(res, 'invalid_scope', 'Aucun scope valide accordé');
 
       const accessToken = signMcpUserAccessToken({
         userId: codeData.userId,
         mcpTokenId: codeData.mcpTokenId,
-        scopes: codeData.scopes
+        clientId: codeData.clientId,
+        scopes
       });
       const refreshToken = codeData.issueRefreshToken
         ? signMcpRefreshToken({
             userId: codeData.userId,
             mcpTokenId: codeData.mcpTokenId,
-            scopes: codeData.scopes
+            clientId: codeData.clientId,
+            scopes
           })
         : null;
 
-      prisma.mcpToken.update({ where: { id: codeData.mcpTokenId }, data: { lastUsedAt: new Date() } }).catch(() => {});
+      if (codeData.mcpTokenId) {
+        prisma.mcpToken.update({ where: { id: codeData.mcpTokenId }, data: { lastUsedAt: new Date() } }).catch(() => {});
+      }
 
-      return res.json(accessTokenResponse({ accessToken, scopes: codeData.scopes, refreshToken }));
+      return res.json(accessTokenResponse({ accessToken, scopes, refreshToken }));
     }
 
     // ── Refresh Token ───────────────────────────────────────────────────────
@@ -436,35 +531,45 @@ router.post('/token', tokenLimiter, async (req, res) => {
         return oauthError(res, 'invalid_grant', 'refresh_token invalide ou expiré');
       }
 
-      if (payload.type !== 'mcp_user_refresh' || !payload.sub || !payload.mcpTokenId) {
+      if (payload.type !== 'mcp_user_refresh' || !payload.sub) {
+        return oauthError(res, 'invalid_grant', 'refresh_token non reconnu');
+      }
+
+      const directClient = isDirectMcpClientId(payload.clientId);
+      if (!directClient && !payload.mcpTokenId) {
         return oauthError(res, 'invalid_grant', 'refresh_token non reconnu');
       }
 
       const [mcpToken, user] = await Promise.all([
-        prisma.mcpToken.findUnique({ where: { id: payload.mcpTokenId } }),
-        prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, isActive: true } })
+        directClient ? Promise.resolve(null) : prisma.mcpToken.findUnique({ where: { id: payload.mcpTokenId } }),
+        prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, isActive: true } })
       ]);
-      if (!mcpToken || !isMcpTokenUsable(mcpToken)) return oauthError(res, 'invalid_client', 'Client révoqué');
+      if (!directClient && (!mcpToken || !isMcpTokenUsable(mcpToken))) return oauthError(res, 'invalid_client', 'Client révoqué');
       if (!user || !user.isActive) return oauthError(res, 'access_denied', 'Compte désactivé');
 
-      const allowedScopes = parseScopes(mcpToken.scopes);
+      const clientAllowedScopes = directClient ? ALL_MCP_SCOPES : parseScopes(mcpToken.scopes);
+      const roleAllowedScopes = filterScopesForUser(clientAllowedScopes, user);
       const scopes = Array.isArray(payload.scopes)
-        ? payload.scopes.filter(s => allowedScopes.includes(s))
-        : allowedScopes;
+        ? payload.scopes.filter(s => roleAllowedScopes.includes(s))
+        : roleAllowedScopes;
       if (!scopes.length) return oauthError(res, 'invalid_scope', 'Aucun scope valide accordé');
 
       const accessToken = signMcpUserAccessToken({
         userId: payload.sub,
         mcpTokenId: payload.mcpTokenId,
+        clientId: payload.clientId,
         scopes
       });
       const rotatedRefreshToken = signMcpRefreshToken({
         userId: payload.sub,
         mcpTokenId: payload.mcpTokenId,
+        clientId: payload.clientId,
         scopes
       });
 
-      prisma.mcpToken.update({ where: { id: payload.mcpTokenId }, data: { lastUsedAt: new Date() } }).catch(() => {});
+      if (payload.mcpTokenId) {
+        prisma.mcpToken.update({ where: { id: payload.mcpTokenId }, data: { lastUsedAt: new Date() } }).catch(() => {});
+      }
 
       return res.json(accessTokenResponse({ accessToken, scopes, refreshToken: rotatedRefreshToken }));
     }

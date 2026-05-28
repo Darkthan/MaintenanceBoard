@@ -59,6 +59,7 @@ const ORDER_INCLUDE = {
       title: true,
       status: true,
       priority: true,
+      techId: true,
       room: { select: { id: true, name: true, number: true } },
       equipment: { select: { id: true, name: true, type: true } }
     }
@@ -131,6 +132,31 @@ function numberOrNull(value, label) {
   const number = Number(value);
   if (Number.isNaN(number) || number < 0) badRequest(`${label} doit être un nombre positif.`);
   return number;
+}
+
+function interventionAccessWhere(user, requestedTechId) {
+  if (user?.role !== 'TECH') return requestedTechId ? { techId: requestedTechId } : null;
+  if (requestedTechId && requestedTechId !== user.id) {
+    return { OR: [{ techId: user.id }, { kind: 'CHECKUP' }] };
+  }
+  return { OR: [{ techId: user.id }, { kind: 'CHECKUP' }] };
+}
+
+function canAccessIntervention(user, intervention) {
+  if (!intervention || user?.role !== 'TECH') return !!intervention;
+  return intervention.techId === user.id || intervention.kind === 'CHECKUP';
+}
+
+async function ensureInterventionLinkAllowed(interventionId, user) {
+  if (!interventionId || user?.role !== 'TECH') return;
+  const intervention = await prisma.intervention.findUnique({
+    where: { id: interventionId },
+    select: { id: true, techId: true, kind: true }
+  });
+  if (!intervention) notFound('Intervention introuvable');
+  if (!canAccessIntervention(user, intervention)) {
+    throw Object.assign(new Error('Accès refusé pour cette intervention'), { status: 403 });
+  }
 }
 
 function mapIntervention(item) {
@@ -232,7 +258,7 @@ function mapProject(project) {
   };
 }
 
-async function listInterventions({ status, priority, search, roomId, equipmentId, techId, archived = false, limit = 20 } = {}) {
+async function listInterventions({ status, priority, search, roomId, equipmentId, techId, archived = false, limit = 20 } = {}, { user } = {}) {
   ensureEnum(status, INTERVENTION_STATUSES, 'Statut');
   ensureEnum(priority, INTERVENTION_PRIORITIES, 'Priorité');
 
@@ -242,7 +268,9 @@ async function listInterventions({ status, priority, search, roomId, equipmentId
   if (priority) clauses.push({ priority });
   if (roomId) clauses.push({ roomId });
   if (equipmentId) clauses.push({ equipmentId });
-  if (techId) clauses.push({ techId });
+  const accessWhere = interventionAccessWhere(user, techId);
+  if (accessWhere) clauses.push(accessWhere);
+  else if (techId) clauses.push({ techId });
   if (search) {
     clauses.push({
       OR: [
@@ -264,16 +292,16 @@ async function listInterventions({ status, priority, search, roomId, equipmentId
   return items.map(mapIntervention);
 }
 
-async function getIntervention({ id }) {
+async function getIntervention({ id }, { user } = {}) {
   const item = await prisma.intervention.findUnique({
     where: { id },
     include: INTERVENTION_INCLUDE
   });
-  if (!item) notFound('Intervention introuvable');
+  if (!canAccessIntervention(user, item)) notFound('Intervention introuvable');
   return mapIntervention(item);
 }
 
-async function createIntervention(input, { userId } = {}) {
+async function createIntervention(input, { userId, user } = {}) {
   const title = cleanString(input.title, { min: 3, max: 300, label: 'Le titre' });
   ensureEnum(input.status, INTERVENTION_STATUSES, 'Statut');
   ensureEnum(input.priority, INTERVENTION_PRIORITIES, 'Priorité');
@@ -293,7 +321,7 @@ async function createIntervention(input, { userId } = {}) {
       priority: input.priority || 'NORMAL',
       roomId: input.roomId || null,
       equipmentId: input.equipmentId || null,
-      techId: input.techId || userId || null,
+      techId: user?.role === 'TECH' ? user.id : (input.techId || userId || null),
       scheduledStartAt: scheduledStartAt === undefined ? null : scheduledStartAt,
       scheduledEndAt: scheduledEndAt === undefined ? null : scheduledEndAt,
       dueAt: parseOptionalDate(input.dueAt, "Date d'échéance") ?? null,
@@ -313,9 +341,9 @@ async function createIntervention(input, { userId } = {}) {
   return mapIntervention(item);
 }
 
-async function updateIntervention({ id, ...input }) {
+async function updateIntervention({ id, ...input }, { user } = {}) {
   const existing = await prisma.intervention.findUnique({ where: { id } });
-  if (!existing) notFound('Intervention introuvable');
+  if (!canAccessIntervention(user, existing)) notFound('Intervention introuvable');
   ensureEnum(input.status, INTERVENTION_STATUSES, 'Statut');
   ensureEnum(input.priority, INTERVENTION_PRIORITIES, 'Priorité');
 
@@ -552,7 +580,7 @@ function toOrderItemData(item) {
   };
 }
 
-async function listOrders({ status, search, interventionId, archived = false, limit = 20 } = {}) {
+async function listOrders({ status, search, interventionId, archived = false, limit = 20 } = {}, { user } = {}) {
   ensureEnum(status, ORDER_STATUSES, 'Statut');
   const where = { archivedAt: archived ? { not: null } : null };
   if (status) where.status = status;
@@ -576,21 +604,30 @@ async function listOrders({ status, search, interventionId, archived = false, li
       _count: { select: { items: true } }
     }
   });
-  return orders.map(mapOrder);
+  return orders.map(order => {
+    if (user?.role === 'TECH' && order.intervention?.techId && order.intervention.techId !== user.id) {
+      return mapOrder({ ...order, intervention: null });
+    }
+    return mapOrder(order);
+  });
 }
 
-async function getOrder({ id }) {
+async function getOrder({ id }, { user } = {}) {
   const order = await prisma.order.findUnique({ where: { id }, include: ORDER_INCLUDE });
   if (!order) notFound('Commande introuvable');
+  if (user?.role === 'TECH' && order.intervention?.techId && order.intervention.techId !== user.id) {
+    return mapOrder({ ...order, intervention: null });
+  }
   return mapOrder(order);
 }
 
-async function createOrder(input, { userId } = {}) {
+async function createOrder(input, { userId, user } = {}) {
   if (!userId) badRequest('Utilisateur créateur introuvable pour créer une commande.');
   if (!Array.isArray(input.items) || input.items.length === 0) {
     badRequest('La commande doit contenir au moins une ligne.');
   }
   ensureEnum(input.status, ORDER_STATUSES, 'Statut');
+  await ensureInterventionLinkAllowed(input.interventionId, user);
 
   const order = await prisma.order.create({
     data: {
@@ -614,13 +651,14 @@ async function createOrder(input, { userId } = {}) {
   return mapOrder(order);
 }
 
-async function updateOrder({ id, ...input }) {
+async function updateOrder({ id, ...input }, { user } = {}) {
   const existing = await prisma.order.findUnique({ where: { id }, select: { id: true } });
   if (!existing) notFound('Commande introuvable');
   ensureEnum(input.status, ORDER_STATUSES, 'Statut');
   if (input.items !== undefined && (!Array.isArray(input.items) || input.items.length === 0)) {
     badRequest('La commande doit contenir au moins une ligne.');
   }
+  await ensureInterventionLinkAllowed(input.interventionId, user);
 
   const data = {};
   if (input.title !== undefined) data.title = cleanString(input.title, { min: 3, max: 300, label: 'Le titre' });

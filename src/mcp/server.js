@@ -40,6 +40,7 @@ function tool(ctx, requiredScope, fn) {
  */
 function buildMcpServer(ctx) {
   const server = new McpServer(SERVER_INFO);
+  const user = ctx.createdBy || null;
   const userId = ctx.createdBy?.id || null;
 
   server.registerTool('list_resources', {
@@ -115,14 +116,14 @@ function buildMcpServer(ctx) {
       archived: z.boolean().optional(),
       limit: z.number().int().min(1).max(100).optional()
     }
-  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_READ, (a) => work.listInterventions(a)));
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_READ, (a) => work.listInterventions(a, { user })));
 
   server.registerTool('get_intervention', {
     description: 'Récupère le détail compact d\'une intervention par ID.',
     inputSchema: {
       id: z.string().describe('ID de l\'intervention')
     }
-  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_READ, (a) => work.getIntervention(a)));
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_READ, (a) => work.getIntervention(a, { user })));
 
   server.registerTool('create_intervention', {
     description: 'Crée une intervention standard de maintenance. Pour les interventions ouvertes liées à un équipement actif, l\'équipement passe en réparation.',
@@ -141,7 +142,7 @@ function buildMcpServer(ctx) {
       scheduledEndAt: z.string().optional(),
       dueAt: z.string().optional()
     }
-  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => work.createIntervention(a, { userId })));
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => work.createIntervention(a, { userId, user })));
 
   server.registerTool('update_intervention', {
     description: 'Modifie une intervention existante : titre, statut, priorité, planning, salle, équipement, notes ou résolution.',
@@ -159,7 +160,7 @@ function buildMcpServer(ctx) {
       scheduledEndAt: z.string().optional(),
       dueAt: z.string().optional()
     }
-  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => work.updateIntervention(a)));
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => work.updateIntervention(a, { user })));
 
   server.registerTool('list_orders', {
     description: 'Liste les commandes avec filtres par statut, intervention, archive ou recherche texte.',
@@ -170,14 +171,14 @@ function buildMcpServer(ctx) {
       archived: z.boolean().optional(),
       limit: z.number().int().min(1).max(100).optional()
     }
-  }, tool(ctx, MCP_SCOPES.ORDERS_READ, (a) => work.listOrders(a)));
+  }, tool(ctx, MCP_SCOPES.ORDERS_READ, (a) => work.listOrders(a, { user })));
 
   server.registerTool('get_order', {
     description: 'Récupère le détail d\'une commande avec ses lignes et son intervention liée.',
     inputSchema: {
       id: z.string().describe('ID de la commande')
     }
-  }, tool(ctx, MCP_SCOPES.ORDERS_READ, (a) => work.getOrder(a)));
+  }, tool(ctx, MCP_SCOPES.ORDERS_READ, (a) => work.getOrder(a, { user })));
 
   server.registerTool('create_order', {
     description: 'Crée une commande avec une ou plusieurs lignes, éventuellement liée à une intervention.',
@@ -204,7 +205,7 @@ function buildMcpServer(ctx) {
         notes: z.string().max(1000).optional()
       })).min(1).max(100)
     }
-  }, tool(ctx, MCP_SCOPES.ORDERS_WRITE, (a) => work.createOrder(a, { userId })));
+  }, tool(ctx, MCP_SCOPES.ORDERS_WRITE, (a) => work.createOrder(a, { userId, user })));
 
   server.registerTool('update_order', {
     description: 'Modifie une commande : statut, infos de suivi, intervention liée, archivage ou remplacement des lignes.',
@@ -233,7 +234,7 @@ function buildMcpServer(ctx) {
         notes: z.string().max(1000).optional()
       })).min(1).max(100).optional()
     }
-  }, tool(ctx, MCP_SCOPES.ORDERS_WRITE, (a) => work.updateOrder(a)));
+  }, tool(ctx, MCP_SCOPES.ORDERS_WRITE, (a) => work.updateOrder(a, { user })));
 
   server.registerTool('list_stock_items', {
     description: 'Liste les articles de stock avec filtres recherche, catégorie et stock faible.',

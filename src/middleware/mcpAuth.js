@@ -1,7 +1,14 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config');
 const prisma = require('../lib/prisma');
-const { hashMcpToken, isMcpTokenUsable, parseScopes, hasScope } = require('../utils/mcpTokens');
+const {
+  hashMcpToken,
+  isMcpTokenUsable,
+  parseScopes,
+  hasScope,
+  isDirectMcpClientId,
+  filterScopesForUser
+} = require('../utils/mcpTokens');
 
 const base = () => config.appUrl.replace(/\/$/, '');
 
@@ -97,7 +104,29 @@ async function handleMcpAccessJwt(req, res, next, payload) {
 
 // Mode 3 : JWT issu de authorization_code (sub = User.id, mcpTokenId = McpToken.id)
 async function handleMcpUserAccessJwt(req, res, next, payload) {
-  if (!payload.mcpTokenId || !payload.sub) return invalidToken(res, 'JWT incomplet');
+  if (!payload.sub) return invalidToken(res, 'JWT incomplet');
+
+  if (isDirectMcpClientId(payload.clientId)) {
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, name: true, email: true, role: true, isActive: true }
+    });
+    if (!user || !user.isActive) return invalidToken(res, 'Compte utilisateur désactivé');
+
+    const scopes = filterScopesForUser(payload.scopes || [], user);
+    if (!scopes.length) return invalidToken(res, 'Aucun scope MCP autorisé pour cet utilisateur');
+
+    req.mcpToken = {
+      id: payload.clientId,
+      label: 'Connexion OAuth MCP',
+      scopes,
+      createdBy: user,
+      authMethod: 'oauth2_direct'
+    };
+    return next();
+  }
+
+  if (!payload.mcpTokenId) return invalidToken(res, 'JWT incomplet');
 
   const [mcpToken, user] = await Promise.all([
     prisma.mcpToken.findUnique({ where: { id: payload.mcpTokenId } }),

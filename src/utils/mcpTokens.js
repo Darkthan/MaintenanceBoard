@@ -19,6 +19,22 @@ const MCP_SCOPES = {
 const ALL_MCP_SCOPES = Object.values(MCP_SCOPES);
 
 const TOKEN_PREFIX = 'mcp_';
+const DIRECT_MCP_CLIENT_ID = 'maintenanceboard-direct-mcp';
+const DYNAMIC_MCP_CLIENT_PREFIX = 'mcp_dynamic_';
+
+const TECH_MCP_SCOPES = [
+  MCP_SCOPES.RESERVATIONS_READ,
+  MCP_SCOPES.RESERVATIONS_WRITE,
+  MCP_SCOPES.INTERVENTIONS_READ,
+  MCP_SCOPES.INTERVENTIONS_WRITE,
+  MCP_SCOPES.TODOS_READ,
+  MCP_SCOPES.TODOS_WRITE,
+  MCP_SCOPES.PROJECTS_READ,
+  MCP_SCOPES.PROJECTS_WRITE,
+  MCP_SCOPES.ORDERS_READ,
+  MCP_SCOPES.ORDERS_WRITE,
+  MCP_SCOPES.STOCK_READ
+];
 
 /**
  * Génère un nouveau secret MCP cryptographiquement aléatoire.
@@ -77,15 +93,36 @@ function hasScope(scopes, required) {
   return list.includes(required);
 }
 
+function isDirectMcpClientId(clientId) {
+  const value = String(clientId || '');
+  return value === DIRECT_MCP_CLIENT_ID || value.startsWith(DYNAMIC_MCP_CLIENT_PREFIX);
+}
+
+function getUserMcpScopes(user) {
+  if (user?.role === 'ADMIN') return ALL_MCP_SCOPES;
+  return TECH_MCP_SCOPES;
+}
+
+function filterScopesForUser(scopes, user) {
+  const requested = Array.isArray(scopes) ? scopes : parseScopes(scopes);
+  const allowed = getUserMcpScopes(user);
+  return requested.filter(scope => allowed.includes(scope));
+}
+
 module.exports = {
   MCP_SCOPES,
   ALL_MCP_SCOPES,
   TOKEN_PREFIX,
+  DIRECT_MCP_CLIENT_ID,
+  DYNAMIC_MCP_CLIENT_PREFIX,
   generateMcpToken,
   hashMcpToken,
   hasMcpTokenExpired,
   isMcpTokenUsable,
   parseScopes,
   serializeScopes,
-  hasScope
+  hasScope,
+  isDirectMcpClientId,
+  getUserMcpScopes,
+  filterScopesForUser
 };

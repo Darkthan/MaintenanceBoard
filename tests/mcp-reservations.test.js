@@ -246,6 +246,86 @@ describe('OAuth MCP refresh tokens', () => {
     expect(postRes.headers.location).toMatch(/^https:\/\/chatgpt\.com\/connector_platform_oauth_redirect\?code=/);
     expect(postRes.headers.location).toContain('state=state-1');
   });
+
+  it('autorise un client OAuth MCP direct sans token précréé en limitant les scopes au rôle utilisateur', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u-tech',
+      role: 'TECH',
+      isActive: true,
+      name: 'Tech',
+      email: 'tech@test.com'
+    });
+
+    const app = oauthTestApp();
+    const registerRes = await request(app)
+      .post('/oauth/register')
+      .send({
+        client_name: 'LLM local',
+        redirect_uris: ['https://llm.example.test/oauth/callback']
+      });
+
+    expect(registerRes.status).toBe(201);
+    expect(registerRes.body.client_id).toMatch(/^mcp_dynamic_/);
+    expect(registerRes.body.token_endpoint_auth_method).toBe('none');
+
+    const verifier = 'direct-verifier-1234567890';
+    const authorizeQuery = {
+      response_type: 'code',
+      client_id: registerRes.body.client_id,
+      redirect_uri: 'https://llm.example.test/oauth/callback',
+      scope: 'orders:read stock:write offline_access',
+      state: 'direct-state',
+      code_challenge: pkceChallenge(verifier),
+      code_challenge_method: 'S256'
+    };
+
+    const getRes = await request(app)
+      .get('/oauth/authorize')
+      .query(authorizeQuery);
+    expect(getRes.status).toBe(200);
+
+    const csrfCookie = getRes.headers['set-cookie'].find(c => c.startsWith('oauthCsrf='));
+    const csrf = decodeURIComponent(csrfCookie.split(';')[0].slice('oauthCsrf='.length));
+    const sessionToken = jwt.sign({ userId: 'u-tech' }, config.jwt.secret, { expiresIn: '15m' });
+
+    const postRes = await request(app)
+      .post('/oauth/authorize')
+      .set('Cookie', [`oauthCsrf=${encodeURIComponent(csrf)}`, `accessToken=${sessionToken}`])
+      .type('form')
+      .send({
+        ...authorizeQuery,
+        action: 'approve',
+        use_session: 'true',
+        oauth_csrf: csrf
+      });
+
+    expect(postRes.status).toBe(302);
+    const redirect = new URL(postRes.headers.location);
+    expect(redirect.searchParams.get('state')).toBe('direct-state');
+
+    const tokenRes = await request(app)
+      .post('/oauth/token')
+      .type('form')
+      .send({
+        grant_type: 'authorization_code',
+        code: redirect.searchParams.get('code'),
+        redirect_uri: 'https://llm.example.test/oauth/callback',
+        code_verifier: verifier
+      });
+
+    expect(tokenRes.status).toBe(200);
+    expect(tokenRes.body.scope).toBe('orders:read');
+    expect(tokenRes.body.refresh_token).toBeTruthy();
+
+    const req = { headers: { authorization: `Bearer ${tokenRes.body.access_token}` } };
+    const res = mockRes();
+    const next = jest.fn();
+    await mcpAuth(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.mcpToken.authMethod).toBe('oauth2_direct');
+    expect(req.mcpToken.scopes).toEqual(['orders:read']);
+  });
 });
 
 describe('reservationsService', () => {
