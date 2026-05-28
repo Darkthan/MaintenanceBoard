@@ -102,9 +102,21 @@ async function registerPasskey(name) {
 // ── Initialisation page login ─────────────────────────────────────────────────
 
 function initLoginPage() {
+  const safeNextUrl = () => {
+    const next = new URLSearchParams(window.location.search).get('next');
+    if (!next) return '/index.html';
+    try {
+      const url = new URL(next, window.location.origin);
+      if (url.origin !== window.location.origin) return '/index.html';
+      return url.pathname + url.search + url.hash;
+    } catch {
+      return '/index.html';
+    }
+  };
+
   // Vérifier si déjà connecté via le serveur
   apiFetch('/auth/me').then(() => {
-    window.location.href = '/index.html';
+    window.location.href = safeNextUrl();
   }).catch(() => {
     // Non connecté — afficher le formulaire normalement
   });
@@ -136,7 +148,7 @@ function initLoginPage() {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Connexion...';
       await loginWithPassword(email, password);
-      window.location.href = '/index.html';
+      window.location.href = safeNextUrl();
     } catch (err) {
       showError(err.message || 'Identifiants incorrects');
       submitBtn.disabled = false;
@@ -153,7 +165,7 @@ function initLoginPage() {
 
     try {
       await startPasskeyLogin(email);
-      window.location.href = '/index.html';
+      window.location.href = safeNextUrl();
     } catch (err) {
       showError(err.message || 'Authentification passkey échouée');
       passkeyBtn.disabled = false;

@@ -77,7 +77,7 @@ model McpToken {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   @@map("mcp_tokens")
 }

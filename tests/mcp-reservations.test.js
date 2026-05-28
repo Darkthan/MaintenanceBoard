@@ -211,6 +211,7 @@ describe('OAuth MCP refresh tokens', () => {
     prisma.user.findUnique.mockResolvedValue({ id: 'u1', isActive: true });
 
     const app = oauthTestApp();
+    const accessToken = jwt.sign({ userId: 'u1' }, config.jwt.secret, { expiresIn: '15m' });
     const authorizeQuery = {
       response_type: 'code',
       client_id: 't1',
@@ -223,12 +224,12 @@ describe('OAuth MCP refresh tokens', () => {
 
     const getRes = await request(app)
       .get('/oauth/authorize')
+      .set('Cookie', [`accessToken=${accessToken}`])
       .query(authorizeQuery);
     expect(getRes.status).toBe(200);
 
     const csrfCookie = getRes.headers['set-cookie'].find(c => c.startsWith('oauthCsrf='));
     const csrf = decodeURIComponent(csrfCookie.split(';')[0].slice('oauthCsrf='.length));
-    const accessToken = jwt.sign({ userId: 'u1' }, config.jwt.secret, { expiresIn: '15m' });
 
     const postRes = await request(app)
       .post('/oauth/authorize')
@@ -269,6 +270,7 @@ describe('OAuth MCP refresh tokens', () => {
     expect(registerRes.body.token_endpoint_auth_method).toBe('none');
 
     const verifier = 'direct-verifier-1234567890';
+    const sessionToken = jwt.sign({ userId: 'u-tech' }, config.jwt.secret, { expiresIn: '15m' });
     const authorizeQuery = {
       response_type: 'code',
       client_id: registerRes.body.client_id,
@@ -281,12 +283,12 @@ describe('OAuth MCP refresh tokens', () => {
 
     const getRes = await request(app)
       .get('/oauth/authorize')
+      .set('Cookie', [`accessToken=${sessionToken}`])
       .query(authorizeQuery);
     expect(getRes.status).toBe(200);
 
     const csrfCookie = getRes.headers['set-cookie'].find(c => c.startsWith('oauthCsrf='));
     const csrf = decodeURIComponent(csrfCookie.split(';')[0].slice('oauthCsrf='.length));
-    const sessionToken = jwt.sign({ userId: 'u-tech' }, config.jwt.secret, { expiresIn: '15m' });
 
     const postRes = await request(app)
       .post('/oauth/authorize')
@@ -316,6 +318,8 @@ describe('OAuth MCP refresh tokens', () => {
     expect(tokenRes.status).toBe(200);
     expect(tokenRes.body.scope).toBe('orders:read');
     expect(tokenRes.body.refresh_token).toBeTruthy();
+    const refreshPayload = jwt.decode(tokenRes.body.refresh_token);
+    expect(refreshPayload.exp - refreshPayload.iat).toBeGreaterThanOrEqual(364 * 24 * 60 * 60);
 
     const req = { headers: { authorization: `Bearer ${tokenRes.body.access_token}` } };
     const res = mockRes();

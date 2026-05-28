@@ -12,6 +12,7 @@ const {
 const { isValidRedirectUriFormat, parseRedirectUris } = require('./oauth');
 
 const router = express.Router();
+const DEFAULT_MCP_TOKEN_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
 router.use(requireAuth, requireAdmin);
 
@@ -85,7 +86,7 @@ router.post('/',
           tokenHash,
           scopes,
           redirectUris: serializeRedirectUris(req.body.redirectUris || []),
-          expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
+          expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : new Date(Date.now() + DEFAULT_MCP_TOKEN_TTL_MS),
           createdById: req.user.id
         },
         include: { createdBy: { select: { name: true, email: true } } }

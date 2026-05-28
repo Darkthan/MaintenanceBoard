@@ -22,7 +22,7 @@ const { generateCode, storeCode, consumeCode } = require('../lib/oauthCodes');
 const router = express.Router();
 
 const MCP_ACCESS_TOKEN_EXPIRES_IN = 900; // 15 minutes
-const MCP_REFRESH_TOKEN_EXPIRES_IN = '30d';
+const MCP_REFRESH_TOKEN_EXPIRES_IN = '365d';
 const OFFLINE_ACCESS_SCOPE = 'offline_access';
 const OAUTH_CSRF_COOKIE = 'oauthCsrf';
 const OAUTH_CSRF_EXPIRES_IN = 600; // 10 minutes
@@ -120,6 +120,21 @@ function setOAuthCsrfCookie(res, token) {
 
 function clearOAuthCsrfCookie(res) {
   res.clearCookie(OAUTH_CSRF_COOKIE, { path: '/oauth/authorize' });
+}
+
+async function userFromAccessCookie(req) {
+  const token = req.cookies?.accessToken;
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, config.jwt.secret);
+    if (!payload?.userId) return null;
+    return prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { id: true, isActive: true }
+    });
+  } catch {
+    return null;
+  }
 }
 
 function verifyOAuthCsrf(req, { clientId, redirectUri, codeChallenge }) {
@@ -320,6 +335,12 @@ router.get('/authorize', async (req, res) => {
   </div>
 </div>
 </body></html>`);
+  }
+
+  const currentUser = await userFromAccessCookie(req);
+  if (!currentUser?.isActive) {
+    const next = req.originalUrl || `/oauth/authorize?${new URLSearchParams(req.query).toString()}`;
+    return res.redirect(`/login.html?next=${encodeURIComponent(next)}`);
   }
 
   setOAuthCsrfCookie(res, signOAuthCsrfToken({
