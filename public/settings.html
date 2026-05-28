@@ -1046,12 +1046,32 @@
           </div>
         </div>
 
-        <!-- Explication -->
-        <div class="bg-indigo-50 border border-indigo-200 rounded-xl px-5 py-4 flex items-start gap-3">
-          <svg class="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-          <p class="text-sm text-indigo-800">Les tokens MCP permettent à des agents IA (Claude, etc.) d'accéder à l'API de réservation via <code class="bg-indigo-100 px-1 rounded text-xs">POST /mcp</code>. Chaque token a des scopes précis et peut expirer. Le secret n'est affiché qu'une seule fois à la création.</p>
+        <!-- Explication & OAuth2 -->
+        <div class="bg-white rounded-xl border border-indigo-200 divide-y divide-indigo-100">
+          <div class="px-5 py-4 flex items-start gap-3">
+            <svg class="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-slate-700">Les tokens MCP permettent à des agents IA (Claude, etc.) d'accéder à l'API de réservation via <code class="bg-slate-100 px-1 rounded text-xs">POST /mcp</code>. Deux modes d'authentification sont supportés : token natif direct ou JWT OAuth2 court-vécu.</p>
+          </div>
+          <div class="px-5 py-4 space-y-3">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">OAuth2 Client Credentials (recommandé)</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div class="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 space-y-1">
+                <p class="font-medium text-slate-700">Étape 1 — Obtenir un JWT (15 min)</p>
+                <code class="block text-slate-500 font-mono mt-1">POST /oauth/token</code>
+                <code class="block text-slate-500 font-mono">grant_type=client_credentials</code>
+                <code class="block text-slate-500 font-mono">client_id=&lt;UUID du token&gt;</code>
+                <code class="block text-slate-500 font-mono">client_secret=&lt;mcp_xxx…&gt;</code>
+              </div>
+              <div class="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 space-y-1">
+                <p class="font-medium text-slate-700">Étape 2 — Appeler le MCP</p>
+                <code class="block text-slate-500 font-mono mt-1">POST /mcp</code>
+                <code class="block text-slate-500 font-mono">Authorization: Bearer &lt;JWT&gt;</code>
+                <p class="text-slate-400 mt-1">Ou directement avec le token natif :<br><span class="font-mono">Authorization: Bearer mcp_xxx…</span></p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Tableau -->
@@ -1067,7 +1087,7 @@
           <table id="mcp-table" class="hidden w-full text-sm">
             <thead class="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Label / Préfixe</th>
+                <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Label / client_id</th>
                 <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Scopes</th>
                 <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Statut</th>
                 <th class="text-left px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider hidden md:table-cell">Expiration</th>
@@ -1332,9 +1352,17 @@
         </div>
       </div>
       <div id="mcp-secret-info" class="text-xs text-slate-500 space-y-1"></div>
-      <div class="pt-2">
-        <p class="text-xs text-slate-400 mb-3">Utilisez ce token dans l'en-tête HTTP de vos requêtes vers <code class="bg-slate-100 px-1 rounded">POST /mcp</code> :</p>
+      <div class="space-y-3 pt-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mode 1 — Token natif (direct)</p>
         <code class="block bg-slate-900 text-slate-100 rounded-lg px-4 py-3 text-xs font-mono overflow-x-auto">Authorization: Bearer <span id="mcp-secret-preview"></span></code>
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mode 2 — OAuth2 Client Credentials (recommandé)</p>
+        <code class="block bg-slate-900 text-slate-100 rounded-lg px-4 py-3 text-xs font-mono overflow-x-auto whitespace-pre">POST /oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials
+client_id=<span id="mcp-secret-client-id"></span>
+client_secret=<span id="mcp-secret-preview2"></span></code>
+        <p class="text-xs text-slate-400">Le JWT retourné est valable <strong>15 minutes</strong>. Utilisez-le ensuite comme Bearer sur <code class="bg-slate-100 px-1 rounded">POST /mcp</code>.</p>
       </div>
       <button type="button" onclick="closeMcpSecret()" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition">
         J'ai copié le token — Fermer
@@ -1906,7 +1934,8 @@ function renderMcpTokens() {
     return `<tr class="hover:bg-slate-50 transition">
       <td class="px-5 py-3.5">
         <p class="font-medium text-slate-800">${escHtml(t.label)}</p>
-        <p class="text-xs text-slate-400 font-mono mt-0.5">${escHtml(t.tokenPrefix)}…</p>
+        <p class="text-xs text-slate-400 font-mono mt-0.5" title="client_id (OAuth2)">${escHtml(t.id)}</p>
+        <p class="text-xs text-slate-300 font-mono">${escHtml(t.tokenPrefix)}…</p>
       </td>
       <td class="px-5 py-3.5"><div class="flex flex-wrap gap-1">${scopeBadges}</div></td>
       <td class="px-5 py-3.5">${statusBadge}</td>
@@ -1970,18 +1999,21 @@ async function submitCreateToken(e) {
 }
 
 function showMcpSecret(tokenData) {
-  document.getElementById('mcp-secret-value').value = tokenData.token || '';
-  document.getElementById('mcp-secret-preview').textContent = tokenData.token || '';
+  const secret = tokenData.token || '';
+  const clientId = tokenData.id || '';
+  document.getElementById('mcp-secret-value').value = secret;
+  document.getElementById('mcp-secret-preview').textContent = secret;
+  document.getElementById('mcp-secret-preview2').textContent = secret;
+  document.getElementById('mcp-secret-client-id').textContent = clientId;
   const info = document.getElementById('mcp-secret-info');
   const lines = [
     `Label : ${tokenData.label}`,
-    `Préfixe : ${tokenData.tokenPrefix}`,
+    `client_id (OAuth2) : ${clientId}`,
     `Scopes : ${(tokenData.scopes || []).join(', ')}`,
     tokenData.expiresAt ? `Expire le : ${new Date(tokenData.expiresAt).toLocaleString('fr-FR')}` : 'Pas d\'expiration'
   ];
   info.innerHTML = lines.map(l => `<p>${escHtml(l)}</p>`).join('');
   document.getElementById('modal-mcp-secret').classList.remove('hidden');
-  // Sélectionner le token pour faciliter la copie manuelle
   setTimeout(() => document.getElementById('mcp-secret-value').select(), 50);
 }
 
@@ -1989,6 +2021,8 @@ function closeMcpSecret() {
   document.getElementById('modal-mcp-secret').classList.add('hidden');
   document.getElementById('mcp-secret-value').value = '';
   document.getElementById('mcp-secret-preview').textContent = '';
+  document.getElementById('mcp-secret-preview2').textContent = '';
+  document.getElementById('mcp-secret-client-id').textContent = '';
 }
 
 async function copyMcpSecret() {

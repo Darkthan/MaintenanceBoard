@@ -141,6 +141,9 @@ app.use('/api/loan-request', loanPublicRouter);
 app.use('/api/nuget', require('./routes/nuget'));
 app.use('/api/mcp-tokens', require('./routes/mcpTokens'));
 
+// ── OAuth2 token endpoint (Client Credentials pour le MCP) ────────────────────
+app.use('/oauth', require('./routes/oauth'));
+
 // ── Serveur MCP (Model Context Protocol) ───────────────────────────────────────
 // Transport Streamable HTTP, authentifié par token MCP dédié (Bearer).
 const { mcpAuth } = require('./middleware/mcpAuth');
