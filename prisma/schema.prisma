@@ -68,8 +68,9 @@ model McpToken {
   label       String
   tokenPrefix String                            // Préfixe lisible (mcp_xxxxxxxx) affiché dans l'UI
   tokenHash   String    @unique                 // SHA-256 hex du secret complet (jamais le secret en clair)
-  scopes      String    @default("[]")          // JSON array de scopes : reservations:read | reservations:write
-  isActive    Boolean   @default(true)
+  scopes       String    @default("[]")          // JSON array de scopes : reservations:read | reservations:write
+  redirectUris String    @default("[]")          // JSON array de redirect_uri autorisées (OAuth2 Authorization Code)
+  isActive     Boolean   @default(true)
   expiresAt   DateTime?                          // null = pas d'expiration
   lastUsedAt  DateTime?
   createdById String

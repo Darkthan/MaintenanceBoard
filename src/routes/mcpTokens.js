@@ -9,6 +9,7 @@ const {
   serializeScopes,
   parseScopes
 } = require('../utils/mcpTokens');
+const { isValidRedirectUriFormat, parseRedirectUris } = require('./oauth');
 
 const router = express.Router();
 
@@ -23,6 +24,13 @@ function validate(req, res) {
   return true;
 }
 
+function serializeRedirectUris(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  return JSON.stringify(
+    [...new Set(list.map(u => String(u || '').trim()).filter(isValidRedirectUriFormat))]
+  );
+}
+
 // Représentation publique : jamais le hash, jamais le secret.
 function presentToken(token) {
   return {
@@ -30,6 +38,7 @@ function presentToken(token) {
     label: token.label,
     tokenPrefix: token.tokenPrefix,
     scopes: parseScopes(token.scopes),
+    redirectUris: parseRedirectUris(token.redirectUris),
     isActive: token.isActive,
     expiresAt: token.expiresAt,
     lastUsedAt: token.lastUsedAt,
@@ -50,13 +59,13 @@ router.get('/', async (_req, res, next) => {
 });
 
 // ── POST /api/mcp-tokens ────────────────────────────────────────────────────
-// Le secret en clair n'est retourné qu'ici, une seule fois.
 router.post('/',
   [
     body('label').trim().isLength({ min: 2, max: 200 }),
     body('scopes').isArray({ min: 1 }),
     body('scopes.*').isIn(ALL_MCP_SCOPES),
-    body('expiresAt').optional({ values: 'falsy' }).isISO8601()
+    body('expiresAt').optional({ values: 'falsy' }).isISO8601(),
+    body('redirectUris').optional().isArray()
   ],
   async (req, res, next) => {
     try {
@@ -75,6 +84,7 @@ router.post('/',
           tokenPrefix,
           tokenHash,
           scopes,
+          redirectUris: serializeRedirectUris(req.body.redirectUris || []),
           expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
           createdById: req.user.id
         },
@@ -97,7 +107,8 @@ router.patch('/:id',
     body('scopes').optional().isArray({ min: 1 }),
     body('scopes.*').optional().isIn(ALL_MCP_SCOPES),
     body('isActive').optional().isBoolean(),
-    body('expiresAt').optional({ nullable: true }).custom(v => v === null || !Number.isNaN(Date.parse(v)))
+    body('expiresAt').optional({ nullable: true }).custom(v => v === null || !Number.isNaN(Date.parse(v))),
+    body('redirectUris').optional().isArray()
   ],
   async (req, res, next) => {
     try {
@@ -108,6 +119,7 @@ router.patch('/:id',
       if (req.body.scopes !== undefined) data.scopes = serializeScopes(req.body.scopes);
       if (req.body.isActive !== undefined) data.isActive = !!req.body.isActive;
       if (req.body.expiresAt !== undefined) data.expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : null;
+      if (req.body.redirectUris !== undefined) data.redirectUris = serializeRedirectUris(req.body.redirectUris);
 
       const updated = await prisma.mcpToken.update({
         where: { id: req.params.id },
@@ -123,7 +135,6 @@ router.patch('/:id',
 );
 
 // ── DELETE /api/mcp-tokens/:id ──────────────────────────────────────────────
-// Révocation immédiate (désactivation). Le token reste tracé pour audit.
 router.delete('/:id', async (req, res, next) => {
   try {
     await prisma.mcpToken.update({

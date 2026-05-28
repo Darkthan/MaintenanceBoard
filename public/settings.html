@@ -1362,12 +1362,50 @@
           class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
         <p class="mt-1 text-xs text-slate-400">Laisser vide pour un token sans expiration.</p>
       </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">Redirect URIs autorisées <span class="text-slate-400 font-normal">(OAuth2 Authorization Code)</span></label>
+        <textarea id="mcp-redirect-uris" rows="3" placeholder="https://chatgpt.com/aip/p/...&#10;https://claude.ai/..."
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono"></textarea>
+        <p class="mt-1 text-xs text-slate-400">Une URL par ligne. Obligatoire pour que ChatGPT ou Claude.ai puisse s'authentifier via OAuth2. Seules les URLs <code class="bg-slate-100 px-1 rounded">https://</code> et <code class="bg-slate-100 px-1 rounded">localhost</code> sont acceptées.</p>
+      </div>
       <div id="mcp-create-error" class="hidden text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3"></div>
       <div class="flex gap-2 pt-1">
         <button type="button" onclick="closeCreateToken()" class="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition">Annuler</button>
         <button type="submit" class="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition">Générer le token</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL — Éditer les redirect URIs d'un token MCP
+═══════════════════════════════════════════════════════════ -->
+<div id="modal-mcp-uris" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div>
+        <h2 class="font-semibold text-slate-800">Redirect URIs</h2>
+        <p id="mcp-uris-label" class="text-xs text-slate-400 mt-0.5"></p>
+      </div>
+      <button onclick="closeMcpUris()" class="p-1 text-slate-400 hover:text-slate-600 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">URLs autorisées <span class="text-slate-400 font-normal">(une par ligne)</span></label>
+        <textarea id="mcp-uris-value" rows="5" placeholder="https://chatgpt.com/aip/p/...&#10;https://claude.ai/..."
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono"></textarea>
+        <p class="mt-1 text-xs text-slate-400">Seules <code class="bg-slate-100 px-1 rounded">https://</code> et <code class="bg-slate-100 px-1 rounded">localhost</code> sont acceptées.</p>
+      </div>
+      <div id="mcp-uris-error" class="hidden text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3"></div>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeMcpUris()" class="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition">Annuler</button>
+        <button type="button" onclick="saveMcpUris()" class="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition">Enregistrer</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1921,6 +1959,7 @@ document.addEventListener('keydown', e => {
   closeCreate();
   closeCreateToken();
   closeMcpSecret();
+  closeMcpUris();
 });
 
 // ─── Tokens MCP ────────────────────────────────────────────────────────────
@@ -2010,6 +2049,11 @@ function renderMcpTokens() {
     const actionToggle = t.isActive
       ? `<button onclick="revokeMcpToken('${escHtml(t.id)}')" class="text-xs px-3 py-1.5 border border-rose-200 text-rose-700 rounded-lg hover:bg-rose-50 transition whitespace-nowrap">Révoquer</button>`
       : `<button onclick="reactivateMcpToken('${escHtml(t.id)}')" class="text-xs px-3 py-1.5 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-50 transition whitespace-nowrap">Réactiver</button>`;
+    const urisCount = (t.redirectUris || []).length;
+    const urisBadge = urisCount
+      ? `<span class="text-xs text-emerald-600" title="${escHtml((t.redirectUris || []).join('\n'))}">${urisCount} URI${urisCount > 1 ? 's' : ''}</span>`
+      : `<span class="text-xs text-amber-600" title="Aucune redirect URI — le flux Authorization Code (ChatGPT) ne fonctionnera pas">⚠ Aucune URI</span>`;
+
     return `<tr class="hover:bg-slate-50 transition">
       <td class="px-5 py-3.5">
         <p class="font-medium text-slate-800">${escHtml(t.label)}</p>
@@ -2021,7 +2065,13 @@ function renderMcpTokens() {
       <td class="px-5 py-3.5 text-sm hidden md:table-cell ${expired ? 'text-amber-600' : 'text-slate-500'}">${formatMcpDate(t.expiresAt)}</td>
       <td class="px-5 py-3.5 text-sm text-slate-500 hidden lg:table-cell">${formatMcpDate(t.lastUsedAt)}</td>
       <td class="px-5 py-3.5 text-sm text-slate-500 hidden xl:table-cell">${t.createdBy ? escHtml(t.createdBy.name) : '—'}</td>
-      <td class="px-5 py-3.5 text-right">${actionToggle}</td>
+      <td class="px-5 py-3.5 text-right">
+        <div class="flex items-center justify-end gap-2">
+          ${urisBadge}
+          <button onclick="openMcpUris('${escHtml(t.id)}')" class="text-xs px-2.5 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition" title="Gérer les redirect URIs">URIs</button>
+          ${actionToggle}
+        </div>
+      </td>
     </tr>`;
   }).join('');
   document.getElementById('mcp-table').classList.remove('hidden');
@@ -2030,9 +2080,51 @@ function renderMcpTokens() {
 function openCreateToken() {
   document.getElementById('mcp-create-form').reset();
   document.getElementById('mcp-create-error').classList.add('hidden');
-  // Cocher reservations:read par défaut
+  document.getElementById('mcp-redirect-uris').value = '';
   document.querySelector('#mcp-create-form input[value="reservations:read"]').checked = true;
   document.getElementById('modal-mcp-create').classList.remove('hidden');
+}
+
+// ─── Redirect URIs ─────────────────────────────────────────────────────────
+let currentMcpUrisId = null;
+
+function openMcpUris(id) {
+  const token = mcpTokens.find(t => t.id === id);
+  if (!token) return;
+  currentMcpUrisId = id;
+  document.getElementById('mcp-uris-label').textContent = token.label;
+  document.getElementById('mcp-uris-value').value = (token.redirectUris || []).join('\n');
+  document.getElementById('mcp-uris-error').classList.add('hidden');
+  document.getElementById('modal-mcp-uris').classList.remove('hidden');
+}
+
+function closeMcpUris() {
+  document.getElementById('modal-mcp-uris').classList.add('hidden');
+  currentMcpUrisId = null;
+}
+
+async function saveMcpUris() {
+  if (!currentMcpUrisId) return;
+  const errEl = document.getElementById('mcp-uris-error');
+  errEl.classList.add('hidden');
+  const redirectUris = document.getElementById('mcp-uris-value').value
+    .split('\n').map(u => u.trim()).filter(Boolean);
+  const res = await fetch(`/api/mcp-tokens/${currentMcpUrisId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ redirectUris })
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    errEl.textContent = json.error || json.errors?.[0]?.msg || 'Erreur';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  showToast('Redirect URIs enregistrées', 'success');
+  closeMcpUris();
+  mcpTokens = [];
+  loadMcpTokens();
 }
 
 function closeCreateToken() {
@@ -2052,9 +2144,12 @@ async function submitCreateToken(e) {
   }
 
   const expiresAt = document.getElementById('mcp-expires-at').value || null;
+  const redirectUris = document.getElementById('mcp-redirect-uris').value
+    .split('\n').map(u => u.trim()).filter(Boolean);
   const body = {
     label: document.getElementById('mcp-label').value.trim(),
     scopes,
+    redirectUris,
     expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null
   };
 

@@ -27,26 +27,36 @@ const authorizeLimiter = rateLimit({
   message: { error: 'rate_limit_exceeded', error_description: 'Trop de tentatives.' }
 });
 
-// ── Validation redirect_uri ─────────────────────────────────────────────────
-function isValidRedirectUri(uri) {
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function parseRedirectUris(raw) {
+  try {
+    const arr = JSON.parse(raw || '[]');
+    return Array.isArray(arr) ? arr.filter(u => typeof u === 'string' && u.length > 0) : [];
+  } catch { return []; }
+}
+
+/** Vérifie que la redirect_uri est dans la liste enregistrée du client (exact match). */
+function isRegisteredUri(registered, uri) {
+  return Array.isArray(registered) && registered.includes(uri);
+}
+
+/** Valide le format d'une redirect_uri candidate (utilisé à l'enregistrement). */
+function isValidRedirectUriFormat(uri) {
   if (!uri) return false;
   try {
     const url = new URL(uri);
     return url.protocol === 'https:' ||
       url.hostname === 'localhost' ||
       url.hostname === '127.0.0.1';
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 // ── GET /oauth/client-info?client_id=xxx ────────────────────────────────────
-// Endpoint public : label + scopes d'un McpToken (sans secret).
-// Utilisé par la page de consentement pour afficher le nom de l'application.
+// Endpoint public : label + scopes d'un McpToken (sans secret, sans redirectUris).
 router.get('/client-info', async (req, res) => {
   const { client_id } = req.query;
   if (!client_id) return res.status(400).json({ error: 'client_id manquant' });
-
   try {
     const record = await prisma.mcpToken.findUnique({
       where: { id: String(client_id) },
@@ -56,15 +66,17 @@ router.get('/client-info', async (req, res) => {
       return res.status(404).json({ error: 'Client non trouvé ou inactif' });
     }
     res.json({ label: record.label, scopes: parseScopes(record.scopes) });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
-// ── GET /oauth/authorize ────────────────────────────────────────────────────
-// Valide les paramètres OAuth2 et sert la page de consentement.
-router.get('/authorize', (req, res) => {
-  const { response_type, client_id, redirect_uri, code_challenge_method } = req.query;
+// ── GET /oauth/authorize ─────────────────────────────────────────────────────
+// Valide les paramètres et sert la page de consentement.
+// SÉCURITÉ : redirect_uri validée contre la liste enregistrée AVANT toute réponse.
+//            PKCE (code_challenge S256) obligatoire.
+router.get('/authorize', async (req, res) => {
+  const { response_type, client_id, redirect_uri, code_challenge, code_challenge_method } = req.query;
 
   if (response_type !== 'code') {
     return res.status(400).send('response_type doit être "code".');
@@ -72,18 +84,46 @@ router.get('/authorize', (req, res) => {
   if (!client_id) {
     return res.status(400).send('client_id manquant.');
   }
-  if (!isValidRedirectUri(redirect_uri)) {
-    return res.status(400).send('redirect_uri invalide ou manquant (doit être https:// ou localhost).');
+
+  // PKCE obligatoire — rejeté ici pour ne pas avoir à le gérer dans le POST
+  if (!code_challenge) {
+    return res.status(400).send('PKCE obligatoire : code_challenge manquant.');
   }
-  if (code_challenge_method && code_challenge_method !== 'S256') {
+  if (code_challenge_method !== 'S256') {
     return res.status(400).send('Seul S256 est supporté pour code_challenge_method.');
+  }
+
+  // Résoudre le client et valider la redirect_uri AVANT de servir la page
+  // (ne jamais rediriger vers une URI non enregistrée, même pour signaler une erreur)
+  let mcpToken;
+  try {
+    mcpToken = await prisma.mcpToken.findUnique({
+      where: { id: String(client_id) },
+      select: { label: true, redirectUris: true, isActive: true, expiresAt: true }
+    });
+  } catch {
+    return res.status(500).send('Erreur interne.');
+  }
+
+  if (!mcpToken || !isMcpTokenUsable(mcpToken)) {
+    return res.status(400).send('Client OAuth invalide ou inactif.');
+  }
+
+  const registered = parseRedirectUris(mcpToken.redirectUris);
+  if (!redirect_uri || !isRegisteredUri(registered, redirect_uri)) {
+    // Ne pas rediriger — afficher une page d'erreur directement
+    return res.status(400).send(
+      'redirect_uri non enregistrée pour ce client. ' +
+      'Ajoutez cette URI dans la configuration du token MCP (Paramètres → Tokens MCP).'
+    );
   }
 
   res.sendFile(path.join(__dirname, '../../public/oauth-authorize.html'));
 });
 
-// ── POST /oauth/authorize ───────────────────────────────────────────────────
+// ── POST /oauth/authorize ────────────────────────────────────────────────────
 // Traite la soumission du formulaire de consentement.
+// SÉCURITÉ : redirect_uri validée avant tout redirect, même en cas d'erreur.
 router.post('/authorize', authorizeLimiter, async (req, res) => {
   const {
     client_id, redirect_uri, scope, state,
@@ -91,10 +131,24 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
     email, password, action
   } = req.body;
 
+  // ── 1. Valider client et redirect_uri EN PREMIER (avant tout redirect) ──────
+  let mcpToken;
+  try {
+    mcpToken = client_id
+      ? await prisma.mcpToken.findUnique({ where: { id: String(client_id) } })
+      : null;
+  } catch {
+    return res.status(500).send('Erreur interne.');
+  }
+
+  const registered = parseRedirectUris(mcpToken?.redirectUris);
+  if (!mcpToken || !isMcpTokenUsable(mcpToken) || !redirect_uri || !isRegisteredUri(registered, redirect_uri)) {
+    // Erreur de configuration : afficher une page, ne pas rediriger
+    return res.status(400).send('Paramètres OAuth2 invalides (client ou redirect_uri non enregistrée).');
+  }
+
+  // ── 2. À partir d'ici redirect_uri est de confiance — on peut rediriger ──────
   function redirectError(error, description) {
-    if (!isValidRedirectUri(redirect_uri)) {
-      return res.status(400).send('redirect_uri invalide : ' + error);
-    }
     const url = new URL(redirect_uri);
     url.searchParams.set('error', error);
     if (description) url.searchParams.set('error_description', description);
@@ -102,9 +156,11 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
     return res.redirect(url.toString());
   }
 
-  if (!client_id || !isValidRedirectUri(redirect_uri)) {
-    return res.status(400).send('Paramètres OAuth2 invalides.');
+  // PKCE obligatoire
+  if (!code_challenge || code_challenge_method !== 'S256') {
+    return redirectError('invalid_request', 'PKCE S256 obligatoire');
   }
+
   if (action !== 'approve') {
     return redirectError('access_denied', "Accès refusé par l'utilisateur");
   }
@@ -113,12 +169,6 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
   }
 
   try {
-    // Vérifier le client (McpToken)
-    const mcpToken = await prisma.mcpToken.findUnique({ where: { id: String(client_id) } });
-    if (!mcpToken || !isMcpTokenUsable(mcpToken)) {
-      return redirectError('invalid_client', 'Client invalide ou révoqué');
-    }
-
     // Vérifier les identifiants MaintenanceBoard
     const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase().trim() } });
     if (!user || !user.isActive || !user.password) {
@@ -137,15 +187,14 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
       return redirectError('invalid_scope', 'Aucun scope valide accordé');
     }
 
-    // Générer et stocker le code d'autorisation
     const code = generateCode();
     storeCode(code, {
       userId: user.id,
       mcpTokenId: mcpToken.id,
       scopes: grantedScopes,
       redirectUri: redirect_uri,
-      codeChallenge: code_challenge || null,
-      codeChallengeMethod: code_challenge_method || null
+      codeChallenge: code_challenge,        // toujours présent (PKCE obligatoire)
+      codeChallengeMethod: code_challenge_method
     });
 
     const url = new URL(redirect_uri);
@@ -158,10 +207,9 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
   }
 });
 
-// ── POST /oauth/token ───────────────────────────────────────────────────────
+// ── POST /oauth/token ────────────────────────────────────────────────────────
 router.post('/token', tokenLimiter, async (req, res) => {
   try {
-    // Extraire les identifiants client (Basic Auth ou body)
     let clientId, clientSecret;
     const authHeader = req.headers.authorization || '';
     if (authHeader.startsWith('Basic ')) {
@@ -177,7 +225,7 @@ router.post('/token', tokenLimiter, async (req, res) => {
 
     const grantType = req.body.grant_type;
 
-    // ── Authorization Code ─────────────────────────────────────────────────
+    // ── Authorization Code ───────────────────────────────────────────────────
     if (grantType === 'authorization_code') {
       const { code, redirect_uri, code_verifier } = req.body;
       if (!code) return oauthError(res, 'invalid_request', 'code manquant');
@@ -189,22 +237,25 @@ router.post('/token', tokenLimiter, async (req, res) => {
         return oauthError(res, 'invalid_grant', 'redirect_uri ne correspond pas');
       }
 
-      // Vérification PKCE (obligatoire si code_challenge était présent)
-      if (codeData.codeChallenge) {
-        if (!code_verifier) return oauthError(res, 'invalid_request', 'code_verifier manquant');
-        const expected = crypto.createHash('sha256').update(code_verifier).digest('base64url');
-        if (expected !== codeData.codeChallenge) {
-          return oauthError(res, 'invalid_grant', 'code_verifier invalide (PKCE)');
-        }
+      // PKCE obligatoire — le code a forcément un codeChallenge (enforced au GET /authorize)
+      if (!code_verifier) {
+        return oauthError(res, 'invalid_request', 'code_verifier manquant (PKCE obligatoire)');
+      }
+      if (!codeData.codeChallenge) {
+        // Ne devrait pas arriver (PKCE enforced au GET), mais défense en profondeur
+        return oauthError(res, 'invalid_grant', 'Code émis sans PKCE — rejeté');
+      }
+      const expected = crypto.createHash('sha256').update(code_verifier).digest('base64url');
+      if (expected !== codeData.codeChallenge) {
+        return oauthError(res, 'invalid_grant', 'code_verifier invalide (PKCE)');
       }
 
-      // Vérifier que McpToken et utilisateur sont toujours actifs
       const [mcpToken, user] = await Promise.all([
         prisma.mcpToken.findUnique({ where: { id: codeData.mcpTokenId } }),
         prisma.user.findUnique({ where: { id: codeData.userId }, select: { id: true, isActive: true } })
       ]);
       if (!mcpToken || !isMcpTokenUsable(mcpToken)) return oauthError(res, 'invalid_client', 'Client révoqué');
-      if (!user || !user.isActive) return oauthError(res, 'access_denied', 'Compte utilisateur désactivé');
+      if (!user || !user.isActive) return oauthError(res, 'access_denied', 'Compte désactivé');
 
       const accessToken = jwt.sign(
         { sub: codeData.userId, type: 'mcp_user_access', scopes: codeData.scopes, mcpTokenId: codeData.mcpTokenId },
@@ -222,7 +273,7 @@ router.post('/token', tokenLimiter, async (req, res) => {
       });
     }
 
-    // ── Client Credentials ─────────────────────────────────────────────────
+    // ── Client Credentials ───────────────────────────────────────────────────
     if (grantType === 'client_credentials') {
       if (!clientId || !clientSecret) {
         return oauthError(res, 'invalid_client', 'client_id et client_secret sont obligatoires');
@@ -233,7 +284,6 @@ router.post('/token', tokenLimiter, async (req, res) => {
         include: { createdBy: { select: { id: true, isActive: true } } }
       });
 
-      // Comparaison en temps constant (protection timing attack)
       const actualHash = hashMcpToken(clientSecret);
       const hashMatch = record ? record.tokenHash === actualHash : false;
 
@@ -272,4 +322,4 @@ function oauthError(res, error, description) {
   return res.status(400).json({ error, error_description: description });
 }
 
-module.exports = router;
+module.exports = { router, isValidRedirectUriFormat, parseRedirectUris };

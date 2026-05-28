@@ -143,7 +143,7 @@ app.use('/api/mcp-tokens', require('./routes/mcpTokens'));
 
 // ── OAuth2 (discovery + token + authorize) ────────────────────────────────────
 app.use('/.well-known', require('./routes/wellKnown'));
-app.use('/oauth', require('./routes/oauth'));
+app.use('/oauth', require('./routes/oauth').router);
 
 // ── Serveur MCP (Model Context Protocol) ───────────────────────────────────────
 // Transport Streamable HTTP, authentifié par token MCP dédié (Bearer).
