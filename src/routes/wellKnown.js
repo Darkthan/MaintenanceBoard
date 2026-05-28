@@ -4,6 +4,7 @@ const config = require('../config');
 const { ALL_MCP_SCOPES } = require('../utils/mcpTokens');
 
 const base = () => config.appUrl.replace(/\/$/, '');
+const OAUTH_SCOPES = [...ALL_MCP_SCOPES, 'offline_access'];
 
 /**
  * RFC 8414 — OAuth 2.0 Authorization Server Metadata.
@@ -16,10 +17,10 @@ router.get('/oauth-authorization-server', (_req, res) => {
     authorization_endpoint: `${b}/oauth/authorize`,
     token_endpoint: `${b}/oauth/token`,
     response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code', 'client_credentials'],
+    grant_types_supported: ['authorization_code', 'refresh_token', 'client_credentials'],
     code_challenge_methods_supported: ['S256'],
     token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
-    scopes_supported: ALL_MCP_SCOPES,
+    scopes_supported: OAUTH_SCOPES,
     service_documentation: `${b}/api-docs`
   });
 });

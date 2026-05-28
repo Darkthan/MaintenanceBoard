@@ -12,6 +12,8 @@ const { generateCode, storeCode, consumeCode } = require('../lib/oauthCodes');
 const router = express.Router();
 
 const MCP_ACCESS_TOKEN_EXPIRES_IN = 900; // 15 minutes
+const MCP_REFRESH_TOKEN_EXPIRES_IN = '30d';
+const OFFLINE_ACCESS_SCOPE = 'offline_access';
 
 const tokenLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -50,6 +52,33 @@ function isValidRedirectUriFormat(uri) {
       url.hostname === 'localhost' ||
       url.hostname === '127.0.0.1';
   } catch { return false; }
+}
+
+function signMcpUserAccessToken({ userId, mcpTokenId, scopes }) {
+  return jwt.sign(
+    { sub: userId, type: 'mcp_user_access', scopes, mcpTokenId },
+    config.jwt.secret,
+    { expiresIn: MCP_ACCESS_TOKEN_EXPIRES_IN }
+  );
+}
+
+function signMcpRefreshToken({ userId, mcpTokenId, scopes }) {
+  return jwt.sign(
+    { sub: userId, type: 'mcp_user_refresh', scopes, mcpTokenId },
+    config.jwt.secret,
+    { expiresIn: MCP_REFRESH_TOKEN_EXPIRES_IN }
+  );
+}
+
+function accessTokenResponse({ accessToken, scopes, refreshToken }) {
+  const body = {
+    access_token: accessToken,
+    token_type: 'Bearer',
+    expires_in: MCP_ACCESS_TOKEN_EXPIRES_IN,
+    scope: scopes.join(' ')
+  };
+  if (refreshToken) body.refresh_token = refreshToken;
+  return body;
 }
 
 // ── GET /oauth/client-info?client_id=xxx ────────────────────────────────────
@@ -253,6 +282,7 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
     const allowedScopes = parseScopes(mcpToken.scopes);
     const requestedScopes = scope ? scope.split(' ').filter(Boolean) : allowedScopes;
     const grantedScopes = requestedScopes.filter(s => allowedScopes.includes(s));
+    const issueRefreshToken = requestedScopes.includes(OFFLINE_ACCESS_SCOPE);
     if (!grantedScopes.length) {
       return redirectError('invalid_scope', 'Aucun scope valide accordé');
     }
@@ -264,7 +294,8 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
       scopes: grantedScopes,
       redirectUri: redirect_uri,
       codeChallenge: code_challenge,        // toujours présent (PKCE obligatoire)
-      codeChallengeMethod: code_challenge_method
+      codeChallengeMethod: code_challenge_method,
+      issueRefreshToken
     });
 
     const url = new URL(redirect_uri);
@@ -327,20 +358,67 @@ router.post('/token', tokenLimiter, async (req, res) => {
       if (!mcpToken || !isMcpTokenUsable(mcpToken)) return oauthError(res, 'invalid_client', 'Client révoqué');
       if (!user || !user.isActive) return oauthError(res, 'access_denied', 'Compte désactivé');
 
-      const accessToken = jwt.sign(
-        { sub: codeData.userId, type: 'mcp_user_access', scopes: codeData.scopes, mcpTokenId: codeData.mcpTokenId },
-        config.jwt.secret,
-        { expiresIn: MCP_ACCESS_TOKEN_EXPIRES_IN }
-      );
+      const accessToken = signMcpUserAccessToken({
+        userId: codeData.userId,
+        mcpTokenId: codeData.mcpTokenId,
+        scopes: codeData.scopes
+      });
+      const refreshToken = codeData.issueRefreshToken
+        ? signMcpRefreshToken({
+            userId: codeData.userId,
+            mcpTokenId: codeData.mcpTokenId,
+            scopes: codeData.scopes
+          })
+        : null;
 
       prisma.mcpToken.update({ where: { id: codeData.mcpTokenId }, data: { lastUsedAt: new Date() } }).catch(() => {});
 
-      return res.json({
-        access_token: accessToken,
-        token_type: 'Bearer',
-        expires_in: MCP_ACCESS_TOKEN_EXPIRES_IN,
-        scope: codeData.scopes.join(' ')
+      return res.json(accessTokenResponse({ accessToken, scopes: codeData.scopes, refreshToken }));
+    }
+
+    // ── Refresh Token ───────────────────────────────────────────────────────
+    if (grantType === 'refresh_token') {
+      const refreshToken = req.body.refresh_token;
+      if (!refreshToken) return oauthError(res, 'invalid_request', 'refresh_token manquant');
+
+      let payload;
+      try {
+        payload = jwt.verify(refreshToken, config.jwt.secret);
+      } catch {
+        return oauthError(res, 'invalid_grant', 'refresh_token invalide ou expiré');
+      }
+
+      if (payload.type !== 'mcp_user_refresh' || !payload.sub || !payload.mcpTokenId) {
+        return oauthError(res, 'invalid_grant', 'refresh_token non reconnu');
+      }
+
+      const [mcpToken, user] = await Promise.all([
+        prisma.mcpToken.findUnique({ where: { id: payload.mcpTokenId } }),
+        prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, isActive: true } })
+      ]);
+      if (!mcpToken || !isMcpTokenUsable(mcpToken)) return oauthError(res, 'invalid_client', 'Client révoqué');
+      if (!user || !user.isActive) return oauthError(res, 'access_denied', 'Compte désactivé');
+
+      const allowedScopes = parseScopes(mcpToken.scopes);
+      const scopes = Array.isArray(payload.scopes)
+        ? payload.scopes.filter(s => allowedScopes.includes(s))
+        : allowedScopes;
+      if (!scopes.length) return oauthError(res, 'invalid_scope', 'Aucun scope valide accordé');
+
+      const accessToken = signMcpUserAccessToken({
+        userId: payload.sub,
+        mcpTokenId: payload.mcpTokenId,
+        scopes
       });
+      const rotatedRefreshToken = signMcpRefreshToken({
+        userId: payload.sub,
+        mcpTokenId: payload.mcpTokenId,
+        scopes
+      });
+
+      prisma.mcpToken.update({ where: { id: payload.mcpTokenId }, data: { lastUsedAt: new Date() } }).catch(() => {});
+
+      return res.json(accessTokenResponse({ accessToken, scopes, refreshToken: rotatedRefreshToken }));
     }
 
     // ── Client Credentials ───────────────────────────────────────────────────
@@ -381,7 +459,7 @@ router.post('/token', tokenLimiter, async (req, res) => {
       });
     }
 
-    return oauthError(res, 'unsupported_grant_type', 'Seuls authorization_code et client_credentials sont supportés');
+    return oauthError(res, 'unsupported_grant_type', 'Seuls authorization_code, refresh_token et client_credentials sont supportés');
   } catch (err) {
     console.error('OAuth /token error:', err);
     return oauthError(res, 'server_error', 'Erreur interne');

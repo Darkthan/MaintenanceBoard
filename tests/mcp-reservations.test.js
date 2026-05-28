@@ -1,10 +1,14 @@
 jest.mock('../src/lib/prisma', () => ({
   mcpToken: { findUnique: jest.fn(), update: jest.fn() },
+  user: { findUnique: jest.fn() },
   loanResource: { findUnique: jest.fn(), findMany: jest.fn() },
   loanReservation: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   signatureRequest: { findUnique: jest.fn() }
 }));
 
+const crypto = require('crypto');
+const express = require('express');
+const request = require('supertest');
 const prisma = require('../src/lib/prisma');
 const {
   generateMcpToken,
@@ -15,7 +19,20 @@ const {
   hasMcpTokenExpired
 } = require('../src/utils/mcpTokens');
 const { mcpAuth } = require('../src/middleware/mcpAuth');
+const { generateCode, storeCode } = require('../src/lib/oauthCodes');
 const service = require('../src/mcp/reservationsService');
+
+function oauthTestApp() {
+  const app = express();
+  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json());
+  app.use('/oauth', require('../src/routes/oauth').router);
+  return app;
+}
+
+function pkceChallenge(verifier) {
+  return crypto.createHash('sha256').update(verifier).digest('base64url');
+}
 
 function mockRes() {
   return {
@@ -112,6 +129,62 @@ describe('mcpAuth middleware', () => {
     expect(next).toHaveBeenCalled();
     expect(req.mcpToken.scopes).toEqual(['reservations:read', 'reservations:write']);
     expect(req.mcpToken.createdBy.id).toBe('u1');
+  });
+});
+
+describe('OAuth MCP refresh tokens', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('émet puis renouvelle un access token MCP avec offline_access', async () => {
+    const verifier = 'test-verifier-1234567890';
+    const code = generateCode();
+    storeCode(code, {
+      userId: 'u1',
+      mcpTokenId: 't1',
+      scopes: ['reservations:read'],
+      redirectUri: 'https://chatgpt.com/connector_platform_oauth_redirect',
+      codeChallenge: pkceChallenge(verifier),
+      codeChallengeMethod: 'S256',
+      issueRefreshToken: true
+    });
+
+    prisma.mcpToken.findUnique.mockResolvedValue({
+      id: 't1',
+      isActive: true,
+      expiresAt: null,
+      scopes: serializeScopes(['reservations:read', 'reservations:write'])
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1', isActive: true });
+    prisma.mcpToken.update.mockResolvedValue({});
+
+    const app = oauthTestApp();
+    const tokenRes = await request(app)
+      .post('/oauth/token')
+      .type('form')
+      .send({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: 'https://chatgpt.com/connector_platform_oauth_redirect',
+        code_verifier: verifier
+      });
+
+    expect(tokenRes.status).toBe(200);
+    expect(tokenRes.body.access_token).toBeTruthy();
+    expect(tokenRes.body.refresh_token).toBeTruthy();
+    expect(tokenRes.body.scope).toBe('reservations:read');
+
+    const refreshRes = await request(app)
+      .post('/oauth/token')
+      .type('form')
+      .send({
+        grant_type: 'refresh_token',
+        refresh_token: tokenRes.body.refresh_token
+      });
+
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body.access_token).toBeTruthy();
+    expect(refreshRes.body.refresh_token).toBeTruthy();
+    expect(refreshRes.body.scope).toBe('reservations:read');
   });
 });
 
