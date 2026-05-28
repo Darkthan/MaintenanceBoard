@@ -4,7 +4,11 @@ jest.mock('../src/lib/prisma', () => ({
   todo: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   project: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   kanbanColumn: { findFirst: jest.fn(), create: jest.fn() },
-  kanbanCard: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() }
+  kanbanCard: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+  order: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+  stockItem: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+  stockMovement: { findMany: jest.fn(), create: jest.fn() },
+  $transaction: jest.fn()
 }));
 
 const prisma = require('../src/lib/prisma');
@@ -22,6 +26,10 @@ describe('MCP work service', () => {
       'todos:write',
       'projects:read',
       'projects:write',
+      'orders:read',
+      'orders:write',
+      'stock:read',
+      'stock:write',
       'bogus'
     ]))).toEqual([
       'interventions:read',
@@ -29,7 +37,11 @@ describe('MCP work service', () => {
       'todos:read',
       'todos:write',
       'projects:read',
-      'projects:write'
+      'projects:write',
+      'orders:read',
+      'orders:write',
+      'stock:read',
+      'stock:write'
     ]);
   });
 
@@ -130,5 +142,65 @@ describe('MCP work service', () => {
       })
     }));
     expect(out.id).toBe('card-1');
+  });
+
+  it('crée une commande liée à une intervention avec ses lignes', async () => {
+    prisma.order.create.mockImplementation(async ({ data }) => ({
+      id: 'ord-1',
+      ...data,
+      deploymentTags: data.deploymentTags,
+      requester: { id: data.requestedBy, name: 'Admin', email: 'admin@test.com' },
+      intervention: { id: data.interventionId, title: 'Intervention', status: 'OPEN', priority: 'NORMAL' },
+      supplierRef: null,
+      items: data.items.create.map((item, index) => ({ id: `line-${index + 1}`, orderId: 'ord-1', ...item })),
+      createdAt: new Date('2030-01-01T08:00:00Z'),
+      updatedAt: new Date('2030-01-01T08:00:00Z')
+    }));
+
+    const out = await work.createOrder({
+      title: 'Commander alimentation',
+      interventionId: 'int-1',
+      deploymentTags: ['pc', 'urgence'],
+      items: [{ name: 'Alimentation 500W', quantity: 2, unitPrice: 45, priceType: 'HT' }]
+    }, { userId: 'u1' });
+
+    expect(prisma.order.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        title: 'Commander alimentation',
+        requestedBy: 'u1',
+        interventionId: 'int-1',
+        items: { create: [expect.objectContaining({ name: 'Alimentation 500W', quantity: 2, priceType: 'HT' })] }
+      })
+    }));
+    expect(out.id).toBe('ord-1');
+    expect(out.deploymentTags).toEqual(['pc', 'urgence']);
+  });
+
+  it('crée un mouvement de stock et met à jour la quantité', async () => {
+    prisma.stockItem.findUnique.mockResolvedValue({ id: 'stock-1', name: 'Toner', quantity: 5 });
+    prisma.stockMovement.create.mockImplementation(({ data, include }) => Promise.resolve({
+      id: 'mov-1',
+      ...data,
+      include,
+      user: { id: data.userId, name: 'Admin' },
+      stockItem: { id: data.stockItemId, name: 'Toner', quantity: 2 },
+      createdAt: new Date('2030-01-01T08:00:00Z')
+    }));
+    prisma.stockItem.update.mockResolvedValue({ id: 'stock-1', quantity: 2 });
+    prisma.$transaction.mockImplementation(async operations => Promise.all(operations));
+
+    const out = await work.createStockMovement({
+      stockItemId: 'stock-1',
+      type: 'OUT',
+      quantity: 3,
+      reason: 'Intervention',
+      interventionId: 'int-1'
+    }, { userId: 'u1' });
+
+    expect(prisma.stockItem.update).toHaveBeenCalledWith({
+      where: { id: 'stock-1' },
+      data: { quantity: 2 }
+    });
+    expect(out.id).toBe('mov-1');
   });
 });

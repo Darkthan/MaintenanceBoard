@@ -257,7 +257,7 @@ router.get('/:id/sessions', requireAuth, async (req, res, next) => {
     // Utilisateurs distincts
     const users = [...new Set(logs.map(l => l.winUser))];
 
-    res.json({ logs, byHour, total: logs.length, days, users, tableExists });
+    res.json({ logs, byHour, total: logs.length, days, users });
   } catch (err) { next(err); }
 });
 

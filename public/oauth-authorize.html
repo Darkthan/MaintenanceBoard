@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Autorisation – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -130,7 +130,11 @@
       'todos:read': { label: 'Consulter les tâches', desc: 'Lire les tâches standalone ou liées aux interventions' },
       'todos:write': { label: 'Gérer les tâches', desc: 'Créer et modifier les tâches' },
       'projects:read': { label: 'Consulter les projets', desc: 'Lire les projets Kanban, colonnes et cartes' },
-      'projects:write': { label: 'Gérer les projets', desc: 'Créer et modifier projets, colonnes et cartes' }
+      'projects:write': { label: 'Gérer les projets', desc: 'Créer et modifier projets, colonnes et cartes' },
+      'orders:read': { label: 'Consulter les commandes', desc: 'Lire les commandes, lignes et suivis liés aux interventions' },
+      'orders:write': { label: 'Gérer les commandes', desc: 'Créer et modifier les commandes et leur suivi' },
+      'stock:read': { label: 'Consulter le stock', desc: 'Lire les articles, alertes et mouvements de stock' },
+      'stock:write': { label: 'Gérer le stock', desc: 'Créer et modifier les articles et mouvements de stock' }
     };
 
     const params              = new URLSearchParams(window.location.search);

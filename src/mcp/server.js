@@ -161,6 +161,150 @@ function buildMcpServer(ctx) {
     }
   }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => work.updateIntervention(a)));
 
+  server.registerTool('list_orders', {
+    description: 'Liste les commandes avec filtres par statut, intervention, archive ou recherche texte.',
+    inputSchema: {
+      status: z.enum(work.ORDER_STATUSES).optional(),
+      search: z.string().max(200).optional(),
+      interventionId: z.string().optional(),
+      archived: z.boolean().optional(),
+      limit: z.number().int().min(1).max(100).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.ORDERS_READ, (a) => work.listOrders(a)));
+
+  server.registerTool('get_order', {
+    description: 'Récupère le détail d\'une commande avec ses lignes et son intervention liée.',
+    inputSchema: {
+      id: z.string().describe('ID de la commande')
+    }
+  }, tool(ctx, MCP_SCOPES.ORDERS_READ, (a) => work.getOrder(a)));
+
+  server.registerTool('create_order', {
+    description: 'Crée une commande avec une ou plusieurs lignes, éventuellement liée à une intervention.',
+    inputSchema: {
+      title: z.string().min(3).max(300),
+      description: z.string().max(2000).optional(),
+      status: z.enum(work.ORDER_STATUSES).optional(),
+      supplier: z.string().max(200).optional(),
+      supplierId: z.string().optional(),
+      totalAmount: z.number().min(0).optional(),
+      deploymentTags: z.array(z.string().max(100)).max(50).optional(),
+      interventionId: z.string().optional(),
+      orderedAt: z.string().optional(),
+      expectedDeliveryAt: z.string().optional(),
+      receivedAt: z.string().optional(),
+      trackingNotes: z.string().max(2000).optional(),
+      items: z.array(z.object({
+        name: z.string().min(1).max(300),
+        quantity: z.number().int().min(1),
+        unitPrice: z.number().min(0).optional(),
+        priceType: z.enum(work.ORDER_PRICE_TYPES).optional(),
+        reference: z.string().max(200).optional(),
+        productUrl: z.string().max(1000).optional(),
+        notes: z.string().max(1000).optional()
+      })).min(1).max(100)
+    }
+  }, tool(ctx, MCP_SCOPES.ORDERS_WRITE, (a) => work.createOrder(a, { userId })));
+
+  server.registerTool('update_order', {
+    description: 'Modifie une commande : statut, infos de suivi, intervention liée, archivage ou remplacement des lignes.',
+    inputSchema: {
+      id: z.string(),
+      title: z.string().min(3).max(300).optional(),
+      description: z.string().max(2000).optional(),
+      status: z.enum(work.ORDER_STATUSES).optional(),
+      supplier: z.string().max(200).optional(),
+      supplierId: z.string().optional(),
+      totalAmount: z.number().min(0).optional(),
+      deploymentTags: z.array(z.string().max(100)).max(50).optional(),
+      interventionId: z.string().optional(),
+      orderedAt: z.string().optional(),
+      expectedDeliveryAt: z.string().optional(),
+      receivedAt: z.string().optional(),
+      trackingNotes: z.string().max(2000).optional(),
+      archived: z.boolean().optional(),
+      items: z.array(z.object({
+        name: z.string().min(1).max(300),
+        quantity: z.number().int().min(1),
+        unitPrice: z.number().min(0).optional(),
+        priceType: z.enum(work.ORDER_PRICE_TYPES).optional(),
+        reference: z.string().max(200).optional(),
+        productUrl: z.string().max(1000).optional(),
+        notes: z.string().max(1000).optional()
+      })).min(1).max(100).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.ORDERS_WRITE, (a) => work.updateOrder(a)));
+
+  server.registerTool('list_stock_items', {
+    description: 'Liste les articles de stock avec filtres recherche, catégorie et stock faible.',
+    inputSchema: {
+      q: z.string().max(200).optional(),
+      category: z.string().max(100).optional(),
+      lowStock: z.boolean().optional(),
+      limit: z.number().int().min(1).max(200).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.STOCK_READ, (a) => work.listStockItems(a)));
+
+  server.registerTool('get_stock_item', {
+    description: 'Récupère le détail d\'un article de stock avec les derniers mouvements.',
+    inputSchema: {
+      id: z.string().describe('ID de l\'article de stock')
+    }
+  }, tool(ctx, MCP_SCOPES.STOCK_READ, (a) => work.getStockItem(a)));
+
+  server.registerTool('list_stock_movements', {
+    description: 'Liste les mouvements de stock, filtrables par article ou intervention.',
+    inputSchema: {
+      stockItemId: z.string().optional(),
+      interventionId: z.string().optional(),
+      limit: z.number().int().min(1).max(100).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.STOCK_READ, (a) => work.listStockMovements(a)));
+
+  server.registerTool('create_stock_item', {
+    description: 'Crée un article de stock.',
+    inputSchema: {
+      name: z.string().min(1).max(300),
+      reference: z.string().max(200).optional(),
+      barcode: z.string().max(100).optional(),
+      category: z.string().max(100).optional(),
+      description: z.string().max(1000).optional(),
+      quantity: z.number().int().min(0).optional(),
+      minQuantity: z.number().int().min(0).optional(),
+      unitCost: z.number().min(0).optional(),
+      location: z.string().max(200).optional(),
+      supplierId: z.string().optional()
+    }
+  }, tool(ctx, MCP_SCOPES.STOCK_WRITE, (a) => work.createStockItem(a)));
+
+  server.registerTool('update_stock_item', {
+    description: 'Modifie un article de stock.',
+    inputSchema: {
+      id: z.string(),
+      name: z.string().min(1).max(300).optional(),
+      reference: z.string().max(200).optional(),
+      barcode: z.string().max(100).optional(),
+      category: z.string().max(100).optional(),
+      description: z.string().max(1000).optional(),
+      quantity: z.number().int().min(0).optional(),
+      minQuantity: z.number().int().min(0).optional(),
+      unitCost: z.number().min(0).optional(),
+      location: z.string().max(200).optional(),
+      supplierId: z.string().optional()
+    }
+  }, tool(ctx, MCP_SCOPES.STOCK_WRITE, (a) => work.updateStockItem(a)));
+
+  server.registerTool('create_stock_movement', {
+    description: 'Crée un mouvement de stock IN, OUT ou ADJUSTMENT et met à jour la quantité de l\'article.',
+    inputSchema: {
+      stockItemId: z.string(),
+      type: z.enum(work.STOCK_MOVEMENT_TYPES),
+      quantity: z.number().int().min(1),
+      reason: z.string().max(500).optional(),
+      interventionId: z.string().optional()
+    }
+  }, tool(ctx, MCP_SCOPES.STOCK_WRITE, (a) => work.createStockMovement(a, { userId })));
+
   server.registerTool('list_todos', {
     description: 'Liste les tâches, éventuellement filtrées par état, retard ou intervention.',
     inputSchema: {

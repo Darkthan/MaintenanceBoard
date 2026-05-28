@@ -1396,6 +1396,34 @@
               <p class="text-xs text-slate-400">Créer et modifier projets, colonnes et cartes</p>
             </div>
           </label>
+          <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+            <input type="checkbox" name="scopes" value="orders:read" class="h-4 w-4 rounded text-blue-600"/>
+            <div>
+              <p class="text-sm font-medium text-slate-700">orders:read</p>
+              <p class="text-xs text-slate-400">Lire les commandes et leurs lignes</p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+            <input type="checkbox" name="scopes" value="orders:write" class="h-4 w-4 rounded text-blue-600"/>
+            <div>
+              <p class="text-sm font-medium text-slate-700">orders:write</p>
+              <p class="text-xs text-slate-400">Créer et modifier les commandes</p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+            <input type="checkbox" name="scopes" value="stock:read" class="h-4 w-4 rounded text-blue-600"/>
+            <div>
+              <p class="text-sm font-medium text-slate-700">stock:read</p>
+              <p class="text-xs text-slate-400">Lire les articles et mouvements de stock</p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+            <input type="checkbox" name="scopes" value="stock:write" class="h-4 w-4 rounded text-blue-600"/>
+            <div>
+              <p class="text-sm font-medium text-slate-700">stock:write</p>
+              <p class="text-xs text-slate-400">Créer des articles et mouvements de stock</p>
+            </div>
+          </label>
         </div>
       </div>
       <div>

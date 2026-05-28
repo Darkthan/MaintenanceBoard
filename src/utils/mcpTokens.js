@@ -9,7 +9,11 @@ const MCP_SCOPES = {
   TODOS_READ: 'todos:read',
   TODOS_WRITE: 'todos:write',
   PROJECTS_READ: 'projects:read',
-  PROJECTS_WRITE: 'projects:write'
+  PROJECTS_WRITE: 'projects:write',
+  ORDERS_READ: 'orders:read',
+  ORDERS_WRITE: 'orders:write',
+  STOCK_READ: 'stock:read',
+  STOCK_WRITE: 'stock:write'
 };
 
 const ALL_MCP_SCOPES = Object.values(MCP_SCOPES);

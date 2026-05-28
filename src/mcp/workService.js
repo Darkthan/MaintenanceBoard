@@ -4,11 +4,26 @@ const { containsFilter } = require('../lib/db-utils');
 const INTERVENTION_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
 const INTERVENTION_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'];
 const CARD_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'];
+const ORDER_STATUSES = ['PENDING', 'ORDERED', 'PARTIAL', 'RECEIVED', 'CANCELLED'];
+const ORDER_PRICE_TYPES = ['TTC', 'HT'];
+const STOCK_MOVEMENT_TYPES = ['IN', 'OUT', 'ADJUSTMENT'];
 
 const INTERVENTION_INCLUDE = {
   room: { select: { id: true, name: true, number: true, building: true } },
   equipment: { select: { id: true, name: true, type: true, brand: true, model: true } },
   tech: { select: { id: true, name: true, email: true } },
+  orders: {
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      supplier: true,
+      totalAmount: true,
+      expectedDeliveryAt: true,
+      receivedAt: true
+    },
+    orderBy: { createdAt: 'desc' }
+  },
   _count: { select: { todos: true, messages: true, orders: true } }
 };
 
@@ -34,6 +49,33 @@ const PROJECT_FULL_INCLUDE = {
       }
     }
   }
+};
+
+const ORDER_INCLUDE = {
+  requester: { select: { id: true, name: true, email: true } },
+  intervention: {
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      priority: true,
+      room: { select: { id: true, name: true, number: true } },
+      equipment: { select: { id: true, name: true, type: true } }
+    }
+  },
+  supplierRef: { select: { id: true, name: true } },
+  items: { orderBy: { createdAt: 'asc' } }
+};
+
+const STOCK_ITEM_INCLUDE = {
+  supplier: { select: { id: true, name: true } },
+  _count: { select: { movements: true } }
+};
+
+const STOCK_MOVEMENT_INCLUDE = {
+  user: { select: { id: true, name: true, email: true } },
+  intervention: { select: { id: true, title: true, status: true } },
+  stockItem: { select: { id: true, name: true, reference: true, quantity: true } }
 };
 
 function badRequest(message) {
@@ -73,6 +115,24 @@ function nullableText(value, max, label) {
   return text || null;
 }
 
+function parseTags(raw) {
+  if (Array.isArray(raw)) return raw;
+  try { return JSON.parse(raw || '[]'); } catch { return []; }
+}
+
+function serializeTags(tags) {
+  if (!Array.isArray(tags)) return '[]';
+  return JSON.stringify([...new Set(tags.map(t => String(t || '').trim()).filter(Boolean))]);
+}
+
+function numberOrNull(value, label) {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const number = Number(value);
+  if (Number.isNaN(number) || number < 0) badRequest(`${label} doit être un nombre positif.`);
+  return number;
+}
+
 function mapIntervention(item) {
   return {
     id: item.id,
@@ -91,7 +151,54 @@ function mapIntervention(item) {
     dueAt: item.dueAt || null,
     closedAt: item.closedAt || null,
     archivedAt: item.archivedAt || null,
+    orders: item.orders || undefined,
     counts: item._count || undefined,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt
+  };
+}
+
+function mapOrder(order) {
+  return {
+    id: order.id,
+    title: order.title,
+    description: order.description || null,
+    status: order.status,
+    supplier: order.supplier || null,
+    supplierRef: order.supplierRef || null,
+    totalAmount: order.totalAmount ?? null,
+    deploymentTags: parseTags(order.deploymentTags),
+    requester: order.requester || null,
+    interventionId: order.interventionId || null,
+    intervention: order.intervention || null,
+    orderedAt: order.orderedAt || null,
+    expectedDeliveryAt: order.expectedDeliveryAt || null,
+    receivedAt: order.receivedAt || null,
+    trackingNotes: order.trackingNotes || null,
+    archivedAt: order.archivedAt || null,
+    items: order.items || undefined,
+    counts: order._count || undefined,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt
+  };
+}
+
+function mapStockItem(item) {
+  return {
+    id: item.id,
+    name: item.name,
+    reference: item.reference || null,
+    barcode: item.barcode || null,
+    category: item.category || null,
+    description: item.description || null,
+    quantity: item.quantity,
+    minQuantity: item.minQuantity,
+    lowStock: item.quantity <= item.minQuantity,
+    unitCost: item.unitCost ?? null,
+    location: item.location || null,
+    supplier: item.supplier || null,
+    counts: item._count || undefined,
+    movements: item.movements || undefined,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt
   };
@@ -432,10 +539,250 @@ async function updateProjectCard({ projectId, cardId, ...input }) {
   return prisma.kanbanCard.update({ where: { id: cardId }, data, include: CARD_INCLUDE });
 }
 
+function toOrderItemData(item) {
+  ensureEnum(item.priceType, ORDER_PRICE_TYPES, 'Type de prix');
+  return {
+    name: cleanString(item.name, { min: 1, max: 300, label: 'Le nom de ligne' }),
+    quantity: Math.max(1, parseInt(item.quantity, 10) || 1),
+    unitPrice: numberOrNull(item.unitPrice, 'Le prix unitaire') ?? null,
+    priceType: item.priceType || 'TTC',
+    reference: nullableText(item.reference, 200, 'La référence'),
+    productUrl: nullableText(item.productUrl, 1000, "L'URL produit"),
+    notes: nullableText(item.notes, 1000, 'Les notes de ligne')
+  };
+}
+
+async function listOrders({ status, search, interventionId, archived = false, limit = 20 } = {}) {
+  ensureEnum(status, ORDER_STATUSES, 'Statut');
+  const where = { archivedAt: archived ? { not: null } : null };
+  if (status) where.status = status;
+  if (interventionId) where.interventionId = interventionId;
+  if (search) {
+    where.OR = [
+      { title: containsFilter(search) },
+      { supplier: containsFilter(search) },
+      { trackingNotes: containsFilter(search) }
+    ];
+  }
+
+  const orders = await prisma.order.findMany({
+    where,
+    take: Math.min(100, Math.max(1, parseInt(limit, 10) || 20)),
+    orderBy: { createdAt: 'desc' },
+    include: {
+      requester: { select: { id: true, name: true, email: true } },
+      intervention: ORDER_INCLUDE.intervention,
+      supplierRef: ORDER_INCLUDE.supplierRef,
+      _count: { select: { items: true } }
+    }
+  });
+  return orders.map(mapOrder);
+}
+
+async function getOrder({ id }) {
+  const order = await prisma.order.findUnique({ where: { id }, include: ORDER_INCLUDE });
+  if (!order) notFound('Commande introuvable');
+  return mapOrder(order);
+}
+
+async function createOrder(input, { userId } = {}) {
+  if (!userId) badRequest('Utilisateur créateur introuvable pour créer une commande.');
+  if (!Array.isArray(input.items) || input.items.length === 0) {
+    badRequest('La commande doit contenir au moins une ligne.');
+  }
+  ensureEnum(input.status, ORDER_STATUSES, 'Statut');
+
+  const order = await prisma.order.create({
+    data: {
+      title: cleanString(input.title, { min: 3, max: 300, label: 'Le titre' }),
+      description: nullableText(input.description, 2000, 'La description'),
+      status: input.status || 'PENDING',
+      supplier: nullableText(input.supplier, 200, 'Le fournisseur'),
+      supplierId: input.supplierId || null,
+      totalAmount: numberOrNull(input.totalAmount, 'Le montant total') ?? null,
+      deploymentTags: serializeTags(input.deploymentTags || []),
+      requestedBy: userId,
+      interventionId: input.interventionId || null,
+      orderedAt: parseOptionalDate(input.orderedAt, 'Date de commande') ?? null,
+      expectedDeliveryAt: parseOptionalDate(input.expectedDeliveryAt, 'Date de livraison prévue') ?? null,
+      receivedAt: parseOptionalDate(input.receivedAt, 'Date de réception') ?? null,
+      trackingNotes: nullableText(input.trackingNotes, 2000, 'Les notes de suivi'),
+      items: { create: input.items.map(toOrderItemData) }
+    },
+    include: ORDER_INCLUDE
+  });
+  return mapOrder(order);
+}
+
+async function updateOrder({ id, ...input }) {
+  const existing = await prisma.order.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) notFound('Commande introuvable');
+  ensureEnum(input.status, ORDER_STATUSES, 'Statut');
+  if (input.items !== undefined && (!Array.isArray(input.items) || input.items.length === 0)) {
+    badRequest('La commande doit contenir au moins une ligne.');
+  }
+
+  const data = {};
+  if (input.title !== undefined) data.title = cleanString(input.title, { min: 3, max: 300, label: 'Le titre' });
+  if (input.description !== undefined) data.description = nullableText(input.description, 2000, 'La description');
+  if (input.status !== undefined) {
+    data.status = input.status;
+    if (input.status === 'ORDERED' && input.orderedAt === undefined) data.orderedAt = new Date();
+    if (input.status === 'RECEIVED' && input.receivedAt === undefined) data.receivedAt = new Date();
+  }
+  if (input.supplier !== undefined) data.supplier = nullableText(input.supplier, 200, 'Le fournisseur');
+  if (input.supplierId !== undefined) data.supplierId = input.supplierId || null;
+  if (input.totalAmount !== undefined) data.totalAmount = numberOrNull(input.totalAmount, 'Le montant total');
+  if (input.deploymentTags !== undefined) data.deploymentTags = serializeTags(input.deploymentTags);
+  if (input.interventionId !== undefined) data.interventionId = input.interventionId || null;
+  if (input.orderedAt !== undefined) data.orderedAt = parseOptionalDate(input.orderedAt, 'Date de commande');
+  if (input.expectedDeliveryAt !== undefined) data.expectedDeliveryAt = parseOptionalDate(input.expectedDeliveryAt, 'Date de livraison prévue');
+  if (input.receivedAt !== undefined) data.receivedAt = parseOptionalDate(input.receivedAt, 'Date de réception');
+  if (input.trackingNotes !== undefined) data.trackingNotes = nullableText(input.trackingNotes, 2000, 'Les notes de suivi');
+  if (input.archived !== undefined) data.archivedAt = input.archived ? new Date() : null;
+  if (input.items !== undefined) data.items = { deleteMany: {}, create: input.items.map(toOrderItemData) };
+
+  const order = await prisma.order.update({ where: { id }, data, include: ORDER_INCLUDE });
+  return mapOrder(order);
+}
+
+async function listStockItems({ q, category, lowStock = false, limit = 100 } = {}) {
+  const where = {};
+  if (q) {
+    where.OR = [
+      { name: containsFilter(q) },
+      { reference: containsFilter(q) },
+      { barcode: containsFilter(q) },
+      { category: containsFilter(q) }
+    ];
+  }
+  if (category) where.category = category;
+
+  const items = await prisma.stockItem.findMany({
+    where,
+    take: Math.min(200, Math.max(1, parseInt(limit, 10) || 100)),
+    orderBy: { name: 'asc' },
+    include: STOCK_ITEM_INCLUDE
+  });
+  return (lowStock ? items.filter(i => i.quantity <= i.minQuantity) : items).map(mapStockItem);
+}
+
+async function getStockItem({ id }) {
+  const item = await prisma.stockItem.findUnique({
+    where: { id },
+    include: {
+      supplier: { select: { id: true, name: true } },
+      movements: {
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        include: { user: { select: { id: true, name: true, email: true } } }
+      }
+    }
+  });
+  if (!item) notFound('Article introuvable');
+  return mapStockItem(item);
+}
+
+function stockItemData(input) {
+  const data = {};
+  if (input.name !== undefined) data.name = cleanString(input.name, { min: 1, max: 300, label: 'Le nom' });
+  if (input.reference !== undefined) data.reference = nullableText(input.reference, 200, 'La référence');
+  if (input.barcode !== undefined) data.barcode = nullableText(input.barcode, 100, 'Le code-barres');
+  if (input.category !== undefined) data.category = nullableText(input.category, 100, 'La catégorie');
+  if (input.description !== undefined) data.description = nullableText(input.description, 1000, 'La description');
+  if (input.quantity !== undefined) data.quantity = Math.max(0, parseInt(input.quantity, 10) || 0);
+  if (input.minQuantity !== undefined) data.minQuantity = Math.max(0, parseInt(input.minQuantity, 10) || 0);
+  if (input.unitCost !== undefined) data.unitCost = numberOrNull(input.unitCost, 'Le coût unitaire');
+  if (input.location !== undefined) data.location = nullableText(input.location, 200, "L'emplacement");
+  if (input.supplierId !== undefined) data.supplierId = input.supplierId || null;
+  return data;
+}
+
+async function createStockItem(input) {
+  const item = await prisma.stockItem.create({
+    data: {
+      ...stockItemData(input),
+      name: cleanString(input.name, { min: 1, max: 300, label: 'Le nom' }),
+      quantity: input.quantity !== undefined ? Math.max(0, parseInt(input.quantity, 10) || 0) : 0,
+      minQuantity: input.minQuantity !== undefined ? Math.max(0, parseInt(input.minQuantity, 10) || 0) : 0
+    },
+    include: STOCK_ITEM_INCLUDE
+  });
+  return mapStockItem(item);
+}
+
+async function updateStockItem({ id, ...input }) {
+  const existing = await prisma.stockItem.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) notFound('Article introuvable');
+  const item = await prisma.stockItem.update({
+    where: { id },
+    data: stockItemData(input),
+    include: STOCK_ITEM_INCLUDE
+  });
+  return mapStockItem(item);
+}
+
+async function listStockMovements({ stockItemId, interventionId, limit = 50 } = {}) {
+  const where = {};
+  if (stockItemId) where.stockItemId = stockItemId;
+  if (interventionId) where.interventionId = interventionId;
+  return prisma.stockMovement.findMany({
+    where,
+    take: Math.min(100, Math.max(1, parseInt(limit, 10) || 50)),
+    orderBy: { createdAt: 'desc' },
+    include: STOCK_MOVEMENT_INCLUDE
+  });
+}
+
+async function createStockMovement(input, { userId } = {}) {
+  if (!userId) badRequest('Utilisateur créateur introuvable pour créer un mouvement de stock.');
+  ensureEnum(input.type, STOCK_MOVEMENT_TYPES, 'Type de mouvement');
+  const quantity = parseInt(input.quantity, 10);
+  if (!quantity || quantity < 1) badRequest('La quantité doit être un entier supérieur à 0.');
+
+  const item = await prisma.stockItem.findUnique({ where: { id: input.stockItemId } });
+  if (!item) notFound('Article introuvable');
+
+  let newQuantity;
+  if (input.type === 'IN') {
+    newQuantity = item.quantity + quantity;
+  } else if (input.type === 'OUT') {
+    if (item.quantity < quantity) {
+      throw Object.assign(new Error(`Stock insuffisant : ${item.quantity} disponible(s), ${quantity} demandé(s).`), { status: 409 });
+    }
+    newQuantity = item.quantity - quantity;
+  } else {
+    newQuantity = quantity;
+  }
+
+  const [movement] = await prisma.$transaction([
+    prisma.stockMovement.create({
+      data: {
+        stockItemId: item.id,
+        type: input.type,
+        quantity,
+        reason: nullableText(input.reason, 500, 'Le motif'),
+        interventionId: input.interventionId || null,
+        userId
+      },
+      include: STOCK_MOVEMENT_INCLUDE
+    }),
+    prisma.stockItem.update({
+      where: { id: item.id },
+      data: { quantity: newQuantity }
+    })
+  ]);
+
+  return movement;
+}
+
 module.exports = {
   INTERVENTION_STATUSES,
   INTERVENTION_PRIORITIES,
   CARD_PRIORITIES,
+  ORDER_STATUSES,
+  ORDER_PRICE_TYPES,
+  STOCK_MOVEMENT_TYPES,
   listInterventions,
   getIntervention,
   createIntervention,
@@ -450,5 +797,15 @@ module.exports = {
   createProjectColumn,
   updateProjectColumn,
   createProjectCard,
-  updateProjectCard
+  updateProjectCard,
+  listOrders,
+  getOrder,
+  createOrder,
+  updateOrder,
+  listStockItems,
+  getStockItem,
+  createStockItem,
+  updateStockItem,
+  listStockMovements,
+  createStockMovement
 };
