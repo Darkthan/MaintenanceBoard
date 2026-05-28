@@ -14,6 +14,8 @@ const router = express.Router();
 const MCP_ACCESS_TOKEN_EXPIRES_IN = 900; // 15 minutes
 const MCP_REFRESH_TOKEN_EXPIRES_IN = '30d';
 const OFFLINE_ACCESS_SCOPE = 'offline_access';
+const OAUTH_CSRF_COOKIE = 'oauthCsrf';
+const OAUTH_CSRF_EXPIRES_IN = 600; // 10 minutes
 
 const tokenLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -79,6 +81,50 @@ function accessTokenResponse({ accessToken, scopes, refreshToken }) {
   };
   if (refreshToken) body.refresh_token = refreshToken;
   return body;
+}
+
+function signOAuthCsrfToken({ clientId, redirectUri, codeChallenge }) {
+  return jwt.sign(
+    {
+      type: 'oauth_authorize_csrf',
+      clientId,
+      redirectUri,
+      codeChallenge
+    },
+    config.jwt.secret,
+    { expiresIn: OAUTH_CSRF_EXPIRES_IN }
+  );
+}
+
+function setOAuthCsrfCookie(res, token) {
+  res.cookie(OAUTH_CSRF_COOKIE, token, {
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: config.env === 'production',
+    maxAge: OAUTH_CSRF_EXPIRES_IN * 1000,
+    path: '/oauth/authorize'
+  });
+}
+
+function clearOAuthCsrfCookie(res) {
+  res.clearCookie(OAUTH_CSRF_COOKIE, { path: '/oauth/authorize' });
+}
+
+function verifyOAuthCsrf(req, { clientId, redirectUri, codeChallenge }) {
+  const bodyToken = req.body.oauth_csrf;
+  const cookieToken = req.cookies?.[OAUTH_CSRF_COOKIE];
+  if (!bodyToken || !cookieToken || bodyToken !== cookieToken) {
+    return false;
+  }
+  try {
+    const payload = jwt.verify(bodyToken, config.jwt.secret);
+    return payload.type === 'oauth_authorize_csrf' &&
+      payload.clientId === clientId &&
+      payload.redirectUri === redirectUri &&
+      payload.codeChallenge === codeChallenge;
+  } catch {
+    return false;
+  }
 }
 
 // ── GET /oauth/client-info?client_id=xxx ────────────────────────────────────
@@ -195,6 +241,11 @@ router.get('/authorize', async (req, res) => {
 </body></html>`);
   }
 
+  setOAuthCsrfCookie(res, signOAuthCsrfToken({
+    clientId: String(client_id),
+    redirectUri: String(redirect_uri),
+    codeChallenge: String(code_challenge)
+  }));
   res.sendFile(path.join(__dirname, '../../public/oauth-authorize.html'));
 });
 
@@ -245,19 +296,15 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
   let user;
   try {
     if (req.body.use_session === 'true') {
-      // Anti-CSRF : comparaison exacte protocol+host de l'Origin.
-      // On n'accepte pas l'absence d'Origin ni Referer comme fallback
-      // (un startsWith serait contournable par https://monapp.com.evil.com).
-      const originHeader = req.get('Origin');
-      if (!originHeader) return redirectError('access_denied', 'En-tête Origin manquant');
-      try {
-        const originUrl   = new URL(originHeader);
-        const expectedUrl = new URL(config.appUrl);
-        if (originUrl.protocol !== expectedUrl.protocol || originUrl.host !== expectedUrl.host) {
-          return redirectError('access_denied', 'Requête cross-site refusée');
-        }
-      } catch {
-        return redirectError('access_denied', 'En-tête Origin invalide');
+      // Anti-CSRF compatible WebViews : Origin peut être absent ou "null" dans
+      // l'application ChatGPT. On vérifie plutôt un double-submit token signé,
+      // lié au client, à la redirect_uri déjà enregistrée et au challenge PKCE.
+      if (!verifyOAuthCsrf(req, {
+        clientId: String(client_id),
+        redirectUri: String(redirect_uri),
+        codeChallenge: String(code_challenge)
+      })) {
+        return redirectError('access_denied', 'Jeton de session OAuth invalide ou expiré');
       }
 
       // Mode session : authentification via le cookie JWT existant
@@ -301,6 +348,7 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
     const url = new URL(redirect_uri);
     url.searchParams.set('code', code);
     if (state) url.searchParams.set('state', state);
+    clearOAuthCsrfCookie(res);
     return res.redirect(url.toString());
   } catch (err) {
     console.error('OAuth /authorize POST error:', err);

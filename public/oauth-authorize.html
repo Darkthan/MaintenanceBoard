@@ -58,6 +58,7 @@
           <input type="hidden" name="state"                 id="sf-state"/>
           <input type="hidden" name="code_challenge"        id="sf-code-challenge"/>
           <input type="hidden" name="code_challenge_method" id="sf-code-challenge-method"/>
+          <input type="hidden" name="oauth_csrf"            id="sf-oauth-csrf"/>
           <input type="hidden" name="action"                value="approve"/>
           <input type="hidden" name="use_session"           value="true"/>
 
@@ -81,6 +82,7 @@
           <input type="hidden" name="state"                 id="f-state"/>
           <input type="hidden" name="code_challenge"        id="f-code-challenge"/>
           <input type="hidden" name="code_challenge_method" id="f-code-challenge-method"/>
+          <input type="hidden" name="oauth_csrf"            id="f-oauth-csrf"/>
           <input type="hidden" name="action"                value="approve"/>
 
           <p class="text-xs text-slate-500">Identifiez-vous pour autoriser l'accès.</p>
@@ -122,7 +124,13 @@
   <script>
     const SCOPE_LABELS = {
       'reservations:read':  { label: 'Consulter les réservations',  desc: 'Lire les ressources, disponibilités et réservations existantes' },
-      'reservations:write': { label: 'Créer des réservations',      desc: 'Créer et modifier des réservations de matériel' }
+      'reservations:write': { label: 'Créer des réservations',      desc: 'Créer et modifier des réservations de matériel' },
+      'interventions:read': { label: 'Consulter les interventions', desc: 'Lire les demandes de maintenance et leur suivi' },
+      'interventions:write': { label: 'Gérer les interventions', desc: 'Créer et modifier les interventions de maintenance' },
+      'todos:read': { label: 'Consulter les tâches', desc: 'Lire les tâches standalone ou liées aux interventions' },
+      'todos:write': { label: 'Gérer les tâches', desc: 'Créer et modifier les tâches' },
+      'projects:read': { label: 'Consulter les projets', desc: 'Lire les projets Kanban, colonnes et cartes' },
+      'projects:write': { label: 'Gérer les projets', desc: 'Créer et modifier projets, colonnes et cartes' }
     };
 
     const params              = new URLSearchParams(window.location.search);
@@ -132,6 +140,11 @@
     const state               = params.get('state')                 || '';
     const codeChallenge       = params.get('code_challenge')        || '';
     const codeChallengeMethod = params.get('code_challenge_method') || '';
+    const oauthCsrf           = document.cookie
+      .split(';')
+      .map(part => part.trim())
+      .find(part => part.startsWith('oauthCsrf='))
+      ?.slice('oauthCsrf='.length) || '';
 
     function fillHiddenFields(prefix) {
       document.getElementById(prefix + 'client-id').value              = clientId;
@@ -140,6 +153,7 @@
       document.getElementById(prefix + 'state').value                  = state;
       document.getElementById(prefix + 'code-challenge').value         = codeChallenge;
       document.getElementById(prefix + 'code-challenge-method').value  = codeChallengeMethod;
+      document.getElementById(prefix + 'oauth-csrf').value             = decodeURIComponent(oauthCsrf);
     }
     fillHiddenFields('sf-');
     fillHiddenFields('f-');

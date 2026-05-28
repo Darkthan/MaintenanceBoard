@@ -8,7 +8,10 @@ jest.mock('../src/lib/prisma', () => ({
 
 const crypto = require('crypto');
 const express = require('express');
+const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken');
 const request = require('supertest');
+const config = require('../src/config');
 const prisma = require('../src/lib/prisma');
 const {
   generateMcpToken,
@@ -26,6 +29,7 @@ function oauthTestApp() {
   const app = express();
   app.use(express.urlencoded({ extended: true }));
   app.use(express.json());
+  app.use(cookieParser());
   app.use('/oauth', require('../src/routes/oauth').router);
   return app;
 }
@@ -185,6 +189,62 @@ describe('OAuth MCP refresh tokens', () => {
     expect(refreshRes.body.access_token).toBeTruthy();
     expect(refreshRes.body.refresh_token).toBeTruthy();
     expect(refreshRes.body.scope).toBe('reservations:read');
+  });
+
+  it('autorise le mode session avec un Origin opaque si le CSRF OAuth est valide', async () => {
+    prisma.mcpToken.findUnique
+      .mockResolvedValueOnce({
+        id: 't1',
+        label: 'ChatGPT',
+        isActive: true,
+        expiresAt: null,
+        scopes: serializeScopes(['reservations:read']),
+        redirectUris: JSON.stringify(['https://chatgpt.com/connector_platform_oauth_redirect'])
+      })
+      .mockResolvedValueOnce({
+        id: 't1',
+        isActive: true,
+        expiresAt: null,
+        scopes: serializeScopes(['reservations:read']),
+        redirectUris: JSON.stringify(['https://chatgpt.com/connector_platform_oauth_redirect'])
+      });
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1', isActive: true });
+
+    const app = oauthTestApp();
+    const authorizeQuery = {
+      response_type: 'code',
+      client_id: 't1',
+      redirect_uri: 'https://chatgpt.com/connector_platform_oauth_redirect',
+      scope: 'reservations:read offline_access',
+      state: 'state-1',
+      code_challenge: 'challenge-1',
+      code_challenge_method: 'S256'
+    };
+
+    const getRes = await request(app)
+      .get('/oauth/authorize')
+      .query(authorizeQuery);
+    expect(getRes.status).toBe(200);
+
+    const csrfCookie = getRes.headers['set-cookie'].find(c => c.startsWith('oauthCsrf='));
+    const csrf = decodeURIComponent(csrfCookie.split(';')[0].slice('oauthCsrf='.length));
+    const accessToken = jwt.sign({ userId: 'u1' }, config.jwt.secret, { expiresIn: '15m' });
+
+    const postRes = await request(app)
+      .post('/oauth/authorize')
+      .set('Origin', 'null')
+      .set('Cookie', [`oauthCsrf=${encodeURIComponent(csrf)}`, `accessToken=${accessToken}`])
+      .type('form')
+      .send({
+        ...authorizeQuery,
+        action: 'approve',
+        use_session: 'true',
+        oauth_csrf: csrf
+      });
+
+    expect(postRes.status).toBe(302);
+    expect(postRes.headers.location).toMatch(/^https:\/\/chatgpt\.com\/connector_platform_oauth_redirect\?code=/);
+    expect(postRes.headers.location).toContain('state=state-1');
   });
 });
 
