@@ -249,6 +249,61 @@ describe('OAuth MCP refresh tokens', () => {
     expect(postRes.headers.location).toContain('state=state-1');
   });
 
+  it('autorise le consentement si le WebView ne renvoie pas le cookie oauthCsrf au POST', async () => {
+    prisma.mcpToken.findUnique
+      .mockResolvedValueOnce({
+        id: 't1',
+        label: 'ChatGPT',
+        isActive: true,
+        expiresAt: null,
+        scopes: serializeScopes(['reservations:read']),
+        redirectUris: JSON.stringify(['https://chatgpt.com/connector_platform_oauth_redirect'])
+      })
+      .mockResolvedValueOnce({
+        id: 't1',
+        isActive: true,
+        expiresAt: null,
+        scopes: serializeScopes(['reservations:read']),
+        redirectUris: JSON.stringify(['https://chatgpt.com/connector_platform_oauth_redirect'])
+      });
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1', isActive: true });
+
+    const app = oauthTestApp();
+    const accessToken = jwt.sign({ userId: 'u1' }, config.jwt.secret, { expiresIn: '15m' });
+    const authorizeQuery = {
+      response_type: 'code',
+      client_id: 't1',
+      redirect_uri: 'https://chatgpt.com/connector_platform_oauth_redirect',
+      scope: 'reservations:read',
+      state: 'state-webview',
+      code_challenge: pkceChallenge('webview-verifier-1234567890'),
+      code_challenge_method: 'S256'
+    };
+
+    const getRes = await request(app)
+      .get('/oauth/authorize')
+      .set('Cookie', [`accessToken=${accessToken}`])
+      .query(authorizeQuery);
+
+    const csrf = getRes.text.match(/<meta name="oauth-csrf" content="([^"]+)"/)?.[1];
+    expect(csrf).toBeTruthy();
+
+    const postRes = await request(app)
+      .post('/oauth/authorize')
+      .set('Cookie', [`accessToken=${accessToken}`])
+      .type('form')
+      .send({
+        ...authorizeQuery,
+        action: 'approve',
+        use_session: 'true',
+        oauth_csrf: csrf
+      });
+
+    expect(postRes.status).toBe(302);
+    expect(postRes.headers.location).toContain('code=');
+    expect(postRes.headers.location).toContain('state=state-webview');
+  });
+
   it('autorise un client OAuth MCP direct sans token précréé en limitant les scopes au rôle utilisateur', async () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'u-tech',

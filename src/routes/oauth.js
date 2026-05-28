@@ -158,7 +158,10 @@ async function userFromAccessCookie(req) {
 function verifyOAuthCsrf(req, { clientId, redirectUri, codeChallenge }) {
   const bodyToken = req.body.oauth_csrf;
   const cookieToken = req.cookies?.[OAUTH_CSRF_COOKIE];
-  if (!bodyToken || !cookieToken || bodyToken !== cookieToken) {
+  if (!bodyToken) {
+    return false;
+  }
+  if (cookieToken && bodyToken !== cookieToken) {
     return false;
   }
   try {
