@@ -216,14 +216,19 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
   let user;
   try {
     if (req.body.use_session === 'true') {
-      // Anti-CSRF : un POST légitime depuis notre page de consentement porte toujours
-      // un header Origin égal à notre domaine. Un POST cross-site aura un Origin
-      // différent — et le cookie SameSite=Lax n'est de toute façon pas envoyé
-      // par les navigateurs modernes sur les requêtes cross-site POST.
-      const requestOrigin = req.get('Origin') || req.get('Referer') || '';
-      const expectedOrigin = config.appUrl.replace(/\/$/, '');
-      if (!requestOrigin.startsWith(expectedOrigin)) {
-        return redirectError('access_denied', 'Requête cross-site refusée');
+      // Anti-CSRF : comparaison exacte protocol+host de l'Origin.
+      // On n'accepte pas l'absence d'Origin ni Referer comme fallback
+      // (un startsWith serait contournable par https://monapp.com.evil.com).
+      const originHeader = req.get('Origin');
+      if (!originHeader) return redirectError('access_denied', 'En-tête Origin manquant');
+      try {
+        const originUrl   = new URL(originHeader);
+        const expectedUrl = new URL(config.appUrl);
+        if (originUrl.protocol !== expectedUrl.protocol || originUrl.host !== expectedUrl.host) {
+          return redirectError('access_denied', 'Requête cross-site refusée');
+        }
+      } catch {
+        return redirectError('access_denied', 'En-tête Origin invalide');
       }
 
       // Mode session : authentification via le cookie JWT existant
