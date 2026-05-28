@@ -111,11 +111,59 @@ router.get('/authorize', async (req, res) => {
 
   const registered = parseRedirectUris(mcpToken.redirectUris);
   if (!redirect_uri || !isRegisteredUri(registered, redirect_uri)) {
-    // Ne pas rediriger — afficher une page d'erreur directement
-    return res.status(400).send(
-      'redirect_uri non enregistrée pour ce client. ' +
-      'Ajoutez cette URI dans la configuration du token MCP (Paramètres → Tokens MCP).'
-    );
+    // Ne pas rediriger — afficher une page d'erreur avec l'URI tentée (pour que l'admin sache quoi ajouter)
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return res.status(400).send(`<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Autorisation refusée – MaintenanceBoard</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;background:#f1f5f9;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+  .card{width:100%;max-width:560px;background:#fff;border-radius:1rem;border:1px solid #e2e8f0;overflow:hidden}
+  .banner{background:#fffbeb;border-bottom:1px solid #fde68a;padding:1.25rem 1.5rem;display:flex;gap:.75rem;align-items:flex-start}
+  .banner svg{flex-shrink:0;margin-top:.125rem}
+  .banner-title{font-weight:600;color:#78350f;margin-bottom:.25rem}
+  .banner-desc{font-size:.875rem;color:#92400e}
+  .body{padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem}
+  .label{font-size:.7rem;font-weight:700;letter-spacing:.075em;text-transform:uppercase;color:#64748b;margin-bottom:.5rem}
+  .uri-row{display:flex;gap:.5rem;align-items:stretch}
+  code{flex:1;font-family:monospace;font-size:.8125rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.5rem;padding:.625rem .75rem;color:#1e293b;word-break:break-all;display:block}
+  button{flex-shrink:0;padding:.625rem .875rem;background:#1e293b;color:#fff;border:none;border-radius:.5rem;font-size:.8125rem;cursor:pointer}
+  button:hover{background:#334155}
+  ol{font-size:.875rem;color:#475569;padding-left:1.25rem;line-height:1.75}
+  ol li strong,ol li em{color:#1e293b}
+  .btn-link{display:inline-block;padding:.625rem 1rem;background:#4f46e5;color:#fff;border-radius:.5rem;font-size:.875rem;font-weight:500;text-decoration:none}
+  .btn-link:hover{background:#4338ca}
+</style></head>
+<body>
+<div class="card">
+  <div class="banner">
+    <svg width="20" height="20" fill="none" stroke="#d97706" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    <div>
+      <p class="banner-title">Redirect URI non enregistrée</p>
+      <p class="banner-desc">Le client <strong>${esc(mcpToken.label)}</strong> n'est pas autorisé à utiliser cette URI de redirection.</p>
+    </div>
+  </div>
+  <div class="body">
+    <div>
+      <p class="label">URI tentée — à ajouter dans Paramètres → Tokens MCP</p>
+      <div class="uri-row">
+        <code id="uri-val">${esc(redirect_uri)}</code>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('uri-val').textContent).then(()=>this.textContent='Copié ✓')">Copier</button>
+      </div>
+    </div>
+    <ol>
+      <li>Allez dans <strong>Paramètres → Tokens MCP</strong></li>
+      <li>Cliquez sur <strong>URIs</strong> à côté du token <em>${esc(mcpToken.label)}</em></li>
+      <li>Collez l'URI ci-dessus et enregistrez</li>
+      <li>Relancez la connexion depuis votre LLM</li>
+    </ol>
+    <a href="/settings.html?tab=mcp" class="btn-link">Ouvrir les Paramètres MCP</a>
+  </div>
+</div>
+</body></html>`);
   }
 
   res.sendFile(path.join(__dirname, '../../public/oauth-authorize.html'));
