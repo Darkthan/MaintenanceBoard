@@ -4,8 +4,9 @@ const { z } = require('zod');
 
 const { MCP_SCOPES, hasScope } = require('../utils/mcpTokens');
 const reservations = require('./reservationsService');
+const work = require('./workService');
 
-const SERVER_INFO = { name: 'maintenanceboard-loans', version: '1.0.0' };
+const SERVER_INFO = { name: 'maintenanceboard', version: '1.1.0' };
 
 function jsonResult(payload) {
   return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }] };
@@ -101,6 +102,176 @@ function buildMcpServer(ctx) {
       internalNotes: z.string().max(2000).optional()
     }
   }, tool(ctx, MCP_SCOPES.RESERVATIONS_WRITE, ({ id, ...rest }) => reservations.updateReservation(id, rest, { userId })));
+
+  server.registerTool('list_interventions', {
+    description: 'Liste les interventions de maintenance avec filtres par statut, priorité, salle, équipement, technicien ou recherche texte.',
+    inputSchema: {
+      status: z.enum(work.INTERVENTION_STATUSES).optional(),
+      priority: z.enum(work.INTERVENTION_PRIORITIES).optional(),
+      search: z.string().max(200).optional(),
+      roomId: z.string().optional(),
+      equipmentId: z.string().optional(),
+      techId: z.string().optional(),
+      archived: z.boolean().optional(),
+      limit: z.number().int().min(1).max(100).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_READ, (a) => work.listInterventions(a)));
+
+  server.registerTool('get_intervention', {
+    description: 'Récupère le détail compact d\'une intervention par ID.',
+    inputSchema: {
+      id: z.string().describe('ID de l\'intervention')
+    }
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_READ, (a) => work.getIntervention(a)));
+
+  server.registerTool('create_intervention', {
+    description: 'Crée une intervention standard de maintenance. Pour les interventions ouvertes liées à un équipement actif, l\'équipement passe en réparation.',
+    inputSchema: {
+      title: z.string().min(3).max(300),
+      description: z.string().max(2000).optional(),
+      notes: z.string().max(5000).optional(),
+      status: z.enum(work.INTERVENTION_STATUSES).optional(),
+      priority: z.enum(work.INTERVENTION_PRIORITIES).optional(),
+      roomId: z.string().optional(),
+      equipmentId: z.string().optional(),
+      techId: z.string().optional(),
+      suggestedRoom: z.string().max(200).optional(),
+      suggestedEquipment: z.string().max(200).optional(),
+      scheduledStartAt: z.string().optional(),
+      scheduledEndAt: z.string().optional(),
+      dueAt: z.string().optional()
+    }
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => work.createIntervention(a, { userId })));
+
+  server.registerTool('update_intervention', {
+    description: 'Modifie une intervention existante : titre, statut, priorité, planning, salle, équipement, notes ou résolution.',
+    inputSchema: {
+      id: z.string(),
+      title: z.string().min(3).max(300).optional(),
+      description: z.string().max(2000).optional(),
+      notes: z.string().max(5000).optional(),
+      status: z.enum(work.INTERVENTION_STATUSES).optional(),
+      priority: z.enum(work.INTERVENTION_PRIORITIES).optional(),
+      resolution: z.string().max(5000).optional(),
+      roomId: z.string().optional(),
+      equipmentId: z.string().optional(),
+      scheduledStartAt: z.string().optional(),
+      scheduledEndAt: z.string().optional(),
+      dueAt: z.string().optional()
+    }
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => work.updateIntervention(a)));
+
+  server.registerTool('list_todos', {
+    description: 'Liste les tâches, éventuellement filtrées par état, retard ou intervention.',
+    inputSchema: {
+      done: z.boolean().optional(),
+      overdue: z.boolean().optional(),
+      interventionId: z.string().optional(),
+      limit: z.number().int().min(1).max(200).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.TODOS_READ, (a) => work.listTodos(a)));
+
+  server.registerTool('create_todo', {
+    description: 'Crée une tâche standalone ou liée à une intervention.',
+    inputSchema: {
+      title: z.string().min(1).max(500),
+      description: z.string().max(2000).optional(),
+      dueAt: z.string().optional(),
+      interventionId: z.string().optional()
+    }
+  }, tool(ctx, MCP_SCOPES.TODOS_WRITE, (a) => work.createTodo(a)));
+
+  server.registerTool('update_todo', {
+    description: 'Modifie une tâche : titre, description, échéance, lien intervention ou état terminé.',
+    inputSchema: {
+      id: z.string(),
+      title: z.string().min(1).max(500).optional(),
+      description: z.string().max(2000).optional(),
+      dueAt: z.string().optional(),
+      interventionId: z.string().optional(),
+      done: z.boolean().optional()
+    }
+  }, tool(ctx, MCP_SCOPES.TODOS_WRITE, (a) => work.updateTodo(a)));
+
+  server.registerTool('list_projects', {
+    description: 'Liste les projets Kanban avec leur créateur et le nombre de colonnes.',
+    inputSchema: {
+      limit: z.number().int().min(1).max(100).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.PROJECTS_READ, (a) => work.listProjects(a)));
+
+  server.registerTool('get_project', {
+    description: 'Récupère un projet Kanban avec ses colonnes et cartes ordonnées.',
+    inputSchema: {
+      id: z.string()
+    }
+  }, tool(ctx, MCP_SCOPES.PROJECTS_READ, (a) => work.getProject(a)));
+
+  server.registerTool('create_project', {
+    description: 'Crée un projet Kanban.',
+    inputSchema: {
+      title: z.string().min(1).max(200),
+      description: z.string().max(1000).optional(),
+      color: z.string().max(40).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.PROJECTS_WRITE, (a) => work.createProject(a, { userId })));
+
+  server.registerTool('update_project', {
+    description: 'Modifie le titre, la description ou la couleur d\'un projet.',
+    inputSchema: {
+      id: z.string(),
+      title: z.string().min(1).max(200).optional(),
+      description: z.string().max(1000).optional(),
+      color: z.string().max(40).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.PROJECTS_WRITE, (a) => work.updateProject(a)));
+
+  server.registerTool('create_project_column', {
+    description: 'Ajoute une colonne à la fin d\'un projet Kanban.',
+    inputSchema: {
+      projectId: z.string(),
+      title: z.string().min(1).max(100),
+      color: z.string().max(40).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.PROJECTS_WRITE, (a) => work.createProjectColumn(a)));
+
+  server.registerTool('update_project_column', {
+    description: 'Modifie le titre ou la couleur d\'une colonne de projet Kanban.',
+    inputSchema: {
+      projectId: z.string(),
+      columnId: z.string(),
+      title: z.string().min(1).max(100).optional(),
+      color: z.string().max(40).optional()
+    }
+  }, tool(ctx, MCP_SCOPES.PROJECTS_WRITE, (a) => work.updateProjectColumn(a)));
+
+  server.registerTool('create_project_card', {
+    description: 'Crée une carte dans une colonne de projet Kanban.',
+    inputSchema: {
+      projectId: z.string(),
+      columnId: z.string(),
+      title: z.string().min(1).max(300),
+      description: z.string().max(2000).optional(),
+      priority: z.enum(work.CARD_PRIORITIES).optional(),
+      dueDate: z.string().optional(),
+      assigneeId: z.string().optional()
+    }
+  }, tool(ctx, MCP_SCOPES.PROJECTS_WRITE, (a) => work.createProjectCard(a)));
+
+  server.registerTool('update_project_card', {
+    description: 'Modifie une carte Kanban, y compris son déplacement vers une autre colonne du même projet.',
+    inputSchema: {
+      projectId: z.string(),
+      cardId: z.string(),
+      title: z.string().min(1).max(300).optional(),
+      description: z.string().max(2000).optional(),
+      priority: z.enum(work.CARD_PRIORITIES).optional(),
+      dueDate: z.string().optional(),
+      assigneeId: z.string().optional(),
+      columnId: z.string().optional(),
+      note: z.string().optional()
+    }
+  }, tool(ctx, MCP_SCOPES.PROJECTS_WRITE, (a) => work.updateProjectCard(a)));
 
   return server;
 }

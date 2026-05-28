@@ -3,7 +3,13 @@ const crypto = require('crypto');
 // Scopes disponibles pour les tokens MCP.
 const MCP_SCOPES = {
   RESERVATIONS_READ: 'reservations:read',
-  RESERVATIONS_WRITE: 'reservations:write'
+  RESERVATIONS_WRITE: 'reservations:write',
+  INTERVENTIONS_READ: 'interventions:read',
+  INTERVENTIONS_WRITE: 'interventions:write',
+  TODOS_READ: 'todos:read',
+  TODOS_WRITE: 'todos:write',
+  PROJECTS_READ: 'projects:read',
+  PROJECTS_WRITE: 'projects:write'
 };
 
 const ALL_MCP_SCOPES = Object.values(MCP_SCOPES);
