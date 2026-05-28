@@ -29,6 +29,10 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain('button[onclick*="toggleSidebar"]');
     expect(res.text).toContain('--mobile-content-clearance');
     expect(res.text).toContain('--mobile-fab-clearance');
+    expect(res.text).toContain('position: fixed');
+    expect(res.text).toContain('overscroll-behavior-y: none');
+    expect(res.text).toContain('100dvh');
+    expect(res.text).toContain('touch-action: manipulation');
     expect(res.text).toContain('[data-mobile-fab="true"]');
     expect(res.text).toContain("label: 'Accueil'");
   });

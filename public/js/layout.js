@@ -46,6 +46,8 @@ function ensureResponsiveStyles() {
         --mobile-content-clearance: calc(env(safe-area-inset-bottom, 0px) + 7.75rem);
         --mobile-fab-clearance: calc(env(safe-area-inset-bottom, 0px) + 6.55rem);
         --mobile-toast-clearance: calc(env(safe-area-inset-bottom, 0px) + 6.35rem);
+        min-height: 100dvh;
+        overscroll-behavior-y: none;
       }
 
       body.app-mobile-refined main > header[data-app-header] {
@@ -103,14 +105,48 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined #mobile-tabbar-shell {
         display: block !important;
+        position: fixed;
+        inset: auto 0 0 0;
+        z-index: 40;
+        pointer-events: none;
+        contain: layout paint style;
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
       }
 
       #mobile-tabbar-bar,
       #mobile-tabbar-sheet {
+        pointer-events: auto;
         -webkit-transform: translateZ(0);
         transform: translateZ(0);
         -webkit-backface-visibility: hidden;
         backface-visibility: hidden;
+      }
+
+      body.app-mobile-refined #mobile-tabbar-bar {
+        position: fixed !important;
+        inset: auto 0 0 0 !important;
+        z-index: 40;
+        touch-action: manipulation;
+      }
+
+      body.app-mobile-refined #mobile-tabbar-bar::before {
+        content: "";
+        position: absolute;
+        inset: auto 0 0 0;
+        height: calc(env(safe-area-inset-bottom, 0px) + 1.75rem);
+        background: rgba(248, 250, 252, 0.96);
+        pointer-events: none;
+      }
+
+      body.app-mobile-refined #mobile-tabbar-bar > * {
+        position: relative;
+      }
+
+      body.app-mobile-refined #mobile-tabbar-sheet {
+        max-height: min(82dvh, 34rem);
+        overflow-y: auto;
+        overscroll-behavior: contain;
       }
 
       body.app-mobile-refined .fixed.right-6.bottom-6,
