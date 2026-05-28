@@ -160,7 +160,7 @@ router.get('/authorize', async (req, res) => {
       <li>Collez l'URI ci-dessus et enregistrez</li>
       <li>Relancez la connexion depuis votre LLM</li>
     </ol>
-    <a href="/settings.html?tab=mcp" class="btn-link">Ouvrir les Paramètres MCP</a>
+    <a href="/settings.html?tab=mcp&amp;openUris=${esc(String(client_id))}&amp;addUri=${encodeURIComponent(redirect_uri)}" class="btn-link">Ajouter cette URI et continuer →</a>
   </div>
 </div>
 </body></html>`);
@@ -212,20 +212,27 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
   if (action !== 'approve') {
     return redirectError('access_denied', "Accès refusé par l'utilisateur");
   }
-  if (!email || !password) {
-    return redirectError('invalid_request', 'Identifiants manquants');
-  }
 
+  let user;
   try {
-    // Vérifier les identifiants MaintenanceBoard
-    const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase().trim() } });
-    if (!user || !user.isActive || !user.password) {
-      return redirectError('access_denied', 'Identifiants invalides');
+    if (req.body.use_session === 'true') {
+      // Mode session : authentification via le cookie JWT existant
+      const sessionToken = req.cookies?.accessToken;
+      if (!sessionToken) return redirectError('access_denied', 'Session expirée, reconnectez-vous');
+      let payload;
+      try { payload = jwt.verify(sessionToken, config.jwt.secret); }
+      catch { return redirectError('access_denied', 'Session expirée'); }
+      user = await prisma.user.findUnique({ where: { id: payload.userId } });
+    } else {
+      // Mode login : email + mot de passe
+      if (!email || !password) return redirectError('invalid_request', 'Identifiants manquants');
+      user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase().trim() } });
+      if (!user || !user.isActive || !user.password) return redirectError('access_denied', 'Identifiants invalides');
+      const passwordOk = await bcrypt.compare(String(password), user.password);
+      if (!passwordOk) return redirectError('access_denied', 'Identifiants invalides');
     }
-    const passwordOk = await bcrypt.compare(String(password), user.password);
-    if (!passwordOk) {
-      return redirectError('access_denied', 'Identifiants invalides');
-    }
+
+    if (!user || !user.isActive) return redirectError('access_denied', 'Compte inactif');
 
     // Scopes accordés = intersection(demandés, autorisés par le token)
     const allowedScopes = parseScopes(mcpToken.scopes);

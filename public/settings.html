@@ -1435,21 +1435,56 @@
           </button>
         </div>
       </div>
-      <div id="mcp-secret-info" class="text-xs text-slate-500 space-y-1"></div>
-      <div class="space-y-3 pt-2">
-        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mode 1 — Token natif (direct)</p>
-        <code class="block bg-slate-900 text-slate-100 rounded-lg px-4 py-3 text-xs font-mono overflow-x-auto">Authorization: Bearer <span id="mcp-secret-preview"></span></code>
-        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mode 2 — OAuth2 Client Credentials (recommandé)</p>
-        <code class="block bg-slate-900 text-slate-100 rounded-lg px-4 py-3 text-xs font-mono overflow-x-auto whitespace-pre">POST /oauth/token
-Content-Type: application/x-www-form-urlencoded
-
-grant_type=client_credentials
-client_id=<span id="mcp-secret-client-id"></span>
-client_secret=<span id="mcp-secret-preview2"></span></code>
-        <p class="text-xs text-slate-400">Le JWT retourné est valable <strong>15 minutes</strong>. Utilisez-le ensuite comme Bearer sur <code class="bg-slate-100 px-1 rounded">POST /mcp</code>.</p>
+      <!-- Config complète à copier pour le LLM -->
+      <div class="space-y-2 pt-1">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Configuration à renseigner dans votre LLM</p>
+        <div class="rounded-xl bg-slate-900 px-4 py-4 space-y-2.5 text-xs font-mono">
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <span class="text-slate-500">MCP URL&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+              <span id="cfg-mcp-url" class="text-emerald-400 break-all"></span>
+            </div>
+            <button onclick="copyCfg('cfg-mcp-url')" class="flex-shrink-0 text-slate-500 hover:text-white transition">Copier</button>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <span class="text-slate-500">client_id&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+              <span id="cfg-client-id" class="text-blue-300 break-all"></span>
+            </div>
+            <button onclick="copyCfg('cfg-client-id')" class="flex-shrink-0 text-slate-500 hover:text-white transition">Copier</button>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <span class="text-slate-500">client_secret&nbsp;&nbsp;</span>
+              <span id="cfg-client-secret" class="text-amber-300 break-all"></span>
+            </div>
+            <button onclick="copyCfg('cfg-client-secret')" class="flex-shrink-0 text-slate-500 hover:text-white transition">Copier</button>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <span class="text-slate-500">Token URL&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+              <span id="cfg-token-url" class="text-slate-300 break-all"></span>
+            </div>
+            <button onclick="copyCfg('cfg-token-url')" class="flex-shrink-0 text-slate-500 hover:text-white transition">Copier</button>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <span class="text-slate-500">Authorize URL&nbsp;&nbsp;</span>
+              <span id="cfg-auth-url" class="text-slate-300 break-all"></span>
+            </div>
+            <button onclick="copyCfg('cfg-auth-url')" class="flex-shrink-0 text-slate-500 hover:text-white transition">Copier</button>
+          </div>
+        </div>
+        <button onclick="copyAllCfg()" class="w-full px-3 py-2 bg-slate-700 text-white rounded-lg text-xs font-medium hover:bg-slate-600 transition">
+          Tout copier en une fois
+        </button>
       </div>
+      <!-- Champs cachés pour les fonctions copy (valeurs en clair) -->
+      <input type="hidden" id="mcp-secret-preview"/>
+      <input type="hidden" id="mcp-secret-preview2"/>
+      <input type="hidden" id="mcp-secret-client-id"/>
       <button type="button" onclick="closeMcpSecret()" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition">
-        J'ai copié le token — Fermer
+        J'ai copié — Fermer
       </button>
     </div>
   </div>
@@ -2023,8 +2058,26 @@ async function loadMcpTokens() {
     document.getElementById('mcp-stat-active').textContent = mcpTokens.filter(t => t.isActive && !isMcpExpired(t)).length;
     document.getElementById('mcp-stat-revoked').textContent = mcpTokens.filter(t => !t.isActive || isMcpExpired(t)).length;
     renderMcpTokens();
+    checkAutoOpenUris();
   } catch (err) {
     document.getElementById('mcp-loading').textContent = 'Erreur : ' + err.message;
+  }
+}
+
+function checkAutoOpenUris() {
+  const p = new URLSearchParams(window.location.search);
+  const openId = p.get('openUris');
+  const addUri = p.get('addUri');
+  if (!openId) return;
+  const token = mcpTokens.find(t => t.id === openId);
+  if (!token) return;
+  openMcpUris(openId);
+  if (addUri) {
+    const textarea = document.getElementById('mcp-uris-value');
+    const existing = textarea.value.split('\n').map(u => u.trim()).filter(Boolean);
+    if (!existing.includes(addUri)) {
+      textarea.value = [...existing, addUri].join('\n');
+    }
   }
 }
 
@@ -2049,6 +2102,7 @@ function renderMcpTokens() {
     const actionToggle = t.isActive
       ? `<button onclick="revokeMcpToken('${escHtml(t.id)}')" class="text-xs px-3 py-1.5 border border-rose-200 text-rose-700 rounded-lg hover:bg-rose-50 transition whitespace-nowrap">Révoquer</button>`
       : `<button onclick="reactivateMcpToken('${escHtml(t.id)}')" class="text-xs px-3 py-1.5 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-50 transition whitespace-nowrap">Réactiver</button>`;
+    const actionDelete = `<button onclick="deleteMcpToken('${escHtml(t.id)}')" class="text-xs px-2.5 py-1.5 border border-slate-200 text-slate-400 rounded-lg hover:border-red-200 hover:text-red-600 hover:bg-red-50 transition" title="Supprimer définitivement">🗑</button>`;
     const urisCount = (t.redirectUris || []).length;
     const urisBadge = urisCount
       ? `<span class="text-xs text-emerald-600" title="${escHtml((t.redirectUris || []).join('\n'))}">${urisCount} URI${urisCount > 1 ? 's' : ''}</span>`
@@ -2066,10 +2120,11 @@ function renderMcpTokens() {
       <td class="px-5 py-3.5 text-sm text-slate-500 hidden lg:table-cell">${formatMcpDate(t.lastUsedAt)}</td>
       <td class="px-5 py-3.5 text-sm text-slate-500 hidden xl:table-cell">${t.createdBy ? escHtml(t.createdBy.name) : '—'}</td>
       <td class="px-5 py-3.5 text-right">
-        <div class="flex items-center justify-end gap-2">
+        <div class="flex items-center justify-end gap-1.5 flex-wrap">
           ${urisBadge}
           <button onclick="openMcpUris('${escHtml(t.id)}')" class="text-xs px-2.5 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition" title="Gérer les redirect URIs">URIs</button>
           ${actionToggle}
+          ${actionDelete}
         </div>
       </td>
     </tr>`;
@@ -2175,28 +2230,51 @@ async function submitCreateToken(e) {
 function showMcpSecret(tokenData) {
   const secret = tokenData.token || '';
   const clientId = tokenData.id || '';
+  const origin = window.location.origin;
+
   document.getElementById('mcp-secret-value').value = secret;
-  document.getElementById('mcp-secret-preview').textContent = secret;
-  document.getElementById('mcp-secret-preview2').textContent = secret;
-  document.getElementById('mcp-secret-client-id').textContent = clientId;
-  const info = document.getElementById('mcp-secret-info');
-  const lines = [
-    `Label : ${tokenData.label}`,
-    `client_id (OAuth2) : ${clientId}`,
-    `Scopes : ${(tokenData.scopes || []).join(', ')}`,
-    tokenData.expiresAt ? `Expire le : ${new Date(tokenData.expiresAt).toLocaleString('fr-FR')}` : 'Pas d\'expiration'
-  ];
-  info.innerHTML = lines.map(l => `<p>${escHtml(l)}</p>`).join('');
+  document.getElementById('mcp-secret-preview').value = secret;
+  document.getElementById('mcp-secret-preview2').value = secret;
+  document.getElementById('mcp-secret-client-id').value = clientId;
+
+  // Bloc config
+  document.getElementById('cfg-mcp-url').textContent      = origin + '/mcp';
+  document.getElementById('cfg-client-id').textContent    = clientId;
+  document.getElementById('cfg-client-secret').textContent = secret;
+  document.getElementById('cfg-token-url').textContent    = origin + '/oauth/token';
+  document.getElementById('cfg-auth-url').textContent     = origin + '/oauth/authorize';
+
   document.getElementById('modal-mcp-secret').classList.remove('hidden');
   setTimeout(() => document.getElementById('mcp-secret-value').select(), 50);
+}
+
+async function copyCfg(id) {
+  const text = document.getElementById(id)?.textContent || document.getElementById(id)?.value || '';
+  try { await navigator.clipboard.writeText(text); showToast('Copié', 'success'); }
+  catch { showToast('Copie impossible', 'error'); }
+}
+
+async function copyAllCfg() {
+  const origin = window.location.origin;
+  const secret = document.getElementById('mcp-secret-value').value;
+  const clientId = document.getElementById('cfg-client-id').textContent;
+  const text = [
+    `MCP URL:       ${origin}/mcp`,
+    `client_id:     ${clientId}`,
+    `client_secret: ${secret}`,
+    `Token URL:     ${origin}/oauth/token`,
+    `Authorize URL: ${origin}/oauth/authorize`
+  ].join('\n');
+  try { await navigator.clipboard.writeText(text); showToast('Configuration copiée', 'success'); }
+  catch { showToast('Copie impossible', 'error'); }
 }
 
 function closeMcpSecret() {
   document.getElementById('modal-mcp-secret').classList.add('hidden');
   document.getElementById('mcp-secret-value').value = '';
-  document.getElementById('mcp-secret-preview').textContent = '';
-  document.getElementById('mcp-secret-preview2').textContent = '';
-  document.getElementById('mcp-secret-client-id').textContent = '';
+  document.getElementById('mcp-secret-preview').value = '';
+  document.getElementById('mcp-secret-preview2').value = '';
+  document.getElementById('mcp-secret-client-id').value = '';
 }
 
 async function copyMcpSecret() {
@@ -2208,6 +2286,17 @@ async function copyMcpSecret() {
     document.getElementById('mcp-secret-value').select();
     showToast('Sélectionnez et copiez manuellement (Ctrl+C)', 'error');
   }
+}
+
+async function deleteMcpToken(id) {
+  const token = mcpTokens.find(t => t.id === id);
+  if (!token) return;
+  if (!confirm(`Supprimer définitivement le token "${token.label}" ?\n\nCette action est irréversible et supprime toutes les données d'audit.`)) return;
+  const res = await fetch(`/api/mcp-tokens/${id}?permanent=true`, { method: 'DELETE', credentials: 'include' });
+  if (!res.ok) { showToast('Erreur lors de la suppression', 'error'); return; }
+  showToast('Token supprimé définitivement', 'success');
+  mcpTokens = [];
+  loadMcpTokens();
 }
 
 async function revokeMcpToken(id) {

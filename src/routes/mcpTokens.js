@@ -135,13 +135,17 @@ router.patch('/:id',
 );
 
 // ── DELETE /api/mcp-tokens/:id ──────────────────────────────────────────────
+// Sans ?permanent : révocation (isActive=false, conservé pour audit).
+// Avec ?permanent=true : suppression définitive et irréversible.
 router.delete('/:id', async (req, res, next) => {
   try {
-    await prisma.mcpToken.update({
-      where: { id: req.params.id },
-      data: { isActive: false }
-    });
-    res.json({ message: 'Token MCP révoqué' });
+    if (req.query.permanent === 'true') {
+      await prisma.mcpToken.delete({ where: { id: req.params.id } });
+      res.json({ message: 'Token MCP supprimé définitivement' });
+    } else {
+      await prisma.mcpToken.update({ where: { id: req.params.id }, data: { isActive: false } });
+      res.json({ message: 'Token MCP révoqué' });
+    }
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Token introuvable' });
     next(err);
