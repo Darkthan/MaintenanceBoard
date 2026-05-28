@@ -216,6 +216,16 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
   let user;
   try {
     if (req.body.use_session === 'true') {
+      // Anti-CSRF : un POST légitime depuis notre page de consentement porte toujours
+      // un header Origin égal à notre domaine. Un POST cross-site aura un Origin
+      // différent — et le cookie SameSite=Lax n'est de toute façon pas envoyé
+      // par les navigateurs modernes sur les requêtes cross-site POST.
+      const requestOrigin = req.get('Origin') || req.get('Referer') || '';
+      const expectedOrigin = config.appUrl.replace(/\/$/, '');
+      if (!requestOrigin.startsWith(expectedOrigin)) {
+        return redirectError('access_denied', 'Requête cross-site refusée');
+      }
+
       // Mode session : authentification via le cookie JWT existant
       const sessionToken = req.cookies?.accessToken;
       if (!sessionToken) return redirectError('access_denied', 'Session expirée, reconnectez-vous');
