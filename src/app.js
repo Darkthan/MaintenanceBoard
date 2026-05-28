@@ -139,6 +139,20 @@ const { loansRouter, loanPublicRouter } = require('./routes/loans');
 app.use('/api/loans', loansRouter);
 app.use('/api/loan-request', loanPublicRouter);
 app.use('/api/nuget', require('./routes/nuget'));
+app.use('/api/mcp-tokens', require('./routes/mcpTokens'));
+
+// ── Serveur MCP (Model Context Protocol) ───────────────────────────────────────
+// Transport Streamable HTTP, authentifié par token MCP dédié (Bearer).
+const { mcpAuth } = require('./middleware/mcpAuth');
+const { handleMcpRequest, methodNotAllowed } = require('./mcp/server');
+const mcpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 240,
+  message: { jsonrpc: '2.0', error: { code: -32000, message: 'Trop de requêtes MCP, réessayez dans 15 minutes.' }, id: null }
+});
+app.post('/mcp', mcpLimiter, mcpAuth, handleMcpRequest);
+app.get('/mcp', methodNotAllowed);
+app.delete('/mcp', methodNotAllowed);
 
 // ── Tickets publics (sans auth, rate limit IP strict) ─────────────────────────
 const ticketLimiter = rateLimit({

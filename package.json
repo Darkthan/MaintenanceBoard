@@ -13,6 +13,7 @@
     "test": "jest --forceExit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/adapter-better-sqlite3": "^7.5.0",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
@@ -45,7 +46,8 @@
     "tesseract.js": "^7.0.0",
     "uuid": "^10.0.0",
     "xlsx": "^0.18.5",
-    "yamljs": "^0.3.0"
+    "yamljs": "^0.3.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "jest": "^29.7.0",

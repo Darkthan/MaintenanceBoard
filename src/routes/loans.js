@@ -14,6 +14,7 @@ const {
   getBundleInfo,
   computeReservedSlots,
   overlaps,
+  ensureLoanAvailability,
   getCalendarFeedToken,
   escapeIcsText,
   toIcsDate
@@ -617,49 +618,8 @@ function hasReservationScheduleChange(existing, nextData) {
   return false;
 }
 
-async function ensureAvailable(resourceId, startAt, endAt, requestedUnits, excludeReservationId = null) {
-  const resource = await prisma.loanResource.findUnique({
-    where: { id: resourceId },
-    include: { ...EQUIPMENT_SELECT }
-  });
-  if (!resource || !resource.isActive) {
-    throw Object.assign(new Error('Ressource de prêt introuvable'), { status: 404 });
-  }
-
-  // Bloquer si au moins un équipement lié est en réparation
-  const linkedEquipments = (resource.equipments || []).map(e => e.equipment).filter(Boolean);
-  if (linkedEquipments.length > 0 && linkedEquipments.some(e => e.status === 'REPAIR')) {
-    throw Object.assign(new Error('Cette ressource est temporairement indisponible : un équipement lié est en cours de réparation.'), { status: 409 });
-  }
-
-  const bundle = getBundleInfo(resource);
-  const requested = Math.max(1, Math.min(bundle.totalUnits, Math.round(Number(requestedUnits) || 1)));
-  const reservedSlots = computeReservedSlots(resource, requested);
-
-  const overlapsWhere = {
-    resourceId,
-    status: { in: ACTIVE_LOAN_STATUSES },
-    startAt: { lt: new Date(endAt) },
-    endAt: { gt: new Date(startAt) }
-  };
-
-  if (excludeReservationId) {
-    overlapsWhere.id = { not: excludeReservationId };
-  }
-
-  const overlapping = await prisma.loanReservation.findMany({ where: overlapsWhere });
-  const usedSlots = overlapping.reduce((sum, item) => sum + (item.reservedSlots || 0), 0);
-
-  if (usedSlots + reservedSlots > bundle.totalSlots) {
-    throw Object.assign(new Error(`Disponibilité insuffisante sur cette période. ${bundle.totalSlots - usedSlots} lot(s) restant(s).`), { status: 409 });
-  }
-
-  return {
-    resource,
-    requestedUnits: requested,
-    reservedSlots,
-    remainingSlots: Math.max(0, bundle.totalSlots - usedSlots - reservedSlots)
-  };
+function ensureAvailable(resourceId, startAt, endAt, requestedUnits, excludeReservationId = null) {
+  return ensureLoanAvailability(prisma, { resourceId, startAt, endAt, requestedUnits, excludeReservationId });
 }
 
 function buildIcs(events) {

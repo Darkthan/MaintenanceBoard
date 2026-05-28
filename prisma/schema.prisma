@@ -29,6 +29,7 @@ model User {
   orders               Order[]
   refreshTokens        RefreshToken[]
   agentTokens          AgentToken[]
+  mcpTokens            McpToken[]
   loginLogs            LoginLog[]
   orderAttachments     OrderAttachment[]
   signatureRequests    SignatureRequest[]
@@ -60,6 +61,24 @@ model AgentToken {
   enrolledMachines Equipment[]
 
   @@map("agent_tokens")
+}
+
+model McpToken {
+  id          String    @id @default(uuid())
+  label       String
+  tokenPrefix String                            // Préfixe lisible (mcp_xxxxxxxx) affiché dans l'UI
+  tokenHash   String    @unique                 // SHA-256 hex du secret complet (jamais le secret en clair)
+  scopes      String    @default("[]")          // JSON array de scopes : reservations:read | reservations:write
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime?                          // null = pas d'expiration
+  lastUsedAt  DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy   User      @relation(fields: [createdById], references: [id])
+
+  @@map("mcp_tokens")
 }
 
 model Passkey {
