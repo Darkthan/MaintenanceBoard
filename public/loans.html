@@ -1313,13 +1313,27 @@ function showDayDetail(dayKey) {
       <h4 class="text-sm font-semibold text-slate-700 capitalize">${label}</h4>
       <div class="space-y-2 mt-2">
         ${items.map(item => `
-          <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
-            <div class="flex items-center justify-between gap-2">
-              <p class="font-medium text-slate-800 text-sm">${item.resource.name}</p>
+          <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 space-y-2">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="flex-1 min-w-0">
+                <p class="font-medium text-slate-800 text-sm">${escapeHtml(item.resource.name)}</p>
+                <p class="text-sm text-slate-500 mt-0.5">${escapeHtml(item.requesterName)} · ${item.requestedUnits} unité(s)</p>
+                <p class="text-xs text-slate-400 mt-0.5">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)}</p>
+              </div>
               ${formatStatus(item.status)}
             </div>
-            <p class="text-sm text-slate-500 mt-1">${item.requesterName} · ${item.requestedUnits} unité(s)</p>
-            <p class="text-xs text-slate-400 mt-1">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)}</p>
+            <div class="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+              ${item.status !== 'APPROVED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="APPROVED" class="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 transition">Approuver</button>` : ''}
+              ${item.status !== 'REJECTED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="REJECTED" class="px-2 py-1 border border-red-300 text-red-700 rounded text-xs hover:bg-red-50 transition">Refuser</button>` : ''}
+              ${item.status !== 'RETURNED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="RETURNED" class="px-2 py-1 border border-slate-300 text-slate-700 rounded text-xs hover:bg-slate-100 transition">Restitué</button>` : ''}
+              ${item.status !== 'CANCELLED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="CANCELLED" class="px-2 py-1 border border-slate-300 text-slate-700 rounded text-xs hover:bg-slate-100 transition">Annuler</button>` : ''}
+              <button type="button" data-action="reservation-edit" data-id="${item.id}" class="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-300 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition" title="Modifier" aria-label="Modifier">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 013.536 3.536L12.536 14.536A4 4 0 0110.05 15.65L7 16l.35-3.05A4 4 0 018.464 10.464L9 11z"/></svg>
+              </button>
+              <button type="button" data-action="reservation-delete" data-id="${item.id}" class="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-300 text-slate-500 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition" title="Supprimer" aria-label="Supprimer">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8"/></svg>
+              </button>
+            </div>
           </div>`).join('')}
       </div>`;
   }
