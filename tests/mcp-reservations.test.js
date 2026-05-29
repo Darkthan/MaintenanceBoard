@@ -216,6 +216,57 @@ describe('OAuth MCP refresh tokens', () => {
     expect(refreshRes.body.scope).toBe('reservations:read');
   });
 
+  it('renouvelle un refresh token avec ancien scope réservation quand le client expose le nouveau scope emprunt', async () => {
+    const verifier = 'test-verifier-legacy-scope';
+    const code = generateCode();
+    storeCode(code, {
+      userId: 'u1',
+      mcpTokenId: 't1',
+      clientId: 't1',
+      clientType: 'mcpToken',
+      scopes: ['reservations:read'],
+      redirectUri: 'https://chatgpt.com/connector_platform_oauth_redirect',
+      codeChallenge: pkceChallenge(verifier),
+      codeChallengeMethod: 'S256',
+      issueRefreshToken: true
+    });
+
+    prisma.mcpToken.findUnique.mockResolvedValue({
+      id: 't1',
+      isActive: true,
+      expiresAt: null,
+      scopes: serializeScopes(['equipment_bookings:read'])
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1', role: 'ADMIN', isActive: true });
+    prisma.mcpToken.update.mockResolvedValue({});
+
+    const app = oauthTestApp();
+    const tokenRes = await request(app)
+      .post('/oauth/token')
+      .type('form')
+      .send({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: 'https://chatgpt.com/connector_platform_oauth_redirect',
+        code_verifier: verifier
+      });
+
+    expect(tokenRes.status).toBe(200);
+    expect(tokenRes.body.refresh_token).toBeTruthy();
+
+    const refreshRes = await request(app)
+      .post('/oauth/token')
+      .type('form')
+      .send({
+        grant_type: 'refresh_token',
+        refresh_token: tokenRes.body.refresh_token
+      });
+
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body.access_token).toBeTruthy();
+    expect(refreshRes.body.scope).toBe('reservations:read');
+  });
+
   it('autorise le mode session avec un Origin opaque si le CSRF OAuth est valide', async () => {
     prisma.mcpToken.findUnique
       .mockResolvedValueOnce({

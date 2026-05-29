@@ -15,6 +15,7 @@ const {
   isDirectMcpClientId,
   isMcpTokenUsable,
   parseScopes,
+  expandCompatibleScopes,
   filterScopesForUser,
   getUserMcpScopes
 } = require('../utils/mcpTokens');
@@ -214,7 +215,7 @@ async function resolveOAuthClient(clientId) {
     type: 'mcpToken',
     id: mcpToken.id,
     label: mcpToken.label,
-    scopes: parseScopes(mcpToken.scopes),
+    scopes: expandCompatibleScopes(mcpToken.scopes),
     redirectUris: parseRedirectUris(mcpToken.redirectUris),
     token: mcpToken
   };
@@ -608,7 +609,7 @@ router.post('/token', tokenLimiter, async (req, res) => {
       }
       if (!user || !user.isActive) return oauthError(res, 'access_denied', 'Compte désactivé');
 
-      const clientAllowedScopes = directClient ? ALL_MCP_SCOPES : parseScopes(mcpToken.scopes);
+      const clientAllowedScopes = directClient ? ALL_MCP_SCOPES : expandCompatibleScopes(mcpToken.scopes);
       const roleAllowedScopes = filterScopesForUser(clientAllowedScopes, user);
       const storedScopes = parseScopes(tokenRecord.scopes);
       const scopes = storedScopes.filter(s => roleAllowedScopes.includes(s));

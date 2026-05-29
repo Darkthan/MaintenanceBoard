@@ -20,6 +20,13 @@ const MCP_SCOPES = {
 
 const ALL_MCP_SCOPES = Object.values(MCP_SCOPES);
 
+const MCP_SCOPE_ALIASES = {
+  [MCP_SCOPES.RESERVATIONS_READ]: MCP_SCOPES.EQUIPMENT_BOOKINGS_READ,
+  [MCP_SCOPES.EQUIPMENT_BOOKINGS_READ]: MCP_SCOPES.RESERVATIONS_READ,
+  [MCP_SCOPES.RESERVATIONS_WRITE]: MCP_SCOPES.EQUIPMENT_BOOKINGS_WRITE,
+  [MCP_SCOPES.EQUIPMENT_BOOKINGS_WRITE]: MCP_SCOPES.RESERVATIONS_WRITE
+};
+
 const TOKEN_PREFIX = 'mcp_';
 const DIRECT_MCP_CLIENT_ID = 'maintenanceboard-direct-mcp';
 const DYNAMIC_MCP_CLIENT_PREFIX = 'mcp_dynamic_';
@@ -97,6 +104,17 @@ function hasScope(scopes, required) {
   return list.includes(required);
 }
 
+function expandCompatibleScopes(scopes) {
+  const list = Array.isArray(scopes) ? scopes : parseScopes(scopes);
+  const expanded = [];
+  for (const scope of list) {
+    if (!ALL_MCP_SCOPES.includes(scope)) continue;
+    expanded.push(scope);
+    if (MCP_SCOPE_ALIASES[scope]) expanded.push(MCP_SCOPE_ALIASES[scope]);
+  }
+  return [...new Set(expanded)];
+}
+
 function isDirectMcpClientId(clientId) {
   const value = String(clientId || '');
   return value === DIRECT_MCP_CLIENT_ID || value.startsWith(DYNAMIC_MCP_CLIENT_PREFIX);
@@ -116,6 +134,7 @@ function filterScopesForUser(scopes, user) {
 module.exports = {
   MCP_SCOPES,
   ALL_MCP_SCOPES,
+  MCP_SCOPE_ALIASES,
   TOKEN_PREFIX,
   DIRECT_MCP_CLIENT_ID,
   DYNAMIC_MCP_CLIENT_PREFIX,
@@ -126,6 +145,7 @@ module.exports = {
   parseScopes,
   serializeScopes,
   hasScope,
+  expandCompatibleScopes,
   isDirectMcpClientId,
   getUserMcpScopes,
   filterScopesForUser
