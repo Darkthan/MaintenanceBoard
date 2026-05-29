@@ -31,6 +31,18 @@ jest.mock('../src/lib/prisma', () => ({
   $transaction: jest.fn(operations => Promise.all(operations))
 }));
 
+jest.mock('../src/utils/settings', () => {
+  let settings = {};
+  return {
+    readSettings: jest.fn(() => settings),
+    __reset: jest.fn(() => { settings = {}; }),
+    writeSettings: jest.fn((patch) => {
+      settings = { ...settings, ...patch };
+      return settings;
+    })
+  };
+});
+
 const crypto = require('crypto');
 const express = require('express');
 const cookieParser = require('cookie-parser');
@@ -38,6 +50,7 @@ const jwt = require('jsonwebtoken');
 const request = require('supertest');
 const config = require('../src/config');
 const prisma = require('../src/lib/prisma');
+const settings = require('../src/utils/settings');
 const {
   generateMcpToken,
   hashMcpToken,
@@ -162,7 +175,7 @@ describe('mcpAuth middleware', () => {
 });
 
 describe('OAuth MCP refresh tokens', () => {
-  beforeEach(() => { jest.clearAllMocks(); mockRefreshTokens.length = 0; });
+  beforeEach(() => { jest.clearAllMocks(); mockRefreshTokens.length = 0; settings.__reset(); });
 
   it('émet puis renouvelle un access token MCP avec offline_access', async () => {
     const verifier = 'test-verifier-1234567890';
@@ -461,6 +474,45 @@ describe('OAuth MCP refresh tokens', () => {
     expect(next).toHaveBeenCalled();
     expect(req.mcpToken.authMethod).toBe('oauth2_direct');
     expect(req.mcpToken.scopes).toEqual(['orders:read']);
+  });
+
+  it('retrouve un client OAuth dynamique persisté après redémarrage', async () => {
+    settings.writeSettings({
+      dynamicOAuthClients: {
+        mcp_dynamic_saved: {
+          id: 'mcp_dynamic_saved',
+          label: 'ChatGPT',
+          redirectUris: ['https://chatgpt.com/connector_platform_oauth_redirect']
+        }
+      }
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1', role: 'ADMIN', isActive: true });
+
+    const app = oauthTestApp();
+    const accessToken = jwt.sign({ userId: 'u1' }, config.jwt.secret, { expiresIn: '15m' });
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .set('Cookie', [`accessToken=${accessToken}`])
+      .query({
+        response_type: 'code',
+        client_id: 'mcp_dynamic_saved',
+        redirect_uri: 'https://chatgpt.com/connector_platform_oauth_redirect',
+        scope: 'equipment_bookings:read',
+        state: 'state-1',
+        code_challenge: 'challenge-1',
+        code_challenge_method: 'S256'
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('oauth-csrf');
+
+    const infoRes = await request(app)
+      .get('/oauth/client-info')
+      .query({ client_id: 'mcp_dynamic_saved' });
+
+    expect(infoRes.status).toBe(200);
+    expect(infoRes.body.label).toBe('ChatGPT');
+    expect(infoRes.body.scopes).toContain('equipment_bookings:read');
   });
 });
 

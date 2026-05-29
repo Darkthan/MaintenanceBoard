@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const prisma = require('../lib/prisma');
 const config = require('../config');
+const { readSettings, writeSettings } = require('../utils/settings');
 const {
   ALL_MCP_SCOPES,
   DIRECT_MCP_CLIENT_ID,
@@ -30,6 +31,7 @@ const OAUTH_CSRF_COOKIE = 'oauthCsrf';
 const OAUTH_CSRF_EXPIRES_IN = 600; // 10 minutes
 const DIRECT_MCP_CLIENT_LABEL = 'MaintenanceBoard MCP';
 const dynamicOAuthClients = new Map();
+const DYNAMIC_OAUTH_SETTINGS_KEY = 'dynamicOAuthClients';
 
 const tokenLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -192,11 +194,35 @@ function normalizeClientId(clientId) {
   return String(clientId || DIRECT_MCP_CLIENT_ID);
 }
 
+function readDynamicOAuthClients() {
+  const saved = readSettings()[DYNAMIC_OAUTH_SETTINGS_KEY] || {};
+  return saved && typeof saved === 'object' ? saved : {};
+}
+
+function getDynamicOAuthClient(clientId) {
+  const cached = dynamicOAuthClients.get(clientId);
+  if (cached) return cached;
+  const saved = readDynamicOAuthClients()[clientId];
+  if (!saved) return null;
+  dynamicOAuthClients.set(clientId, saved);
+  return saved;
+}
+
+function saveDynamicOAuthClient(client) {
+  dynamicOAuthClients.set(client.id, client);
+  writeSettings({
+    [DYNAMIC_OAUTH_SETTINGS_KEY]: {
+      ...readDynamicOAuthClients(),
+      [client.id]: client
+    }
+  });
+}
+
 function publicClientRecord(clientId, record) {
   return {
     type: 'direct',
     id: clientId,
-    label: record?.clientName || DIRECT_MCP_CLIENT_LABEL,
+    label: record?.label || record?.clientName || DIRECT_MCP_CLIENT_LABEL,
     scopes: ALL_MCP_SCOPES,
     redirectUris: record?.redirectUris || null
   };
@@ -205,7 +231,7 @@ function publicClientRecord(clientId, record) {
 async function resolveOAuthClient(clientId) {
   const id = normalizeClientId(clientId);
   if (isDirectMcpClientId(id)) {
-    return publicClientRecord(id, dynamicOAuthClients.get(id));
+    return publicClientRecord(id, getDynamicOAuthClient(id));
   }
 
   const mcpToken = await prisma.mcpToken.findUnique({ where: { id } });
@@ -257,12 +283,12 @@ router.post('/register', (req, res) => {
     label: String(req.body.client_name || DIRECT_MCP_CLIENT_LABEL).trim().slice(0, 200) || DIRECT_MCP_CLIENT_LABEL,
     redirectUris
   };
-  dynamicOAuthClients.set(client.id, client);
+  saveDynamicOAuthClient(client);
   res.status(201).json(dynamicClientResponse(client, req));
 });
 
 router.get('/register/:clientId', (req, res) => {
-  const client = dynamicOAuthClients.get(req.params.clientId);
+  const client = getDynamicOAuthClient(req.params.clientId);
   if (!client) return res.status(404).json({ error: 'invalid_client', error_description: 'Client dynamique inconnu ou expiré.' });
   res.json(dynamicClientResponse(client, req));
 });
