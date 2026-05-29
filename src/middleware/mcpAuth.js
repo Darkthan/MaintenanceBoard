@@ -64,7 +64,7 @@ async function mcpAuth(req, res, next) {
 async function handleNativeToken(req, res, next, token) {
   const record = await prisma.mcpToken.findUnique({
     where: { tokenHash: hashMcpToken(token) },
-    include: { createdBy: { select: { id: true, name: true, email: true, role: true, isActive: true } } }
+    include: { createdBy: { select: { id: true, name: true, email: true, contactEmail: true, role: true, isActive: true } } }
   });
   if (!record || !isMcpTokenUsable(record)) return invalidToken(res, 'Token MCP invalide, révoqué ou expiré');
   if (!record.createdBy?.isActive) return invalidToken(res, 'Compte propriétaire du token désactivé');
@@ -92,7 +92,7 @@ async function handleOAuthJwt(req, res, next, token) {
 async function handleMcpAccessJwt(req, res, next, payload) {
   const record = await prisma.mcpToken.findUnique({
     where: { id: payload.sub },
-    include: { createdBy: { select: { id: true, name: true, email: true, role: true, isActive: true } } }
+    include: { createdBy: { select: { id: true, name: true, email: true, contactEmail: true, role: true, isActive: true } } }
   });
   if (!record || !isMcpTokenUsable(record)) return invalidToken(res, 'Token MCP révoqué ou expiré');
   if (!record.createdBy?.isActive) return invalidToken(res, 'Compte propriétaire du token désactivé');
@@ -109,7 +109,7 @@ async function handleMcpUserAccessJwt(req, res, next, payload) {
   if (isDirectMcpClientId(payload.clientId)) {
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, name: true, email: true, role: true, isActive: true }
+      select: { id: true, name: true, email: true, contactEmail: true, role: true, isActive: true }
     });
     if (!user || !user.isActive) return invalidToken(res, 'Compte utilisateur désactivé');
 
@@ -130,7 +130,7 @@ async function handleMcpUserAccessJwt(req, res, next, payload) {
 
   const [mcpToken, user] = await Promise.all([
     prisma.mcpToken.findUnique({ where: { id: payload.mcpTokenId } }),
-    prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, name: true, email: true, role: true, isActive: true } })
+    prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, name: true, email: true, contactEmail: true, role: true, isActive: true } })
   ]);
   if (!mcpToken || !isMcpTokenUsable(mcpToken)) return invalidToken(res, 'Client MCP révoqué ou expiré');
   if (!user || !user.isActive) return invalidToken(res, 'Compte utilisateur désactivé');

@@ -9,6 +9,7 @@ const prisma = require('../lib/prisma');
 const config = require('../config');
 const { requireAuth } = require('../middleware/auth');
 const { createSmtpTransporter } = require('../utils/mail');
+const { normalizeEmail, resolveLoanRequesterEmail } = require('../utils/loanReservationEmail');
 const {
   ACTIVE_LOAN_STATUSES,
   getBundleInfo,
@@ -454,10 +455,6 @@ function computeOccurrences(startAt, endAt, recurrence) {
     occurrences.push({ startAt: new Date(cur), endAt: new Date(cur.getTime() + duration) });
   }
   return occurrences;
-}
-
-function normalizeEmail(value) {
-  return String(value || '').trim().toLowerCase();
 }
 
 function fmtLoanDate(d) {
@@ -1185,7 +1182,7 @@ loansRouter.post('/reservations',
   [
     body('resourceId').isString(),
     body('requesterName').trim().isLength({ min: 2, max: 200 }),
-    body('requesterEmail').isEmail().normalizeEmail(),
+    body('requesterEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
     body('requesterPhone').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
     body('requesterOrganization').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
     body('startAt').isISO8601(),
@@ -1204,6 +1201,10 @@ loansRouter.post('/reservations',
       if (!validate(req, res)) return;
       const { start, end } = ensureValidDates(req.body.startAt, req.body.endAt);
       const occurrences = computeOccurrences(start, end, req.body.recurrence);
+      const requesterEmail = resolveLoanRequesterEmail(req.body.requesterEmail, req.user);
+      if (!requesterEmail) {
+        return res.status(400).json({ error: 'Aucun email disponible pour la réservation. Renseignez un email de profil ou un email par défaut dans les paramètres.' });
+      }
 
       const created = [];
       const selectedEquipmentIds = normalizeSelectedEquipmentIds(req.body.selectedEquipmentIds);
@@ -1214,7 +1215,7 @@ loansRouter.post('/reservations',
           data: {
             resourceId: availability.resource.id,
             requesterName: req.body.requesterName,
-            requesterEmail: normalizeEmail(req.body.requesterEmail),
+            requesterEmail,
             requesterPhone: req.body.requesterPhone || null,
             requesterOrganization: req.body.requesterOrganization || null,
             startAt: occ.startAt,

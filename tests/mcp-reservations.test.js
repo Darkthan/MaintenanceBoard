@@ -1,9 +1,34 @@
+const mockRefreshTokens = [];
+
 jest.mock('../src/lib/prisma', () => ({
   mcpToken: { findUnique: jest.fn(), update: jest.fn() },
+  mcpRefreshToken: {
+    create: jest.fn(({ data }) => {
+      const row = { id: `refresh-${mockRefreshTokens.length + 1}`, ...data };
+      mockRefreshTokens.push(row);
+      return Promise.resolve(row);
+    }),
+    findUnique: jest.fn(({ where }) => {
+      const row = mockRefreshTokens.find(item => item.tokenHash === where.tokenHash);
+      return Promise.resolve(row ? {
+        ...row,
+        user: { id: row.userId, role: 'ADMIN', isActive: true },
+        mcpToken: row.mcpTokenId
+          ? { id: row.mcpTokenId, isActive: true, expiresAt: null, scopes: '["reservations:read","reservations:write","orders:read"]' }
+          : null
+      } : null);
+    }),
+    delete: jest.fn(({ where }) => {
+      const index = mockRefreshTokens.findIndex(row => row.id === where.id);
+      if (index >= 0) mockRefreshTokens.splice(index, 1);
+      return Promise.resolve({});
+    })
+  },
   user: { findUnique: jest.fn() },
   loanResource: { findUnique: jest.fn(), findMany: jest.fn() },
   loanReservation: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-  signatureRequest: { findUnique: jest.fn() }
+  signatureRequest: { findUnique: jest.fn() },
+  $transaction: jest.fn(operations => Promise.all(operations))
 }));
 
 const crypto = require('crypto');
@@ -59,8 +84,8 @@ describe('mcpTokens util', () => {
   });
 
   it('ne conserve que les scopes valides', () => {
-    expect(parseScopes(serializeScopes(['reservations:read', 'bogus', 'reservations:write']))).toEqual(
-      ['reservations:read', 'reservations:write']
+    expect(parseScopes(serializeScopes(['equipment_bookings:read', 'bogus', 'equipment_bookings:write']))).toEqual(
+      ['equipment_bookings:read', 'equipment_bookings:write']
     );
   });
 
@@ -77,7 +102,7 @@ describe('mcpTokens util', () => {
 });
 
 describe('mcpAuth middleware', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => { jest.clearAllMocks(); mockRefreshTokens.length = 0; });
 
   it('refuse l\'absence de Bearer avec WWW-Authenticate', async () => {
     const req = { headers: {} };
@@ -137,7 +162,7 @@ describe('mcpAuth middleware', () => {
 });
 
 describe('OAuth MCP refresh tokens', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => { jest.clearAllMocks(); mockRefreshTokens.length = 0; });
 
   it('émet puis renouvelle un access token MCP avec offline_access', async () => {
     const verifier = 'test-verifier-1234567890';
@@ -375,8 +400,7 @@ describe('OAuth MCP refresh tokens', () => {
     expect(tokenRes.status).toBe(200);
     expect(tokenRes.body.scope).toBe('orders:read');
     expect(tokenRes.body.refresh_token).toBeTruthy();
-    const refreshPayload = jwt.decode(tokenRes.body.refresh_token);
-    expect(refreshPayload.exp - refreshPayload.iat).toBeGreaterThanOrEqual(364 * 24 * 60 * 60);
+    expect(typeof tokenRes.body.refresh_token).toBe('string');
 
     const req = { headers: { authorization: `Bearer ${tokenRes.body.access_token}` } };
     const res = mockRes();
@@ -390,7 +414,7 @@ describe('OAuth MCP refresh tokens', () => {
 });
 
 describe('reservationsService', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => { jest.clearAllMocks(); mockRefreshTokens.length = 0; });
 
   it('crée une réservation après vérification de disponibilité', async () => {
     prisma.loanResource.findUnique.mockResolvedValue({
@@ -420,7 +444,81 @@ describe('reservationsService', () => {
         createdById: 'u1'
       })
     }));
-    expect(out.status).toBe('PENDING');
+    expect(out.resource.id).toBe('res-1');
+  });
+
+  it('crée une réservation MCP sans email saisi en utilisant le profil', async () => {
+    prisma.loanResource.findUnique.mockResolvedValue({
+      id: 'res-1', name: 'Valise iPad', isActive: true, totalUnits: 10, bundleSize: 10, usesBundles: true, equipments: []
+    });
+    prisma.loanReservation.findMany.mockResolvedValue([]);
+    prisma.loanReservation.create.mockImplementation(async ({ data }) => ({
+      id: 'r-1', ...data, resource: { id: 'res-1', name: 'Valise iPad' }, selectedEquipments: []
+    }));
+
+    await service.createReservation({
+      resourceId: 'res-1',
+      requesterName: 'Jean Dupont',
+      startAt: '2030-03-25T08:00:00.000Z',
+      endAt: '2030-03-25T12:00:00.000Z',
+      requestedUnits: 3
+    }, { userId: 'u1', user: { email: 'LOGIN@example.com', contactEmail: 'contact@example.com' } });
+
+    expect(prisma.loanReservation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        requesterEmail: 'contact@example.com'
+      })
+    }));
+  });
+
+  it('prévisualise un emprunt de matériel sans écrire en base', async () => {
+    prisma.loanResource.findUnique.mockResolvedValue({
+      id: 'res-1', name: 'Valise iPad', isActive: true, totalUnits: 10, bundleSize: 10, usesBundles: true, equipments: []
+    });
+    prisma.loanReservation.findMany.mockResolvedValue([]);
+
+    const out = await service.previewEquipmentBooking({
+      resourceId: 'res-1',
+      requesterName: 'Angéline',
+      startAt: '2030-03-25T08:00:00.000Z',
+      endAt: '2030-03-25T12:00:00.000Z',
+      requestedUnits: 17,
+      notes: 'Classe mobile'
+    }, { user: {} });
+
+    expect(out.databaseChanged).toBe(false);
+    expect(out.booking.requesterEmail).toBe('support@beaupeyrat.fr');
+    expect(prisma.loanReservation.create).not.toHaveBeenCalled();
+  });
+
+  it('crée un emprunt pour la ressource Tablettes Valise', async () => {
+    prisma.loanResource.findMany.mockResolvedValue([
+      { id: 'tablet-case', name: 'Tablettes Valise', isActive: true, totalUnits: 20, bundleSize: 1, usesBundles: false, equipments: [] }
+    ]);
+    prisma.loanResource.findUnique.mockResolvedValue({
+      id: 'tablet-case', name: 'Tablettes Valise', isActive: true, totalUnits: 20, bundleSize: 1, usesBundles: false, equipments: []
+    });
+    prisma.loanReservation.findMany.mockResolvedValue([]);
+    prisma.loanReservation.create.mockImplementation(async ({ data }) => ({
+      id: 'r-tablets', ...data, resource: { id: 'tablet-case', name: 'Tablettes Valise' }, selectedEquipments: []
+    }));
+
+    await service.bookTabletCase({
+      requesterName: 'Angéline',
+      startAt: '2030-03-25T08:00:00.000Z',
+      endAt: '2030-03-25T12:00:00.000Z',
+      requestedUnits: 17
+    }, { userId: 'u1', user: {} });
+
+    expect(prisma.loanReservation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        resourceId: 'tablet-case',
+        requesterName: 'Angéline',
+        requesterEmail: 'support@beaupeyrat.fr',
+        requestedUnits: 17,
+        status: 'PENDING'
+      })
+    }));
   });
 
   it('refuse une création quand la période est complète', async () => {

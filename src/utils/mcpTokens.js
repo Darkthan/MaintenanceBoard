@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const MCP_SCOPES = {
   RESERVATIONS_READ: 'reservations:read',
   RESERVATIONS_WRITE: 'reservations:write',
+  EQUIPMENT_BOOKINGS_READ: 'equipment_bookings:read',
+  EQUIPMENT_BOOKINGS_WRITE: 'equipment_bookings:write',
   INTERVENTIONS_READ: 'interventions:read',
   INTERVENTIONS_WRITE: 'interventions:write',
   TODOS_READ: 'todos:read',
@@ -25,6 +27,8 @@ const DYNAMIC_MCP_CLIENT_PREFIX = 'mcp_dynamic_';
 const TECH_MCP_SCOPES = [
   MCP_SCOPES.RESERVATIONS_READ,
   MCP_SCOPES.RESERVATIONS_WRITE,
+  MCP_SCOPES.EQUIPMENT_BOOKINGS_READ,
+  MCP_SCOPES.EQUIPMENT_BOOKINGS_WRITE,
   MCP_SCOPES.INTERVENTIONS_READ,
   MCP_SCOPES.INTERVENTIONS_WRITE,
   MCP_SCOPES.TODOS_READ,

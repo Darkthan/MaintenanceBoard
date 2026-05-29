@@ -20,8 +20,9 @@ function errorResult(message) {
 // Enveloppe un handler d'outil : vérifie le scope, exécute, et formate erreurs métier.
 function tool(ctx, requiredScope, fn) {
   return async (args) => {
-    if (!hasScope(ctx.scopes, requiredScope)) {
-      return errorResult(`Scope « ${requiredScope} » requis pour cet outil. Scopes du token : ${ctx.scopes.join(', ') || 'aucun'}.`);
+    const requiredScopes = Array.isArray(requiredScope) ? requiredScope : [requiredScope];
+    if (!requiredScopes.some(scope => hasScope(ctx.scopes, scope))) {
+      return errorResult(`Scope requis : ${requiredScopes.join(' ou ')}. Scopes du token : ${ctx.scopes.join(', ') || 'aucun'}.`);
     }
     try {
       const result = await fn(args);
@@ -43,67 +44,80 @@ function buildMcpServer(ctx) {
   const server = new McpServer(SERVER_INFO);
   const user = ctx.createdBy || null;
   const userId = ctx.createdBy?.id || null;
+  const bookingsReadScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_READ, MCP_SCOPES.RESERVATIONS_READ];
+  const bookingsWriteScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_WRITE, MCP_SCOPES.RESERVATIONS_WRITE];
+
+  const bookingCreateSchema = {
+    resourceId: z.string().describe('Identifiant de la ressource de matériel informatique scolaire'),
+    requesterName: z.string().min(2).max(200).describe('Nom de la personne qui emprunte le matériel'),
+    requesterEmail: z.string().email().optional().describe('Email de contact. Optionnel si un email par défaut est configuré dans MaintenanceBoard.'),
+    startAt: z.string().describe('Date et heure de début au format ISO 8601'),
+    endAt: z.string().describe('Date et heure de fin au format ISO 8601'),
+    requestedUnits: z.number().int().min(1).max(500).describe('Nombre d’unités de matériel informatique scolaire'),
+    notes: z.string().max(2000).optional().describe('Note courte liée à l’emprunt de matériel')
+  };
+
+  const tabletCaseSchema = {
+    requesterName: z.string().min(2).max(200).describe('Nom de la personne qui emprunte le matériel'),
+    requesterEmail: z.string().email().optional().describe('Email de contact. Optionnel si un email par défaut est configuré dans MaintenanceBoard.'),
+    startAt: z.string().describe('Date et heure de début au format ISO 8601'),
+    endAt: z.string().describe('Date et heure de fin au format ISO 8601'),
+    requestedUnits: z.number().int().min(1).max(500).describe('Nombre de tablettes'),
+    notes: z.string().max(2000).optional().describe('Note courte liée à l’emprunt de matériel')
+  };
 
   server.registerTool('list_resources', {
-    description: 'Liste les ressources de matériel empruntables (actives) avec leur capacité (lots disponibles) et les appareils nominatifs associés.',
+    description: 'Liste le matériel informatique scolaire empruntable avec sa capacité.',
     inputSchema: {}
-  }, tool(ctx, MCP_SCOPES.RESERVATIONS_READ, () => reservations.listResources()));
+  }, tool(ctx, bookingsReadScopes, () => reservations.listResources()));
 
-  server.registerTool('check_availability', {
-    description: 'Vérifie si une ressource est disponible sur une période donnée pour un nombre d\'unités, et renvoie les lots restants.',
+  server.registerTool('check_equipment_availability', {
+    description: 'Indique la disponibilité d’un matériel informatique scolaire sur une période donnée.',
     inputSchema: {
-      resourceId: z.string().describe('ID de la ressource de prêt'),
-      startAt: z.string().describe('Date/heure de début au format ISO 8601'),
-      endAt: z.string().describe('Date/heure de fin au format ISO 8601'),
-      requestedUnits: z.number().int().min(1).max(500).optional().describe('Nombre d\'unités souhaitées (défaut 1)')
+      resourceId: z.string().describe('Identifiant de la ressource de matériel informatique scolaire'),
+      startAt: z.string().describe('Date et heure de début au format ISO 8601'),
+      endAt: z.string().describe('Date et heure de fin au format ISO 8601'),
+      requestedUnits: z.number().int().min(1).max(500).optional().describe('Nombre d’unités de matériel informatique scolaire')
     }
-  }, tool(ctx, MCP_SCOPES.RESERVATIONS_READ, (a) => reservations.checkAvailability(a)));
+  }, tool(ctx, bookingsReadScopes, (a) => reservations.checkAvailability(a)));
 
-  server.registerTool('list_reservations', {
-    description: 'Liste les réservations sur une fenêtre temporelle, avec filtres optionnels par statut et par ressource.',
+  server.registerTool('list_equipment_bookings', {
+    description: 'Liste les emprunts de matériel informatique scolaire sur une fenêtre temporelle.',
     inputSchema: {
-      start: z.string().optional().describe('Début de la fenêtre (ISO 8601, défaut : il y a 7 jours)'),
-      end: z.string().optional().describe('Fin de la fenêtre (ISO 8601, défaut : dans 60 jours)'),
-      status: z.enum(reservations.RESERVATION_STATUSES).optional().describe('Filtre par statut'),
-      resourceId: z.string().optional().describe('Filtre par ressource')
+      start: z.string().optional().describe('Début de la fenêtre au format ISO 8601'),
+      end: z.string().optional().describe('Fin de la fenêtre au format ISO 8601'),
+      resourceId: z.string().optional().describe('Identifiant de la ressource de matériel informatique scolaire')
     }
-  }, tool(ctx, MCP_SCOPES.RESERVATIONS_READ, (a) => reservations.listReservations(a)));
+  }, tool(ctx, bookingsReadScopes, (a) => reservations.listReservations(a)));
 
-  server.registerTool('create_reservation', {
-    description: 'Crée une réservation de matériel après vérification de disponibilité. Statut PENDING par défaut (APPROVED possible). Échoue si la période est complète.',
-    inputSchema: {
-      resourceId: z.string().describe('ID de la ressource de prêt'),
-      requesterName: z.string().min(2).max(200).describe('Nom du demandeur'),
-      requesterEmail: z.string().email().describe('Email du demandeur'),
-      requesterPhone: z.string().max(80).optional(),
-      requesterOrganization: z.string().max(200).optional(),
-      startAt: z.string().describe('Date/heure de début (ISO 8601)'),
-      endAt: z.string().describe('Date/heure de fin (ISO 8601)'),
-      requestedUnits: z.number().int().min(1).max(500).describe('Nombre d\'unités demandées'),
-      notes: z.string().max(2000).optional().describe('Notes visibles par le demandeur'),
-      internalNotes: z.string().max(2000).optional().describe('Notes internes (staff)'),
-      selectedEquipmentIds: z.array(z.string()).max(500).optional().describe('IDs d\'appareils nominatifs (doivent appartenir à la ressource)'),
-      status: z.enum(['PENDING', 'APPROVED']).optional().describe('Statut initial (défaut PENDING)')
-    }
-  }, tool(ctx, MCP_SCOPES.RESERVATIONS_WRITE, (a) => reservations.createReservation(a, { userId })));
+  server.registerTool('create_equipment_booking', {
+    description: 'Ajoute un emprunt de matériel informatique scolaire dans MaintenanceBoard.',
+    inputSchema: bookingCreateSchema
+  }, tool(ctx, bookingsWriteScopes, (a) => reservations.createEquipmentBooking(a, { userId, user })));
 
-  server.registerTool('update_reservation', {
-    description: 'Modifie une réservation existante (dates, quantité, demandeur, statut, notes). Re-vérifie la disponibilité si la période/quantité change ou en cas d\'approbation. Refuse si une fiche signée existe.',
+  server.registerTool('book_tablet_case', {
+    description: 'Ajoute un emprunt de tablettes depuis la ressource de matériel informatique scolaire “Tablettes Valise”.',
+    inputSchema: tabletCaseSchema
+  }, tool(ctx, bookingsWriteScopes, (a) => reservations.bookTabletCase(a, { userId, user })));
+
+  server.registerTool('preview_equipment_booking', {
+    description: 'Prépare un aperçu non destructif d’un emprunt de matériel informatique scolaire, sans écrire en base.',
+    inputSchema: bookingCreateSchema
+  }, tool(ctx, bookingsReadScopes, (a) => reservations.previewEquipmentBooking(a, { user })));
+
+  server.registerTool('update_equipment_booking', {
+    description: 'Met à jour les informations simples d’un emprunt de matériel informatique scolaire.',
     inputSchema: {
-      id: z.string().describe('ID de la réservation à modifier'),
+      id: z.string().describe('Identifiant de l’emprunt de matériel'),
       resourceId: z.string().optional(),
       requesterName: z.string().min(2).max(200).optional(),
       requesterEmail: z.string().email().optional(),
-      requesterPhone: z.string().max(80).optional(),
-      requesterOrganization: z.string().max(200).optional(),
-      startAt: z.string().optional().describe('Nouvelle date de début (ISO 8601)'),
-      endAt: z.string().optional().describe('Nouvelle date de fin (ISO 8601)'),
+      startAt: z.string().optional().describe('Date et heure de début au format ISO 8601'),
+      endAt: z.string().optional().describe('Date et heure de fin au format ISO 8601'),
       requestedUnits: z.number().int().min(1).max(500).optional(),
-      status: z.enum(reservations.RESERVATION_STATUSES).optional(),
-      notes: z.string().max(2000).optional(),
-      internalNotes: z.string().max(2000).optional()
+      notes: z.string().max(2000).optional()
     }
-  }, tool(ctx, MCP_SCOPES.RESERVATIONS_WRITE, ({ id, ...rest }) => reservations.updateReservation(id, rest, { userId })));
+  }, tool(ctx, bookingsWriteScopes, ({ id, ...rest }) => reservations.updateReservation(id, rest, { userId })));
 
   server.registerTool('list_interventions', {
     description: 'Liste les interventions de maintenance avec filtres par statut, priorité, salle, équipement, technicien ou recherche texte.',
@@ -471,6 +485,25 @@ async function handleStateless(req, res, ctx) {
  * supportant les sessions persistantes pour les clients qui les gèrent.
  */
 async function handleMcpRequest(req, res) {
+  // Le SDK StreamableHTTP (via @hono/node-server) exige Accept contenant à la fois
+  // application/json ET text/event-stream sur tous les POST.
+  // ChatGPT envoie seulement Accept: application/json → 406 systématique.
+  // @hono/node-server lit req.rawHeaders (et non req.headers), les deux doivent être patchés.
+  if (req.method !== 'GET') {
+    const raw = req.rawHeaders;
+    let acceptRawIdx = -1;
+    for (let i = 0; i < raw.length; i += 2) {
+      if (raw[i].toLowerCase() === 'accept') { acceptRawIdx = i + 1; break; }
+    }
+    const current = acceptRawIdx >= 0 ? raw[acceptRawIdx] : '';
+    if (!current.includes('application/json') || !current.includes('text/event-stream')) {
+      const normalized = 'application/json, text/event-stream';
+      if (acceptRawIdx === -1) { raw.push('accept', normalized); }
+      else { raw[acceptRawIdx] = normalized; }
+      req.headers['accept'] = normalized;
+    }
+  }
+
   const ctx = req.mcpToken;
   if (!ctx) {
     return res.status(401).json({

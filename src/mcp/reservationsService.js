@@ -5,12 +5,9 @@ const {
   getBundleInfo,
   ensureLoanAvailability
 } = require('../utils/loans');
+const { normalizeEmail, resolveLoanRequesterEmail } = require('../utils/loanReservationEmail');
 
 const RESERVATION_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'RETURNED'];
-
-function normalizeEmail(value) {
-  return String(value || '').trim().toLowerCase();
-}
 
 function ensureValidDates(startAt, endAt) {
   const start = new Date(startAt);
@@ -24,11 +21,10 @@ function ensureValidDates(startAt, endAt) {
   return { start, end };
 }
 
-// Vue compacte d'une réservation, adaptée à une réponse textuelle MCP.
+// Vue compacte d'un emprunt, adaptée à une réponse textuelle MCP.
 function mapReservation(r) {
   return {
     id: r.id,
-    status: r.status,
     resource: r.resource ? { id: r.resource.id, name: r.resource.name } : null,
     requesterName: r.requesterName,
     requesterEmail: r.requesterEmail,
@@ -38,14 +34,6 @@ function mapReservation(r) {
     requestedUnits: r.requestedUnits,
     reservedSlots: r.reservedSlots,
     notes: r.notes || null,
-    internalNotes: r.internalNotes || null,
-    selectedEquipments: Array.isArray(r.selectedEquipments)
-      ? r.selectedEquipments.map(e => ({
-          equipmentId: e.equipmentId || e.equipment?.id || null,
-          name: e.equipmentName || e.equipment?.name || null,
-          serialNumber: e.equipmentSerialNumber || e.equipment?.serialNumber || null
-        }))
-      : [],
     createdAt: r.createdAt,
     updatedAt: r.updatedAt
   };
@@ -58,6 +46,21 @@ const RESERVATION_INCLUDE = {
     orderBy: [{ lotNumber: 'asc' }, { equipmentName: 'asc' }]
   }
 };
+
+function toSimpleBooking(input, availability, requesterEmail, selectedEquipments = []) {
+  return {
+    resourceId: availability.resource.id,
+    resourceName: availability.resource.name,
+    requesterName: String(input.requesterName || '').trim(),
+    requesterEmail,
+    startAt: availability.startAt || new Date(input.startAt),
+    endAt: availability.endAt || new Date(input.endAt),
+    requestedUnits: availability.requestedUnits,
+    reservedSlots: availability.reservedSlots,
+    notes: input.notes ? String(input.notes).trim() : null,
+    selectedEquipments
+  };
+}
 
 // Construit les snapshots d'équipements nominatifs en validant qu'ils appartiennent à la ressource.
 function buildSelectedEquipmentSnapshots(resource, selectedEquipmentIds) {
@@ -141,6 +144,27 @@ async function checkAvailability({ resourceId, startAt, endAt, requestedUnits = 
   }
 }
 
+async function findTabletCaseResource() {
+  const resources = await prisma.loanResource.findMany({
+    where: { isActive: true },
+    include: { ...LOAN_EQUIPMENT_INCLUDE }
+  });
+  const normalize = value => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const exact = resources.find(resource => normalize(resource.name) === 'tablettes valise');
+  if (exact) return exact;
+  const matching = resources.find(resource => {
+    const name = normalize(resource.name);
+    return name.includes('tablette') && name.includes('valise');
+  });
+  if (!matching) {
+    throw Object.assign(new Error('Ressource "Tablettes Valise" introuvable parmi le matériel informatique scolaire empruntable.'), { status: 404 });
+  }
+  return matching;
+}
+
 async function listReservations({ start, end, status, resourceId } = {}) {
   const startDate = start ? new Date(start) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const endDate = end ? new Date(end) : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
@@ -165,9 +189,13 @@ async function listReservations({ start, end, status, resourceId } = {}) {
   return reservations.map(mapReservation);
 }
 
-async function createReservation(input, { userId } = {}) {
+async function createReservation(input, { userId, user } = {}) {
   const { start, end } = ensureValidDates(input.startAt, input.endAt);
   const status = input.status && ['PENDING', 'APPROVED'].includes(input.status) ? input.status : 'PENDING';
+  const requesterEmail = resolveLoanRequesterEmail(input.requesterEmail, user);
+  if (!requesterEmail) {
+    throw Object.assign(new Error('Aucun email disponible pour cet emprunt de matériel informatique scolaire.'), { status: 400 });
+  }
 
   const availability = await ensureLoanAvailability(prisma, {
     resourceId: input.resourceId,
@@ -182,7 +210,7 @@ async function createReservation(input, { userId } = {}) {
     data: {
       resourceId: availability.resource.id,
       requesterName: String(input.requesterName).trim(),
-      requesterEmail: normalizeEmail(input.requesterEmail),
+      requesterEmail,
       requesterPhone: input.requesterPhone ? String(input.requesterPhone).trim() : null,
       requesterOrganization: input.requesterOrganization ? String(input.requesterOrganization).trim() : null,
       startAt: start,
@@ -202,6 +230,43 @@ async function createReservation(input, { userId } = {}) {
   return mapReservation(reservation);
 }
 
+async function createEquipmentBooking(input, { userId, user } = {}) {
+  return createReservation({
+    resourceId: input.resourceId,
+    requesterName: input.requesterName,
+    requesterEmail: input.requesterEmail,
+    startAt: input.startAt,
+    endAt: input.endAt,
+    requestedUnits: input.requestedUnits,
+    notes: input.notes,
+    status: 'PENDING'
+  }, { userId, user });
+}
+
+async function bookTabletCase(input, { userId, user } = {}) {
+  const resource = await findTabletCaseResource();
+  return createEquipmentBooking({ ...input, resourceId: resource.id }, { userId, user });
+}
+
+async function previewEquipmentBooking(input, { user } = {}) {
+  const { start, end } = ensureValidDates(input.startAt, input.endAt);
+  const requesterEmail = resolveLoanRequesterEmail(input.requesterEmail, user);
+  if (!requesterEmail) {
+    throw Object.assign(new Error('Aucun email disponible pour cet emprunt de matériel informatique scolaire.'), { status: 400 });
+  }
+  const availability = await ensureLoanAvailability(prisma, {
+    resourceId: input.resourceId,
+    startAt: start,
+    endAt: end,
+    requestedUnits: input.requestedUnits
+  });
+  return {
+    wouldCreate: true,
+    booking: toSimpleBooking(input, { ...availability, startAt: start, endAt: end }, requesterEmail),
+    databaseChanged: false
+  };
+}
+
 async function updateReservation(id, input, { userId } = {}) {
   const existing = await prisma.loanReservation.findUnique({
     where: { id },
@@ -211,14 +276,14 @@ async function updateReservation(id, input, { userId } = {}) {
     throw Object.assign(new Error('Réservation introuvable'), { status: 404 });
   }
 
-  // Une fiche de prêt déjà signée fige la réservation : refus de toute modification via MCP.
+  // Une fiche de prêt déjà signée fige l'emprunt : refus de modification via MCP.
   if (existing.contractSignatureRequestId) {
     const sig = await prisma.signatureRequest.findUnique({
       where: { id: existing.contractSignatureRequestId },
       select: { status: true }
     });
     if (sig?.status === 'SIGNED') {
-      throw Object.assign(new Error('Cette réservation possède une fiche de prêt signée et ne peut être modifiée via MCP.'), { status: 409 });
+      throw Object.assign(new Error('Cet emprunt possède une fiche de prêt signée et ne peut être modifié via MCP.'), { status: 409 });
     }
   }
 
@@ -289,7 +354,11 @@ module.exports = {
   RESERVATION_STATUSES,
   listResources,
   checkAvailability,
+  findTabletCaseResource,
   listReservations,
   createReservation,
+  createEquipmentBooking,
+  bookTabletCase,
+  previewEquipmentBooking,
   updateReservation
 };

@@ -265,6 +265,50 @@ describe('loan requests', () => {
     });
   });
 
+  it('crée une réservation interne sans email saisi en utilisant le profil', async () => {
+    prisma.loanResource.findUnique.mockResolvedValue({
+      id: 'resource-1',
+      name: 'Valise tablettes',
+      totalUnits: 10,
+      bundleSize: 10,
+      usesBundles: true,
+      isActive: true,
+      equipments: []
+    });
+    prisma.loanReservation.findMany.mockResolvedValue([]);
+    prisma.loanReservation.create.mockImplementation(async ({ data }) => ({
+      id: 'reservation-internal',
+      status: 'APPROVED',
+      ...data,
+      resource: {
+        id: 'resource-1',
+        name: 'Valise tablettes',
+        totalUnits: 10,
+        bundleSize: 10,
+        isActive: true,
+        equipments: []
+      },
+      selectedEquipments: []
+    }));
+
+    const res = await request(buildApp())
+      .post('/api/loans/reservations')
+      .send({
+        resourceId: 'resource-1',
+        requesterName: 'Jean Dupont',
+        startAt: '2026-03-25T08:00:00.000Z',
+        endAt: '2026-03-25T12:00:00.000Z',
+        requestedUnits: 3
+      });
+
+    expect(res.status).toBe(201);
+    expect(prisma.loanReservation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        requesterEmail: 'admin@test.com'
+      })
+    }));
+  });
+
   it('edite une reservation sans envoyer d email utilisateur', async () => {
     const sendMail = jest.fn().mockResolvedValue({});
     createSmtpTransporter.mockReturnValue({

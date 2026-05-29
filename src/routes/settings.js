@@ -7,6 +7,7 @@ const { requireAdmin } = require('../middleware/roles');
 const config = require('../config');
 const { readSettings, writeSettings } = require('../utils/settings');
 const { buildSmtpTransportOptions } = require('../utils/mail');
+const { FALLBACK_REQUESTER_EMAIL, getLoanEmailSettings, isValidEmail, normalizeEmail } = require('../utils/loanReservationEmail');
 const {
   normalizePublicIpList,
   getFail2banState,
@@ -27,6 +28,11 @@ const prisma = require('../lib/prisma');
 const AGENT_MONITORING_DEFAULTS = {
   lowDiskAlertsEnabled: false,
   lowDiskThresholdGb: 20
+};
+
+const LOAN_SETTINGS_DEFAULTS = {
+  reservationEmailSource: 'profile',
+  defaultRequesterEmail: FALLBACK_REQUESTER_EMAIL
 };
 
 function getDisplayScreens() {
@@ -292,6 +298,45 @@ router.patch('/agent-monitoring', requireAuth, requireAdmin, (req, res) => {
 
   writeSettings({ agentMonitoring: next });
   res.json({ message: 'Surveillance des agents enregistrée', settings: next });
+});
+
+// ── Prêts de matériel ──────────────────────────────────────────────────────
+
+router.get('/loans', requireAuth, requireAdmin, (_req, res) => {
+  res.json({ ...LOAN_SETTINGS_DEFAULTS, ...getLoanEmailSettings() });
+});
+
+router.patch('/loans', requireAuth, requireAdmin, (req, res) => {
+  const current = getLoanEmailSettings();
+  const next = { ...LOAN_SETTINGS_DEFAULTS, ...current };
+
+  if (req.body.reservationEmailSource !== undefined) {
+    if (!['profile', 'default'].includes(req.body.reservationEmailSource)) {
+      return res.status(400).json({ error: 'Source email invalide.' });
+    }
+    next.reservationEmailSource = req.body.reservationEmailSource;
+  }
+
+  if (req.body.defaultRequesterEmail !== undefined) {
+    const email = normalizeEmail(req.body.defaultRequesterEmail);
+    if (email && !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Email par défaut invalide.' });
+    }
+    next.defaultRequesterEmail = email;
+  }
+
+  if (next.reservationEmailSource === 'default' && !next.defaultRequesterEmail) {
+    return res.status(400).json({ error: 'Un email par défaut est requis pour cette option.' });
+  }
+
+  writeSettings({
+    loans: {
+      ...(readSettings().loans || {}),
+      reservationEmailSource: next.reservationEmailSource,
+      defaultRequesterEmail: next.defaultRequesterEmail
+    }
+  });
+  res.json({ message: 'Paramètres de prêt enregistrés', settings: next });
 });
 
 // ── WebAuthn ────────────────────────────────────────────────────────────────
