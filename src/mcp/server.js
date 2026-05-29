@@ -424,7 +424,7 @@ function buildMcpServer(ctx) {
 
 // Sessions MCP actives : sessionId → { transport, server, ctxId, expiresAt }
 const mcpSessions = new Map();
-const SESSION_TTL = 60 * 60 * 1000; // 1 heure d'inactivité
+const SESSION_TTL = 4 * 60 * 60 * 1000; // 4 heures d'inactivité
 
 setInterval(() => {
   const now = Date.now();
@@ -435,30 +435,40 @@ setInterval(() => {
       mcpSessions.delete(id);
     }
   }
-}, 15 * 60 * 1000).unref();
+}, 30 * 60 * 1000).unref();
 
-function sessionForbidden(res) {
-  return res.status(403).json({
-    jsonrpc: '2.0',
-    error: { code: -32001, message: 'Token non autorisé pour cette session MCP' },
-    id: null
-  });
-}
-
-function sessionNotFound(res) {
-  return res.status(404).json({
-    jsonrpc: '2.0',
-    error: { code: -32000, message: 'Session MCP inconnue ou expirée' },
-    id: null
-  });
+/**
+ * Crée un transport + serveur éphémères, traite la requête, puis les détruit.
+ * Utilisé pour les requêtes sans Mcp-Session-Id (mode stateless).
+ * Le SDK n'exige pas de séquence initialize → tools/call en mode stateless.
+ */
+async function handleStateless(req, res, ctx) {
+  const server = buildMcpServer(ctx);
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  res.on('close', () => { transport.close().catch(() => {}); server.close().catch(() => {}); });
+  try {
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'Erreur interne MCP' }, id: null });
+    }
+  }
 }
 
 /**
- * Handler Express pour GET/POST/DELETE /mcp en mode stateful.
- * - POST initialize → crée une session, retourne Mcp-Session-Id
- * - POST tools/call avec Mcp-Session-Id → réutilise la session
- * - GET avec Mcp-Session-Id → canal SSE (notifications serveur → client)
- * - DELETE avec Mcp-Session-Id → ferme la session
+ * Handler Express pour GET/POST/DELETE /mcp.
+ *
+ * Mode dual :
+ * - POST sans Mcp-Session-Id → stateless (chaque requête indépendante, aucune
+ *   séquence impose — tools/call fonctionne directement sans initialize préalable)
+ * - POST avec Mcp-Session-Id → session stateful existante (créée via initialize)
+ * - GET avec Mcp-Session-Id → canal SSE pour les notifications serveur → client
+ * - DELETE avec Mcp-Session-Id → fermeture de session
+ *
+ * Ce mode dual assure la compatibilité avec ChatGPT (qui peut envoyer des
+ * tools/call sans session si le Mcp-Session-Id n'a pas été retenu) tout en
+ * supportant les sessions persistantes pour les clients qui les gèrent.
  */
 async function handleMcpRequest(req, res) {
   const ctx = req.mcpToken;
@@ -474,18 +484,18 @@ async function handleMcpRequest(req, res) {
 
   // ── GET : canal SSE pour les notifications serveur → client ─────────────
   if (req.method === 'GET') {
-    if (!sessionId || !mcpSessions.has(sessionId)) return sessionNotFound(res);
-    const s = mcpSessions.get(sessionId);
-    if (s.ctxId !== ctx.id) return sessionForbidden(res);
+    const s = sessionId ? mcpSessions.get(sessionId) : null;
+    if (!s) return res.status(404).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Session MCP inconnue ou expirée' }, id: null });
+    if (s.ctxId !== ctx.id) return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Token non autorisé pour cette session' }, id: null });
     s.expiresAt = Date.now() + SESSION_TTL;
     return s.transport.handleRequest(req, res);
   }
 
   // ── DELETE : fermeture explicite d'une session ───────────────────────────
   if (req.method === 'DELETE') {
-    if (!sessionId || !mcpSessions.has(sessionId)) return sessionNotFound(res);
-    const s = mcpSessions.get(sessionId);
-    if (s.ctxId !== ctx.id) return sessionForbidden(res);
+    const s = sessionId ? mcpSessions.get(sessionId) : null;
+    if (!s) return res.status(404).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Session MCP inconnue' }, id: null });
+    if (s.ctxId !== ctx.id) return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Token non autorisé' }, id: null });
     await s.transport.handleRequest(req, res);
     s.transport.close().catch(() => {});
     s.server.close().catch(() => {});
@@ -495,48 +505,53 @@ async function handleMcpRequest(req, res) {
 
   // ── POST : requête JSON-RPC ──────────────────────────────────────────────
 
-  // Requête dans une session existante
+  // Requête dans une session stateful existante
   if (sessionId) {
-    if (!mcpSessions.has(sessionId)) return sessionNotFound(res);
     const s = mcpSessions.get(sessionId);
-    if (s.ctxId !== ctx.id) return sessionForbidden(res);
+    // Session inconnue → répondre proprement pour que le client refasse initialize
+    if (!s) {
+      return res.status(404).json({
+        jsonrpc: '2.0',
+        error: { code: -32001, message: 'Session MCP expirée, reconnectez le serveur MCP.' },
+        id: req.body?.id ?? null
+      });
+    }
+    if (s.ctxId !== ctx.id) return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Token non autorisé' }, id: null });
     s.expiresAt = Date.now() + SESSION_TTL;
     return s.transport.handleRequest(req, res, req.body);
   }
 
-  // Nouvelle session (requête initialize sans Mcp-Session-Id)
-  const server = buildMcpServer(ctx);
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-    onsessioninitialized: (sid) => {
-      mcpSessions.set(sid, {
-        transport,
-        server,
-        ctxId: ctx.id,
-        expiresAt: Date.now() + SESSION_TTL
-      });
-    },
-    onsessionclosed: (sid) => {
-      mcpSessions.delete(sid);
+  // Pas de Mcp-Session-Id : traiter en stateless (tools/call direct sans initialize)
+  // Si c'est une requête initialize, créer aussi une session stateful en parallèle
+  // pour les clients qui savent gérer les sessions.
+  if (req.body?.method === 'initialize') {
+    const server = buildMcpServer(ctx);
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (sid) => {
+        mcpSessions.set(sid, { transport, server, ctxId: ctx.id, expiresAt: Date.now() + SESSION_TTL });
+      },
+      onsessionclosed: (sid) => {
+        mcpSessions.delete(sid);
+        server.close().catch(() => {});
+      }
+    });
+    try {
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      if (!res.headersSent) {
+        res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'Erreur interne MCP' }, id: null });
+      }
+      if (transport.sessionId) mcpSessions.delete(transport.sessionId);
+      transport.close().catch(() => {});
       server.close().catch(() => {});
     }
-  });
-
-  try {
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).json({
-        jsonrpc: '2.0',
-        error: { code: -32603, message: 'Erreur interne du serveur MCP' },
-        id: null
-      });
-    }
-    if (transport.sessionId) mcpSessions.delete(transport.sessionId);
-    transport.close().catch(() => {});
-    server.close().catch(() => {});
+    return;
   }
+
+  // tools/list, tools/call, etc. sans session → mode stateless
+  return handleStateless(req, res, ctx);
 }
 
 module.exports = { buildMcpServer, handleMcpRequest };

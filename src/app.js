@@ -42,6 +42,17 @@ app.use(cors({
   credentials: true
 }));
 
+// CORS permissif pour /mcp : les clients LLM (ChatGPT, Claude) appellent depuis leurs
+// serveurs backend (pas depuis le navigateur) mais certains proxies ajoutent Origin.
+// exposedHeaders est nécessaire pour que le client puisse lire Mcp-Session-Id.
+app.use('/mcp', cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Mcp-Session-Id'],
+  exposedHeaders: ['Mcp-Session-Id'],
+  credentials: false
+}));
+
 // ── Rate limiting ──────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
