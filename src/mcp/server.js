@@ -9,6 +9,20 @@ const work = require('./workService');
 
 const SERVER_INFO = { name: 'maintenanceboard', version: '1.1.0' };
 
+const READ_ONLY_TOOL = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false
+};
+
+const ADDITIVE_WRITE_TOOL = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false
+};
+
 function jsonResult(payload) {
   return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }] };
 }
@@ -67,45 +81,58 @@ function buildMcpServer(ctx) {
   };
 
   server.registerTool('list_resources', {
+    title: 'Lister le matériel',
     description: 'Liste le matériel informatique scolaire empruntable avec sa capacité.',
-    inputSchema: {}
+    inputSchema: {},
+    annotations: READ_ONLY_TOOL
   }, tool(ctx, bookingsReadScopes, () => reservations.listResources()));
 
   server.registerTool('check_equipment_availability', {
+    title: 'Vérifier la disponibilité du matériel',
     description: 'Indique la disponibilité d’un matériel informatique scolaire sur une période donnée.',
     inputSchema: {
       resourceId: z.string().describe('Identifiant de la ressource de matériel informatique scolaire'),
       startAt: z.string().describe('Date et heure de début au format ISO 8601'),
       endAt: z.string().describe('Date et heure de fin au format ISO 8601'),
       requestedUnits: z.number().int().min(1).max(500).optional().describe('Nombre d’unités de matériel informatique scolaire')
-    }
+    },
+    annotations: READ_ONLY_TOOL
   }, tool(ctx, bookingsReadScopes, (a) => reservations.checkAvailability(a)));
 
   server.registerTool('list_equipment_bookings', {
+    title: 'Lister les emprunts de matériel',
     description: 'Liste les emprunts de matériel informatique scolaire sur une fenêtre temporelle.',
     inputSchema: {
       start: z.string().optional().describe('Début de la fenêtre au format ISO 8601'),
       end: z.string().optional().describe('Fin de la fenêtre au format ISO 8601'),
       resourceId: z.string().optional().describe('Identifiant de la ressource de matériel informatique scolaire')
-    }
+    },
+    annotations: READ_ONLY_TOOL
   }, tool(ctx, bookingsReadScopes, (a) => reservations.listReservations(a)));
 
   server.registerTool('create_equipment_booking', {
+    title: 'Ajouter un emprunt de matériel',
     description: 'Ajoute un emprunt de matériel informatique scolaire dans MaintenanceBoard.',
-    inputSchema: bookingCreateSchema
+    inputSchema: bookingCreateSchema,
+    annotations: ADDITIVE_WRITE_TOOL
   }, tool(ctx, bookingsWriteScopes, (a) => reservations.createEquipmentBooking(a, { userId, user })));
 
   server.registerTool('book_tablet_case', {
+    title: 'Ajouter un emprunt de tablettes',
     description: 'Ajoute un emprunt de tablettes depuis la ressource de matériel informatique scolaire “Tablettes Valise”.',
-    inputSchema: tabletCaseSchema
+    inputSchema: tabletCaseSchema,
+    annotations: ADDITIVE_WRITE_TOOL
   }, tool(ctx, bookingsWriteScopes, (a) => reservations.bookTabletCase(a, { userId, user })));
 
   server.registerTool('preview_equipment_booking', {
+    title: 'Prévisualiser un emprunt de matériel',
     description: 'Prépare un aperçu non destructif d’un emprunt de matériel informatique scolaire, sans écrire en base.',
-    inputSchema: bookingCreateSchema
+    inputSchema: bookingCreateSchema,
+    annotations: READ_ONLY_TOOL
   }, tool(ctx, bookingsReadScopes, (a) => reservations.previewEquipmentBooking(a, { user })));
 
   server.registerTool('update_equipment_booking', {
+    title: 'Mettre à jour un emprunt de matériel',
     description: 'Met à jour les informations simples d’un emprunt de matériel informatique scolaire.',
     inputSchema: {
       id: z.string().describe('Identifiant de l’emprunt de matériel'),
@@ -116,6 +143,12 @@ function buildMcpServer(ctx) {
       endAt: z.string().optional().describe('Date et heure de fin au format ISO 8601'),
       requestedUnits: z.number().int().min(1).max(500).optional(),
       notes: z.string().max(2000).optional()
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false
     }
   }, tool(ctx, bookingsWriteScopes, ({ id, ...rest }) => reservations.updateReservation(id, rest, { userId })));
 

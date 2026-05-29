@@ -80,6 +80,11 @@ function mcpTestApp() {
   return app;
 }
 
+function parseSseJson(text) {
+  const dataLine = String(text).split(/\r?\n/).find(line => line.startsWith('data: '));
+  return dataLine ? JSON.parse(dataLine.slice(6)) : {};
+}
+
 function pkceChallenge(verifier) {
   return crypto.createHash('sha256').update(verifier).digest('base64url');
 }
@@ -566,6 +571,73 @@ describe('MCP transport sessions', () => {
     expect(res.status).toBe(200);
     expect(res.headers['mcp-session-id']).toBeTruthy();
     expect(res.body.error).toBeUndefined();
+  });
+
+  it('expose les annotations de sécurité pour les outils MCP de matériel', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      role: 'ADMIN',
+      isActive: true,
+      name: 'Admin',
+      email: 'admin@example.test',
+      contactEmail: null
+    });
+
+    const accessToken = jwt.sign(
+      {
+        sub: 'u1',
+        type: 'mcp_user_access',
+        clientId: 'mcp_dynamic_saved',
+        scopes: ['equipment_bookings:read', 'equipment_bookings:write']
+      },
+      config.jwt.secret,
+      { expiresIn: '15m' }
+    );
+
+    const app = mcpTestApp();
+    const initRes = await request(app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'ChatGPT', version: 'test' }
+        }
+      });
+
+    expect(initRes.status).toBe(200);
+    const sessionId = initRes.headers['mcp-session-id'];
+    expect(sessionId).toBeTruthy();
+
+    const res = await request(app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Mcp-Session-Id', sessionId)
+      .send({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/list',
+        params: {}
+      });
+
+    expect(res.status).toBe(200);
+    const body = res.body?.result ? res.body : parseSseJson(res.text);
+    const tools = Object.fromEntries(body.result.tools.map(item => [item.name, item]));
+    expect(tools.preview_equipment_booking.annotations.readOnlyHint).toBe(true);
+    expect(tools.create_equipment_booking.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false
+    });
+    expect(tools.book_tablet_case.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false
+    });
   });
 });
 
