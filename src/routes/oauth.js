@@ -23,7 +23,7 @@ const { generateCode, storeCode, consumeCode } = require('../lib/oauthCodes');
 const router = express.Router();
 
 const MCP_ACCESS_TOKEN_EXPIRES_IN = 900; // 15 minutes
-const MCP_REFRESH_TOKEN_EXPIRES_IN = '365d';
+const MCP_REFRESH_TOKEN_EXPIRES_DAYS = 365;
 const OFFLINE_ACCESS_SCOPE = 'offline_access';
 const OAUTH_CSRF_COOKIE = 'oauthCsrf';
 const OAUTH_CSRF_EXPIRES_IN = 600; // 10 minutes
@@ -77,12 +77,24 @@ function signMcpUserAccessToken({ userId, mcpTokenId, clientId, scopes }) {
   );
 }
 
-function signMcpRefreshToken({ userId, mcpTokenId, clientId, scopes }) {
-  return jwt.sign(
-    { sub: userId, type: 'mcp_user_refresh', scopes, mcpTokenId, clientId },
-    config.jwt.secret,
-    { expiresIn: MCP_REFRESH_TOKEN_EXPIRES_IN }
-  );
+function hashRefreshToken(token) {
+  return crypto.createHash('sha256').update(String(token), 'utf8').digest('hex');
+}
+
+async function storeRefreshToken({ userId, mcpTokenId, clientId, scopes }) {
+  const token = crypto.randomBytes(48).toString('base64url');
+  const expiresAt = new Date(Date.now() + MCP_REFRESH_TOKEN_EXPIRES_DAYS * 86400 * 1000);
+  await prisma.mcpRefreshToken.create({
+    data: {
+      tokenHash: hashRefreshToken(token),
+      userId,
+      mcpTokenId: mcpTokenId || null,
+      clientId,
+      scopes: JSON.stringify(scopes),
+      expiresAt
+    }
+  });
+  return token;
 }
 
 function accessTokenResponse({ accessToken, scopes, refreshToken }) {
@@ -447,12 +459,21 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
 
     if (!user || !user.isActive) return redirectError('access_denied', 'Compte inactif');
 
-    // Scopes accordés = intersection(demandés, autorisés par le client, autorisés par le rôle utilisateur)
+    // Scopes accordés = intersection(demandés, autorisés client, autorisés rôle, sélectionnés par l'utilisateur)
     const clientAllowedScopes = client.scopes;
     const userAllowedScopes = filterScopesForUser(clientAllowedScopes, user);
     const requestedScopes = scope ? scope.split(' ').filter(Boolean) : userAllowedScopes;
-    const grantedScopes = requestedScopes.filter(s => userAllowedScopes.includes(s));
     const issueRefreshToken = requestedScopes.includes(OFFLINE_ACCESS_SCOPE);
+
+    // Scopes cochés par l'utilisateur sur la page de consentement
+    const userChecked = req.body.granted_scopes
+      ? (Array.isArray(req.body.granted_scopes) ? req.body.granted_scopes : [req.body.granted_scopes])
+      : null;
+
+    const grantedScopes = requestedScopes.filter(s =>
+      userAllowedScopes.includes(s) &&
+      (userChecked === null || userChecked.includes(s))
+    );
     if (!grantedScopes.length) {
       return redirectError('invalid_scope', 'Aucun scope valide accordé');
     }
@@ -547,7 +568,7 @@ router.post('/token', tokenLimiter, async (req, res) => {
         scopes
       });
       const refreshToken = codeData.issueRefreshToken
-        ? signMcpRefreshToken({
+        ? await storeRefreshToken({
             userId: codeData.userId,
             mcpTokenId: codeData.mcpTokenId,
             clientId: codeData.clientId,
@@ -564,57 +585,65 @@ router.post('/token', tokenLimiter, async (req, res) => {
 
     // ── Refresh Token ───────────────────────────────────────────────────────
     if (grantType === 'refresh_token') {
-      const refreshToken = req.body.refresh_token;
-      if (!refreshToken) return oauthError(res, 'invalid_request', 'refresh_token manquant');
+      const refreshTokenValue = req.body.refresh_token;
+      if (!refreshTokenValue) return oauthError(res, 'invalid_request', 'refresh_token manquant');
 
-      let payload;
-      try {
-        payload = jwt.verify(refreshToken, config.jwt.secret);
-      } catch {
+      const tokenRecord = await prisma.mcpRefreshToken.findUnique({
+        where: { tokenHash: hashRefreshToken(refreshTokenValue) },
+        include: {
+          user: { select: { id: true, role: true, isActive: true } },
+          mcpToken: true
+        }
+      });
+
+      if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
         return oauthError(res, 'invalid_grant', 'refresh_token invalide ou expiré');
       }
 
-      if (payload.type !== 'mcp_user_refresh' || !payload.sub) {
-        return oauthError(res, 'invalid_grant', 'refresh_token non reconnu');
-      }
+      const { user, mcpToken } = tokenRecord;
+      const directClient = isDirectMcpClientId(tokenRecord.clientId);
 
-      const directClient = isDirectMcpClientId(payload.clientId);
-      if (!directClient && !payload.mcpTokenId) {
-        return oauthError(res, 'invalid_grant', 'refresh_token non reconnu');
+      if (!directClient && (!mcpToken || !isMcpTokenUsable(mcpToken))) {
+        return oauthError(res, 'invalid_client', 'Client révoqué ou expiré');
       }
-
-      const [mcpToken, user] = await Promise.all([
-        directClient ? Promise.resolve(null) : prisma.mcpToken.findUnique({ where: { id: payload.mcpTokenId } }),
-        prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, isActive: true } })
-      ]);
-      if (!directClient && (!mcpToken || !isMcpTokenUsable(mcpToken))) return oauthError(res, 'invalid_client', 'Client révoqué');
       if (!user || !user.isActive) return oauthError(res, 'access_denied', 'Compte désactivé');
 
       const clientAllowedScopes = directClient ? ALL_MCP_SCOPES : parseScopes(mcpToken.scopes);
       const roleAllowedScopes = filterScopesForUser(clientAllowedScopes, user);
-      const scopes = Array.isArray(payload.scopes)
-        ? payload.scopes.filter(s => roleAllowedScopes.includes(s))
-        : roleAllowedScopes;
+      const storedScopes = parseScopes(tokenRecord.scopes);
+      const scopes = storedScopes.filter(s => roleAllowedScopes.includes(s));
       if (!scopes.length) return oauthError(res, 'invalid_scope', 'Aucun scope valide accordé');
 
+      // Rotation : supprimer l'ancien token, créer le nouveau
+      const newRefreshToken = crypto.randomBytes(48).toString('base64url');
+      const newExpiresAt = new Date(Date.now() + MCP_REFRESH_TOKEN_EXPIRES_DAYS * 86400 * 1000);
+
+      await prisma.$transaction([
+        prisma.mcpRefreshToken.delete({ where: { id: tokenRecord.id } }),
+        prisma.mcpRefreshToken.create({
+          data: {
+            tokenHash: hashRefreshToken(newRefreshToken),
+            userId: tokenRecord.userId,
+            mcpTokenId: tokenRecord.mcpTokenId,
+            clientId: tokenRecord.clientId,
+            scopes: JSON.stringify(scopes),
+            expiresAt: newExpiresAt
+          }
+        })
+      ]);
+
       const accessToken = signMcpUserAccessToken({
-        userId: payload.sub,
-        mcpTokenId: payload.mcpTokenId,
-        clientId: payload.clientId,
-        scopes
-      });
-      const rotatedRefreshToken = signMcpRefreshToken({
-        userId: payload.sub,
-        mcpTokenId: payload.mcpTokenId,
-        clientId: payload.clientId,
+        userId: tokenRecord.userId,
+        mcpTokenId: tokenRecord.mcpTokenId,
+        clientId: tokenRecord.clientId,
         scopes
       });
 
-      if (payload.mcpTokenId) {
-        prisma.mcpToken.update({ where: { id: payload.mcpTokenId }, data: { lastUsedAt: new Date() } }).catch(() => {});
+      if (tokenRecord.mcpTokenId) {
+        prisma.mcpToken.update({ where: { id: tokenRecord.mcpTokenId }, data: { lastUsedAt: new Date() } }).catch(() => {});
       }
 
-      return res.json(accessTokenResponse({ accessToken, scopes, refreshToken: rotatedRefreshToken }));
+      return res.json(accessTokenResponse({ accessToken, scopes, refreshToken: newRefreshToken }));
     }
 
     // ── Client Credentials ───────────────────────────────────────────────────

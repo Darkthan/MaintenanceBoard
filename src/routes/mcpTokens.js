@@ -122,6 +122,10 @@ router.patch('/:id',
       if (req.body.expiresAt !== undefined) data.expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : null;
       if (req.body.redirectUris !== undefined) data.redirectUris = serializeRedirectUris(req.body.redirectUris);
 
+      if (data.isActive === false) {
+        await prisma.mcpRefreshToken.deleteMany({ where: { mcpTokenId: req.params.id } });
+      }
+
       const updated = await prisma.mcpToken.update({
         where: { id: req.params.id },
         data,
@@ -136,15 +140,18 @@ router.patch('/:id',
 );
 
 // ── DELETE /api/mcp-tokens/:id ──────────────────────────────────────────────
-// Sans ?permanent : révocation (isActive=false, conservé pour audit).
-// Avec ?permanent=true : suppression définitive et irréversible.
+// Sans ?permanent : révocation (isActive=false, conservé pour audit) + révocation des refresh tokens actifs.
+// Avec ?permanent=true : suppression définitive (cascade supprime les refresh tokens).
 router.delete('/:id', async (req, res, next) => {
   try {
     if (req.query.permanent === 'true') {
       await prisma.mcpToken.delete({ where: { id: req.params.id } });
       res.json({ message: 'Token MCP supprimé définitivement' });
     } else {
-      await prisma.mcpToken.update({ where: { id: req.params.id }, data: { isActive: false } });
+      await prisma.$transaction([
+        prisma.mcpRefreshToken.deleteMany({ where: { mcpTokenId: req.params.id } }),
+        prisma.mcpToken.update({ where: { id: req.params.id }, data: { isActive: false } })
+      ]);
       res.json({ message: 'Token MCP révoqué' });
     }
   } catch (err) {

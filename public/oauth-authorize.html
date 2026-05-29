@@ -31,10 +31,14 @@
         </p>
       </div>
 
-      <!-- Scopes demandés (commun aux deux modes) -->
+      <!-- Scopes demandés (checkboxes interactives) -->
       <div class="px-6 py-4 border-b border-slate-100">
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Accès demandé</p>
-        <ul id="scope-list" class="space-y-2.5 text-sm"></ul>
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Accès demandé</p>
+          <span class="text-xs text-slate-400">Décochez pour refuser</span>
+        </div>
+        <ul id="scope-list" class="space-y-2 text-sm"></ul>
+        <p id="scope-error" class="hidden mt-2 text-xs text-red-500">Sélectionnez au moins un accès.</p>
       </div>
 
       <!-- ── Mode session : utilisateur déjà connecté ── -->
@@ -61,6 +65,7 @@
           <input type="hidden" name="oauth_csrf"            id="sf-oauth-csrf"/>
           <input type="hidden" name="action"                value="approve"/>
           <input type="hidden" name="use_session"           value="true"/>
+          <div id="sf-granted-scopes"></div>
 
           <button type="submit"
             class="w-full px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition">
@@ -84,6 +89,7 @@
           <input type="hidden" name="code_challenge_method" id="f-code-challenge-method"/>
           <input type="hidden" name="oauth_csrf"            id="f-oauth-csrf"/>
           <input type="hidden" name="action"                value="approve"/>
+          <div id="f-granted-scopes"></div>
 
           <p class="text-xs text-slate-500">Identifiez-vous pour autoriser l'accès.</p>
 
@@ -126,15 +132,15 @@
       'reservations:read':  { label: 'Consulter les réservations',  desc: 'Lire les ressources, disponibilités et réservations existantes' },
       'reservations:write': { label: 'Créer des réservations',      desc: 'Créer et modifier des réservations de matériel' },
       'interventions:read': { label: 'Consulter les interventions', desc: 'Lire les demandes de maintenance et leur suivi' },
-      'interventions:write': { label: 'Gérer les interventions', desc: 'Créer et modifier les interventions de maintenance' },
-      'todos:read': { label: 'Consulter les tâches', desc: 'Lire les tâches standalone ou liées aux interventions' },
-      'todos:write': { label: 'Gérer les tâches', desc: 'Créer et modifier les tâches' },
-      'projects:read': { label: 'Consulter les projets', desc: 'Lire les projets Kanban, colonnes et cartes' },
-      'projects:write': { label: 'Gérer les projets', desc: 'Créer et modifier projets, colonnes et cartes' },
-      'orders:read': { label: 'Consulter les commandes', desc: 'Lire les commandes, lignes et suivis liés aux interventions' },
-      'orders:write': { label: 'Gérer les commandes', desc: 'Créer et modifier les commandes et leur suivi' },
-      'stock:read': { label: 'Consulter le stock', desc: 'Lire les articles, alertes et mouvements de stock' },
-      'stock:write': { label: 'Gérer le stock', desc: 'Créer et modifier les articles et mouvements de stock' }
+      'interventions:write': { label: 'Gérer les interventions',    desc: 'Créer et modifier les interventions de maintenance' },
+      'todos:read':         { label: 'Consulter les tâches',        desc: 'Lire les tâches standalone ou liées aux interventions' },
+      'todos:write':        { label: 'Gérer les tâches',            desc: 'Créer et modifier les tâches' },
+      'projects:read':      { label: 'Consulter les projets',       desc: 'Lire les projets Kanban, colonnes et cartes' },
+      'projects:write':     { label: 'Gérer les projets',           desc: 'Créer et modifier projets, colonnes et cartes' },
+      'orders:read':        { label: 'Consulter les commandes',     desc: 'Lire les commandes, lignes et suivis liés aux interventions' },
+      'orders:write':       { label: 'Gérer les commandes',         desc: 'Créer et modifier les commandes et leur suivi' },
+      'stock:read':         { label: 'Consulter le stock',          desc: 'Lire les articles, alertes et mouvements de stock' },
+      'stock:write':        { label: 'Gérer le stock',              desc: 'Créer et modifier les articles et mouvements de stock' }
     };
 
     const params              = new URLSearchParams(window.location.search);
@@ -189,17 +195,57 @@
       card.appendChild(div);
     }
 
+    // Injecte les scopes cochés comme champs hidden dans le formulaire cible
+    function injectGrantedScopes(containerId) {
+      const container = document.getElementById(containerId);
+      container.replaceChildren();
+      document.querySelectorAll('.scope-cb:checked').forEach(cb => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'granted_scopes';
+        input.value = cb.value;
+        container.appendChild(input);
+      });
+    }
+
+    // Validation : au moins un scope coché
+    function validateScopes() {
+      const anyChecked = document.querySelector('.scope-cb:checked');
+      const errEl = document.getElementById('scope-error');
+      if (!anyChecked) {
+        errEl.classList.remove('hidden');
+        return false;
+      }
+      errEl.classList.add('hidden');
+      return true;
+    }
+
+    document.getElementById('session-form').addEventListener('submit', function(e) {
+      if (!validateScopes()) { e.preventDefault(); return; }
+      injectGrantedScopes('sf-granted-scopes');
+    });
+
+    document.getElementById('oauth-form').addEventListener('submit', function(e) {
+      if (!validateScopes()) { e.preventDefault(); return; }
+      injectGrantedScopes('f-granted-scopes');
+    });
+
     function buildScopeItem(scopeKey) {
       const info = SCOPE_LABELS[scopeKey] || { label: scopeKey, desc: '' };
       const li = document.createElement('li');
-      li.className = 'flex items-start gap-2.5';
-      const iconWrap = document.createElement('span');
-      iconWrap.className = 'flex-shrink-0 mt-0.5';
-      iconWrap.setAttribute('aria-hidden', 'true');
-      iconWrap.innerHTML = '<svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+
+      const label = document.createElement('label');
+      label.className = 'flex items-start gap-3 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-slate-50 transition-colors';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'scope-cb mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 cursor-pointer flex-shrink-0';
+      checkbox.value = scopeKey;
+      checkbox.checked = true;
+
       const textDiv = document.createElement('div');
       const labelP = document.createElement('p');
-      labelP.className = 'font-medium text-slate-700';
+      labelP.className = 'font-medium text-slate-700 text-sm leading-snug';
       labelP.textContent = info.label;
       textDiv.appendChild(labelP);
       if (info.desc) {
@@ -208,8 +254,10 @@
         descP.textContent = info.desc;
         textDiv.appendChild(descP);
       }
-      li.appendChild(iconWrap);
-      li.appendChild(textDiv);
+
+      label.appendChild(checkbox);
+      label.appendChild(textDiv);
+      li.appendChild(label);
       return li;
     }
 
@@ -222,16 +270,11 @@
         granted.forEach(s => list.appendChild(buildScopeItem(s)));
       } else {
         const li = document.createElement('li');
-        li.className = 'text-slate-400 text-sm';
+        li.className = 'text-slate-400 text-sm px-2';
         li.textContent = 'Aucun scope valide demandé.';
         list.appendChild(li);
       }
     }
-
-    // ── Initialisation ──────────────────────────────────────────────────────
-    // 1. Charger les infos du client
-    // 2. Vérifier la session en parallèle
-    // 3. Afficher le bon mode
 
     Promise.all([
       fetch('/oauth/client-info?client_id=' + encodeURIComponent(clientId))
@@ -246,13 +289,11 @@
       document.getElementById('loading-mode').classList.add('hidden');
 
       if (me) {
-        // Utilisateur déjà connecté → mode approbation simple
         const initials = me.name ? me.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?';
         document.getElementById('session-avatar').textContent = initials;
         document.getElementById('session-name').textContent = me.name || me.email;
         document.getElementById('session-mode').classList.remove('hidden');
       } else {
-        // Pas de session → mode login
         document.getElementById('login-mode').classList.remove('hidden');
       }
     })
