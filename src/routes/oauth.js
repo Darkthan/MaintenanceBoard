@@ -22,7 +22,7 @@ const { generateCode, storeCode, consumeCode } = require('../lib/oauthCodes');
 
 const router = express.Router();
 
-const MCP_ACCESS_TOKEN_EXPIRES_IN = 900; // 15 minutes
+const MCP_ACCESS_TOKEN_EXPIRES_IN = 86400; // 24 heures
 const MCP_REFRESH_TOKEN_EXPIRES_DAYS = 365;
 const OFFLINE_ACCESS_SCOPE = 'offline_access';
 const OAUTH_CSRF_COOKIE = 'oauthCsrf';
