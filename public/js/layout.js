@@ -65,13 +65,9 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined #mobile-tabbar-shell {
         display: block !important;
-        position: fixed;
-        inset: auto 0 0 0;
-        z-index: 40;
-        pointer-events: none;
-        contain: layout paint style;
-        -webkit-transform: translateZ(0);
-        transform: translateZ(0);
+        /* Pas de position:fixed ni contain:layout — sur iOS Safari, contain:layout
+           crée un containing block pour les enfants position:fixed, les positionnant
+           par rapport au shell (height:0) au lieu du viewport → tab bar hors écran */
       }
 
       #mobile-tabbar-bar,
