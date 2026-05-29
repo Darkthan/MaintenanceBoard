@@ -148,15 +148,15 @@ app.use('/oauth', require('./routes/oauth').router);
 // ── Serveur MCP (Model Context Protocol) ───────────────────────────────────────
 // Transport Streamable HTTP, authentifié par token MCP dédié (Bearer).
 const { mcpAuth } = require('./middleware/mcpAuth');
-const { handleMcpRequest, methodNotAllowed } = require('./mcp/server');
+const { handleMcpRequest } = require('./mcp/server');
 const mcpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 240,
   message: { jsonrpc: '2.0', error: { code: -32000, message: 'Trop de requêtes MCP, réessayez dans 15 minutes.' }, id: null }
 });
 app.post('/mcp', mcpLimiter, mcpAuth, handleMcpRequest);
-app.get('/mcp', methodNotAllowed);
-app.delete('/mcp', methodNotAllowed);
+app.get('/mcp', mcpAuth, handleMcpRequest);    // canal SSE (notifications serveur → client)
+app.delete('/mcp', mcpAuth, handleMcpRequest); // fermeture de session
 
 // ── Tickets publics (sans auth, rate limit IP strict) ─────────────────────────
 const ticketLimiter = rateLimit({

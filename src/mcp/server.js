@@ -1,3 +1,4 @@
+const { randomUUID } = require('crypto');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const { z } = require('zod');
@@ -421,10 +422,43 @@ function buildMcpServer(ctx) {
   return server;
 }
 
+// Sessions MCP actives : sessionId → { transport, server, ctxId, expiresAt }
+const mcpSessions = new Map();
+const SESSION_TTL = 60 * 60 * 1000; // 1 heure d'inactivité
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, s] of mcpSessions) {
+    if (s.expiresAt < now) {
+      s.transport.close().catch(() => {});
+      s.server.close().catch(() => {});
+      mcpSessions.delete(id);
+    }
+  }
+}, 15 * 60 * 1000).unref();
+
+function sessionForbidden(res) {
+  return res.status(403).json({
+    jsonrpc: '2.0',
+    error: { code: -32001, message: 'Token non autorisé pour cette session MCP' },
+    id: null
+  });
+}
+
+function sessionNotFound(res) {
+  return res.status(404).json({
+    jsonrpc: '2.0',
+    error: { code: -32000, message: 'Session MCP inconnue ou expirée' },
+    id: null
+  });
+}
+
 /**
- * Handler Express pour POST /mcp en mode stateless : un serveur + transport
- * éphémères par requête (sessionIdGenerator: undefined). req.mcpToken doit être
- * fourni en amont par le middleware mcpAuth.
+ * Handler Express pour GET/POST/DELETE /mcp en mode stateful.
+ * - POST initialize → crée une session, retourne Mcp-Session-Id
+ * - POST tools/call avec Mcp-Session-Id → réutilise la session
+ * - GET avec Mcp-Session-Id → canal SSE (notifications serveur → client)
+ * - DELETE avec Mcp-Session-Id → ferme la session
  */
 async function handleMcpRequest(req, res) {
   const ctx = req.mcpToken;
@@ -436,12 +470,56 @@ async function handleMcpRequest(req, res) {
     });
   }
 
-  const server = buildMcpServer(ctx);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  const sessionId = req.headers['mcp-session-id'];
 
-  res.on('close', () => {
-    transport.close().catch(() => {});
-    server.close().catch(() => {});
+  // ── GET : canal SSE pour les notifications serveur → client ─────────────
+  if (req.method === 'GET') {
+    if (!sessionId || !mcpSessions.has(sessionId)) return sessionNotFound(res);
+    const s = mcpSessions.get(sessionId);
+    if (s.ctxId !== ctx.id) return sessionForbidden(res);
+    s.expiresAt = Date.now() + SESSION_TTL;
+    return s.transport.handleRequest(req, res);
+  }
+
+  // ── DELETE : fermeture explicite d'une session ───────────────────────────
+  if (req.method === 'DELETE') {
+    if (!sessionId || !mcpSessions.has(sessionId)) return sessionNotFound(res);
+    const s = mcpSessions.get(sessionId);
+    if (s.ctxId !== ctx.id) return sessionForbidden(res);
+    await s.transport.handleRequest(req, res);
+    s.transport.close().catch(() => {});
+    s.server.close().catch(() => {});
+    mcpSessions.delete(sessionId);
+    return;
+  }
+
+  // ── POST : requête JSON-RPC ──────────────────────────────────────────────
+
+  // Requête dans une session existante
+  if (sessionId) {
+    if (!mcpSessions.has(sessionId)) return sessionNotFound(res);
+    const s = mcpSessions.get(sessionId);
+    if (s.ctxId !== ctx.id) return sessionForbidden(res);
+    s.expiresAt = Date.now() + SESSION_TTL;
+    return s.transport.handleRequest(req, res, req.body);
+  }
+
+  // Nouvelle session (requête initialize sans Mcp-Session-Id)
+  const server = buildMcpServer(ctx);
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+    onsessioninitialized: (sid) => {
+      mcpSessions.set(sid, {
+        transport,
+        server,
+        ctxId: ctx.id,
+        expiresAt: Date.now() + SESSION_TTL
+      });
+    },
+    onsessionclosed: (sid) => {
+      mcpSessions.delete(sid);
+      server.close().catch(() => {});
+    }
   });
 
   try {
@@ -455,16 +533,10 @@ async function handleMcpRequest(req, res) {
         id: null
       });
     }
+    if (transport.sessionId) mcpSessions.delete(transport.sessionId);
+    transport.close().catch(() => {});
+    server.close().catch(() => {});
   }
 }
 
-// En mode stateless, les flux GET (SSE) et la terminaison DELETE de session ne s'appliquent pas.
-function methodNotAllowed(_req, res) {
-  res.status(405).json({
-    jsonrpc: '2.0',
-    error: { code: -32000, message: 'Méthode non supportée. Le serveur MCP est sans session (utilisez POST).' },
-    id: null
-  });
-}
-
-module.exports = { buildMcpServer, handleMcpRequest, methodNotAllowed };
+module.exports = { buildMcpServer, handleMcpRequest };
