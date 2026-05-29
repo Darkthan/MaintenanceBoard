@@ -470,6 +470,16 @@ async function handleStateless(req, res, ctx) {
   }
 }
 
+function clearMcpSessionHeader(req) {
+  delete req.headers['mcp-session-id'];
+  if (!Array.isArray(req.rawHeaders)) return;
+  for (let i = req.rawHeaders.length - 2; i >= 0; i -= 2) {
+    if (String(req.rawHeaders[i]).toLowerCase() === 'mcp-session-id') {
+      req.rawHeaders.splice(i, 2);
+    }
+  }
+}
+
 /**
  * Handler Express pour GET/POST/DELETE /mcp.
  *
@@ -543,15 +553,20 @@ async function handleMcpRequest(req, res) {
     const s = mcpSessions.get(sessionId);
     // Session inconnue → répondre proprement pour que le client refasse initialize
     if (!s) {
-      return res.status(404).json({
-        jsonrpc: '2.0',
-        error: { code: -32001, message: 'Session MCP expirée, reconnectez le serveur MCP.' },
-        id: req.body?.id ?? null
-      });
+      if (req.body?.method === 'initialize') {
+        clearMcpSessionHeader(req);
+      } else {
+        return res.status(404).json({
+          jsonrpc: '2.0',
+          error: { code: -32001, message: 'Session MCP expirée, reconnectez le serveur MCP.' },
+          id: req.body?.id ?? null
+        });
+      }
+    } else {
+      if (s.ctxId !== ctx.id) return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Token non autorisé' }, id: null });
+      s.expiresAt = Date.now() + SESSION_TTL;
+      return s.transport.handleRequest(req, res, req.body);
     }
-    if (s.ctxId !== ctx.id) return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Token non autorisé' }, id: null });
-    s.expiresAt = Date.now() + SESSION_TTL;
-    return s.transport.handleRequest(req, res, req.body);
   }
 
   // Pas de Mcp-Session-Id : traiter en stateless (tools/call direct sans initialize)

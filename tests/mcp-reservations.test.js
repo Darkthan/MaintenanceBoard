@@ -60,6 +60,7 @@ const {
   hasMcpTokenExpired
 } = require('../src/utils/mcpTokens');
 const { mcpAuth } = require('../src/middleware/mcpAuth');
+const { handleMcpRequest } = require('../src/mcp/server');
 const { generateCode, storeCode } = require('../src/lib/oauthCodes');
 const service = require('../src/mcp/reservationsService');
 
@@ -69,6 +70,13 @@ function oauthTestApp() {
   app.use(express.json());
   app.use(cookieParser());
   app.use('/oauth', require('../src/routes/oauth').router);
+  return app;
+}
+
+function mcpTestApp() {
+  const app = express();
+  app.use(express.json());
+  app.post('/mcp', mcpAuth, handleMcpRequest);
   return app;
 }
 
@@ -513,6 +521,51 @@ describe('OAuth MCP refresh tokens', () => {
     expect(infoRes.status).toBe(200);
     expect(infoRes.body.label).toBe('ChatGPT');
     expect(infoRes.body.scopes).toContain('equipment_bookings:read');
+  });
+});
+
+describe('MCP transport sessions', () => {
+  beforeEach(() => { jest.clearAllMocks(); mockRefreshTokens.length = 0; settings.__reset(); });
+
+  it('réinitialise une session MCP même si ChatGPT renvoie un ancien identifiant', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      role: 'ADMIN',
+      isActive: true,
+      name: 'Admin',
+      email: 'admin@example.test',
+      contactEmail: null
+    });
+
+    const accessToken = jwt.sign(
+      {
+        sub: 'u1',
+        type: 'mcp_user_access',
+        clientId: 'mcp_dynamic_saved',
+        scopes: ['equipment_bookings:read']
+      },
+      config.jwt.secret,
+      { expiresIn: '15m' }
+    );
+
+    const res = await request(mcpTestApp())
+      .post('/mcp')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Mcp-Session-Id', 'stale-session-id')
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'ChatGPT', version: 'test' }
+        }
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['mcp-session-id']).toBeTruthy();
+    expect(res.body.error).toBeUndefined();
   });
 });
 
