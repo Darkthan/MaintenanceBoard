@@ -1,5 +1,5 @@
 const prisma = require('../lib/prisma');
-const { containsFilter } = require('../lib/db-utils');
+const { containsFilter, isSQLite } = require('../lib/db-utils');
 
 const INTERVENTION_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
 const INTERVENTION_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'];
@@ -122,8 +122,9 @@ function parseTags(raw) {
 }
 
 function serializeTags(tags) {
-  if (!Array.isArray(tags)) return '[]';
-  return JSON.stringify([...new Set(tags.map(t => String(t || '').trim()).filter(Boolean))]);
+  if (!Array.isArray(tags)) return isSQLite ? '[]' : [];
+  const clean = [...new Set(tags.map(t => String(t || '').trim()).filter(Boolean))];
+  return isSQLite ? JSON.stringify(clean) : clean;
 }
 
 function numberOrNull(value, label) {

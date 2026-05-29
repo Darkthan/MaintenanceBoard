@@ -167,12 +167,52 @@ describe('MCP work service', () => {
     expect(prisma.order.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         title: 'Commander alimentation',
+        deploymentTags: JSON.stringify(['pc', 'urgence']),
         requestedBy: 'u1',
         interventionId: 'int-1',
         items: { create: [expect.objectContaining({ name: 'Alimentation 500W', quantity: 2, priceType: 'HT' })] }
       })
     }));
     expect(out.id).toBe('ord-1');
+    expect(out.deploymentTags).toEqual(['pc', 'urgence']);
+  });
+
+  it('envoie les tags de commande MCP en tableau avec PostgreSQL', async () => {
+    jest.resetModules();
+    const pgPrisma = {
+      order: {
+        create: jest.fn(async ({ data }) => ({
+          id: 'ord-pg',
+          ...data,
+          requester: { id: data.requestedBy, name: 'Admin', email: 'admin@test.com' },
+          intervention: null,
+          supplierRef: null,
+          items: [],
+          createdAt: new Date('2030-01-01T08:00:00Z'),
+          updatedAt: new Date('2030-01-01T08:00:00Z')
+        }))
+      }
+    };
+
+    jest.doMock('../src/lib/prisma', () => pgPrisma);
+    jest.doMock('../src/lib/db-utils', () => ({
+      containsFilter: value => ({ contains: value, mode: 'insensitive' }),
+      isSQLite: false,
+      supportsInsensitiveMode: true
+    }));
+
+    const pgWork = require('../src/mcp/workService');
+    const out = await pgWork.createOrder({
+      title: 'Commander alimentation',
+      deploymentTags: ['pc', ' urgence ', '', 'pc'],
+      items: [{ name: 'Alimentation 500W', quantity: 1 }]
+    }, { userId: 'u1' });
+
+    expect(pgPrisma.order.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        deploymentTags: ['pc', 'urgence']
+      })
+    }));
     expect(out.deploymentTags).toEqual(['pc', 'urgence']);
   });
 
