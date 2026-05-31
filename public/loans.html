@@ -1690,7 +1690,7 @@ function bindLoansPageEvents() {
     });
   });
 
-  document.getElementById('reservations-list').addEventListener('click', event => {
+  function handleReservationClick(event) {
     const deleteBtn = event.target.closest('[data-action="reservation-delete"]');
     if (deleteBtn && !deleteBtn.disabled) {
       event.preventDefault();
@@ -1728,7 +1728,10 @@ function bindLoansPageEvents() {
     event.preventDefault();
     event.stopPropagation();
     updateReservationStatus(btn.dataset.id, btn.dataset.status, btn);
-  });
+  }
+
+  document.getElementById('reservations-list').addEventListener('click', handleReservationClick);
+  document.getElementById('cal-day-detail').addEventListener('click', handleReservationClick);
 
   document.getElementById('refresh-reservations-btn').addEventListener('click', loadReservations);
   document.getElementById('toggle-archived-reservations-btn').addEventListener('click', () => {
