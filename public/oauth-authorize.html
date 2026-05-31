@@ -41,6 +41,19 @@
         <p id="scope-error" class="hidden mt-2 text-xs text-red-500">Sélectionnez au moins un accès.</p>
       </div>
 
+      <!-- Durée de connexion -->
+      <div class="px-6 py-4 border-b border-slate-100">
+        <label for="access-duration" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Durée de connexion</label>
+        <select id="access-duration"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="1">1 jour</option>
+          <option value="7">7 jours</option>
+          <option value="30">30 jours</option>
+          <option value="365" selected>1 an</option>
+        </select>
+        <p class="mt-1.5 text-xs text-slate-400">Durée pendant laquelle votre assistant reste connecté avant de devoir se ré-authentifier.</p>
+      </div>
+
       <!-- ── Mode session : utilisateur déjà connecté ── -->
       <div id="session-mode" class="hidden">
         <!-- Infos utilisateur connecté -->
@@ -116,6 +129,9 @@
           </div>
         </form>
       </div>
+
+      <!-- Erreur de consentement (recouvrable) -->
+      <p id="consent-error" class="hidden mx-6 mb-5 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"></p>
 
       <!-- Chargement -->
       <div id="loading-mode" class="px-6 py-10 text-center text-sm text-slate-400">Chargement…</div>
@@ -216,21 +232,62 @@
       const errEl = document.getElementById('scope-error');
       if (!anyChecked) {
         errEl.classList.remove('hidden');
+        errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return false;
       }
       errEl.classList.add('hidden');
       return true;
     }
 
-    document.getElementById('session-form').addEventListener('submit', function(e) {
-      if (!validateScopes()) { e.preventDefault(); return; }
-      injectGrantedScopes('sf-granted-scopes');
-    });
+    function showConsentError(message) {
+      const el = document.getElementById('consent-error');
+      el.textContent = message;
+      el.classList.remove('hidden');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 
-    document.getElementById('oauth-form').addEventListener('submit', function(e) {
-      if (!validateScopes()) { e.preventDefault(); return; }
-      injectGrantedScopes('f-granted-scopes');
-    });
+    // Soumission via fetch puis navigation explicite : plus fiable que la navigation
+    // native POST→302 dans les navigateurs intégrés des applications LLM sur mobile.
+    async function submitConsent(e, form, grantedContainerId) {
+      e.preventDefault();
+      document.getElementById('consent-error').classList.add('hidden');
+      if (!validateScopes()) return;
+      injectGrantedScopes(grantedContainerId);
+
+      const submitBtn = form.querySelector('[type="submit"]');
+      const originalLabel = submitBtn ? submitBtn.textContent : '';
+      const fd = new FormData(form);
+      fd.set('response_mode', 'json');
+      fd.set('access_duration', document.getElementById('access-duration').value);
+
+      try {
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Autorisation…'; }
+        const res = await fetch(form.action, {
+          method: 'POST',
+          body: new URLSearchParams(fd),
+          credentials: 'include',
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.redirect) {
+          window.location.href = data.redirect;
+          return;
+        }
+        showConsentError((data && data.error_description) || 'Autorisation impossible. Réessayez.');
+      } catch (err) {
+        // Repli : soumission native classique si le fetch échoue
+        try { form.submit(); return; } catch (_) {}
+        showConsentError('Connexion au serveur impossible. Vérifiez votre réseau et réessayez.');
+      } finally {
+        if (submitBtn && document.body.contains(submitBtn)) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalLabel;
+        }
+      }
+    }
+
+    document.getElementById('session-form').addEventListener('submit', e => submitConsent(e, e.currentTarget, 'sf-granted-scopes'));
+    document.getElementById('oauth-form').addEventListener('submit', e => submitConsent(e, e.currentTarget, 'f-granted-scopes'));
 
     function buildScopeItem(scopeKey) {
       const info = SCOPE_LABELS[scopeKey] || { label: scopeKey, desc: '' };

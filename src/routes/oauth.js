@@ -26,6 +26,9 @@ const router = express.Router();
 
 const MCP_ACCESS_TOKEN_EXPIRES_IN = 86400; // 24 heures
 const MCP_REFRESH_TOKEN_EXPIRES_DAYS = 365;
+// Durées de connexion proposées sur la page de consentement (en jours).
+// L'utilisateur choisit combien de temps son LLM reste connecté avant de devoir se ré-authentifier.
+const ALLOWED_ACCESS_DURATION_DAYS = [1, 7, 30, 365];
 const OFFLINE_ACCESS_SCOPE = 'offline_access';
 const OAUTH_CSRF_COOKIE = 'oauthCsrf';
 const OAUTH_CSRF_EXPIRES_IN = 600; // 10 minutes
@@ -84,9 +87,16 @@ function hashRefreshToken(token) {
   return crypto.createHash('sha256').update(String(token), 'utf8').digest('hex');
 }
 
-async function storeRefreshToken({ userId, mcpTokenId, clientId, scopes }) {
+/** Valide une durée de connexion choisie par l'utilisateur ; retourne la valeur par défaut si invalide. */
+function parseAccessDurationDays(raw) {
+  const days = parseInt(raw, 10);
+  return ALLOWED_ACCESS_DURATION_DAYS.includes(days) ? days : MCP_REFRESH_TOKEN_EXPIRES_DAYS;
+}
+
+async function storeRefreshToken({ userId, mcpTokenId, clientId, scopes, ttlDays }) {
   const token = crypto.randomBytes(48).toString('base64url');
-  const expiresAt = new Date(Date.now() + MCP_REFRESH_TOKEN_EXPIRES_DAYS * 86400 * 1000);
+  const days = ttlDays || MCP_REFRESH_TOKEN_EXPIRES_DAYS;
+  const expiresAt = new Date(Date.now() + days * 86400 * 1000);
   await prisma.mcpRefreshToken.create({
     data: {
       tokenHash: hashRefreshToken(token),
@@ -94,6 +104,7 @@ async function storeRefreshToken({ userId, mcpTokenId, clientId, scopes }) {
       mcpTokenId: mcpTokenId || null,
       clientId,
       scopes: JSON.stringify(scopes),
+      ttlDays: ttlDays || null,
       expiresAt
     }
   });
@@ -422,6 +433,9 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
     email, password, action
   } = req.body;
   const clientId = normalizeClientId(client_id);
+  // En mode JSON le client soumet via fetch et navigue lui-même vers l'URL retournée.
+  // Plus fiable que la navigation native POST→302 dans les navigateurs intégrés mobiles (apps LLM).
+  const wantsJson = req.body.response_mode === 'json';
 
   // ── 1. Valider client et redirect_uri EN PREMIER (avant tout redirect) ──────
   let client;
@@ -433,6 +447,9 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
 
   if (!client || !isRedirectAllowedForClient(client, redirect_uri)) {
     // Erreur de configuration : afficher une page, ne pas rediriger
+    if (wantsJson) {
+      return res.status(400).json({ error: 'invalid_request', error_description: 'Paramètres OAuth2 invalides (client ou redirect_uri non enregistrée).' });
+    }
     return res.status(400).send('Paramètres OAuth2 invalides (client ou redirect_uri non enregistrée).');
   }
 
@@ -442,6 +459,7 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
     url.searchParams.set('error', error);
     if (description) url.searchParams.set('error_description', description);
     if (state) url.searchParams.set('state', state);
+    if (wantsJson) return res.json({ redirect: url.toString() });
     return res.redirect(url.toString());
   }
 
@@ -515,13 +533,15 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
       redirectUri: redirect_uri,
       codeChallenge: code_challenge,        // toujours présent (PKCE obligatoire)
       codeChallengeMethod: code_challenge_method,
-      issueRefreshToken
+      issueRefreshToken,
+      refreshTokenTtlDays: parseAccessDurationDays(req.body.access_duration)
     });
 
     const url = new URL(redirect_uri);
     url.searchParams.set('code', code);
     if (state) url.searchParams.set('state', state);
     clearOAuthCsrfCookie(res);
+    if (wantsJson) return res.json({ redirect: url.toString() });
     return res.redirect(url.toString());
   } catch (err) {
     console.error('OAuth /authorize POST error:', err);
@@ -599,7 +619,8 @@ router.post('/token', tokenLimiter, async (req, res) => {
             userId: codeData.userId,
             mcpTokenId: codeData.mcpTokenId,
             clientId: codeData.clientId,
-            scopes
+            scopes,
+            ttlDays: codeData.refreshTokenTtlDays
           })
         : null;
 
@@ -641,9 +662,11 @@ router.post('/token', tokenLimiter, async (req, res) => {
       const scopes = storedScopes.filter(s => roleAllowedScopes.includes(s));
       if (!scopes.length) return oauthError(res, 'invalid_scope', 'Aucun scope valide accordé');
 
-      // Rotation : supprimer l'ancien token, créer le nouveau
+      // Rotation : supprimer l'ancien token, créer le nouveau.
+      // On préserve la durée de connexion choisie à l'origine (fenêtre glissante de même longueur).
       const newRefreshToken = crypto.randomBytes(48).toString('base64url');
-      const newExpiresAt = new Date(Date.now() + MCP_REFRESH_TOKEN_EXPIRES_DAYS * 86400 * 1000);
+      const ttlDays = tokenRecord.ttlDays || MCP_REFRESH_TOKEN_EXPIRES_DAYS;
+      const newExpiresAt = new Date(Date.now() + ttlDays * 86400 * 1000);
 
       await prisma.$transaction([
         prisma.mcpRefreshToken.delete({ where: { id: tokenRecord.id } }),
@@ -654,6 +677,7 @@ router.post('/token', tokenLimiter, async (req, res) => {
             mcpTokenId: tokenRecord.mcpTokenId,
             clientId: tokenRecord.clientId,
             scopes: JSON.stringify(scopes),
+            ttlDays: tokenRecord.ttlDays,
             expiresAt: newExpiresAt
           }
         })

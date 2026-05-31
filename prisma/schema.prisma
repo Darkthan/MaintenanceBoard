@@ -92,6 +92,7 @@ model McpRefreshToken {
   clientId   String
   scopes     String    @default("[]")
   expiresAt  DateTime
+  ttlDays    Int?
   createdAt  DateTime  @default(now())
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
