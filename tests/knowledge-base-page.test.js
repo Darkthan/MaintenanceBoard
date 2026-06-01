@@ -36,6 +36,8 @@ describe('knowledge base page', () => {
     expect(res.text).toContain("Nouveau plan d'adressage");
     expect(res.text).not.toContain('fab-new-ip-range');
     expect(res.text).toContain("await selectArticle('system-ip-addressing')");
+    expect(res.text).toContain("actions.classList.remove('pointer-events-none', 'opacity-0', 'scale-95')");
+    expect(res.text).toContain("style.transform = 'rotate(45deg)'");
     expect(res.text).toContain('Les images sont compressées automatiquement');
   });
 
