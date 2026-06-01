@@ -246,7 +246,8 @@
                       <th class="px-3 py-2 font-medium">Type</th>
                       <th class="px-3 py-2 font-medium">Description</th>
                       <th class="px-3 py-2 font-medium">Plage</th>
-                      <th class="px-3 py-2 w-12"></th>
+                      <th class="px-3 py-2 font-medium">Migration</th>
+                      <th class="px-3 py-2 w-16"></th>
                     </tr></thead>
                     <tbody id="ip-addresses-tbody"></tbody>
                   </table>
@@ -395,6 +396,65 @@
         <button id="ip-do-import-addresses" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Importer</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Modal : Planifier une migration IP -->
+<div id="ip-modal-migration" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 class="text-sm font-bold text-slate-900">Planifier une migration IP</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Une tâche sera créée automatiquement. L'IP sera mise à jour dans le plan quand la tâche est validée.</p>
+      </div>
+      <button class="ip-modal-close text-slate-400 hover:text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <form id="ip-form-migration" class="px-6 py-5 space-y-3">
+      <input type="hidden" id="ip-fm-network-id"/>
+      <!-- Transition IP -->
+      <div class="flex items-center gap-3">
+        <div class="flex-1">
+          <label class="block text-xs font-medium text-slate-600 mb-1">IP actuelle</label>
+          <input id="ip-fm-old-ip" type="text" readonly class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50 text-slate-600"/>
+        </div>
+        <svg class="w-5 h-5 text-slate-400 flex-shrink-0 mt-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+        <div class="flex-1">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nouvelle IP *</label>
+          <input id="ip-fm-new-ip" type="text" required placeholder="10.0.0.20" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"/>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nouveau nom d'hôte</label>
+          <input id="ip-fm-hostname" type="text" placeholder="srv-new01" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Type d'équipement</label>
+          <input id="ip-fm-type" type="text" placeholder="Serveur, PC…" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"/>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+        <textarea id="ip-fm-notes" rows="2" placeholder="Raison de la migration, contexte…" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Intervention liée</label>
+          <select id="ip-fm-intervention" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500">
+            <option value="">Aucune</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Date planifiée</label>
+          <input id="ip-fm-scheduled" type="datetime-local" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"/>
+        </div>
+      </div>
+      <p id="ip-fm-error" class="hidden text-xs text-red-600"></p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="ip-modal-close px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Annuler</button>
+        <button type="submit" class="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600">Planifier la migration</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -1707,7 +1767,7 @@ const IP_RANGE_COLORS = {
   OTHER:    { bg:'bg-purple-400', light:'bg-purple-100 text-purple-800', label:'Autre' },
 };
 
-let ipNetworks = [], ipCurrentNetwork = null, ipCurrentAddresses = [], ipCurrentRanges = [];
+let ipNetworks = [], ipCurrentNetwork = null, ipCurrentAddresses = [], ipCurrentRanges = [], ipCurrentMigrations = [];
 let ipBulkEditing = false, ipBulkDeletedIds = new Set(), ipBulkDraft = new Map();
 
 // Modals
@@ -1736,7 +1796,7 @@ function ipRenderList(filter = '') {
           <h3 class="text-sm font-semibold text-slate-900 group-hover:text-emerald-700 truncate">${escapeHtml(n.name)}</h3>
           <p class="text-xs font-mono text-slate-400 mt-0.5">${escapeHtml(n.cidr)}</p>
         </div>
-        ${n.vlan ? `<span class="ml-2 px-1.5 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-700">VLAN ${n.vlan}</span>` : ''}
+        ${n.vlan ? `<span class="ml-2 px-1.5 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-700">VLAN ${escapeHtml(String(n.vlan))}</span>` : ''}
       </div>
       <div class="grid grid-cols-3 gap-1 text-xs text-center mt-2">
         <div><p class="text-slate-400">Hôtes</p><p class="font-semibold text-slate-600">${info ? info.usableHosts.toLocaleString('fr-FR') : '—'}</p></div>
@@ -1752,9 +1812,13 @@ function ipRenderList(filter = '') {
 // Détail réseau
 async function ipOpenDetail(id) {
   try {
-    const res = await fetch(`/api/ip-networks/${id}`, { credentials: 'include' });
-    const data = await res.json();
+    const [netRes, migRes] = await Promise.all([
+      fetch(`/api/ip-networks/${id}`, { credentials: 'include' }),
+      fetch(`/api/ip-networks/${id}/migrations?status=PLANNED`, { credentials: 'include' }),
+    ]);
+    const data = await netRes.json();
     ipCurrentNetwork = data; ipCurrentAddresses = data.addresses||[]; ipCurrentRanges = data.ranges||[];
+    ipCurrentMigrations = migRes.ok ? await migRes.json() : [];
     ipSetBulkEditing(false);
     ipRenderDetail();
     document.getElementById('ip-view-list').classList.add('hidden');
@@ -1864,7 +1928,19 @@ function ipRenderAddresses(filter = '') {
         ? `<input data-ip-field="description" value="${escapeHtml(draft.description||'')}" class="w-40 px-2 py-1 border border-slate-200 rounded"/>`
         : a.description?escapeHtml(a.description):'<span class="text-slate-300">—</span>'}</td>
       <td class="px-3 py-2 text-xs">${rng?`<span class="px-1.5 py-0.5 rounded-full text-xs ${col.light}">${escapeHtml(rng.label)}</span>`:'<span class="text-slate-300">—</span>'}</td>
-      <td class="px-3 py-2">${editable?`<button class="ip-bulk-toggle-delete text-xs ${deleted?'text-emerald-600':'text-red-500'}" data-id="${a.id}">${deleted?'↶':'✕'}</button>`:''}</td></tr>`;
+      <td class="px-3 py-2 text-xs">${(() => { const mig = ipCurrentMigrations.find(m => m.oldIp === a.ip); return mig ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>${escapeHtml(mig.newIp)}</span>` : '<span class="text-slate-300">—</span>'; })()}</td>
+      <td class="px-3 py-2">
+        <div class="flex gap-1 justify-end">
+          ${editable ? `<button class="ip-bulk-toggle-delete text-xs ${deleted?'text-emerald-600':'text-red-500'}" data-id="${a.id}">${deleted?'↶':'✕'}</button>` : ''}
+          ${!editable && !a.autoDiscovered && !a.unassigned && isAdmin() ? `
+            <button class="ip-btn-migrate text-xs text-orange-400 hover:text-orange-600 transition" title="Planifier migration" data-ip="${escapeHtml(a.ip)}">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+            </button>
+            <button class="ip-edit-addr text-slate-300 hover:text-blue-500 text-xs" data-id="${a.id}">✎</button>
+            <button class="ip-del-addr text-slate-300 hover:text-red-500 text-xs" data-id="${a.id}">✕</button>
+          ` : ''}
+        </div>
+      </td></tr>`;
   }).join('');
   tbody.querySelectorAll('[data-ip-field]').forEach(input => input.addEventListener('input', () => {
     const row = input.closest('tr[data-ip-address-id]');
@@ -1876,6 +1952,9 @@ function ipRenderAddresses(filter = '') {
     else ipBulkDeletedIds.add(b.dataset.id);
     ipRenderAddresses(document.getElementById('ip-search-addresses').value.toLowerCase().trim());
   }));
+  tbody.querySelectorAll('.ip-edit-addr').forEach(b => b.addEventListener('click', () => ipOpenAddrForm(ipCurrentAddresses.find(a=>a.id===b.dataset.id))));
+  tbody.querySelectorAll('.ip-del-addr').forEach(b => b.addEventListener('click', () => ipDelAddr(b.dataset.id)));
+  tbody.querySelectorAll('.ip-btn-migrate').forEach(b => b.addEventListener('click', () => ipOpenMigrationForm(b.dataset.ip)));
 }
 
 function ipBuildDisplayAddresses() {
@@ -2185,9 +2264,13 @@ async function ipLoadNetworks() {
 }
 async function ipRefreshDetail() {
   if (!ipCurrentNetwork) return;
-  const res = await fetch(`/api/ip-networks/${ipCurrentNetwork.id}`, { credentials:'include' });
+  const [res, migRes] = await Promise.all([
+    fetch(`/api/ip-networks/${ipCurrentNetwork.id}`, { credentials:'include' }),
+    fetch(`/api/ip-networks/${ipCurrentNetwork.id}/migrations?status=PLANNED`, { credentials:'include' }),
+  ]);
   const data = await res.json();
   ipCurrentNetwork = data; ipCurrentAddresses = data.addresses||[]; ipCurrentRanges = data.ranges||[];
+  ipCurrentMigrations = migRes.ok ? await migRes.json() : [];
   ipRenderDetail();
 }
 
@@ -2236,6 +2319,62 @@ function ipHidePanel() {
   document.getElementById('ip-panel').classList.add('hidden');
   document.getElementById('ip-panel').classList.remove('flex');
 }
+
+// ── Migrations IP ─────────────────────────────────────────────────────────────
+
+async function ipOpenMigrationForm(oldIp) {
+  document.getElementById('ip-fm-network-id').value = ipCurrentNetwork.id;
+  document.getElementById('ip-fm-old-ip').value = oldIp;
+  document.getElementById('ip-fm-new-ip').value = '';
+  document.getElementById('ip-fm-hostname').value = '';
+  document.getElementById('ip-fm-type').value = '';
+  document.getElementById('ip-fm-notes').value = '';
+  document.getElementById('ip-fm-scheduled').value = '';
+  document.getElementById('ip-fm-error').classList.add('hidden');
+
+  // Charger les interventions ouvertes
+  const sel = document.getElementById('ip-fm-intervention');
+  sel.innerHTML = '<option value="">Aucune</option>';
+  try {
+    const res = await fetch('/api/interventions?status=OPEN&status=IN_PROGRESS&limit=50', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data.interventions || data.items || []);
+      items.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i.id; opt.textContent = i.title.slice(0, 60);
+        sel.appendChild(opt);
+      });
+    }
+  } catch {}
+
+  ipOpenModal('ip-modal-migration');
+}
+
+document.getElementById('ip-form-migration').addEventListener('submit', async e => {
+  e.preventDefault();
+  const networkId = document.getElementById('ip-fm-network-id').value;
+  const body = {
+    oldIp: document.getElementById('ip-fm-old-ip').value,
+    newIp: document.getElementById('ip-fm-new-ip').value,
+    newHostname: document.getElementById('ip-fm-hostname').value || null,
+    newType: document.getElementById('ip-fm-type').value || null,
+    notes: document.getElementById('ip-fm-notes').value || null,
+    interventionId: document.getElementById('ip-fm-intervention').value || null,
+    scheduledAt: document.getElementById('ip-fm-scheduled').value || null,
+  };
+  const errEl = document.getElementById('ip-fm-error'); errEl.classList.add('hidden');
+  try {
+    const res = await fetch(`/api/ip-networks/${networkId}/migrations`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Erreur'; errEl.classList.remove('hidden'); return; }
+    ipCloseModal('ip-modal-migration');
+    showToast(`Migration planifiée : ${body.oldIp} → ${body.newIp}`, 'success');
+    await ipRefreshDetail();
+  } catch { errEl.textContent = 'Erreur réseau'; errEl.classList.remove('hidden'); }
+});
 
 // ══ Fin plan d'adressage ═══════════════════════════════════════════════════════
 

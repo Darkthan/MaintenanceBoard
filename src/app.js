@@ -131,7 +131,7 @@ app.use('/api/todos', require('./routes/todos'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/knowledge-base', require('./routes/knowledgeBase'));
-app.use('/api/ip-networks', require('./routes/ipAddressing'));
+app.use('/api/ip-networks', require('./routes/ipAddressing').router);
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/qrcode', require('./routes/qrcode'));
 app.use('/api/users', require('./routes/users'));

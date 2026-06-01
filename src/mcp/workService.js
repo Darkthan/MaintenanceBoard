@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const { containsFilter, isSQLite } = require('../lib/db-utils');
+const { applyMigration } = require('../routes/ipAddressing');
 
 const INTERVENTION_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
 const INTERVENTION_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'];
@@ -815,6 +816,119 @@ async function createStockMovement(input, { userId } = {}) {
   return movement;
 }
 
+// ── Plan d'adressage IP ────────────────────────────────────────────────────────
+
+async function listIpNetworks({ search } = {}) {
+  const networks = await prisma.ipNetwork.findMany({
+    include: { _count: { select: { addresses: true, ranges: true, migrations: true } } },
+    orderBy: [{ vlan: 'asc' }, { name: 'asc' }],
+  });
+  const filtered = search
+    ? networks.filter(n => n.name.toLowerCase().includes(search.toLowerCase()) || n.cidr.includes(search))
+    : networks;
+  return filtered.map(n => ({
+    id: n.id, name: n.name, vlan: n.vlan, cidr: n.cidr, gateway: n.gateway, description: n.description,
+    addressCount: n._count.addresses, rangeCount: n._count.ranges,
+    pendingMigrations: n._count.migrations,
+  }));
+}
+
+async function getIpNetwork({ networkId }) {
+  const network = await prisma.ipNetwork.findUnique({
+    where: { id: networkId },
+    include: {
+      addresses: { orderBy: { ip: 'asc' } },
+      ranges: { orderBy: { startHost: 'asc' } },
+      migrations: {
+        where: { status: 'PLANNED' },
+        include: { todo: { select: { id: true, title: true, done: true, dueAt: true } } },
+        orderBy: { createdAt: 'desc' },
+      },
+    },
+  });
+  if (!network) { const err = new Error('Réseau introuvable'); err.status = 404; throw err; }
+  return network;
+}
+
+async function listIpAddresses({ networkId, search }) {
+  const where = { networkId };
+  if (search) {
+    where.OR = [
+      { ip: { contains: search } },
+      { hostname: { contains: search } },
+      { equipmentType: { contains: search } },
+    ];
+  }
+  return prisma.ipAddress.findMany({ where, orderBy: { ip: 'asc' } });
+}
+
+async function listIpMigrations({ networkId, status } = {}) {
+  const where = {};
+  if (networkId) where.networkId = networkId;
+  if (status) where.status = status;
+  return prisma.ipMigration.findMany({
+    where,
+    include: {
+      network: { select: { id: true, name: true, cidr: true } },
+      todo: { select: { id: true, title: true, done: true, dueAt: true } },
+      intervention: { select: { id: true, title: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+async function createIpMigration({ networkId, oldIp, newIp, newHostname, newType, notes, interventionId, scheduledAt }, { userId } = {}) {
+  const network = await prisma.ipNetwork.findUnique({ where: { id: networkId } });
+  if (!network) { const err = new Error('Réseau introuvable'); err.status = 404; throw err; }
+
+  const existingAddr = await prisma.ipAddress.findUnique({
+    where: { networkId_ip: { networkId, ip: oldIp } }
+  });
+
+  const todo = await prisma.todo.create({
+    data: {
+      title: `Migration IP : ${oldIp} → ${newIp} (${network.name})`,
+      description: notes || null,
+      interventionId: interventionId || null,
+      dueAt: scheduledAt ? new Date(scheduledAt) : null,
+    }
+  });
+
+  return prisma.ipMigration.create({
+    data: {
+      networkId, oldIp, newIp,
+      newHostname: newHostname || null, newType: newType || null,
+      notes: notes || null,
+      ipAddressId: existingAddr?.id || null,
+      interventionId: interventionId || null,
+      todoId: todo.id,
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+      createdById: userId || null,
+    },
+    include: {
+      network: { select: { id: true, name: true, cidr: true } },
+      todo: { select: { id: true, title: true } },
+    },
+  });
+}
+
+async function applyIpMigration({ migrationId }, { userId } = {}) {
+  const migration = await prisma.ipMigration.findUnique({
+    where: { id: migrationId },
+    include: { ipAddress: true, network: true, todo: true }
+  });
+  if (!migration) { const err = new Error('Migration introuvable'); err.status = 404; throw err; }
+  if (migration.status !== 'PLANNED') {
+    const err = new Error(`Migration déjà ${migration.status === 'APPLIED' ? 'appliquée' : 'annulée'}`);
+    err.status = 400; throw err;
+  }
+  await applyMigration(migration, userId);
+  return prisma.ipMigration.findUnique({
+    where: { id: migrationId },
+    include: { network: { select: { id: true, name: true } }, todo: { select: { id: true, done: true } } },
+  });
+}
+
 module.exports = {
   INTERVENTION_STATUSES,
   INTERVENTION_PRIORITIES,
@@ -846,5 +960,12 @@ module.exports = {
   createStockItem,
   updateStockItem,
   listStockMovements,
-  createStockMovement
+  createStockMovement,
+  // Plan d'adressage IP
+  listIpNetworks,
+  getIpNetwork,
+  listIpAddresses,
+  listIpMigrations,
+  createIpMigration,
+  applyIpMigration,
 };

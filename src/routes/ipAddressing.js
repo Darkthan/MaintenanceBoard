@@ -849,4 +849,178 @@ router.post('/import', requireAuth, requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-module.exports = router;
+// ── Migrations IP ─────────────────────────────────────────────────────────────
+
+const MIGRATION_INCLUDE = {
+  network: { select: { id: true, name: true, cidr: true } },
+  ipAddress: { select: { id: true, ip: true, hostname: true } },
+  intervention: { select: { id: true, title: true } },
+  todo: { select: { id: true, title: true, done: true, doneAt: true } },
+  createdBy: { select: { id: true, name: true } },
+  appliedBy: { select: { id: true, name: true } },
+};
+
+// GET /api/ip-networks/:id/migrations
+router.get('/:id/migrations', requireAuth, async (req, res, next) => {
+  try {
+    const { status } = req.query;
+    const where = { networkId: req.params.id };
+    if (status) where.status = status;
+    const migrations = await prisma.ipMigration.findMany({
+      where,
+      include: MIGRATION_INCLUDE,
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(migrations);
+  } catch (err) { next(err); }
+});
+
+// GET /api/ip-networks/migrations/:migrationId
+router.get('/migrations/:migrationId', requireAuth, async (req, res, next) => {
+  try {
+    const migration = await prisma.ipMigration.findUnique({
+      where: { id: req.params.migrationId },
+      include: MIGRATION_INCLUDE,
+    });
+    if (!migration) return res.status(404).json({ error: 'Migration introuvable' });
+    res.json(migration);
+  } catch (err) { next(err); }
+});
+
+// POST /api/ip-networks/:id/migrations — Créer une migration + tâche liée
+router.post('/:id/migrations',
+  requireAuth, requireAdmin,
+  body('oldIp').trim().notEmpty().withMessage('oldIp requis'),
+  body('newIp').trim().notEmpty().withMessage('newIp requis').matches(/^\d+\.\d+\.\d+\.\d+$/).withMessage('Format IP invalide'),
+  async (req, res, next) => {
+    if (!validate(req, res)) return;
+    try {
+      const network = await prisma.ipNetwork.findUnique({ where: { id: req.params.id } });
+      if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
+
+      // Trouver l'adresse IP source si elle existe dans le plan
+      const existingAddr = await prisma.ipAddress.findUnique({
+        where: { networkId_ip: { networkId: req.params.id, ip: req.body.oldIp } }
+      });
+
+      const { oldIp, newIp, newHostname, newType, notes, interventionId, scheduledAt } = req.body;
+
+      // Créer la tâche Todo liée
+      const todoTitle = `Migration IP : ${oldIp} → ${newIp} (${network.name})`;
+      const todo = await prisma.todo.create({
+        data: {
+          title: todoTitle,
+          description: notes || null,
+          interventionId: interventionId || null,
+          dueAt: scheduledAt ? new Date(scheduledAt) : null,
+        }
+      });
+
+      const migration = await prisma.ipMigration.create({
+        data: {
+          networkId: req.params.id,
+          ipAddressId: existingAddr?.id || null,
+          oldIp: oldIp.trim(),
+          newIp: newIp.trim(),
+          newHostname: newHostname?.trim() || null,
+          newType: newType?.trim() || null,
+          notes: notes?.trim() || null,
+          interventionId: interventionId || null,
+          todoId: todo.id,
+          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+          createdById: req.user?.id || null,
+        },
+        include: MIGRATION_INCLUDE,
+      });
+
+      res.status(201).json(migration);
+    } catch (err) { next(err); }
+  }
+);
+
+// POST /api/ip-networks/migrations/:migrationId/apply — Appliquer manuellement
+router.post('/migrations/:migrationId/apply', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const migration = await prisma.ipMigration.findUnique({
+      where: { id: req.params.migrationId },
+      include: { ipAddress: true, network: true, todo: true }
+    });
+    if (!migration) return res.status(404).json({ error: 'Migration introuvable' });
+    if (migration.status !== 'PLANNED') {
+      return res.status(400).json({ error: `Migration déjà ${migration.status === 'APPLIED' ? 'appliquée' : 'annulée'}` });
+    }
+
+    await applyMigration(migration, req.user?.id);
+    const updated = await prisma.ipMigration.findUnique({ where: { id: req.params.migrationId }, include: MIGRATION_INCLUDE });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/ip-networks/migrations/:migrationId — Annuler
+router.delete('/migrations/:migrationId', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const migration = await prisma.ipMigration.findUnique({ where: { id: req.params.migrationId } });
+    if (!migration) return res.status(404).json({ error: 'Migration introuvable' });
+    if (migration.status === 'APPLIED') return res.status(400).json({ error: 'Impossible d\'annuler une migration déjà appliquée' });
+    await prisma.ipMigration.update({
+      where: { id: req.params.migrationId },
+      data: { status: 'CANCELLED', updatedAt: new Date() }
+    });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ── Logique d'application d'une migration ─────────────────────────────────────
+async function applyMigration(migration, appliedById) {
+  const { id, networkId, ipAddressId, oldIp, newIp, newHostname, newType, todoId } = migration;
+
+  await prisma.$transaction(async (tx) => {
+    // 1. Mettre à jour ou créer l'entrée IP dans le plan
+    if (ipAddressId) {
+      // Vérifier qu'aucune autre IP n'a déjà la nouvelle adresse
+      const conflict = await tx.ipAddress.findUnique({
+        where: { networkId_ip: { networkId, ip: newIp } }
+      });
+      if (conflict && conflict.id !== ipAddressId) {
+        // Supprimer l'entrée conflictuelle (ancienne entrée de la newIp)
+        await tx.ipAddress.delete({ where: { id: conflict.id } });
+      }
+      await tx.ipAddress.update({
+        where: { id: ipAddressId },
+        data: {
+          ip: newIp,
+          ...(newHostname !== null && newHostname !== undefined ? { hostname: newHostname } : {}),
+          ...(newType !== null && newType !== undefined ? { equipmentType: newType } : {}),
+        }
+      });
+    } else {
+      // L'ancienne IP n'existait pas dans le plan → créer la nouvelle
+      await tx.ipAddress.upsert({
+        where: { networkId_ip: { networkId, ip: newIp } },
+        create: { networkId, ip: newIp, hostname: newHostname || null, equipmentType: newType || null },
+        update: {
+          ...(newHostname !== undefined ? { hostname: newHostname } : {}),
+          ...(newType !== undefined ? { equipmentType: newType } : {}),
+        }
+      });
+    }
+
+    // 2. Marquer la migration comme appliquée
+    await tx.ipMigration.update({
+      where: { id },
+      data: { status: 'APPLIED', appliedAt: new Date(), appliedById: appliedById || null }
+    });
+
+    // 3. Marquer la tâche como terminée si pas déjà fait
+    if (todoId) {
+      const todo = await tx.todo.findUnique({ where: { id: todoId } });
+      if (todo && !todo.done) {
+        await tx.todo.update({ where: { id: todoId }, data: { done: true, doneAt: new Date() } });
+      }
+    }
+  });
+}
+
+// Exposer applyMigration pour le hook todos
+module.exports = { router, applyMigration };
+

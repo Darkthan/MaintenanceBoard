@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
+const { applyMigration } = require('./ipAddressing');
 
 const router = express.Router();
 
@@ -94,6 +95,23 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       data,
       include: TODO_INCLUDE
     });
+
+    // Auto-appliquer la migration IP liée si la tâche vient d'être validée
+    if (data.done === true && !todo.done) {
+      const migration = await prisma.ipMigration.findUnique({
+        where: { todoId: req.params.id },
+        include: { ipAddress: true, network: true, todo: true }
+      });
+      if (migration && migration.status === 'PLANNED') {
+        try {
+          await applyMigration(migration, req.user?.id);
+        } catch (e) {
+          // Ne pas bloquer la réponse si l'application échoue, mais logger
+          console.error('[ip-migration] Auto-apply failed:', e.message);
+        }
+      }
+    }
+
     res.json(updated);
   } catch (err) { next(err); }
 });

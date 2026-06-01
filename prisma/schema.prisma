@@ -43,6 +43,8 @@ model User {
   checkedCheckupItems            InterventionCheckupItem[]
   projects             Project[]
   kanbanCards          KanbanCard[]
+  ipMigrationsApplied  IpMigration[] @relation("IpMigApplied")
+  ipMigrationsCreated  IpMigration[] @relation("IpMigCreated")
 
   @@map("users")
 }
@@ -233,6 +235,7 @@ model Intervention {
   reporters      InterventionReporter[]
   checkupItems   InterventionCheckupItem[]
   todos          Todo[]
+  ipMigrations   IpMigration[]
 
   @@map("interventions")
 }
@@ -248,9 +251,41 @@ model Todo {
   createdAt      DateTime      @default(now())
 
   intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  ipMigration    IpMigration?
 
   @@index([interventionId])
   @@map("todos")
+}
+
+model IpMigration {
+  id             String    @id @default(uuid())
+  networkId      String
+  ipAddressId    String?
+  oldIp          String
+  newIp          String
+  newHostname    String?
+  newType        String?
+  notes          String?
+  status         String    @default("PLANNED")  // PLANNED | APPLIED | CANCELLED
+  interventionId String?
+  todoId         String?   @unique
+  scheduledAt    DateTime?
+  appliedAt      DateTime?
+  appliedById    String?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  network        IpNetwork     @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  ipAddress      IpAddress?    @relation(fields: [ipAddressId], references: [id], onDelete: SetNull)
+  intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  todo           Todo?         @relation(fields: [todoId], references: [id], onDelete: SetNull)
+  appliedBy      User?         @relation("IpMigApplied", fields: [appliedById], references: [id], onDelete: SetNull)
+  createdBy      User?         @relation("IpMigCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([networkId])
+  @@index([status])
+  @@map("ip_migrations")
 }
 
 model InterventionCheckupItem {
@@ -785,6 +820,7 @@ model IpNetwork {
   addresses   IpAddress[]
   ranges      IpRangeDefinition[]
   revisions   IpNetworkRevision[]
+  migrations  IpMigration[]
 
   @@map("ip_networks")
 }
@@ -832,6 +868,7 @@ model IpAddress {
 
   network       IpNetwork  @relation(fields: [networkId], references: [id], onDelete: Cascade)
   equipment     Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  migrations    IpMigration[]
 
   @@unique([networkId, ip])
   @@index([networkId])

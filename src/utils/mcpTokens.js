@@ -15,7 +15,9 @@ const MCP_SCOPES = {
   ORDERS_READ: 'orders:read',
   ORDERS_WRITE: 'orders:write',
   STOCK_READ: 'stock:read',
-  STOCK_WRITE: 'stock:write'
+  STOCK_WRITE: 'stock:write',
+  IP_ADDRESSING_READ: 'ip_addressing:read',
+  IP_ADDRESSING_WRITE: 'ip_addressing:write',
 };
 
 const ALL_MCP_SCOPES = Object.values(MCP_SCOPES);
@@ -44,7 +46,9 @@ const TECH_MCP_SCOPES = [
   MCP_SCOPES.PROJECTS_WRITE,
   MCP_SCOPES.ORDERS_READ,
   MCP_SCOPES.ORDERS_WRITE,
-  MCP_SCOPES.STOCK_READ
+  MCP_SCOPES.STOCK_READ,
+  MCP_SCOPES.IP_ADDRESSING_READ,
+  MCP_SCOPES.IP_ADDRESSING_WRITE,
 ];
 
 /**
