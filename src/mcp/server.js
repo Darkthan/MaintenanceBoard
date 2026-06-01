@@ -61,23 +61,41 @@ function buildMcpServer(ctx) {
   const bookingsReadScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_READ, MCP_SCOPES.RESERVATIONS_READ];
   const bookingsWriteScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_WRITE, MCP_SCOPES.RESERVATIONS_WRITE];
 
+  // Parametres de date/heure partages par tous les outils de reservation.
+  // Mode structure (recommande) : date + startTime + endTime [+ endDate + timezone]
+  // Mode legacy (retrocompatible) : startAt + endAt (ISO 8601 ; sans offset = Europe/Paris)
+  const dateTimeParams = {
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+      .describe('Date de debut au format YYYY-MM-DD. Mode recommande : evite les ambiguites de fuseau horaire.'),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+      .describe('Date de fin au format YYYY-MM-DD. Si omis, la meme date que "date" est utilisee.'),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/).optional()
+      .describe('Heure de debut HH:MM. Interpretee en Europe/Paris sauf si "timezone" est fourni.'),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/).optional()
+      .describe('Heure de fin HH:MM. Interpretee en Europe/Paris sauf si "timezone" est fourni.'),
+    timezone: z.string().optional()
+      .describe('Fuseau horaire IANA (ex: Europe/Paris). Par defaut : Europe/Paris.'),
+    startAt: z.string().optional()
+      .describe('Alternatif a date+startTime : ISO 8601. Sans offset (ex: 2025-06-10T09:00:00) = Europe/Paris.'),
+    endAt: z.string().optional()
+      .describe('Alternatif a date+endTime : ISO 8601. Sans offset (ex: 2025-06-10T17:00:00) = Europe/Paris.')
+  };
+
   const bookingCreateSchema = {
     resourceId: z.string().describe('Identifiant de la ressource de matériel informatique scolaire'),
     requesterName: z.string().min(2).max(200).describe('Nom de la personne qui emprunte le matériel'),
     requesterEmail: z.string().email().optional().describe('Email de contact. Optionnel si un email par défaut est configuré dans MaintenanceBoard.'),
-    startAt: z.string().describe('Date et heure de début au format ISO 8601'),
-    endAt: z.string().describe('Date et heure de fin au format ISO 8601'),
-    requestedUnits: z.number().int().min(1).max(500).describe('Nombre d’unités de matériel informatique scolaire'),
-    notes: z.string().max(2000).optional().describe('Note courte liée à l’emprunt de matériel')
+    ...dateTimeParams,
+    requestedUnits: z.number().int().min(1).max(500).describe('Nombre d\'unités de matériel informatique scolaire'),
+    notes: z.string().max(2000).optional().describe('Note courte liée à l\'emprunt de matériel')
   };
 
   const tabletCaseSchema = {
     requesterName: z.string().min(2).max(200).describe('Nom de la personne qui emprunte le matériel'),
     requesterEmail: z.string().email().optional().describe('Email de contact. Optionnel si un email par défaut est configuré dans MaintenanceBoard.'),
-    startAt: z.string().describe('Date et heure de début au format ISO 8601'),
-    endAt: z.string().describe('Date et heure de fin au format ISO 8601'),
+    ...dateTimeParams,
     requestedUnits: z.number().int().min(1).max(500).describe('Nombre de tablettes'),
-    notes: z.string().max(2000).optional().describe('Note courte liée à l’emprunt de matériel')
+    notes: z.string().max(2000).optional().describe('Note courte liée à l\'emprunt de matériel')
   };
 
   server.registerTool('list_resources', {
@@ -89,12 +107,11 @@ function buildMcpServer(ctx) {
 
   server.registerTool('check_equipment_availability', {
     title: 'Vérifier la disponibilité du matériel',
-    description: 'Indique la disponibilité d’un matériel informatique scolaire sur une période donnée.',
+    description: 'Indique la disponibilité d\'un matériel informatique scolaire sur une période donnée.',
     inputSchema: {
       resourceId: z.string().describe('Identifiant de la ressource de matériel informatique scolaire'),
-      startAt: z.string().describe('Date et heure de début au format ISO 8601'),
-      endAt: z.string().describe('Date et heure de fin au format ISO 8601'),
-      requestedUnits: z.number().int().min(1).max(500).optional().describe('Nombre d’unités de matériel informatique scolaire')
+      ...dateTimeParams,
+      requestedUnits: z.number().int().min(1).max(500).optional().describe('Nombre d\'unités de matériel informatique scolaire')
     },
     annotations: READ_ONLY_TOOL
   }, tool(ctx, bookingsReadScopes, (a) => reservations.checkAvailability(a)));
@@ -103,8 +120,12 @@ function buildMcpServer(ctx) {
     title: 'Lister les emprunts de matériel',
     description: 'Liste les emprunts de matériel informatique scolaire sur une fenêtre temporelle.',
     inputSchema: {
-      start: z.string().optional().describe('Début de la fenêtre au format ISO 8601'),
-      end: z.string().optional().describe('Fin de la fenêtre au format ISO 8601'),
+      start: z.string().optional().describe(
+        'Début de la fenêtre (ISO 8601 ou YYYY-MM-DD). Si aucun offset n\'est fourni, interprété en Europe/Paris.'
+      ),
+      end: z.string().optional().describe(
+        'Fin de la fenêtre (ISO 8601 ou YYYY-MM-DD). Si aucun offset n\'est fourni, interprété en Europe/Paris.'
+      ),
       resourceId: z.string().optional().describe('Identifiant de la ressource de matériel informatique scolaire')
     },
     annotations: READ_ONLY_TOOL
@@ -126,21 +147,20 @@ function buildMcpServer(ctx) {
 
   server.registerTool('preview_equipment_booking', {
     title: 'Prévisualiser un emprunt de matériel',
-    description: 'Prépare un aperçu non destructif d’un emprunt de matériel informatique scolaire, sans écrire en base.',
+    description: 'Prépare un aperçu non destructif d\'un emprunt de matériel informatique scolaire, sans écrire en base.',
     inputSchema: bookingCreateSchema,
     annotations: READ_ONLY_TOOL
   }, tool(ctx, bookingsReadScopes, (a) => reservations.previewEquipmentBooking(a, { user })));
 
   server.registerTool('update_equipment_booking', {
     title: 'Mettre à jour un emprunt de matériel',
-    description: 'Met à jour les informations simples d’un emprunt de matériel informatique scolaire.',
+    description: 'Met à jour les informations simples d\'un emprunt de matériel informatique scolaire.',
     inputSchema: {
-      id: z.string().describe('Identifiant de l’emprunt de matériel'),
+      id: z.string().describe('Identifiant de l\'emprunt de matériel'),
       resourceId: z.string().optional(),
       requesterName: z.string().min(2).max(200).optional(),
       requesterEmail: z.string().email().optional(),
-      startAt: z.string().optional().describe('Date et heure de début au format ISO 8601'),
-      endAt: z.string().optional().describe('Date et heure de fin au format ISO 8601'),
+      ...dateTimeParams,
       requestedUnits: z.number().int().min(1).max(500).optional(),
       notes: z.string().max(2000).optional()
     },
