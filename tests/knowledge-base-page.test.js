@@ -46,7 +46,10 @@ describe('knowledge base page', () => {
     expect(res.text).toContain("Saisissez une plage IP valide appartenant au réseau.");
     expect(res.text).toContain("networkBase: ipParseCidr(n.cidr).networkBase");
     expect(res.text).toContain('href="/equipment.html?focus=${encodeURIComponent(a.equipment.id)}"');
-    expect(res.text).toContain("ipCurrentAddresses.filter(address => !address.autoDiscovered)");
+    expect(res.text).toContain("ipCurrentAddresses.filter(address => !address.autoDiscovered && !address.unassigned)");
+    expect(res.text).toContain("id:`unassigned:${offset}`, ip, unassigned:true");
+    expect(res.text).toContain("a.unassigned?'Non attribuée':'—'");
+    expect(res.text).toContain('id="ip-unassigned-limit-note"');
     expect(res.text).toContain('id="ip-btn-export-addresses"');
     expect(res.text).toContain('/addresses/export');
     expect(res.text).toContain("${data.created} adresse(s) créée(s), ${data.updated} mise(s) à jour.");

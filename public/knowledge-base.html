@@ -224,6 +224,7 @@
               <div class="bg-white rounded-xl border border-slate-200">
                 <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
                   <h4 class="text-xs font-semibold text-slate-600 flex-1">Adresses IP</h4>
+                  <p id="ip-unassigned-limit-note" class="hidden text-xs text-amber-600">Affichage des IP libres limité aux 4096 premières adresses.</p>
                   <p id="ip-bulk-error" class="hidden text-xs text-red-600"></p>
                   <button id="ip-btn-bulk-edit" class="hidden px-2.5 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition" title="Modifier les adresses">✎</button>
                   <div id="ip-bulk-actions" class="hidden flex items-center gap-2">
@@ -1810,10 +1811,11 @@ function ipRenderRanges() {
 function ipRenderAddresses(filter = '') {
   const tbody = document.getElementById('ip-addresses-tbody');
   const empty = document.getElementById('ip-addresses-empty');
-  const filtered = filter ? ipCurrentAddresses.filter(a =>
+  const addresses = ipBuildDisplayAddresses();
+  const filtered = filter ? addresses.filter(a =>
     a.ip.includes(filter)||(a.hostname||'').toLowerCase().includes(filter)||
     (a.equipment?.name||'').toLowerCase().includes(filter)||
-    (a.equipmentType||'').toLowerCase().includes(filter)||(a.description||'').toLowerCase().includes(filter)) : ipCurrentAddresses;
+    (a.equipmentType||'').toLowerCase().includes(filter)||(a.description||'').toLowerCase().includes(filter)) : addresses;
   if (!filtered.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
   const info = ipCurrentNetwork.cidrInfo;
@@ -1822,10 +1824,10 @@ function ipRenderAddresses(filter = '') {
     const rng = off !== null ? ipCurrentRanges.find(r => off >= r.startHost && off <= r.endHost) : null;
     const col = rng ? (IP_RANGE_COLORS[rng.rangeType]||IP_RANGE_COLORS.OTHER) : null;
     const deleted = ipBulkDeletedIds.has(a.id);
-    const editable = ipBulkEditing && !a.autoDiscovered;
+    const editable = ipBulkEditing && !a.autoDiscovered && !a.unassigned;
     const draft = editable ? (ipBulkDraft.get(a.id) || a) : a;
-    return `<tr class="border-b border-slate-50 hover:bg-slate-50 ${deleted?'opacity-40 line-through bg-red-50':''}" data-ip-address-id="${escapeHtml(a.id)}">
-      <td class="px-3 py-2 font-mono text-xs font-bold text-slate-800">${editable
+    return `<tr class="border-b border-slate-50 hover:bg-slate-50 ${a.unassigned?'bg-slate-50 text-slate-300':''} ${deleted?'opacity-40 line-through bg-red-50':''}" data-ip-address-id="${escapeHtml(a.id)}">
+      <td class="px-3 py-2 font-mono text-xs font-bold ${a.unassigned?'text-slate-300':'text-slate-800'}">${editable
         ? `<input data-ip-field="ip" value="${escapeHtml(draft.ip)}" class="w-32 px-2 py-1 border border-slate-200 rounded font-mono"/>`
         : escapeHtml(a.ip)}</td>
       <td class="px-3 py-2 text-xs text-slate-600">${editable
@@ -1834,7 +1836,7 @@ function ipRenderAddresses(filter = '') {
         ? (a.equipment?.id
           ? `<a href="/equipment.html?focus=${encodeURIComponent(a.equipment.id)}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline">${escapeHtml(a.hostname)}</a>`
           : escapeHtml(a.hostname))
-        : '<span class="text-slate-300">—</span>'}</td>
+        : `<span class="text-slate-300">${a.unassigned?'Non attribuée':'—'}</span>`}</td>
       <td class="px-3 py-2 text-xs">${editable
         ? `<input data-ip-field="equipmentType" value="${escapeHtml(draft.equipmentType||'')}" class="w-28 px-2 py-1 border border-slate-200 rounded"/>`
         : a.equipmentType?`<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-xs">${escapeHtml(a.equipmentType)}</span>`:'<span class="text-slate-300">—</span>'}</td>
@@ -1856,11 +1858,34 @@ function ipRenderAddresses(filter = '') {
   }));
 }
 
+function ipBuildDisplayAddresses() {
+  const info = ipCurrentNetwork?.cidrInfo;
+  const limitNote = document.getElementById('ip-unassigned-limit-note');
+  if (!info || !Number.isInteger(info.networkBase)) {
+    limitNote.classList.add('hidden');
+    return ipCurrentAddresses;
+  }
+  const byIp = new Map(ipCurrentAddresses.map(address => [address.ip, address]));
+  let unassignedCount = 0, truncated = false;
+  ranges: for (const range of ipCurrentRanges) {
+    for (let offset = range.startHost; offset <= range.endHost; offset++) {
+      const ip = ipInt2str(info.networkBase + offset);
+      if (!byIp.has(ip)) {
+        if (unassignedCount >= 4096) { truncated = true; break ranges; }
+        byIp.set(ip, { id:`unassigned:${offset}`, ip, unassigned:true });
+        unassignedCount++;
+      }
+    }
+  }
+  limitNote.classList.toggle('hidden', !truncated);
+  return [...byIp.values()].sort((left, right) => ipOffset(ipCurrentNetwork.cidr, left.ip) - ipOffset(ipCurrentNetwork.cidr, right.ip));
+}
+
 function ipSetBulkEditing(enabled) {
   ipBulkEditing = enabled;
   ipBulkDeletedIds = new Set();
   ipBulkDraft = enabled
-    ? new Map(ipCurrentAddresses.filter(address => !address.autoDiscovered).map(address => [address.id, {
+    ? new Map(ipCurrentAddresses.filter(address => !address.autoDiscovered && !address.unassigned).map(address => [address.id, {
         id: address.id,
         ip: address.ip,
         hostname: address.hostname || '',
