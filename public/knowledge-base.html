@@ -1207,8 +1207,9 @@ async function selectArticle(articleId) {
         if (isNetworkDiagram) openDiagramEditor(article);
         else if (!isIpAddressing) openEditor(article);
       };
-      // Masquer le bouton Modifier pour ip-addressing (géré depuis l'iframe)
+      // Les actions du plan d'adressage sont gérées par le panneau embarqué.
       document.getElementById('edit-article-btn').classList.toggle('hidden', isIpAddressing);
+      document.getElementById('delete-article-btn').classList.toggle('hidden', isIpAddressing);
       document.getElementById('delete-article-btn').onclick = () => deleteArticle(article.id, article.title);
     }
   } catch (err) {

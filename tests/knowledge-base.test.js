@@ -75,8 +75,15 @@ describe('knowledge base routes', () => {
 
     const listRes = await request(buildApp()).get('/api/knowledge-base');
     expect(listRes.status).toBe(200);
-    expect(listRes.body.items).toHaveLength(1);
-    expect(listRes.body.categories).toEqual([{ value: 'Support', count: 1 }]);
+    expect(listRes.body.items).toHaveLength(2);
+    expect(listRes.body.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'system-ip-addressing', type: 'ip-addressing' }),
+      expect.objectContaining({ title: 'Procedure imprimante' })
+    ]));
+    expect(listRes.body.categories).toEqual([
+      { value: 'Réseau', count: 1 },
+      { value: 'Support', count: 1 }
+    ]);
 
     const readRes = await request(buildApp()).get(`/api/knowledge-base/${createRes.body.article.id}`);
     expect(readRes.status).toBe(200);
@@ -170,7 +177,41 @@ describe('knowledge base routes', () => {
     expect(deleteRes.status).toBe(200);
 
     const listRes = await request(buildApp()).get('/api/knowledge-base');
-    expect(listRes.body.items).toHaveLength(0);
+    expect(listRes.body.items).toEqual([
+      expect.objectContaining({ id: 'system-ip-addressing', type: 'ip-addressing' })
+    ]);
+  });
+
+  it('expose le plan d adressage comme article systeme non supprimable', async () => {
+    const readRes = await request(buildApp()).get('/api/knowledge-base/system-ip-addressing');
+    expect(readRes.status).toBe(200);
+    expect(readRes.body).toEqual(expect.objectContaining({
+      id: 'system-ip-addressing',
+      type: 'ip-addressing',
+      title: 'Plan d’adressage IP'
+    }));
+
+    const deleteRes = await request(buildApp()).delete('/api/knowledge-base/system-ip-addressing');
+    expect(deleteRes.status).toBe(403);
+  });
+
+  it('remplace une ancienne entree de plan d adressage par l article systeme', async () => {
+    fs.writeFileSync(knowledgeBaseFile, JSON.stringify({
+      articles: [
+        {
+          id: 'legacy-ip-plan',
+          type: 'ip-addressing',
+          title: 'Ancien plan IP',
+          createdAt: '2026-05-31T08:00:00.000Z',
+          updatedAt: '2026-05-31T08:00:00.000Z'
+        }
+      ]
+    }, null, 2));
+
+    const listRes = await request(buildApp()).get('/api/knowledge-base');
+    expect(listRes.body.items).toEqual([
+      expect.objectContaining({ id: 'system-ip-addressing', type: 'ip-addressing' })
+    ]);
   });
 
   it('ajoute une image compressee et un document a un article', async () => {

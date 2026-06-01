@@ -30,6 +30,16 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('editor-image-input');
     expect(res.text).toContain('editor-document-input');
     expect(res.text).toContain('article-documents');
+    expect(res.text).toContain('id="ip-panel"');
+    expect(res.text).toContain("ipShowPanel()");
+    expect(res.text).toContain("ipOpenNetworkForm()");
     expect(res.text).toContain('Les images sont compressées automatiquement');
+  });
+
+  it('redirige l ancienne page du plan d adressage vers la documentation', async () => {
+    const res = await request(app).get('/ip-addressing.html');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("window.location.replace('/knowledge-base.html?article=system-ip-addressing')");
   });
 });

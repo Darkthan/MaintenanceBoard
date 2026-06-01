@@ -12,6 +12,7 @@ const {
   createKnowledgeBaseArticle,
   getKnowledgeBaseArticle,
   getKnowledgeBaseArticleUploadDir,
+  isSystemKnowledgeBaseArticle,
   listKnowledgeBaseArticles,
   normalizeText,
   removeKnowledgeBaseAttachment,
@@ -219,6 +220,9 @@ router.post('/', requireAuth, ensureAdmin, (req, res, next) => {
 
 router.patch('/:id', requireAuth, ensureAdmin, (req, res, next) => {
   try {
+    if (isSystemKnowledgeBaseArticle(req.params.id)) {
+      return res.status(403).json({ error: 'Cet article système ne peut pas être modifié' });
+    }
     const current = getKnowledgeBaseArticle(req.params.id);
     if (!current) {
       return res.status(404).json({ error: 'Article introuvable' });
@@ -241,6 +245,9 @@ router.post('/:id/attachments', requireAuth, ensureAdmin, (req, res, next) => {
     next();
   });
 }, async (req, res, next) => {
+  if (isSystemKnowledgeBaseArticle(req.params.id)) {
+    return res.status(403).json({ error: 'Cet article système ne peut pas recevoir de pièce jointe' });
+  }
   const article = getKnowledgeBaseArticle(req.params.id);
   if (!article) {
     return res.status(404).json({ error: 'Article introuvable' });
@@ -317,6 +324,9 @@ router.get('/:id/attachments/:attachmentId', requireAuth, (req, res) => {
 
 router.delete('/:id/attachments/:attachmentId', requireAuth, ensureAdmin, async (req, res, next) => {
   try {
+    if (isSystemKnowledgeBaseArticle(req.params.id)) {
+      return res.status(403).json({ error: 'Cet article système ne peut pas être modifié' });
+    }
     const removed = removeKnowledgeBaseAttachment(req.params.id, req.params.attachmentId);
     if (!removed) {
       return res.status(404).json({ error: 'Fichier introuvable' });
@@ -335,6 +345,9 @@ router.delete('/:id/attachments/:attachmentId', requireAuth, ensureAdmin, async 
 });
 
 router.delete('/:id', requireAuth, ensureAdmin, async (req, res) => {
+  if (isSystemKnowledgeBaseArticle(req.params.id)) {
+    return res.status(403).json({ error: 'Cet article système ne peut pas être supprimé' });
+  }
   const article = getKnowledgeBaseArticle(req.params.id);
   if (!article) {
     return res.status(404).json({ error: 'Article introuvable' });

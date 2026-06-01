@@ -102,8 +102,37 @@ function sortArticles(items) {
   });
 }
 
+const IP_ADDRESSING_ARTICLE_ID = 'system-ip-addressing';
+const IP_ADDRESSING_ARTICLE = Object.freeze({
+  id: IP_ADDRESSING_ARTICLE_ID,
+  slug: 'plan-adressage-ip',
+  type: 'ip-addressing',
+  title: 'Plan d’adressage IP',
+  summary: 'Gestion des réseaux, plages DHCP et adresses IP fixes.',
+  category: 'Réseau',
+  tags: ['adressage', 'ip', 'réseau', 'vlan', 'dhcp'],
+  content: '',
+  attachments: [],
+  createdAt: '2026-06-01T00:00:00.000Z',
+  updatedAt: '2026-06-01T00:00:00.000Z',
+  createdById: null,
+  createdByName: '',
+  updatedById: null,
+  updatedByName: ''
+});
+
+function isSystemKnowledgeBaseArticle(articleId) {
+  return articleId === IP_ADDRESSING_ARTICLE_ID;
+}
+
+function listStoredKnowledgeBaseArticles() {
+  return readKnowledgeBaseStore().articles.filter(article =>
+    !isSystemKnowledgeBaseArticle(article.id) && article.type !== 'ip-addressing'
+  );
+}
+
 function listKnowledgeBaseArticles() {
-  return sortArticles(readKnowledgeBaseStore().articles);
+  return sortArticles([...listStoredKnowledgeBaseArticles(), IP_ADDRESSING_ARTICLE]);
 }
 
 function getKnowledgeBaseArticle(articleId) {
@@ -187,7 +216,7 @@ function updateKnowledgeBaseArticle(article, payload, user) {
 }
 
 function saveKnowledgeBaseArticle(article) {
-  const articles = listKnowledgeBaseArticles();
+  const articles = listStoredKnowledgeBaseArticles();
   writeKnowledgeBaseStore({
     articles: sortArticles([
       ...articles,
@@ -201,7 +230,8 @@ function saveKnowledgeBaseArticle(article) {
 }
 
 function replaceKnowledgeBaseArticle(articleId, updatedArticle) {
-  const articles = listKnowledgeBaseArticles();
+  if (isSystemKnowledgeBaseArticle(articleId)) return null;
+  const articles = listStoredKnowledgeBaseArticles();
   const index = articles.findIndex(article => article.id === articleId);
   if (index === -1) return null;
   articles[index] = {
@@ -213,7 +243,8 @@ function replaceKnowledgeBaseArticle(articleId, updatedArticle) {
 }
 
 function removeKnowledgeBaseArticle(articleId) {
-  const articles = listKnowledgeBaseArticles();
+  if (isSystemKnowledgeBaseArticle(articleId)) return false;
+  const articles = listStoredKnowledgeBaseArticles();
   const nextArticles = articles.filter(article => article.id !== articleId);
   if (nextArticles.length === articles.length) return false;
   writeKnowledgeBaseStore({ articles: nextArticles });
@@ -273,6 +304,7 @@ module.exports = {
   getKnowledgeBaseArticleUploadDir,
   getKnowledgeBaseArticle,
   getKnowledgeBaseUploadDir,
+  isSystemKnowledgeBaseArticle,
   listKnowledgeBaseArticles,
   normalizeText,
   removeKnowledgeBaseAttachment,
