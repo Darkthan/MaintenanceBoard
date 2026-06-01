@@ -10,6 +10,7 @@ const signatureRequestModel = prisma.signatureRequest;
 const internalConversationModel = prisma.internalConversation;
 const loanResourceModel = prisma.loanResource;
 const loanReservationModel = prisma.loanReservation;
+const ipAddressModel = prisma.ipAddress;
 
 const EQUIPMENT_STATUS_LABELS = {
   ACTIVE: 'Actif',
@@ -815,6 +816,10 @@ router.get('/', requireAuth, async (req, res, next) => {
       const or = buildContainsOr(rawQuery, ['name', 'reference', 'category', 'description', 'location', 'supplier.name']);
       return or?.length ? { OR: or } : {};
     })();
+    const ipAddressWhere = (() => {
+      const or = buildContainsOr(rawQuery, ['ip', 'hostname', 'equipmentType', 'description', 'network.name', 'network.cidr', 'equipment.name', 'equipment.type']);
+      return or?.length ? { OR: or } : {};
+    })();
     const userWhere = (() => {
       // 'role' est un enum (Role) sur PostgreSQL → exclure du filtre DB.
       const or = buildContainsOr(rawQuery, ['name', 'email', 'contactEmail']);
@@ -867,7 +872,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       return or?.length ? { OR: or } : {};
     })();
 
-    const [rooms, equipment, interventions, orders, attachments, signatureDocuments, suppliers, stockItems, conversations, loanResources, loanReservations, users] = await Promise.all([
+    const [rooms, equipment, interventions, orders, attachments, signatureDocuments, suppliers, stockItems, ipAddresses, conversations, loanResources, loanReservations, users] = await Promise.all([
       prisma.room.findMany({
         where: roomWhere,
         take: candidateLimit,
@@ -973,6 +978,17 @@ router.get('/', requireAuth, async (req, res, next) => {
           supplier: { select: { id: true, name: true } }
         }
       }),
+      ipAddressModel
+        ? ipAddressModel.findMany({
+            where: ipAddressWhere,
+            take: candidateLimit,
+            orderBy: { updatedAt: 'desc' },
+            include: {
+              network: { select: { id: true, name: true, cidr: true } },
+              equipment: { select: { id: true, name: true, type: true } }
+            }
+          }).catch(err => tableMissing(err) ? [] : Promise.reject(err))
+        : Promise.resolve([]),
       internalConversationModel
         ? internalConversationModel.findMany({
             where: conversationWhere,
@@ -1076,6 +1092,36 @@ router.get('/', requireAuth, async (req, res, next) => {
         ...extractAgentIps(item.agentInfo),
         item.room?.name,
         item.room?.number
+      ].filter(Boolean).join(' ')
+    })), query, limit);
+
+    const ipAddressResults = filterAndRank(ipAddresses.map(address => ({
+      id: `ip-address:${address.id}`,
+      type: 'ip-address',
+      group: 'Plan d adressage',
+      title: address.ip,
+      subtitle: [address.hostname, address.equipment?.name, address.network?.name].filter(Boolean).join(' · ') || 'Adresse IP',
+      href: `/knowledge-base.html?article=system-ip-addressing&network=${encodeURIComponent(address.networkId)}`,
+      openMode: 'direct',
+      preview: {
+        title: address.ip,
+        description: address.description || 'Ouvre cette adresse dans le plan d adressage.',
+        lines: [
+          address.network ? `Reseau : ${address.network.name} (${address.network.cidr})` : null,
+          address.hostname ? `Nom d hote : ${address.hostname}` : null,
+          address.equipment?.name ? `Equipement : ${address.equipment.name}` : null,
+          address.equipmentType ? `Type : ${address.equipmentType}` : null
+        ].filter(Boolean)
+      },
+      searchText: [
+        address.ip,
+        address.hostname,
+        address.equipmentType,
+        address.description,
+        address.network?.name,
+        address.network?.cidr,
+        address.equipment?.name,
+        address.equipment?.type
       ].filter(Boolean).join(' ')
     })), query, limit);
 
@@ -1489,6 +1535,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         signatureDocumentResults,
         roomResults,
         equipmentResults,
+        ipAddressResults,
         interventionResults,
         orderResults,
         supplierResults,

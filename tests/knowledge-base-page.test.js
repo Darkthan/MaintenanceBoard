@@ -49,6 +49,8 @@ describe('knowledge base page', () => {
     expect(res.text).toContain("ipCurrentAddresses.filter(address => !address.autoDiscovered && !address.unassigned)");
     expect(res.text).toContain("id:`unassigned:${offset}`, ip, unassigned:true");
     expect(res.text).toContain("a.unassigned?'Non attribuée':'—'");
+    expect(res.text).toContain("new URLSearchParams(window.location.search).get('network')");
+    expect(res.text).toContain('await ipOpenDetail(requestedNetworkId)');
     expect(res.text).toContain('id="ip-unassigned-limit-note"');
     expect(res.text).toContain('id="ip-btn-export-addresses"');
     expect(res.text).toContain('/addresses/export');

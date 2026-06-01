@@ -2084,6 +2084,10 @@ async function ipLoadNetworks() {
   const res = await fetch('/api/ip-networks', { credentials:'include' });
   ipNetworks = await res.json();
   ipRenderList(document.getElementById('ip-search').value.toLowerCase().trim());
+  const requestedNetworkId = new URLSearchParams(window.location.search).get('network');
+  if (!ipCurrentNetwork && requestedNetworkId && ipNetworks.some(network => network.id === requestedNetworkId)) {
+    await ipOpenDetail(requestedNetworkId);
+  }
 }
 async function ipRefreshDetail() {
   if (!ipCurrentNetwork) return;

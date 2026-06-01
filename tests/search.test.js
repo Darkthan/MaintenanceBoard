@@ -19,6 +19,7 @@ jest.mock('../src/lib/prisma', () => ({
   signatureRequest: { findMany: jest.fn() },
   supplier: { findMany: jest.fn() },
   stockItem: { findMany: jest.fn() },
+  ipAddress: { findMany: jest.fn() },
   internalConversation: { findMany: jest.fn() },
   loanResource: { findMany: jest.fn() },
   loanReservation: { findMany: jest.fn() },
@@ -46,6 +47,7 @@ function setupEmptyMocks() {
   prisma.signatureRequest.findMany.mockResolvedValue([]);
   prisma.supplier.findMany.mockResolvedValue([]);
   prisma.stockItem.findMany.mockResolvedValue([]);
+  prisma.ipAddress.findMany.mockResolvedValue([]);
   prisma.internalConversation.findMany.mockResolvedValue([]);
   prisma.loanResource.findMany.mockResolvedValue([]);
   prisma.loanReservation.findMany.mockResolvedValue([]);
@@ -210,6 +212,29 @@ describe('GET /api/search', () => {
     const res = await request(app).get('/api/search?q=10.42.0.15');
     expect(res.status).toBe(200);
     expect(res.body.results.some(r => r.type === 'equipment' && r.id === 'equipment:eq-42')).toBe(true);
+  });
+
+  it('retrouve une adresse IP du plan d adressage et ouvre son reseau', async () => {
+    prisma.ipAddress.findMany.mockResolvedValue([
+      {
+        id: 'ip-42',
+        networkId: 'network-42',
+        ip: '10.42.0.21',
+        hostname: 'imprimante-cdi',
+        equipmentType: 'Imprimante',
+        description: 'Imprimante principale',
+        network: { id: 'network-42', name: 'CDI', cidr: '10.42.0.0/24' },
+        equipment: null
+      }
+    ]);
+
+    const res = await request(app).get('/api/search?q=10.42.0.21');
+    expect(res.status).toBe(200);
+    expect(res.body.results).toContainEqual(expect.objectContaining({
+      type: 'ip-address',
+      id: 'ip-address:ip-42',
+      href: '/knowledge-base.html?article=system-ip-addressing&network=network-42'
+    }));
   });
 
   it('retrouve un equipement meme s il n est pas dans une petite fenetre de candidats', async () => {
