@@ -971,56 +971,7 @@ router.delete('/migrations/:migrationId', requireAuth, requireAdmin, async (req,
 });
 
 // ── Logique d'application d'une migration ─────────────────────────────────────
-async function applyMigration(migration, appliedById) {
-  const { id, networkId, ipAddressId, oldIp, newIp, newHostname, newType, todoId } = migration;
+const { applyMigration } = require('../services/ipMigrationService');
 
-  await prisma.$transaction(async (tx) => {
-    // 1. Mettre à jour ou créer l'entrée IP dans le plan
-    if (ipAddressId) {
-      // Vérifier qu'aucune autre IP n'a déjà la nouvelle adresse
-      const conflict = await tx.ipAddress.findUnique({
-        where: { networkId_ip: { networkId, ip: newIp } }
-      });
-      if (conflict && conflict.id !== ipAddressId) {
-        // Supprimer l'entrée conflictuelle (ancienne entrée de la newIp)
-        await tx.ipAddress.delete({ where: { id: conflict.id } });
-      }
-      await tx.ipAddress.update({
-        where: { id: ipAddressId },
-        data: {
-          ip: newIp,
-          ...(newHostname !== null && newHostname !== undefined ? { hostname: newHostname } : {}),
-          ...(newType !== null && newType !== undefined ? { equipmentType: newType } : {}),
-        }
-      });
-    } else {
-      // L'ancienne IP n'existait pas dans le plan → créer la nouvelle
-      await tx.ipAddress.upsert({
-        where: { networkId_ip: { networkId, ip: newIp } },
-        create: { networkId, ip: newIp, hostname: newHostname || null, equipmentType: newType || null },
-        update: {
-          ...(newHostname !== undefined ? { hostname: newHostname } : {}),
-          ...(newType !== undefined ? { equipmentType: newType } : {}),
-        }
-      });
-    }
-
-    // 2. Marquer la migration comme appliquée
-    await tx.ipMigration.update({
-      where: { id },
-      data: { status: 'APPLIED', appliedAt: new Date(), appliedById: appliedById || null }
-    });
-
-    // 3. Marquer la tâche como terminée si pas déjà fait
-    if (todoId) {
-      const todo = await tx.todo.findUnique({ where: { id: todoId } });
-      if (todo && !todo.done) {
-        await tx.todo.update({ where: { id: todoId }, data: { done: true, doneAt: new Date() } });
-      }
-    }
-  });
-}
-
-// Exposer applyMigration pour le hook todos
 module.exports = { router, applyMigration };
 

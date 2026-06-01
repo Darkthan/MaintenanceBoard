@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
-const { applyMigration } = require('./ipAddressing');
+const { applyMigration } = require('../services/ipMigrationService');
 
 const router = express.Router();
 

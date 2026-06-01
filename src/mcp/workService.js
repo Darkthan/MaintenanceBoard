@@ -1,6 +1,6 @@
 const prisma = require('../lib/prisma');
 const { containsFilter, isSQLite } = require('../lib/db-utils');
-const { applyMigration } = require('../routes/ipAddressing');
+const { applyMigration } = require('../services/ipMigrationService');
 
 const INTERVENTION_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
 const INTERVENTION_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'];
