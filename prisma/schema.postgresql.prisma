@@ -787,8 +787,23 @@ model IpNetwork {
 
   addresses   IpAddress[]
   ranges      IpRangeDefinition[]
+  revisions   IpNetworkRevision[]
 
   @@map("ip_networks")
+}
+
+model IpNetworkRevision {
+  id        String   @id @default(uuid())
+  networkId String
+  action    String
+  actorName String?
+  snapshot  String
+  createdAt DateTime @default(now())
+
+  network   IpNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+  @@index([networkId, createdAt])
+  @@map("ip_network_revisions")
 }
 
 model IpRangeDefinition {

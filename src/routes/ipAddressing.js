@@ -210,6 +210,68 @@ function ipToHostOffset(networkCidr, ip) {
   return ipInt - cleanBase;
 }
 
+function serializeNetworkSnapshot(network) {
+  return JSON.stringify({
+    network: {
+      name: network.name,
+      vlan: network.vlan,
+      cidr: network.cidr,
+      gateway: network.gateway,
+      description: network.description,
+    },
+    ranges: (network.ranges || []).map(({ id, startHost, endHost, label, rangeType }) => ({
+      id, startHost, endHost, label, rangeType,
+    })),
+    addresses: (network.addresses || []).map(({ id, ip, hostname, equipmentType, description, equipmentId }) => ({
+      id, ip, hostname, equipmentType, description, equipmentId,
+    })),
+  });
+}
+
+function parseNetworkSnapshot(revision) {
+  try {
+    const snapshot = JSON.parse(revision.snapshot);
+    if (!snapshot?.network || !Array.isArray(snapshot.ranges) || !Array.isArray(snapshot.addresses)) {
+      throw new Error();
+    }
+    return snapshot;
+  } catch {
+    throw new Error('Instantané d historique invalide');
+  }
+}
+
+async function createNetworkRevision(networkId, action, user, db = prisma) {
+  if (!db.ipNetworkRevision?.create) return null;
+  const network = await db.ipNetwork.findUnique({
+    where: { id: networkId },
+    include: { ranges: true, addresses: true }
+  });
+  if (!network) return null;
+  return db.ipNetworkRevision.create({
+    data: {
+      networkId,
+      action,
+      actorName: user?.name || user?.email || null,
+      snapshot: serializeNetworkSnapshot(network),
+    }
+  });
+}
+
+function validateRestoredSections(snapshot, current, sections) {
+  const cidr = sections.includes('network') ? snapshot.network.cidr : current.cidr;
+  const ranges = sections.includes('ranges') ? snapshot.ranges : current.ranges;
+  const addresses = sections.includes('addresses') ? snapshot.addresses : current.addresses;
+  const { networkBase, totalHosts } = parseCidr(cidr);
+  validateGateway(cidr, sections.includes('network') ? snapshot.network.gateway : current.gateway);
+  ranges.forEach(range => validateRangeOffsets(cidr, range.startHost, range.endHost));
+  addresses.forEach(address => {
+    const ipInt = ipToInt(address.ip);
+    if (ipInt < networkBase || ipInt >= networkBase + totalHosts) {
+      throw new Error(`IP hors du réseau ${cidr}: "${address.ip}"`);
+    }
+  });
+}
+
 // ── Réseaux ───────────────────────────────────────────────────────────────────
 
 // GET /api/ip-networks
@@ -249,6 +311,87 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     const addresses = await loadEquipmentAddresses(network.addresses, network.cidr);
     res.json({ ...network, addresses, cidrInfo });
   } catch (err) { next(err); }
+});
+
+// GET /api/ip-networks/:id/history
+router.get('/:id/history', requireAuth, async (req, res, next) => {
+  try {
+    if (!prisma.ipNetworkRevision?.findMany) return res.json([]);
+    const revisions = await prisma.ipNetworkRevision.findMany({
+      where: { networkId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+    res.json(revisions.map(revision => {
+      const snapshot = parseNetworkSnapshot(revision);
+      return {
+        id: revision.id,
+        action: revision.action,
+        actorName: revision.actorName,
+        createdAt: revision.createdAt,
+        summary: {
+          networkName: snapshot.network.name,
+          ranges: snapshot.ranges.length,
+          addresses: snapshot.addresses.length,
+        }
+      };
+    }));
+  } catch (err) { next(err); }
+});
+
+// POST /api/ip-networks/:id/history/:revisionId/restore
+router.post('/:id/history/:revisionId/restore', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const sections = Array.isArray(req.body.sections) ? req.body.sections : [];
+    const allowedSections = ['network', 'ranges', 'addresses'];
+    if (!sections.length || sections.some(section => !allowedSections.includes(section))) {
+      return res.status(400).json({ error: 'Sélectionnez au moins une partie valide à restaurer' });
+    }
+    const revision = await prisma.ipNetworkRevision.findUnique({
+      where: { id: req.params.revisionId }
+    });
+    if (!revision || revision.networkId !== req.params.id) {
+      return res.status(404).json({ error: 'Version introuvable' });
+    }
+    const snapshot = parseNetworkSnapshot(revision);
+    const current = await prisma.ipNetwork.findUnique({
+      where: { id: req.params.id },
+      include: { ranges: true, addresses: true }
+    });
+    if (!current) return res.status(404).json({ error: 'Réseau introuvable' });
+    validateRestoredSections(snapshot, current, sections);
+    await createNetworkRevision(req.params.id, `Avant restauration de ${revision.id}`, req.user);
+    await prisma.$transaction(async tx => {
+      if (sections.includes('network')) {
+        await tx.ipNetwork.update({
+          where: { id: req.params.id },
+          data: snapshot.network
+        });
+      }
+      if (sections.includes('ranges')) {
+        await tx.ipRangeDefinition.deleteMany({ where: { networkId: req.params.id } });
+        if (snapshot.ranges.length) {
+          await tx.ipRangeDefinition.createMany({
+            data: snapshot.ranges.map(range => ({ ...range, networkId: req.params.id }))
+          });
+        }
+      }
+      if (sections.includes('addresses')) {
+        await tx.ipAddress.deleteMany({ where: { networkId: req.params.id } });
+        if (snapshot.addresses.length) {
+          await tx.ipAddress.createMany({
+            data: snapshot.addresses.map(address => ({ ...address, networkId: req.params.id }))
+          });
+        }
+      }
+    });
+    res.json({ restored: sections });
+  } catch (err) {
+    if (err.message.includes('CIDR') || err.message.includes('Adresse') || err.message.includes('passerelle') || err.message.includes('historique')) {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
 });
 
 // POST /api/ip-networks
@@ -304,6 +447,7 @@ router.patch('/:id',
       if (req.body.gateway !== undefined || req.body.cidr !== undefined) data.gateway = gateway;
       if (req.body.vlan !== undefined) data.vlan = req.body.vlan ? parseInt(req.body.vlan) : null;
       if (req.body.description !== undefined) data.description = req.body.description?.trim() || null;
+      await createNetworkRevision(req.params.id, 'Modification du réseau', req.user);
       const network = await prisma.ipNetwork.update({ where: { id: req.params.id }, data });
       res.json(network);
     } catch (err) {
@@ -350,6 +494,7 @@ router.post('/:id/ranges',
       const network = await prisma.ipNetwork.findUnique({ where: { id: req.params.id } });
       if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
       const offsets = validateRangeOffsets(network.cidr, startHost, endHost);
+      await createNetworkRevision(req.params.id, 'Ajout d une plage', req.user);
       const range = await prisma.ipRangeDefinition.create({
         data: {
           networkId: req.params.id,
@@ -387,6 +532,7 @@ router.patch('/:id/ranges/:rangeId', requireAuth, requireAdmin, async (req, res,
     if (req.body.endHost !== undefined) data.endHost = offsets.end;
     if (req.body.label !== undefined) data.label = req.body.label.trim();
     if (req.body.rangeType !== undefined) data.rangeType = req.body.rangeType;
+    await createNetworkRevision(req.params.id, 'Modification d une plage', req.user);
     const range = await prisma.ipRangeDefinition.update({
       where: { id: req.params.rangeId },
       data
@@ -403,6 +549,7 @@ router.patch('/:id/ranges/:rangeId', requireAuth, requireAdmin, async (req, res,
 // DELETE /api/ip-networks/:id/ranges/:rangeId
 router.delete('/:id/ranges/:rangeId', requireAuth, requireAdmin, async (req, res, next) => {
   try {
+    await createNetworkRevision(req.params.id, 'Suppression d une plage', req.user);
     await prisma.ipRangeDefinition.delete({ where: { id: req.params.rangeId } });
     res.json({ ok: true });
   } catch (err) { next(err); }
@@ -497,6 +644,7 @@ router.post('/:id/addresses/bulk', requireAuth, requireAdmin, async (req, res, n
       };
     });
 
+    await createNetworkRevision(req.params.id, 'Modification groupée des adresses', req.user);
     await prisma.$transaction(async tx => {
       if (deleteIds.length) {
         await tx.ipAddress.deleteMany({ where: { networkId: req.params.id, id: { in: deleteIds } } });
@@ -523,6 +671,7 @@ router.post('/:id/addresses',
   async (req, res, next) => {
     if (!validate(req, res)) return;
     try {
+      await createNetworkRevision(req.params.id, 'Ajout d une adresse IP', req.user);
       const addr = await prisma.ipAddress.create({
         data: {
           networkId: req.params.id,
@@ -551,6 +700,7 @@ router.patch('/:id/addresses/:addrId', requireAuth, requireAdmin, async (req, re
     if (req.body.equipmentType !== undefined) data.equipmentType = req.body.equipmentType?.trim() || null;
     if (req.body.description !== undefined) data.description = req.body.description?.trim() || null;
     if (req.body.equipmentId !== undefined) data.equipmentId = req.body.equipmentId || null;
+    await createNetworkRevision(req.params.id, 'Modification d une adresse IP', req.user);
     const addr = await prisma.ipAddress.update({
       where: { id: req.params.addrId },
       data,
@@ -566,6 +716,7 @@ router.patch('/:id/addresses/:addrId', requireAuth, requireAdmin, async (req, re
 // DELETE /api/ip-networks/:id/addresses/:addrId
 router.delete('/:id/addresses/:addrId', requireAuth, requireAdmin, async (req, res, next) => {
   try {
+    await createNetworkRevision(req.params.id, 'Suppression d une adresse IP', req.user);
     await prisma.ipAddress.delete({ where: { id: req.params.addrId } });
     res.json({ ok: true });
   } catch (err) { next(err); }
@@ -593,6 +744,7 @@ router.post('/:id/addresses/import', requireAuth, requireAdmin, async (req, res,
     if (ipIdx === -1) return res.status(400).json({ error: 'Colonne "ip" manquante dans le CSV' });
 
     const results = { created: 0, updated: 0, errors: [] };
+    await createNetworkRevision(req.params.id, 'Import CSV des adresses', req.user);
 
     for (let i = 1; i < lines.length; i++) {
       const cols = parseCsvLine(lines[i]);

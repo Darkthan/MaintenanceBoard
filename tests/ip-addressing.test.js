@@ -20,8 +20,15 @@ jest.mock('../src/lib/prisma', () => ({
     findUnique: jest.fn(),
     update: jest.fn()
   },
+  ipNetworkRevision: {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    findUnique: jest.fn()
+  },
   ipRangeDefinition: {
     create: jest.fn(),
+    createMany: jest.fn(),
+    deleteMany: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn()
   },
@@ -29,6 +36,7 @@ jest.mock('../src/lib/prisma', () => ({
     findMany: jest.fn(),
     findUnique: jest.fn(),
     upsert: jest.fn(),
+    createMany: jest.fn(),
     update: jest.fn(),
     deleteMany: jest.fn()
   },
@@ -54,6 +62,7 @@ describe('ip addressing gateways', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.equipment.findMany.mockResolvedValue([]);
+    prisma.ipNetworkRevision.create.mockResolvedValue({ id: 'revision-created' });
     prisma.$transaction.mockImplementation(async callback => callback(prisma));
   });
 
@@ -335,5 +344,112 @@ describe('ip addressing gateways', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('hors du réseau');
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('liste l historique d un reseau avec le resume de chaque instantane', async () => {
+    prisma.ipNetworkRevision.findMany.mockResolvedValue([
+      {
+        id: 'revision-1',
+        networkId: 'network-1',
+        action: 'Modification groupée des adresses',
+        actorName: 'Admin',
+        createdAt: new Date('2026-06-01T10:00:00Z'),
+        snapshot: JSON.stringify({
+          network: { name: 'LAN CDI', cidr: '10.0.0.0/24', gateway: null, vlan: 10, description: null },
+          ranges: [{ id: 'range-1', startHost: 1, endHost: 20, label: 'Postes', rangeType: 'STATIC' }],
+          addresses: [{ id: 'address-1', ip: '10.0.0.15', hostname: 'pc-cdi-01' }]
+        })
+      }
+    ]);
+
+    const res = await request(buildApp()).get('/api/ip-networks/network-1/history');
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toEqual(expect.objectContaining({
+      id: 'revision-1',
+      action: 'Modification groupée des adresses',
+      summary: { networkName: 'LAN CDI', ranges: 1, addresses: 1 }
+    }));
+  });
+
+  it('restaure toutes les parties d une version et conserve l etat courant', async () => {
+    prisma.ipNetworkRevision.findUnique.mockResolvedValue({
+      id: 'revision-1',
+      networkId: 'network-1',
+      snapshot: JSON.stringify({
+        network: { name: 'LAN CDI', cidr: '10.0.0.0/24', gateway: '10.0.0.254', vlan: 10, description: 'CDI' },
+        ranges: [{ id: 'range-1', startHost: 1, endHost: 20, label: 'Postes', rangeType: 'STATIC' }],
+        addresses: [{ id: 'address-1', ip: '10.0.0.15', hostname: 'pc-cdi-01', equipmentType: 'PC', description: null, equipmentId: null }]
+      })
+    });
+    prisma.ipNetwork.findUnique.mockResolvedValue({
+      id: 'network-1',
+      name: 'LAN actuel',
+      cidr: '10.0.1.0/24',
+      gateway: null,
+      vlan: 20,
+      description: null,
+      ranges: [],
+      addresses: []
+    });
+
+    const res = await request(buildApp())
+      .post('/api/ip-networks/network-1/history/revision-1/restore')
+      .send({ sections: ['network', 'ranges', 'addresses'] });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ restored: ['network', 'ranges', 'addresses'] });
+    expect(prisma.ipNetworkRevision.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        networkId: 'network-1',
+        action: 'Avant restauration de revision-1',
+        actorName: 'Admin'
+      })
+    });
+    expect(prisma.ipNetwork.update).toHaveBeenCalledWith({
+      where: { id: 'network-1' },
+      data: expect.objectContaining({ name: 'LAN CDI', cidr: '10.0.0.0/24' })
+    });
+    expect(prisma.ipRangeDefinition.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ id: 'range-1', networkId: 'network-1' })]
+    });
+    expect(prisma.ipAddress.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ id: 'address-1', networkId: 'network-1', ip: '10.0.0.15' })]
+    });
+  });
+
+  it('restaure uniquement les adresses selectionnees sans remplacer le reseau ni les plages', async () => {
+    prisma.ipNetworkRevision.findUnique.mockResolvedValue({
+      id: 'revision-2',
+      networkId: 'network-1',
+      snapshot: JSON.stringify({
+        network: { name: 'Ancien LAN', cidr: '10.0.0.0/24', gateway: null, vlan: 10, description: null },
+        ranges: [{ id: 'old-range', startHost: 1, endHost: 20, label: 'Ancienne plage', rangeType: 'STATIC' }],
+        addresses: [{ id: 'old-address', ip: '10.0.0.12', hostname: 'pc-restaure', equipmentType: 'PC', description: null, equipmentId: null }]
+      })
+    });
+    prisma.ipNetwork.findUnique.mockResolvedValue({
+      id: 'network-1',
+      name: 'LAN actuel',
+      cidr: '10.0.0.0/24',
+      gateway: null,
+      vlan: 20,
+      description: null,
+      ranges: [{ id: 'current-range', startHost: 30, endHost: 40, label: 'Plage actuelle', rangeType: 'DHCP' }],
+      addresses: []
+    });
+
+    const res = await request(buildApp())
+      .post('/api/ip-networks/network-1/history/revision-2/restore')
+      .send({ sections: ['addresses'] });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ restored: ['addresses'] });
+    expect(prisma.ipNetwork.update).not.toHaveBeenCalled();
+    expect(prisma.ipRangeDefinition.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.ipAddress.deleteMany).toHaveBeenCalledWith({ where: { networkId: 'network-1' } });
+    expect(prisma.ipAddress.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ id: 'old-address', ip: '10.0.0.12' })]
+    });
   });
 });

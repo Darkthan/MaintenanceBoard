@@ -54,6 +54,10 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('id="ip-unassigned-limit-note"');
     expect(res.text).toContain('id="ip-btn-export-addresses"');
     expect(res.text).toContain('/addresses/export');
+    expect(res.text).toContain('id="ip-btn-history"');
+    expect(res.text).toContain('id="ip-modal-history"');
+    expect(res.text).toContain('/history/${revisionId}/restore');
+    expect(res.text).toContain("['network','ranges','addresses']");
     expect(res.text).toContain("${data.created} adresse(s) créée(s), ${data.updated} mise(s) à jour.");
     expect(res.text).toContain('id="ip-btn-bulk-edit"');
     expect(res.text).toContain('/addresses/bulk');

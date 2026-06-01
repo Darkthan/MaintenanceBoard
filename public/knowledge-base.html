@@ -177,6 +177,10 @@
                 <svg class="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 <span id="ip-detail-breadcrumb" class="text-sm font-semibold text-slate-800"></span>
                 <div id="ip-detail-admin-actions" class="hidden ml-auto flex gap-2">
+                  <button id="ip-btn-history" class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8m0-5v5h5m4-1v5l3 2"/></svg>
+                    Historique
+                  </button>
                   <a id="ip-btn-export-addresses" href="#" download class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-5l-4 4m0 0l-4-4m4 4V4"/></svg>
                     Export CSV
@@ -391,6 +395,22 @@
         <button id="ip-do-import-addresses" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Importer</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Modal : Historique du plan d'adressage -->
+<div id="ip-modal-history" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 class="text-sm font-bold text-slate-900">Historique du plan d'adressage</h2>
+        <p class="mt-1 text-xs text-slate-500">Restaure entièrement le réseau ou sélectionne uniquement les éléments nécessaires.</p>
+      </div>
+      <button class="ip-modal-close text-slate-400 hover:text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <div id="ip-history-list" class="flex-1 overflow-y-auto px-6 py-4 space-y-3"></div>
+    <p id="ip-history-empty" class="hidden px-6 py-10 text-center text-sm text-slate-400">Aucune modification enregistrée pour ce réseau.</p>
+    <p id="ip-history-error" class="hidden px-6 pb-4 text-sm text-red-600"></p>
   </div>
 </div>
 
@@ -1899,6 +1919,80 @@ function ipSetBulkEditing(enabled) {
   ipRenderAddresses(document.getElementById('ip-search-addresses').value.toLowerCase().trim());
 }
 
+function ipRenderHistory(revisions) {
+  const list = document.getElementById('ip-history-list');
+  const empty = document.getElementById('ip-history-empty');
+  list.innerHTML = '';
+  empty.classList.toggle('hidden', revisions.length > 0);
+  revisions.forEach(revision => {
+    const item = document.createElement('div');
+    item.className = 'rounded-xl border border-slate-200 p-4';
+    const date = new Date(revision.createdAt).toLocaleString('fr-FR');
+    item.innerHTML = `
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-sm font-semibold text-slate-800">${escapeHtml(revision.action)}</p>
+          <p class="mt-1 text-xs text-slate-400">${escapeHtml(date)}${revision.actorName?` · ${escapeHtml(revision.actorName)}`:''}</p>
+          <p class="mt-2 text-xs text-slate-500">${escapeHtml(revision.summary.networkName)} · ${revision.summary.ranges} plage(s) · ${revision.summary.addresses} adresse(s)</p>
+        </div>
+        <button class="ip-history-restore-all flex-shrink-0 px-2.5 py-1.5 text-xs text-white bg-emerald-600 rounded-lg hover:bg-emerald-700" data-id="${escapeHtml(revision.id)}">Tout restaurer</button>
+      </div>
+      <div class="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+        <span class="font-medium">Restauration partielle :</span>
+        <label class="flex items-center gap-1"><input type="checkbox" data-history-section="network" checked/> Réseau</label>
+        <label class="flex items-center gap-1"><input type="checkbox" data-history-section="ranges" checked/> Plages</label>
+        <label class="flex items-center gap-1"><input type="checkbox" data-history-section="addresses" checked/> Adresses</label>
+        <button class="ip-history-restore-parts ml-auto px-2.5 py-1.5 text-xs text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-50" data-id="${escapeHtml(revision.id)}">Restaurer la sélection</button>
+      </div>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('.ip-history-restore-all').forEach(button =>
+    button.addEventListener('click', () => ipRestoreHistory(button.dataset.id, ['network','ranges','addresses']))
+  );
+  list.querySelectorAll('.ip-history-restore-parts').forEach(button => button.addEventListener('click', () => {
+    const sections = [...button.closest('.rounded-xl').querySelectorAll('[data-history-section]:checked')].map(input => input.dataset.historySection);
+    ipRestoreHistory(button.dataset.id, sections);
+  }));
+}
+
+async function ipOpenHistory() {
+  const error = document.getElementById('ip-history-error');
+  error.classList.add('hidden');
+  ipOpenModal('ip-modal-history');
+  try {
+    const res = await fetch(`/api/ip-networks/${ipCurrentNetwork.id}/history`, { credentials:'include' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erreur');
+    ipRenderHistory(data);
+  } catch (err) {
+    error.textContent = err.message || 'Impossible de charger l historique';
+    error.classList.remove('hidden');
+  }
+}
+
+async function ipRestoreHistory(revisionId, sections) {
+  const error = document.getElementById('ip-history-error');
+  if (!sections.length) {
+    error.textContent = 'Sélectionnez au moins un élément à restaurer.';
+    error.classList.remove('hidden');
+    return;
+  }
+  if (!confirm('Restaurer cette version du plan d adressage ? Une sauvegarde de l état actuel sera conservée.')) return;
+  try {
+    const res = await fetch(`/api/ip-networks/${ipCurrentNetwork.id}/history/${revisionId}/restore`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({ sections })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erreur');
+    ipCloseModal('ip-modal-history');
+    showToast('Plan d adressage restauré', 'success');
+    await ipRefreshDetail();
+  } catch (err) {
+    error.textContent = err.message || 'Impossible de restaurer cette version';
+    error.classList.remove('hidden');
+  }
+}
+
 async function ipSaveBulkAddresses() {
   const errEl = document.getElementById('ip-bulk-error');
   const updates = [...ipBulkDraft.values()].filter(item => !ipBulkDeletedIds.has(item.id));
@@ -2109,6 +2203,7 @@ document.getElementById('ip-btn-back').addEventListener('click', () => {
   updateFabForArticle('ip-addressing');
 });
 document.getElementById('ip-btn-edit-network').addEventListener('click', () => ipOpenNetworkForm(ipCurrentNetwork));
+document.getElementById('ip-btn-history').addEventListener('click', ipOpenHistory);
 document.getElementById('ip-btn-add-range').addEventListener('click', () => ipOpenRangeForm());
 document.getElementById('ip-btn-bulk-edit').addEventListener('click', () => ipSetBulkEditing(true));
 document.getElementById('ip-btn-bulk-cancel').addEventListener('click', () => ipSetBulkEditing(false));
