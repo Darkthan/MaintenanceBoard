@@ -145,10 +145,240 @@
               </div>
             </div>
           </article>
+
+          <!-- ── Plan d'adressage IP (embarqué) ─────────────────────────── -->
+          <div id="ip-panel" class="hidden h-full flex flex-col overflow-y-auto">
+
+            <!-- Vue liste réseaux -->
+            <div id="ip-view-list" class="p-5 flex flex-col gap-4">
+              <div class="flex items-center gap-2">
+                <input id="ip-search" type="text" placeholder="Filtrer les réseaux…"
+                  class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/>
+                <button id="ip-btn-import-networks" class="hidden flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                  Import CSV
+                </button>
+              </div>
+              <div id="ip-networks-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+              <div id="ip-networks-empty" class="hidden text-center py-12 text-slate-400">
+                <svg class="w-10 h-10 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+                <p class="text-sm">Aucun réseau configuré</p>
+              </div>
+            </div>
+
+            <!-- Vue détail réseau -->
+            <div id="ip-view-detail" class="hidden p-5 flex flex-col gap-4">
+              <!-- Breadcrumb -->
+              <div class="flex items-center gap-2 flex-wrap">
+                <button id="ip-btn-back" class="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                  Réseaux
+                </button>
+                <svg class="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                <span id="ip-detail-breadcrumb" class="text-sm font-semibold text-slate-800"></span>
+                <div id="ip-detail-admin-actions" class="hidden ml-auto flex gap-2">
+                  <button id="ip-btn-import-addresses" class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    Import IP
+                  </button>
+                </div>
+              </div>
+
+              <!-- Infos réseau + plages -->
+              <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div id="ip-network-info-card" class="bg-white rounded-xl border border-slate-200 p-4">
+                  <div class="flex items-start justify-between mb-2">
+                    <h3 id="ip-detail-name" class="text-sm font-bold text-slate-900"></h3>
+                    <span id="ip-detail-vlan" class="hidden px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700"></span>
+                  </div>
+                  <p id="ip-detail-desc" class="text-xs text-slate-500 mb-3 hidden"></p>
+                  <dl class="space-y-1.5 text-xs">
+                    <div class="flex justify-between"><dt class="text-slate-400">Réseau</dt><dd id="ip-info-network" class="font-mono font-medium text-slate-700"></dd></div>
+                    <div class="flex justify-between"><dt class="text-slate-400">Masque</dt><dd id="ip-info-mask" class="font-mono text-slate-600"></dd></div>
+                    <div class="flex justify-between"><dt class="text-slate-400">Passerelle</dt><dd id="ip-info-gateway" class="font-mono text-emerald-700 font-bold"></dd></div>
+                    <div class="flex justify-between"><dt class="text-slate-400">Broadcast</dt><dd id="ip-info-broadcast" class="font-mono text-slate-600"></dd></div>
+                    <div class="flex justify-between"><dt class="text-slate-400">Hôtes</dt><dd id="ip-info-usable" class="font-semibold text-slate-700"></dd></div>
+                    <div class="flex justify-between"><dt class="text-slate-400">Assignées</dt><dd id="ip-info-assigned" class="font-semibold text-emerald-600"></dd></div>
+                  </dl>
+                  <div id="ip-edit-net-wrap" class="hidden mt-3">
+                    <button id="ip-btn-edit-network" class="w-full text-center text-xs text-slate-500 hover:text-emerald-600 border border-slate-200 rounded-lg py-1.5 hover:border-emerald-300 transition">Modifier</button>
+                  </div>
+                </div>
+                <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-4">
+                  <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-xs font-semibold text-slate-600">Plages d'adresses</h4>
+                    <button id="ip-btn-add-range" class="hidden text-xs text-emerald-600 hover:text-emerald-800 font-medium">+ Ajouter</button>
+                  </div>
+                  <div id="ip-ranges-bar" class="h-5 rounded-lg overflow-hidden flex mb-2 bg-slate-100"></div>
+                  <div id="ip-ranges-legend" class="flex flex-wrap gap-1.5 mb-2"></div>
+                  <div id="ip-ranges-list" class="space-y-1"></div>
+                  <p id="ip-ranges-empty" class="hidden text-xs text-slate-400 text-center py-3">Aucune plage définie</p>
+                </div>
+              </div>
+
+              <!-- Tableau adresses -->
+              <div class="bg-white rounded-xl border border-slate-200">
+                <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
+                  <h4 class="text-xs font-semibold text-slate-600 flex-1">Adresses IP</h4>
+                  <input id="ip-search-addresses" type="text" placeholder="Rechercher…"
+                    class="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs w-40 focus:outline-none focus:ring-2 focus:ring-emerald-400"/>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-xs">
+                    <thead><tr class="text-left text-slate-400 border-b border-slate-100 bg-slate-50">
+                      <th class="px-3 py-2 font-medium">IP</th>
+                      <th class="px-3 py-2 font-medium">Hôte</th>
+                      <th class="px-3 py-2 font-medium">Type</th>
+                      <th class="px-3 py-2 font-medium">Description</th>
+                      <th class="px-3 py-2 font-medium">Plage</th>
+                      <th class="px-3 py-2 w-12"></th>
+                    </tr></thead>
+                    <tbody id="ip-addresses-tbody"></tbody>
+                  </table>
+                </div>
+                <div id="ip-addresses-empty" class="hidden text-center py-8 text-slate-400 text-xs">Aucune adresse enregistrée</div>
+              </div>
+            </div>
+          </div>
+          <!-- ── fin plan d'adressage ──────────────────────────────────── -->
+
         </section>
       </div>
     </div>
   </main>
+</div>
+
+<!-- ══ Modals plan d'adressage ═════════════════════════════════════════════ -->
+<!-- Modal : Réseau -->
+<div id="ip-modal-network" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 id="ip-modal-network-title" class="text-sm font-bold text-slate-900">Nouveau réseau</h2>
+      <button class="ip-modal-close text-slate-400 hover:text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <form id="ip-form-network" class="px-6 py-5 space-y-3">
+      <input type="hidden" id="ip-fn-id"/>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Nom *</label>
+        <input id="ip-fn-name" type="text" required placeholder="LAN Bureau" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">CIDR *</label>
+          <input id="ip-fn-cidr" type="text" required placeholder="10.0.0.0/24" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">VLAN</label>
+          <input id="ip-fn-vlan" type="number" min="1" max="4094" placeholder="10" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+      </div>
+      <div id="ip-cidr-preview" class="hidden rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs space-y-1">
+        <div class="flex justify-between text-slate-500"><span>Réseau</span><span id="ip-prev-network" class="font-mono"></span></div>
+        <div class="flex justify-between text-slate-500"><span>Masque</span><span id="ip-prev-mask" class="font-mono"></span></div>
+        <div class="flex justify-between text-emerald-700 font-bold"><span>Passerelle</span><span id="ip-prev-gateway" class="font-mono"></span></div>
+        <div class="flex justify-between text-slate-500"><span>Broadcast</span><span id="ip-prev-broadcast" class="font-mono"></span></div>
+        <div class="flex justify-between text-slate-700 font-medium"><span>Hôtes utilisables</span><span id="ip-prev-usable"></span></div>
+      </div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Description</label>
+        <textarea id="ip-fn-desc" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"></textarea></div>
+      <p id="ip-fn-error" class="hidden text-xs text-red-600"></p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="ip-modal-close px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Annuler</button>
+        <button type="submit" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- Modal : Adresse IP -->
+<div id="ip-modal-address" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 id="ip-modal-address-title" class="text-sm font-bold text-slate-900">Ajouter une IP</h2>
+      <button class="ip-modal-close text-slate-400 hover:text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <form id="ip-form-address" class="px-6 py-5 space-y-3">
+      <input type="hidden" id="ip-fa-id"/>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Adresse IP *</label>
+          <input id="ip-fa-ip" type="text" required placeholder="10.0.0.15" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Nom d'hôte</label>
+          <input id="ip-fa-hostname" type="text" placeholder="srv-web01" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+      </div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Type d'équipement</label>
+        <input id="ip-fa-type" type="text" list="ip-equip-types" placeholder="Serveur, PC, Switch…" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/>
+        <datalist id="ip-equip-types"><option value="Serveur"/><option value="PC"/><option value="Laptop"/><option value="Switch"/><option value="Routeur"/><option value="Imprimante"/><option value="NAS"/><option value="Borne WiFi"/><option value="Caméra IP"/><option value="Téléphone IP"/></datalist></div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Description</label>
+        <input id="ip-fa-desc" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+      <p id="ip-fa-error" class="hidden text-xs text-red-600"></p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="ip-modal-close px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Annuler</button>
+        <button type="submit" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- Modal : Plage -->
+<div id="ip-modal-range" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 id="ip-modal-range-title" class="text-sm font-bold text-slate-900">Nouvelle plage</h2>
+      <button class="ip-modal-close text-slate-400 hover:text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <form id="ip-form-range" class="px-6 py-5 space-y-3">
+      <input type="hidden" id="ip-fr-id"/>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Début (offset) *</label>
+          <input id="ip-fr-start" type="number" min="0" required placeholder="1" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Fin (offset) *</label>
+          <input id="ip-fr-end" type="number" min="0" required placeholder="50" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+      </div>
+      <p id="ip-fr-preview" class="hidden text-xs text-slate-400 font-mono"></p>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Nom *</label>
+        <input id="ip-fr-label" type="text" required placeholder="Serveurs, DHCP PC…" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Type</label>
+        <select id="ip-fr-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <option value="STATIC">Statique</option><option value="DHCP">DHCP</option>
+          <option value="RESERVED">Réservé</option><option value="OTHER">Autre</option>
+        </select></div>
+      <p id="ip-fr-error" class="hidden text-xs text-red-600"></p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="ip-modal-close px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Annuler</button>
+        <button type="submit" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- Modal : Import CSV réseaux -->
+<div id="ip-modal-import-networks" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-slate-900">Import CSV — Réseaux</h2>
+      <button class="ip-modal-close text-slate-400 hover:text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <div class="px-6 py-5 space-y-3">
+      <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 font-mono">name,cidr,vlan,description<br/>LAN Bureau,10.0.1.0/24,10,Postes de travail</div>
+      <input id="ip-import-networks-file" type="file" accept=".csv" class="block w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-emerald-50 file:text-emerald-700"/>
+      <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer"><input id="ip-import-networks-skip" type="checkbox" class="rounded"/> Ignorer les lignes invalides</label>
+      <p id="ip-import-networks-result" class="hidden text-sm"></p>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="ip-modal-close px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Annuler</button>
+        <button id="ip-do-import-networks" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Importer</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Modal : Import CSV adresses -->
+<div id="ip-modal-import-addresses" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-slate-900">Import CSV — Adresses IP</h2>
+      <button class="ip-modal-close text-slate-400 hover:text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <div class="px-6 py-5 space-y-3">
+      <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 font-mono">ip,hostname,type,description<br/>10.0.1.1,gw,Routeur,Passerelle</div>
+      <input id="ip-import-addresses-file" type="file" accept=".csv" class="block w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-emerald-50 file:text-emerald-700"/>
+      <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer"><input id="ip-import-addresses-skip" type="checkbox" class="rounded"/> Ignorer les lignes invalides</label>
+      <p id="ip-import-addresses-result" class="hidden text-sm"></p>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="ip-modal-close px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Annuler</button>
+        <button id="ip-do-import-addresses" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Importer</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── FAB speed-dial ────────────────────────────────────────────────────── -->
@@ -916,8 +1146,11 @@ async function selectArticle(articleId) {
     selectedArticleId = article.id;
     updateUrl(article.id);
     renderArticleList();
+    // Masquer le panneau IP si on navigue vers un autre type
+    ipHidePanel();
     emptyStateEl.classList.add('hidden');
     articlePanelEl.classList.remove('hidden');
+    updateFabForArticle(article.type);
 
     const isNetworkDiagram = article.type === 'network-diagram';
     const isIpAddressing = article.type === 'ip-addressing';
@@ -944,19 +1177,9 @@ async function selectArticle(articleId) {
     ].filter(Boolean).join(' ');
 
     if (isIpAddressing) {
-      // Rendu iframe plein-panneau
-      const docWrap = document.getElementById('article-documents-wrap');
-      if (docWrap) docWrap.classList.add('hidden');
-      articleContentEl.innerHTML = '';
-      let iframe = document.getElementById('ip-addressing-iframe');
-      if (!iframe) {
-        iframe = document.createElement('iframe');
-        iframe.id = 'ip-addressing-iframe';
-        iframe.src = '/ip-addressing.html?embedded=1';
-        iframe.style.cssText = 'width:100%;height:calc(100vh - 280px);min-height:500px;border:none;border-radius:0.75rem;';
-        iframe.title = 'Plan d\'adressage IP';
-      }
-      articleContentEl.appendChild(iframe);
+      articlePanelEl.classList.add('hidden'); // pas de header article pour ce type
+      ipShowPanel();
+      return;
     } else if (isNetworkDiagram) {
       if (article.diagramSvg) {
         articleContentEl.innerHTML = `<div class="w-full overflow-auto rounded-xl border border-slate-200 bg-white p-3">${DOMPurify.sanitize(article.diagramSvg, { USE_PROFILES: { svg: true, svgFilters: true } })}</div>`;
@@ -1381,14 +1604,15 @@ let fabOpen = false;
 
 function updateFabForArticle(type) {
   const isIp = type === 'ip-addressing';
+  const inDetail = isIp && ipCurrentNetwork !== null;
   document.getElementById('kb-fab-item-article').classList.toggle('hidden', isIp);
   document.getElementById('kb-fab-item-diagram').classList.toggle('hidden', isIp);
   document.getElementById('kb-fab-item-ip-network').classList.toggle('hidden', !isIp);
-  document.getElementById('kb-fab-item-ip-range').classList.toggle('hidden', !isIp);
+  document.getElementById('kb-fab-item-ip-range').classList.toggle('hidden', !inDetail);
   // Couleur du bouton principal selon contexte
   const btn = document.getElementById('kb-fab-btn');
-  btn.className = btn.className.replace(/bg-\w+-600|hover:bg-\w+-700/g, '').trim();
-  btn.classList.add(isIp ? 'bg-emerald-600' : 'bg-blue-600', isIp ? 'hover:bg-emerald-700' : 'hover:bg-blue-700');
+  btn.className = btn.className.replace(/bg-\w+-\d+|hover:bg-\w+-\d+/g, '').trim() +
+    (isIp ? ' bg-emerald-600 hover:bg-emerald-700' : ' bg-blue-600 hover:bg-blue-700');
   closeFab();
 }
 
@@ -1418,22 +1642,389 @@ document.getElementById('kb-fab-btn').addEventListener('click', () => { fabOpen 
 document.getElementById('fab-new-article').addEventListener('click', () => { closeFab(); openEditor(); });
 document.getElementById('fab-new-diagram').addEventListener('click', () => { closeFab(); openDiagramEditor(); });
 
-document.getElementById('fab-new-ip-network').addEventListener('click', () => {
-  closeFab();
-  const iframe = document.getElementById('ip-addressing-iframe');
-  if (iframe?.contentWindow) iframe.contentWindow.postMessage({ type: 'kb-action', action: 'new-network' }, '*');
-});
-
-document.getElementById('fab-new-ip-range').addEventListener('click', () => {
-  closeFab();
-  const iframe = document.getElementById('ip-addressing-iframe');
-  if (iframe?.contentWindow) iframe.contentWindow.postMessage({ type: 'kb-action', action: 'new-range' }, '*');
-});
+document.getElementById('fab-new-ip-network').addEventListener('click', () => { closeFab(); ipOpenNetworkForm(); });
+document.getElementById('fab-new-ip-range').addEventListener('click', () => { closeFab(); if (ipCurrentNetwork) ipOpenRangeForm(); else showToast('Ouvrez d\'abord un réseau', 'info'); });
 
 // Fermer FAB si clic ailleurs
 document.addEventListener('click', e => {
   if (fabOpen && !document.getElementById('kb-fab-wrap').contains(e.target)) closeFab();
 });
+
+// ══ Plan d'adressage IP — logique embarquée ════════════════════════════════════
+
+// Utilitaires CIDR
+function ipParseCidr(cidr) {
+  const [netStr, pfxStr] = cidr.split('/');
+  const prefix = parseInt(pfxStr, 10);
+  if (isNaN(prefix) || prefix < 0 || prefix > 32) throw new Error('Préfixe invalide');
+  const p = netStr.split('.').map(Number);
+  if (p.length !== 4 || p.some(x => isNaN(x) || x < 0 || x > 255)) throw new Error('Adresse invalide');
+  const netInt = (p[0]*16777216 + p[1]*65536 + p[2]*256 + p[3]) >>> 0;
+  const mask = prefix === 0 ? 0 : ((0xFFFFFFFF << (32 - prefix)) >>> 0);
+  const base = (netInt & mask) >>> 0;
+  const bcast = (base | (~mask >>> 0)) >>> 0;
+  const total = Math.pow(2, 32 - prefix);
+  return { network: ipInt2str(base), broadcast: ipInt2str(bcast),
+    gateway: prefix >= 31 ? ipInt2str(base) : ipInt2str(base + 1),
+    subnetMask: ipInt2str(mask), prefix, totalHosts: total,
+    usableHosts: prefix >= 31 ? total : Math.max(0, total - 2), networkBase: base };
+}
+function ipInt2str(n) { n = n >>> 0; return [(n>>>24)&0xFF,(n>>>16)&0xFF,(n>>>8)&0xFF,n&0xFF].join('.'); }
+function ipOffset(cidr, ip) {
+  try {
+    const info = ipParseCidr(cidr);
+    const p = ip.split('.').map(Number);
+    return ((p[0]*16777216+p[1]*65536+p[2]*256+p[3])>>>0) - info.networkBase;
+  } catch { return null; }
+}
+
+const IP_RANGE_COLORS = {
+  STATIC:   { bg:'bg-blue-500',   light:'bg-blue-100 text-blue-800',   label:'Statique' },
+  DHCP:     { bg:'bg-amber-400',  light:'bg-amber-100 text-amber-800',  label:'DHCP' },
+  RESERVED: { bg:'bg-slate-400',  light:'bg-slate-100 text-slate-700',  label:'Réservé' },
+  OTHER:    { bg:'bg-purple-400', light:'bg-purple-100 text-purple-800', label:'Autre' },
+};
+
+let ipNetworks = [], ipCurrentNetwork = null, ipCurrentAddresses = [], ipCurrentRanges = [];
+
+// Modals
+document.querySelectorAll('.ip-modal-close').forEach(btn =>
+  btn.addEventListener('click', () => btn.closest('[id^="ip-modal-"]').classList.add('hidden'))
+);
+function ipOpenModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function ipCloseModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+// Rendu liste réseaux
+function ipRenderList(filter = '') {
+  const grid = document.getElementById('ip-networks-grid');
+  const empty = document.getElementById('ip-networks-empty');
+  const filtered = ipNetworks.filter(n => !filter ||
+    n.name.toLowerCase().includes(filter) || n.cidr.includes(filter) || String(n.vlan||'').includes(filter));
+  grid.innerHTML = '';
+  if (!filtered.length) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  filtered.forEach(n => {
+    let info = null; try { info = ipParseCidr(n.cidr); } catch {}
+    const card = document.createElement('div');
+    card.className = 'bg-slate-50 hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 p-4 cursor-pointer transition group';
+    card.innerHTML = `
+      <div class="flex items-start justify-between mb-2">
+        <div class="min-w-0 flex-1">
+          <h3 class="text-sm font-semibold text-slate-900 group-hover:text-emerald-700 truncate">${escapeHtml(n.name)}</h3>
+          <p class="text-xs font-mono text-slate-400 mt-0.5">${escapeHtml(n.cidr)}</p>
+        </div>
+        ${n.vlan ? `<span class="ml-2 px-1.5 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-700">VLAN ${n.vlan}</span>` : ''}
+      </div>
+      <div class="grid grid-cols-3 gap-1 text-xs text-center mt-2">
+        <div><p class="text-slate-400">Hôtes</p><p class="font-semibold text-slate-600">${info ? info.usableHosts.toLocaleString('fr-FR') : '—'}</p></div>
+        <div class="border-x border-slate-200"><p class="text-slate-400">Assignées</p><p class="font-semibold text-emerald-600">${n._count?.addresses ?? 0}</p></div>
+        <div><p class="text-slate-400">Plages</p><p class="font-semibold text-slate-600">${n._count?.ranges ?? 0}</p></div>
+      </div>
+      ${info ? `<p class="mt-2 text-xs text-slate-400 font-mono">GW: <span class="text-emerald-700 font-semibold">${info.gateway}</span></p>` : ''}`;
+    card.addEventListener('click', () => ipOpenDetail(n.id));
+    grid.appendChild(card);
+  });
+}
+
+// Détail réseau
+async function ipOpenDetail(id) {
+  try {
+    const res = await fetch(`/api/ip-networks/${id}`, { credentials: 'include' });
+    const data = await res.json();
+    ipCurrentNetwork = data; ipCurrentAddresses = data.addresses||[]; ipCurrentRanges = data.ranges||[];
+    ipRenderDetail();
+    document.getElementById('ip-view-list').classList.add('hidden');
+    document.getElementById('ip-view-detail').classList.remove('hidden');
+    updateFabForArticle('ip-addressing');
+  } catch { showToast('Erreur chargement réseau', 'error'); }
+}
+
+function ipRenderDetail() {
+  const n = ipCurrentNetwork, info = n.cidrInfo;
+  document.getElementById('ip-detail-breadcrumb').textContent = n.name;
+  document.getElementById('ip-detail-name').textContent = n.name;
+  const vlanEl = document.getElementById('ip-detail-vlan');
+  if (n.vlan) { vlanEl.textContent = `VLAN ${n.vlan}`; vlanEl.classList.remove('hidden'); } else vlanEl.classList.add('hidden');
+  const descEl = document.getElementById('ip-detail-desc');
+  if (n.description) { descEl.textContent = n.description; descEl.classList.remove('hidden'); } else descEl.classList.add('hidden');
+  document.getElementById('ip-info-network').textContent = info ? `${info.network}/${info.prefix}` : n.cidr;
+  document.getElementById('ip-info-mask').textContent = info?.subnetMask || '—';
+  document.getElementById('ip-info-gateway').textContent = info?.gateway || '—';
+  document.getElementById('ip-info-broadcast').textContent = info?.broadcast || '—';
+  document.getElementById('ip-info-usable').textContent = info ? info.usableHosts.toLocaleString('fr-FR') : '—';
+  document.getElementById('ip-info-assigned').textContent = ipCurrentAddresses.length;
+  if (isAdmin()) {
+    document.getElementById('ip-detail-admin-actions').classList.remove('hidden');
+    document.getElementById('ip-detail-admin-actions').classList.add('flex');
+    document.getElementById('ip-edit-net-wrap').classList.remove('hidden');
+    document.getElementById('ip-btn-add-range').classList.remove('hidden');
+  }
+  ipRenderRanges(); ipRenderAddresses();
+}
+
+function ipRenderRanges() {
+  const n = ipCurrentNetwork, info = n.cidrInfo;
+  const total = info ? info.totalHosts : 256;
+  const bar = document.getElementById('ip-ranges-bar');
+  const legend = document.getElementById('ip-ranges-legend');
+  const list = document.getElementById('ip-ranges-list');
+  bar.innerHTML = ''; legend.innerHTML = ''; list.innerHTML = '';
+  if (!ipCurrentRanges.length) { document.getElementById('ip-ranges-empty').classList.remove('hidden'); return; }
+  document.getElementById('ip-ranges-empty').classList.add('hidden');
+  ipCurrentRanges.forEach(r => {
+    const col = IP_RANGE_COLORS[r.rangeType] || IP_RANGE_COLORS.OTHER;
+    const w = Math.max(1, ((r.endHost - r.startHost + 1) / total) * 100);
+    const seg = document.createElement('div');
+    seg.className = `${col.bg} h-full`; seg.style.width = `${w}%`;
+    seg.title = `${r.label}: ${r.startHost}–${r.endHost}`; bar.appendChild(seg);
+    const badge = document.createElement('span');
+    badge.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${col.light}`;
+    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${col.bg}"></span>${escapeHtml(r.label)}`;
+    legend.appendChild(badge);
+    const startIp = info ? ipInt2str(info.networkBase + r.startHost) : `+${r.startHost}`;
+    const endIp   = info ? ipInt2str(info.networkBase + r.endHost)   : `+${r.endHost}`;
+    const item = document.createElement('div');
+    item.className = 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 text-xs';
+    item.innerHTML = `<span class="w-2 h-2 rounded-full ${col.bg} flex-shrink-0"></span>
+      <span class="flex-1 font-medium text-slate-700">${escapeHtml(r.label)}</span>
+      <span class="font-mono text-slate-400">${startIp} – ${endIp}</span>
+      <span class="px-1.5 py-0.5 rounded ${col.light}">${col.label}</span>
+      <span class="text-slate-400">${(r.endHost-r.startHost+1).toLocaleString('fr-FR')} IP</span>
+      ${isAdmin() ? `<button class="ip-edit-range text-slate-300 hover:text-blue-500 transition" data-id="${r.id}">✎</button>
+        <button class="ip-del-range text-slate-300 hover:text-red-500 transition" data-id="${r.id}">✕</button>` : ''}`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('.ip-edit-range').forEach(b => b.addEventListener('click', () => ipOpenRangeForm(ipCurrentRanges.find(r=>r.id===b.dataset.id))));
+  list.querySelectorAll('.ip-del-range').forEach(b => b.addEventListener('click', () => ipDelRange(b.dataset.id)));
+}
+
+function ipRenderAddresses(filter = '') {
+  const tbody = document.getElementById('ip-addresses-tbody');
+  const empty = document.getElementById('ip-addresses-empty');
+  const filtered = filter ? ipCurrentAddresses.filter(a =>
+    a.ip.includes(filter)||(a.hostname||'').toLowerCase().includes(filter)||
+    (a.equipmentType||'').toLowerCase().includes(filter)||(a.description||'').toLowerCase().includes(filter)) : ipCurrentAddresses;
+  if (!filtered.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  const info = ipCurrentNetwork.cidrInfo;
+  tbody.innerHTML = filtered.map(a => {
+    const off = info ? ipOffset(ipCurrentNetwork.cidr, a.ip) : null;
+    const rng = off !== null ? ipCurrentRanges.find(r => off >= r.startHost && off <= r.endHost) : null;
+    const col = rng ? (IP_RANGE_COLORS[rng.rangeType]||IP_RANGE_COLORS.OTHER) : null;
+    return `<tr class="border-b border-slate-50 hover:bg-slate-50">
+      <td class="px-3 py-2 font-mono text-xs font-bold text-slate-800">${escapeHtml(a.ip)}</td>
+      <td class="px-3 py-2 text-xs text-slate-600">${a.hostname?escapeHtml(a.hostname):'<span class="text-slate-300">—</span>'}</td>
+      <td class="px-3 py-2 text-xs">${a.equipmentType?`<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-xs">${escapeHtml(a.equipmentType)}</span>`:'<span class="text-slate-300">—</span>'}</td>
+      <td class="px-3 py-2 text-xs text-slate-500 max-w-[120px] truncate">${a.description?escapeHtml(a.description):'<span class="text-slate-300">—</span>'}</td>
+      <td class="px-3 py-2 text-xs">${rng?`<span class="px-1.5 py-0.5 rounded-full text-xs ${col.light}">${escapeHtml(rng.label)}</span>`:'<span class="text-slate-300">—</span>'}</td>
+      <td class="px-3 py-2">${isAdmin()?`<div class="flex gap-1">
+        <button class="ip-edit-addr text-slate-300 hover:text-blue-500 text-xs" data-id="${a.id}">✎</button>
+        <button class="ip-del-addr text-slate-300 hover:text-red-500 text-xs" data-id="${a.id}">✕</button>
+      </div>`:''}</td></tr>`;
+  }).join('');
+  tbody.querySelectorAll('.ip-edit-addr').forEach(b => b.addEventListener('click', () => ipOpenAddrForm(ipCurrentAddresses.find(a=>a.id===b.dataset.id))));
+  tbody.querySelectorAll('.ip-del-addr').forEach(b => b.addEventListener('click', () => ipDelAddr(b.dataset.id)));
+}
+
+// Formulaires réseau
+function ipOpenNetworkForm(net = null) {
+  document.getElementById('ip-modal-network-title').textContent = net ? 'Modifier le réseau' : 'Nouveau réseau';
+  document.getElementById('ip-fn-id').value = net?.id||'';
+  document.getElementById('ip-fn-name').value = net?.name||'';
+  document.getElementById('ip-fn-cidr').value = net?.cidr||'';
+  document.getElementById('ip-fn-vlan').value = net?.vlan||'';
+  document.getElementById('ip-fn-desc').value = net?.description||'';
+  document.getElementById('ip-fn-error').classList.add('hidden');
+  ipUpdateCidrPreview(net?.cidr||'');
+  ipOpenModal('ip-modal-network');
+}
+document.getElementById('ip-fn-cidr').addEventListener('input', e => ipUpdateCidrPreview(e.target.value));
+function ipUpdateCidrPreview(val) {
+  const p = document.getElementById('ip-cidr-preview');
+  if (!val || !/^\d+\.\d+\.\d+\.\d+\/\d+$/.test(val)) { p.classList.add('hidden'); return; }
+  try {
+    const info = ipParseCidr(val);
+    document.getElementById('ip-prev-network').textContent = `${info.network}/${info.prefix}`;
+    document.getElementById('ip-prev-mask').textContent = info.subnetMask;
+    document.getElementById('ip-prev-gateway').textContent = info.gateway;
+    document.getElementById('ip-prev-broadcast').textContent = info.broadcast;
+    document.getElementById('ip-prev-usable').textContent = info.usableHosts.toLocaleString('fr-FR');
+    p.classList.remove('hidden');
+  } catch { p.classList.add('hidden'); }
+}
+document.getElementById('ip-form-network').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('ip-fn-id').value;
+  const body = { name: document.getElementById('ip-fn-name').value, cidr: document.getElementById('ip-fn-cidr').value,
+    vlan: document.getElementById('ip-fn-vlan').value||null, description: document.getElementById('ip-fn-desc').value||null };
+  const errEl = document.getElementById('ip-fn-error'); errEl.classList.add('hidden');
+  try {
+    const res = await fetch(id?`/api/ip-networks/${id}`:'/api/ip-networks', {
+      method: id?'PATCH':'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error||'Erreur'; errEl.classList.remove('hidden'); return; }
+    ipCloseModal('ip-modal-network');
+    showToast(id?'Réseau mis à jour':'Réseau créé', 'success');
+    await ipLoadNetworks();
+    if (id && ipCurrentNetwork?.id===id) await ipRefreshDetail();
+  } catch { errEl.textContent='Erreur réseau'; errEl.classList.remove('hidden'); }
+});
+
+// Formulaires adresse
+function ipOpenAddrForm(addr = null) {
+  document.getElementById('ip-modal-address-title').textContent = addr ? 'Modifier l\'IP' : 'Ajouter une IP';
+  document.getElementById('ip-fa-id').value = addr?.id||'';
+  document.getElementById('ip-fa-ip').value = addr?.ip||'';
+  document.getElementById('ip-fa-hostname').value = addr?.hostname||'';
+  document.getElementById('ip-fa-type').value = addr?.equipmentType||'';
+  document.getElementById('ip-fa-desc').value = addr?.description||'';
+  document.getElementById('ip-fa-error').classList.add('hidden');
+  ipOpenModal('ip-modal-address');
+}
+document.getElementById('ip-form-address').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('ip-fa-id').value;
+  const body = { ip: document.getElementById('ip-fa-ip').value, hostname: document.getElementById('ip-fa-hostname').value||null,
+    equipmentType: document.getElementById('ip-fa-type').value||null, description: document.getElementById('ip-fa-desc').value||null };
+  const errEl = document.getElementById('ip-fa-error'); errEl.classList.add('hidden');
+  try {
+    const url = id ? `/api/ip-networks/${ipCurrentNetwork.id}/addresses/${id}` : `/api/ip-networks/${ipCurrentNetwork.id}/addresses`;
+    const res = await fetch(url, { method:id?'PATCH':'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error||'Erreur'; errEl.classList.remove('hidden'); return; }
+    ipCloseModal('ip-modal-address');
+    showToast(id?'IP mise à jour':'IP ajoutée', 'success');
+    await ipRefreshDetail();
+  } catch { errEl.textContent='Erreur réseau'; errEl.classList.remove('hidden'); }
+});
+async function ipDelAddr(id) {
+  if (!confirm('Supprimer cette adresse IP ?')) return;
+  const res = await fetch(`/api/ip-networks/${ipCurrentNetwork.id}/addresses/${id}`, { method:'DELETE', credentials:'include' });
+  if (res.ok) { showToast('IP supprimée', 'success'); await ipRefreshDetail(); } else showToast('Erreur', 'error');
+}
+
+// Formulaires plage
+function ipOpenRangeForm(range = null) {
+  document.getElementById('ip-modal-range-title').textContent = range ? 'Modifier la plage' : 'Nouvelle plage';
+  document.getElementById('ip-fr-id').value = range?.id||'';
+  document.getElementById('ip-fr-start').value = range?.startHost??'';
+  document.getElementById('ip-fr-end').value = range?.endHost??'';
+  document.getElementById('ip-fr-label').value = range?.label||'';
+  document.getElementById('ip-fr-type').value = range?.rangeType||'STATIC';
+  document.getElementById('ip-fr-error').classList.add('hidden');
+  ipUpdateRangePreview();
+  ipOpenModal('ip-modal-range');
+}
+function ipUpdateRangePreview() {
+  const s = parseInt(document.getElementById('ip-fr-start').value);
+  const e = parseInt(document.getElementById('ip-fr-end').value);
+  const prev = document.getElementById('ip-fr-preview');
+  if (isNaN(s)||isNaN(e)||!ipCurrentNetwork?.cidrInfo) { prev.classList.add('hidden'); return; }
+  const info = ipCurrentNetwork.cidrInfo;
+  prev.textContent = `${ipInt2str(info.networkBase+s)} → ${ipInt2str(info.networkBase+e)} (${Math.max(0,e-s+1)} addr.)`;
+  prev.classList.remove('hidden');
+}
+document.getElementById('ip-fr-start').addEventListener('input', ipUpdateRangePreview);
+document.getElementById('ip-fr-end').addEventListener('input', ipUpdateRangePreview);
+document.getElementById('ip-form-range').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('ip-fr-id').value;
+  const body = { startHost:parseInt(document.getElementById('ip-fr-start').value), endHost:parseInt(document.getElementById('ip-fr-end').value),
+    label:document.getElementById('ip-fr-label').value, rangeType:document.getElementById('ip-fr-type').value };
+  const errEl = document.getElementById('ip-fr-error'); errEl.classList.add('hidden');
+  try {
+    const url = id?`/api/ip-networks/${ipCurrentNetwork.id}/ranges/${id}`:`/api/ip-networks/${ipCurrentNetwork.id}/ranges`;
+    const res = await fetch(url, { method:id?'PATCH':'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent=data.error||'Erreur'; errEl.classList.remove('hidden'); return; }
+    ipCloseModal('ip-modal-range');
+    showToast(id?'Plage mise à jour':'Plage créée', 'success');
+    await ipRefreshDetail();
+  } catch { errEl.textContent='Erreur réseau'; errEl.classList.remove('hidden'); }
+});
+async function ipDelRange(id) {
+  if (!confirm('Supprimer cette plage ?')) return;
+  const res = await fetch(`/api/ip-networks/${ipCurrentNetwork.id}/ranges/${id}`, { method:'DELETE', credentials:'include' });
+  if (res.ok) { showToast('Plage supprimée', 'success'); await ipRefreshDetail(); } else showToast('Erreur', 'error');
+}
+
+// Import CSV réseaux
+document.getElementById('ip-do-import-networks').addEventListener('click', async () => {
+  const file = document.getElementById('ip-import-networks-file').files[0]; if (!file) return;
+  const csv = await file.text(), skipErrors = document.getElementById('ip-import-networks-skip').checked;
+  const res = await fetch('/api/ip-networks/import', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({csv,skipErrors}) });
+  const data = await res.json();
+  const el = document.getElementById('ip-import-networks-result'); el.classList.remove('hidden');
+  if (res.ok) { el.className='text-sm text-emerald-700'; el.textContent=`${data.created} réseau(x) importé(s).${data.errors.length?` ${data.errors.length} erreur(s).`:''}`; await ipLoadNetworks(); }
+  else { el.className='text-sm text-red-600'; el.textContent=data.error||'Erreur'; }
+});
+// Import CSV adresses
+document.getElementById('ip-do-import-addresses').addEventListener('click', async () => {
+  const file = document.getElementById('ip-import-addresses-file').files[0]; if (!file) return;
+  const csv = await file.text(), skipErrors = document.getElementById('ip-import-addresses-skip').checked;
+  const res = await fetch(`/api/ip-networks/${ipCurrentNetwork.id}/addresses/import`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({csv,skipErrors}) });
+  const data = await res.json();
+  const el = document.getElementById('ip-import-addresses-result'); el.classList.remove('hidden');
+  if (res.ok) { el.className='text-sm text-emerald-700'; el.textContent=`${data.created} adresse(s) importée(s).${data.errors.length?` ${data.errors.length} erreur(s).`:''}`; await ipRefreshDetail(); }
+  else { el.className='text-sm text-red-600'; el.textContent=data.error||'Erreur'; }
+});
+
+// Chargement
+async function ipLoadNetworks() {
+  const res = await fetch('/api/ip-networks', { credentials:'include' });
+  ipNetworks = await res.json();
+  ipRenderList(document.getElementById('ip-search').value.toLowerCase().trim());
+}
+async function ipRefreshDetail() {
+  if (!ipCurrentNetwork) return;
+  const res = await fetch(`/api/ip-networks/${ipCurrentNetwork.id}`, { credentials:'include' });
+  const data = await res.json();
+  ipCurrentNetwork = data; ipCurrentAddresses = data.addresses||[]; ipCurrentRanges = data.ranges||[];
+  ipRenderDetail();
+}
+
+// Écouteurs
+document.getElementById('ip-search').addEventListener('input', e => ipRenderList(e.target.value.toLowerCase().trim()));
+document.getElementById('ip-search-addresses').addEventListener('input', e => ipRenderAddresses(e.target.value.toLowerCase().trim()));
+document.getElementById('ip-btn-back').addEventListener('click', () => {
+  document.getElementById('ip-view-detail').classList.add('hidden');
+  document.getElementById('ip-view-list').classList.remove('hidden');
+  ipCurrentNetwork = null;
+  ipLoadNetworks();
+  updateFabForArticle('ip-addressing');
+});
+document.getElementById('ip-btn-edit-network').addEventListener('click', () => ipOpenNetworkForm(ipCurrentNetwork));
+document.getElementById('ip-btn-add-range').addEventListener('click', () => ipOpenRangeForm());
+document.getElementById('ip-btn-import-networks').addEventListener('click', () => {
+  document.getElementById('ip-import-networks-result').classList.add('hidden');
+  document.getElementById('ip-import-networks-file').value = '';
+  ipOpenModal('ip-modal-import-networks');
+});
+document.getElementById('ip-btn-import-addresses').addEventListener('click', () => {
+  document.getElementById('ip-import-addresses-result').classList.add('hidden');
+  document.getElementById('ip-import-addresses-file').value = '';
+  ipOpenModal('ip-modal-import-addresses');
+});
+
+// Affichage du panneau IP depuis selectArticle
+function ipShowPanel() {
+  document.getElementById('knowledge-empty-state').classList.add('hidden');
+  document.getElementById('knowledge-article-panel').classList.add('hidden');
+  document.getElementById('ip-panel').classList.remove('hidden');
+  document.getElementById('ip-panel').classList.add('flex');
+  // Remettre sur la vue liste si pas de réseau ouvert
+  if (!ipCurrentNetwork) {
+    document.getElementById('ip-view-detail').classList.add('hidden');
+    document.getElementById('ip-view-list').classList.remove('hidden');
+  }
+  ipLoadNetworks();
+}
+function ipHidePanel() {
+  document.getElementById('ip-panel').classList.add('hidden');
+  document.getElementById('ip-panel').classList.remove('flex');
+}
+
+// ══ Fin plan d'adressage ═══════════════════════════════════════════════════════
 
 requireLogin().then(user => {
   currentUser = user;
