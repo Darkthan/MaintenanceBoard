@@ -224,6 +224,12 @@
               <div class="bg-white rounded-xl border border-slate-200">
                 <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
                   <h4 class="text-xs font-semibold text-slate-600 flex-1">Adresses IP</h4>
+                  <p id="ip-bulk-error" class="hidden text-xs text-red-600"></p>
+                  <button id="ip-btn-bulk-edit" class="hidden px-2.5 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition" title="Modifier les adresses">✎</button>
+                  <div id="ip-bulk-actions" class="hidden flex items-center gap-2">
+                    <button id="ip-btn-bulk-cancel" class="px-2.5 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition">Annuler</button>
+                    <button id="ip-btn-bulk-save" class="px-2.5 py-1.5 text-xs text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition">Enregistrer</button>
+                  </div>
                   <input id="ip-search-addresses" type="text" placeholder="Rechercher…"
                     class="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs w-40 focus:outline-none focus:ring-2 focus:ring-emerald-400"/>
                 </div>
@@ -1681,6 +1687,7 @@ const IP_RANGE_COLORS = {
 };
 
 let ipNetworks = [], ipCurrentNetwork = null, ipCurrentAddresses = [], ipCurrentRanges = [];
+let ipBulkEditing = false, ipBulkDeletedIds = new Set(), ipBulkDraft = new Map();
 
 // Modals
 document.querySelectorAll('.ip-modal-close').forEach(btn =>
@@ -1727,6 +1734,7 @@ async function ipOpenDetail(id) {
     const res = await fetch(`/api/ip-networks/${id}`, { credentials: 'include' });
     const data = await res.json();
     ipCurrentNetwork = data; ipCurrentAddresses = data.addresses||[]; ipCurrentRanges = data.ranges||[];
+    ipSetBulkEditing(false);
     ipRenderDetail();
     document.getElementById('ip-view-list').classList.add('hidden');
     document.getElementById('ip-view-detail').classList.remove('hidden');
@@ -1754,6 +1762,7 @@ function ipRenderDetail() {
     document.getElementById('ip-detail-admin-actions').classList.add('flex');
     document.getElementById('ip-edit-net-wrap').classList.remove('hidden');
     document.getElementById('ip-btn-add-range').classList.remove('hidden');
+    document.getElementById('ip-btn-bulk-edit').classList.remove('hidden');
   }
   ipRenderRanges(); ipRenderAddresses();
 }
@@ -1812,23 +1821,73 @@ function ipRenderAddresses(filter = '') {
     const off = info ? ipOffset(ipCurrentNetwork.cidr, a.ip) : null;
     const rng = off !== null ? ipCurrentRanges.find(r => off >= r.startHost && off <= r.endHost) : null;
     const col = rng ? (IP_RANGE_COLORS[rng.rangeType]||IP_RANGE_COLORS.OTHER) : null;
-    return `<tr class="border-b border-slate-50 hover:bg-slate-50">
-      <td class="px-3 py-2 font-mono text-xs font-bold text-slate-800">${escapeHtml(a.ip)}</td>
-      <td class="px-3 py-2 text-xs text-slate-600">${a.hostname
+    const deleted = ipBulkDeletedIds.has(a.id);
+    const editable = ipBulkEditing && !a.autoDiscovered;
+    const draft = editable ? (ipBulkDraft.get(a.id) || a) : a;
+    return `<tr class="border-b border-slate-50 hover:bg-slate-50 ${deleted?'opacity-40 line-through bg-red-50':''}" data-ip-address-id="${escapeHtml(a.id)}">
+      <td class="px-3 py-2 font-mono text-xs font-bold text-slate-800">${editable
+        ? `<input data-ip-field="ip" value="${escapeHtml(draft.ip)}" class="w-32 px-2 py-1 border border-slate-200 rounded font-mono"/>`
+        : escapeHtml(a.ip)}</td>
+      <td class="px-3 py-2 text-xs text-slate-600">${editable
+        ? `<input data-ip-field="hostname" value="${escapeHtml(draft.hostname||'')}" class="w-32 px-2 py-1 border border-slate-200 rounded"/>`
+        : a.hostname
         ? (a.equipment?.id
           ? `<a href="/equipment.html?focus=${encodeURIComponent(a.equipment.id)}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline">${escapeHtml(a.hostname)}</a>`
           : escapeHtml(a.hostname))
         : '<span class="text-slate-300">—</span>'}</td>
-      <td class="px-3 py-2 text-xs">${a.equipmentType?`<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-xs">${escapeHtml(a.equipmentType)}</span>`:'<span class="text-slate-300">—</span>'}</td>
-      <td class="px-3 py-2 text-xs text-slate-500 max-w-[120px] truncate">${a.description?escapeHtml(a.description):'<span class="text-slate-300">—</span>'}</td>
+      <td class="px-3 py-2 text-xs">${editable
+        ? `<input data-ip-field="equipmentType" value="${escapeHtml(draft.equipmentType||'')}" class="w-28 px-2 py-1 border border-slate-200 rounded"/>`
+        : a.equipmentType?`<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-xs">${escapeHtml(a.equipmentType)}</span>`:'<span class="text-slate-300">—</span>'}</td>
+      <td class="px-3 py-2 text-xs text-slate-500 max-w-[120px] truncate">${editable
+        ? `<input data-ip-field="description" value="${escapeHtml(draft.description||'')}" class="w-40 px-2 py-1 border border-slate-200 rounded"/>`
+        : a.description?escapeHtml(a.description):'<span class="text-slate-300">—</span>'}</td>
       <td class="px-3 py-2 text-xs">${rng?`<span class="px-1.5 py-0.5 rounded-full text-xs ${col.light}">${escapeHtml(rng.label)}</span>`:'<span class="text-slate-300">—</span>'}</td>
-      <td class="px-3 py-2">${isAdmin()&&!a.autoDiscovered?`<div class="flex gap-1">
-        <button class="ip-edit-addr text-slate-300 hover:text-blue-500 text-xs" data-id="${a.id}">✎</button>
-        <button class="ip-del-addr text-slate-300 hover:text-red-500 text-xs" data-id="${a.id}">✕</button>
-      </div>`:''}</td></tr>`;
+      <td class="px-3 py-2">${editable?`<button class="ip-bulk-toggle-delete text-xs ${deleted?'text-emerald-600':'text-red-500'}" data-id="${a.id}">${deleted?'↶':'✕'}</button>`:''}</td></tr>`;
   }).join('');
-  tbody.querySelectorAll('.ip-edit-addr').forEach(b => b.addEventListener('click', () => ipOpenAddrForm(ipCurrentAddresses.find(a=>a.id===b.dataset.id))));
-  tbody.querySelectorAll('.ip-del-addr').forEach(b => b.addEventListener('click', () => ipDelAddr(b.dataset.id)));
+  tbody.querySelectorAll('[data-ip-field]').forEach(input => input.addEventListener('input', () => {
+    const row = input.closest('tr[data-ip-address-id]');
+    const draft = ipBulkDraft.get(row.dataset.ipAddressId);
+    if (draft) draft[input.dataset.ipField] = input.value;
+  }));
+  tbody.querySelectorAll('.ip-bulk-toggle-delete').forEach(b => b.addEventListener('click', () => {
+    if (ipBulkDeletedIds.has(b.dataset.id)) ipBulkDeletedIds.delete(b.dataset.id);
+    else ipBulkDeletedIds.add(b.dataset.id);
+    ipRenderAddresses(document.getElementById('ip-search-addresses').value.toLowerCase().trim());
+  }));
+}
+
+function ipSetBulkEditing(enabled) {
+  ipBulkEditing = enabled;
+  ipBulkDeletedIds = new Set();
+  ipBulkDraft = enabled
+    ? new Map(ipCurrentAddresses.filter(address => !address.autoDiscovered).map(address => [address.id, {
+        id: address.id,
+        ip: address.ip,
+        hostname: address.hostname || '',
+        equipmentType: address.equipmentType || '',
+        description: address.description || '',
+      }]))
+    : new Map();
+  document.getElementById('ip-btn-bulk-edit').classList.toggle('hidden', enabled || !isAdmin());
+  document.getElementById('ip-bulk-actions').classList.toggle('hidden', !enabled);
+  document.getElementById('ip-bulk-error').classList.add('hidden');
+  ipRenderAddresses(document.getElementById('ip-search-addresses').value.toLowerCase().trim());
+}
+
+async function ipSaveBulkAddresses() {
+  const errEl = document.getElementById('ip-bulk-error');
+  const updates = [...ipBulkDraft.values()].filter(item => !ipBulkDeletedIds.has(item.id));
+  try {
+    const res = await fetch(`/api/ip-networks/${ipCurrentNetwork.id}/addresses/bulk`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+      body:JSON.stringify({ updates, deleteIds:[...ipBulkDeletedIds] })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent=data.error||'Erreur'; errEl.classList.remove('hidden'); return; }
+    ipSetBulkEditing(false);
+    showToast(`${data.updated} IP mise(s) à jour, ${data.deleted} supprimée(s)`, 'success');
+    await ipRefreshDetail();
+  } catch { errEl.textContent='Erreur réseau'; errEl.classList.remove('hidden'); }
 }
 
 // Formulaires réseau
@@ -2013,6 +2072,7 @@ async function ipRefreshDetail() {
 document.getElementById('ip-search').addEventListener('input', e => ipRenderList(e.target.value.toLowerCase().trim()));
 document.getElementById('ip-search-addresses').addEventListener('input', e => ipRenderAddresses(e.target.value.toLowerCase().trim()));
 document.getElementById('ip-btn-back').addEventListener('click', () => {
+  ipSetBulkEditing(false);
   document.getElementById('ip-view-detail').classList.add('hidden');
   document.getElementById('ip-view-list').classList.remove('hidden');
   ipCurrentNetwork = null;
@@ -2021,6 +2081,9 @@ document.getElementById('ip-btn-back').addEventListener('click', () => {
 });
 document.getElementById('ip-btn-edit-network').addEventListener('click', () => ipOpenNetworkForm(ipCurrentNetwork));
 document.getElementById('ip-btn-add-range').addEventListener('click', () => ipOpenRangeForm());
+document.getElementById('ip-btn-bulk-edit').addEventListener('click', () => ipSetBulkEditing(true));
+document.getElementById('ip-btn-bulk-cancel').addEventListener('click', () => ipSetBulkEditing(false));
+document.getElementById('ip-btn-bulk-save').addEventListener('click', ipSaveBulkAddresses);
 document.getElementById('ip-btn-import-networks').addEventListener('click', () => {
   document.getElementById('ip-import-networks-result').classList.add('hidden');
   document.getElementById('ip-import-networks-file').value = '';

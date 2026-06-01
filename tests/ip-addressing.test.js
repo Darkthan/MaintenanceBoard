@@ -13,6 +13,7 @@ jest.mock('../src/middleware/roles', () => ({
 }));
 
 jest.mock('../src/lib/prisma', () => ({
+  $transaction: jest.fn(),
   ipNetwork: {
     create: jest.fn(),
     findMany: jest.fn(),
@@ -27,7 +28,9 @@ jest.mock('../src/lib/prisma', () => ({
   ipAddress: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
-    upsert: jest.fn()
+    upsert: jest.fn(),
+    update: jest.fn(),
+    deleteMany: jest.fn()
   },
   equipment: {
     findMany: jest.fn()
@@ -51,6 +54,7 @@ describe('ip addressing gateways', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.equipment.findMany.mockResolvedValue([]);
+    prisma.$transaction.mockImplementation(async callback => callback(prisma));
   });
 
   it('enregistre une passerelle personnalisee a la creation', async () => {
@@ -290,5 +294,46 @@ describe('ip addressing gateways', () => {
     expect(res.status).toBe(200);
     expect(res.body.errors[0].error).toContain('hors du réseau');
     expect(prisma.ipAddress.upsert).not.toHaveBeenCalled();
+  });
+
+  it('applique les modifications et suppressions groupees dans une transaction', async () => {
+    prisma.ipNetwork.findUnique.mockResolvedValue({ cidr: '10.0.0.0/24' });
+    prisma.ipAddress.findMany.mockResolvedValue([
+      { id: 'address-update', networkId: 'network-1', ip: '10.0.0.15' },
+      { id: 'address-delete', networkId: 'network-1', ip: '10.0.0.16' }
+    ]);
+    prisma.ipAddress.update.mockResolvedValue({ id: 'address-update' });
+    prisma.ipAddress.deleteMany.mockResolvedValue({ count: 1 });
+
+    const res = await request(buildApp())
+      .post('/api/ip-networks/network-1/addresses/bulk')
+      .send({
+        updates: [{ id: 'address-update', ip: '10.0.0.25', hostname: 'pc-cdi-25', equipmentType: 'PC', description: 'Déplacé' }],
+        deleteIds: ['address-delete']
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ updated: 1, deleted: 1 });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.ipAddress.deleteMany).toHaveBeenCalledWith({
+      where: { networkId: 'network-1', id: { in: ['address-delete'] } }
+    });
+    expect(prisma.ipAddress.update).toHaveBeenCalledWith({
+      where: { id: 'address-update' },
+      data: { ip: '10.0.0.25', hostname: 'pc-cdi-25', equipmentType: 'PC', description: 'Déplacé' }
+    });
+  });
+
+  it('refuse une modification groupee hors du reseau avant transaction', async () => {
+    prisma.ipNetwork.findUnique.mockResolvedValue({ cidr: '10.0.0.0/24' });
+    prisma.ipAddress.findMany.mockResolvedValue([{ id: 'address-update', networkId: 'network-1', ip: '10.0.0.15' }]);
+
+    const res = await request(buildApp())
+      .post('/api/ip-networks/network-1/addresses/bulk')
+      .send({ updates: [{ id: 'address-update', ip: '192.168.1.15' }], deleteIds: [] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('hors du réseau');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

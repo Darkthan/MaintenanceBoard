@@ -456,6 +456,66 @@ router.get('/:id/addresses/export', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/ip-networks/:id/addresses/bulk
+router.post('/:id/addresses/bulk', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const updates = Array.isArray(req.body.updates) ? req.body.updates : [];
+    const deleteIds = Array.isArray(req.body.deleteIds) ? req.body.deleteIds : [];
+    if (updates.some(item => !item?.id) || deleteIds.some(id => !id)) {
+      return res.status(400).json({ error: 'Identifiant d’adresse manquant' });
+    }
+    const updateIds = updates.map(item => item.id);
+    if (new Set(updateIds).size !== updateIds.length || deleteIds.some(id => updateIds.includes(id))) {
+      return res.status(400).json({ error: 'Brouillon de modification incohérent' });
+    }
+    const network = await prisma.ipNetwork.findUnique({ where: { id: req.params.id }, select: { cidr: true } });
+    if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
+
+    const { networkBase, totalHosts } = parseCidr(network.cidr);
+    const ids = [...new Set([...updates.map(item => item.id), ...deleteIds].filter(Boolean))];
+    const current = ids.length
+      ? await prisma.ipAddress.findMany({ where: { networkId: req.params.id, id: { in: ids } } })
+      : [];
+    if (current.length !== ids.length) {
+      return res.status(400).json({ error: 'Une adresse à modifier est introuvable dans ce réseau' });
+    }
+
+    const normalizedUpdates = updates.map(item => {
+      const ip = String(item.ip || '').trim();
+      const ipInt = ipToInt(ip);
+      if (ipInt < networkBase || ipInt >= networkBase + totalHosts) {
+        throw new Error(`IP hors du réseau ${network.cidr}: "${ip}"`);
+      }
+      return {
+        id: item.id,
+        data: {
+          ip,
+          hostname: String(item.hostname || '').trim() || null,
+          equipmentType: String(item.equipmentType || '').trim() || null,
+          description: String(item.description || '').trim() || null,
+        }
+      };
+    });
+
+    await prisma.$transaction(async tx => {
+      if (deleteIds.length) {
+        await tx.ipAddress.deleteMany({ where: { networkId: req.params.id, id: { in: deleteIds } } });
+      }
+      for (const item of normalizedUpdates) {
+        await tx.ipAddress.update({ where: { id: item.id }, data: item.data });
+      }
+    });
+
+    res.json({ updated: normalizedUpdates.length, deleted: deleteIds.length });
+  } catch (err) {
+    if (err.message.includes('Adresse IP') || err.message.includes('hors du réseau')) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Une adresse IP est présente plusieurs fois dans ce réseau' });
+    next(err);
+  }
+});
+
 // POST /api/ip-networks/:id/addresses
 router.post('/:id/addresses',
   requireAuth, requireAdmin,
