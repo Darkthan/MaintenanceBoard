@@ -262,7 +262,7 @@
 
       try {
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Autorisation…'; }
-        const res = await fetch(form.action, {
+        const res = await fetch(form.getAttribute('action'), {
           method: 'POST',
           body: new URLSearchParams(fd),
           credentials: 'include',
