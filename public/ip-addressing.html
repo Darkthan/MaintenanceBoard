@@ -466,6 +466,7 @@ async function openNetworkDetail(id) {
     renderDetail();
     document.getElementById('view-list').classList.add('hidden');
     document.getElementById('view-detail').classList.remove('hidden');
+    updateIpFab();
   } catch { showToast('Erreur lors du chargement', false); }
 }
 
@@ -877,6 +878,7 @@ document.getElementById('btn-back').addEventListener('click', () => {
   document.getElementById('view-list').classList.remove('hidden');
   currentNetwork = null;
   loadNetworks();
+  updateIpFab();
 });
 
 document.getElementById('btn-add-network').addEventListener('click', () => openNetworkForm());
@@ -899,14 +901,53 @@ function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Mode embarqué (iframe depuis knowledge-base) ──────────────────────────────
+const isEmbedded = new URLSearchParams(window.location.search).get('embedded') === '1';
+
+if (isEmbedded) {
+  document.documentElement.classList.add('embedded-mode');
+  const style = document.createElement('style');
+  style.textContent = `
+    .embedded-mode body { background: transparent !important; }
+    .embedded-mode #sidebar { display: none !important; }
+    .embedded-mode main { margin-left: 0 !important; min-height: auto !important; }
+    .embedded-mode main > div:first-child { display: none !important; } /* header */
+  `;
+  document.head.appendChild(style);
+}
+
+// ── FAB contextuel (visible en mode embarqué uniquement pour ne pas doublon) ──
+function updateIpFab() {
+  if (!isAdmin) return;
+  const fab = document.getElementById('ip-fab-wrap');
+  if (!fab) return;
+  const inDetail = !document.getElementById('view-detail').classList.contains('hidden');
+  document.getElementById('ip-fab-item-range').classList.toggle('hidden', !inDetail);
+  document.getElementById('ip-fab-item-address').classList.toggle('hidden', !inDetail);
+}
+
+// Écouter les messages du parent (knowledge-base.html)
+window.addEventListener('message', e => {
+  if (!e.data || e.data.type !== 'kb-action') return;
+  if (e.data.action === 'new-network') openNetworkForm();
+  if (e.data.action === 'new-range' && currentNetwork) openRangeForm();
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  const user = await initLayout('ip-addressing');
+  const user = isEmbedded
+    ? await (async () => {
+        const r = await fetch('/api/auth/me', { credentials: 'include' });
+        return r.ok ? r.json() : null;
+      })()
+    : await initLayout('ip-addressing');
   if (!user) return;
   isAdmin = user.role === 'ADMIN';
-  if (isAdmin) {
-    document.getElementById('admin-actions').classList.remove('hidden');
-    document.getElementById('admin-actions').classList.add('flex');
+  if (!isEmbedded) {
+    if (isAdmin) {
+      document.getElementById('admin-actions').classList.remove('hidden');
+      document.getElementById('admin-actions').classList.add('flex');
+    }
   }
   await loadNetworks();
 });

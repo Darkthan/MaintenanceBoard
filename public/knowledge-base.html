@@ -73,12 +73,6 @@
         <button id="refresh-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">
           Rafraîchir
         </button>
-        <button id="new-diagram-btn" type="button" class="hidden rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition">
-          Nouveau plan réseau
-        </button>
-        <button id="new-article-btn" type="button" class="hidden rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition">
-          Nouvel article
-        </button>
       </div>
     </header>
 
@@ -155,6 +149,42 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- ── FAB speed-dial ────────────────────────────────────────────────────── -->
+<div id="kb-fab-wrap" class="hidden fixed bottom-6 right-6 z-40 flex flex-col-reverse items-end gap-3">
+  <!-- Actions -->
+  <div id="kb-fab-actions" class="hidden flex-col-reverse gap-2 items-end pointer-events-none opacity-0 transition-all duration-200">
+    <div id="kb-fab-item-article" class="hidden flex items-center gap-2">
+      <span class="bg-white rounded-lg shadow-md px-3 py-1.5 text-sm font-medium text-slate-700 whitespace-nowrap">Nouvel article</span>
+      <button id="fab-new-article" class="w-11 h-11 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center hover:bg-blue-700 transition flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      </button>
+    </div>
+    <div id="kb-fab-item-diagram" class="hidden flex items-center gap-2">
+      <span class="bg-white rounded-lg shadow-md px-3 py-1.5 text-sm font-medium text-slate-700 whitespace-nowrap">Nouveau plan réseau</span>
+      <button id="fab-new-diagram" class="w-11 h-11 rounded-full bg-purple-600 text-white shadow-lg flex items-center justify-center hover:bg-purple-700 transition flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+      </button>
+    </div>
+    <div id="kb-fab-item-ip-network" class="hidden flex items-center gap-2">
+      <span class="bg-white rounded-lg shadow-md px-3 py-1.5 text-sm font-medium text-slate-700 whitespace-nowrap">Nouveau réseau IP</span>
+      <button id="fab-new-ip-network" class="w-11 h-11 rounded-full bg-emerald-600 text-white shadow-lg flex items-center justify-center hover:bg-emerald-700 transition flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+      </button>
+    </div>
+    <div id="kb-fab-item-ip-range" class="hidden flex items-center gap-2">
+      <span class="bg-white rounded-lg shadow-md px-3 py-1.5 text-sm font-medium text-slate-700 whitespace-nowrap">Nouvelle plage réseau</span>
+      <button id="fab-new-ip-range" class="w-11 h-11 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center hover:bg-teal-700 transition flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+      </button>
+    </div>
+  </div>
+  <!-- Bouton principal -->
+  <button id="kb-fab-btn" class="w-14 h-14 rounded-full bg-blue-600 text-white shadow-xl flex items-center justify-center hover:bg-blue-700 transition-all duration-200" aria-label="Créer">
+    <svg id="kb-fab-icon-plus" class="w-6 h-6 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    <svg id="kb-fab-icon-close" class="w-6 h-6 hidden transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+  </button>
 </div>
 
 <div id="knowledge-editor-modal" class="hidden fixed inset-0 z-[120] bg-slate-950/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -374,7 +404,7 @@ const articleMetaEl = document.getElementById('article-meta');
 const articleContentEl = document.getElementById('article-content');
 const articleDocumentsWrapEl = document.getElementById('article-documents-wrap');
 const articleDocumentsEl = document.getElementById('article-documents');
-const newArticleBtnEl = document.getElementById('new-article-btn');
+const newArticleBtnEl = null; // déplacé vers le FAB speed-dial
 const articleAdminActionsEl = document.getElementById('article-admin-actions');
 const editorModalEl = document.getElementById('knowledge-editor-modal');
 const editorFormEl = document.getElementById('knowledge-editor-form');
@@ -851,16 +881,20 @@ function renderArticleList() {
 
   articleListEl.innerHTML = knowledgeArticles.map(article => {
     const isNet = article.type === 'network-diagram';
+    const isIpPlan = article.type === 'ip-addressing';
     const activeClass = selectedArticleId === article.id
-      ? (isNet ? 'border-purple-200 bg-purple-50' : 'border-blue-200 bg-blue-50')
-      : (isNet ? 'border-slate-200 bg-white hover:border-purple-200 hover:bg-purple-50' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50');
+      ? (isNet ? 'border-purple-200 bg-purple-50' : isIpPlan ? 'border-emerald-200 bg-emerald-50' : 'border-blue-200 bg-blue-50')
+      : (isNet ? 'border-slate-200 bg-white hover:border-purple-200 hover:bg-purple-50' : isIpPlan ? 'border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50');
+    const labelColor = isNet ? 'text-purple-600' : isIpPlan ? 'text-emerald-600' : (article.category ? 'text-blue-600' : 'text-slate-400');
     const categoryLabel = isNet
       ? `<span class="inline-flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>Plan réseau${article.category ? ' · ' + escapeHtml(article.category) : ''}</span>`
+      : isIpPlan
+      ? `<span class="inline-flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>Plan d'adressage${article.category ? ' · ' + escapeHtml(article.category) : ''}</span>`
       : escapeHtml(article.category || 'Documentation');
     return `
     <button type="button" data-article-id="${article.id}"
       class="w-full rounded-2xl border p-4 text-left transition ${activeClass}">
-      <p class="text-xs font-semibold uppercase tracking-wide ${isNet ? 'text-purple-600' : article.category ? 'text-blue-600' : 'text-slate-400'}">${categoryLabel}</p>
+      <p class="text-xs font-semibold uppercase tracking-wide ${labelColor}">${categoryLabel}</p>
       <h3 class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(article.title)}</h3>
       <p class="mt-2 text-sm leading-6 text-slate-500 line-clamp-3">${escapeHtml(article.summary || article.excerpt || 'Aucun résumé.')}</p>
       <p class="mt-3 text-[11px] text-slate-400">${escapeHtml(new Date(article.updatedAt).toLocaleDateString('fr-FR'))}</p>
@@ -886,10 +920,19 @@ async function selectArticle(articleId) {
     articlePanelEl.classList.remove('hidden');
 
     const isNetworkDiagram = article.type === 'network-diagram';
-    articleCategoryEl.className = `text-xs font-semibold uppercase tracking-wide ${isNetworkDiagram ? 'text-purple-600' : 'text-blue-600'}`;
-    articleCategoryEl.textContent = isNetworkDiagram
-      ? `Plan réseau${article.category ? ' · ' + article.category : ''}`
-      : (article.category || 'Documentation');
+    const isIpAddressing = article.type === 'ip-addressing';
+
+    // Catégorie + couleur
+    if (isNetworkDiagram) {
+      articleCategoryEl.className = 'text-xs font-semibold uppercase tracking-wide text-purple-600';
+      articleCategoryEl.textContent = `Plan réseau${article.category ? ' · ' + article.category : ''}`;
+    } else if (isIpAddressing) {
+      articleCategoryEl.className = 'text-xs font-semibold uppercase tracking-wide text-emerald-600';
+      articleCategoryEl.textContent = `Plan d'adressage${article.category ? ' · ' + article.category : ''}`;
+    } else {
+      articleCategoryEl.className = 'text-xs font-semibold uppercase tracking-wide text-blue-600';
+      articleCategoryEl.textContent = article.category || 'Documentation';
+    }
     articleTitleEl.textContent = article.title;
     articleSummaryEl.textContent = article.summary || '';
     articleTagsEl.innerHTML = (article.tags || []).map(tag => `
@@ -900,26 +943,49 @@ async function selectArticle(articleId) {
       article.updatedAt ? `le ${formatDateTime(article.updatedAt)}` : null
     ].filter(Boolean).join(' ');
 
-    if (isNetworkDiagram) {
+    if (isIpAddressing) {
+      // Rendu iframe plein-panneau
+      const docWrap = document.getElementById('article-documents-wrap');
+      if (docWrap) docWrap.classList.add('hidden');
+      articleContentEl.innerHTML = '';
+      let iframe = document.getElementById('ip-addressing-iframe');
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'ip-addressing-iframe';
+        iframe.src = '/ip-addressing.html?embedded=1';
+        iframe.style.cssText = 'width:100%;height:calc(100vh - 280px);min-height:500px;border:none;border-radius:0.75rem;';
+        iframe.title = 'Plan d\'adressage IP';
+      }
+      articleContentEl.appendChild(iframe);
+    } else if (isNetworkDiagram) {
       if (article.diagramSvg) {
         articleContentEl.innerHTML = `<div class="w-full overflow-auto rounded-xl border border-slate-200 bg-white p-3">${DOMPurify.sanitize(article.diagramSvg, { USE_PROFILES: { svg: true, svgFilters: true } })}</div>`;
       } else {
-        articleContentEl.innerHTML = '<p class="text-slate-400 text-sm italic">Aucun diagramme enregistré. Cliquez sur Modifier pour créer le plan.</p>';
+        articleContentEl.textContent = 'Aucun diagramme enregistré. Cliquez sur Modifier pour créer le plan.';
+        articleContentEl.className = 'text-slate-400 text-sm italic';
       }
     } else {
       articleContentEl.innerHTML = renderRichText(article.content || '');
       initMermaidInEl(articleContentEl);
     }
-    renderArticleDocuments(article);
-    applyArticleSearchHighlight();
+
+    if (!isIpAddressing) {
+      renderArticleDocuments(article);
+      applyArticleSearchHighlight();
+    }
+
+    // FAB : masquer les items IP si pas en mode ip-addressing
+    updateFabForArticle(article.type);
 
     if (isAdmin()) {
       articleAdminActionsEl.classList.remove('hidden');
       articleAdminActionsEl.classList.add('flex');
       document.getElementById('edit-article-btn').onclick = () => {
         if (isNetworkDiagram) openDiagramEditor(article);
-        else openEditor(article);
+        else if (!isIpAddressing) openEditor(article);
       };
+      // Masquer le bouton Modifier pour ip-addressing (géré depuis l'iframe)
+      document.getElementById('edit-article-btn').classList.toggle('hidden', isIpAddressing);
       document.getElementById('delete-article-btn').onclick = () => deleteArticle(article.id, article.title);
     }
   } catch (err) {
@@ -992,7 +1058,7 @@ document.getElementById('clear-category-btn').addEventListener('click', () => {
   loadKnowledgeArticles();
 });
 document.getElementById('refresh-btn').addEventListener('click', loadKnowledgeArticles);
-newArticleBtnEl.addEventListener('click', () => openEditor());
+// newArticleBtnEl retiré du header — géré par le FAB speed-dial (#fab-new-article)
 document.getElementById('close-editor-btn').addEventListener('click', closeEditor);
 document.getElementById('cancel-editor-btn').addEventListener('click', closeEditor);
 addImageBtnEl.addEventListener('click', () => editorImageInputEl.click());
@@ -1310,15 +1376,75 @@ window.addEventListener('message', event => {
 document.getElementById('close-drawio-viewer-btn').addEventListener('click', closeDrawioViewer);
 drawioViewerModalEl.addEventListener('click', event => { if (event.target === drawioViewerModalEl) closeDrawioViewer(); });
 
-const newDiagramBtnEl = document.getElementById('new-diagram-btn');
-newDiagramBtnEl.addEventListener('click', () => openDiagramEditor());
+// ── FAB speed-dial ────────────────────────────────────────────────────────────
+let fabOpen = false;
+
+function updateFabForArticle(type) {
+  const isIp = type === 'ip-addressing';
+  document.getElementById('kb-fab-item-article').classList.toggle('hidden', isIp);
+  document.getElementById('kb-fab-item-diagram').classList.toggle('hidden', isIp);
+  document.getElementById('kb-fab-item-ip-network').classList.toggle('hidden', !isIp);
+  document.getElementById('kb-fab-item-ip-range').classList.toggle('hidden', !isIp);
+  // Couleur du bouton principal selon contexte
+  const btn = document.getElementById('kb-fab-btn');
+  btn.className = btn.className.replace(/bg-\w+-600|hover:bg-\w+-700/g, '').trim();
+  btn.classList.add(isIp ? 'bg-emerald-600' : 'bg-blue-600', isIp ? 'hover:bg-emerald-700' : 'hover:bg-blue-700');
+  closeFab();
+}
+
+function openFab() {
+  fabOpen = true;
+  const actions = document.getElementById('kb-fab-actions');
+  actions.classList.remove('hidden');
+  actions.classList.add('flex');
+  actions.classList.remove('pointer-events-none', 'opacity-0');
+  actions.classList.add('pointer-events-auto', 'opacity-100');
+  document.getElementById('kb-fab-icon-plus').classList.add('hidden');
+  document.getElementById('kb-fab-icon-close').classList.remove('hidden');
+}
+
+function closeFab() {
+  fabOpen = false;
+  const actions = document.getElementById('kb-fab-actions');
+  actions.classList.add('pointer-events-none', 'opacity-0');
+  actions.classList.remove('pointer-events-auto', 'opacity-100');
+  document.getElementById('kb-fab-icon-plus').classList.remove('hidden');
+  document.getElementById('kb-fab-icon-close').classList.add('hidden');
+  setTimeout(() => { if (!fabOpen) actions.classList.add('hidden'); actions.classList.remove('flex'); }, 200);
+}
+
+document.getElementById('kb-fab-btn').addEventListener('click', () => { fabOpen ? closeFab() : openFab(); });
+
+document.getElementById('fab-new-article').addEventListener('click', () => { closeFab(); openEditor(); });
+document.getElementById('fab-new-diagram').addEventListener('click', () => { closeFab(); openDiagramEditor(); });
+
+document.getElementById('fab-new-ip-network').addEventListener('click', () => {
+  closeFab();
+  const iframe = document.getElementById('ip-addressing-iframe');
+  if (iframe?.contentWindow) iframe.contentWindow.postMessage({ type: 'kb-action', action: 'new-network' }, '*');
+});
+
+document.getElementById('fab-new-ip-range').addEventListener('click', () => {
+  closeFab();
+  const iframe = document.getElementById('ip-addressing-iframe');
+  if (iframe?.contentWindow) iframe.contentWindow.postMessage({ type: 'kb-action', action: 'new-range' }, '*');
+});
+
+// Fermer FAB si clic ailleurs
+document.addEventListener('click', e => {
+  if (fabOpen && !document.getElementById('kb-fab-wrap').contains(e.target)) closeFab();
+});
 
 requireLogin().then(user => {
   currentUser = user;
   renderNav('knowledge-base');
   if (isAdmin()) {
-    newArticleBtnEl.classList.remove('hidden');
-    newDiagramBtnEl.classList.remove('hidden');
+    const fabWrap = document.getElementById('kb-fab-wrap');
+    fabWrap.classList.remove('hidden');
+    fabWrap.classList.add('flex');
+    // Afficher les items KB par défaut (pas en mode IP)
+    document.getElementById('kb-fab-item-article').classList.remove('hidden');
+    document.getElementById('kb-fab-item-diagram').classList.remove('hidden');
   }
   loadKnowledgeArticles();
 });

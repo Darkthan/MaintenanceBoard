@@ -110,7 +110,7 @@ function getKnowledgeBaseArticle(articleId) {
   return listKnowledgeBaseArticles().find(article => article.id === articleId) || null;
 }
 
-const VALID_ARTICLE_TYPES = ['article', 'network-diagram'];
+const VALID_ARTICLE_TYPES = ['article', 'network-diagram', 'ip-addressing'];
 
 function validateKnowledgeBasePayload(payload, { partial = false } = {}) {
   const title = payload.title === undefined ? undefined : String(payload.title || '').trim();
