@@ -2250,7 +2250,7 @@ function dpSyncUi() {
   if (startMinuteSection) startMinuteSection.classList.add('hidden');
   if (endMinuteSection) endMinuteSection.classList.add('hidden');
 
-  if (dpStartDate && ['pick-start-time', 'pick-start-min', 'pick-end-date', 'pick-end-time', 'pick-end-min', 'done'].includes(dpStep)) {
+  if (dpStartDate && ['pick-start-time', 'pick-start-min'].includes(dpStep)) {
     dpShowStartTimeGrid();
     if (dpStartHour !== null && startMinuteSection && dpStep !== 'pick-start-time') {
       document.getElementById('dp-start-minute-grid').innerHTML =
@@ -2259,7 +2259,7 @@ function dpSyncUi() {
     }
   }
 
-  if (dpEndDate && ['pick-end-time', 'pick-end-min', 'done'].includes(dpStep)) {
+  if (dpEndDate && ['pick-end-time', 'pick-end-min'].includes(dpStep)) {
     dpShowEndTimeGrid();
     if (dpEndHour !== null && endMinuteSection && dpStep !== 'pick-end-time') {
       const sameDay = dpGetDayKey(dpStartDate) === dpGetDayKey(dpEndDate);

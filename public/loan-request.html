@@ -464,7 +464,7 @@ function lrdpShowEndTimeGrid() {
     lrdpEndDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
   document.getElementById('lrdp-end-time-grid').innerHTML = lrdpBuildTimeGrid(endKey, lrdpEndHour, 'lrdpSelectEndHour', minHour);
   document.getElementById('lrdp-time-section').classList.remove('hidden');
-  document.getElementById('lrdp-start-time-section').classList.remove('hidden');
+  document.getElementById('lrdp-start-time-section').classList.add('hidden');
   document.getElementById('lrdp-end-time-section').classList.remove('hidden');
   const em = document.getElementById('lrdp-end-minute-section');
   if (em) em.classList.add('hidden');
@@ -568,7 +568,7 @@ function lrdpSyncUi() {
   if (startMinuteSection) startMinuteSection.classList.add('hidden');
   if (endMinuteSection) endMinuteSection.classList.add('hidden');
 
-  if (lrdpStartDate && ['pick-start-time', 'pick-start-min', 'pick-end-date', 'pick-end-time', 'pick-end-min', 'done'].includes(lrdpStep)) {
+  if (lrdpStartDate && ['pick-start-time', 'pick-start-min'].includes(lrdpStep)) {
     lrdpShowStartTimeGrid();
     if (lrdpStartHour !== null && startMinuteSection && lrdpStep !== 'pick-start-time') {
       document.getElementById('lrdp-start-minute-grid').innerHTML =
@@ -577,7 +577,7 @@ function lrdpSyncUi() {
     }
   }
 
-  if (lrdpEndDate && ['pick-end-time', 'pick-end-min', 'done'].includes(lrdpStep)) {
+  if (lrdpEndDate && ['pick-end-time', 'pick-end-min'].includes(lrdpStep)) {
     lrdpShowEndTimeGrid();
     if (lrdpEndHour !== null && endMinuteSection && lrdpStep !== 'pick-end-time') {
       const sameDay = lrdpDayKey(lrdpStartDate) === lrdpDayKey(lrdpEndDate);
