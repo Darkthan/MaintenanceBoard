@@ -487,41 +487,53 @@ function buildMcpServer(ctx) {
   }, tool(ctx, MCP_SCOPES.PROJECTS_WRITE, (a) => work.updateProjectCard(a)));
 
   // ── Plan d'adressage IP ──────────────────────────────────────────────────────
-  server.tool('list_ip_networks', 'Liste les réseaux IP du plan d\'adressage.', {
-    search: z.string().optional().describe('Filtre par nom ou CIDR'),
+  server.registerTool('list_ip_networks', {
+    description: 'Liste les réseaux IP du plan d\'adressage.',
+    inputSchema: { search: z.string().optional() },
+    annotations: READ_ONLY_TOOL
   }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => work.listIpNetworks(a)));
 
-  server.tool('get_ip_network', 'Récupère un réseau IP avec ses adresses, plages et migrations planifiées.', {
-    networkId: z.string().describe('ID du réseau'),
+  server.registerTool('get_ip_network', {
+    description: 'Récupère un réseau IP avec ses adresses, plages et migrations planifiées.',
+    inputSchema: { networkId: z.string() },
+    annotations: READ_ONLY_TOOL
   }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => work.getIpNetwork(a)));
 
-  server.tool('list_ip_addresses', 'Liste les adresses IP d\'un réseau.', {
-    networkId: z.string().describe('ID du réseau'),
-    search: z.string().optional().describe('Filtre par IP, hostname, type'),
+  server.registerTool('list_ip_addresses', {
+    description: 'Liste les adresses IP d\'un réseau.',
+    inputSchema: { networkId: z.string(), search: z.string().optional() },
+    annotations: READ_ONLY_TOOL
   }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => work.listIpAddresses(a)));
 
-  server.tool('list_ip_migrations', 'Liste les migrations IP planifiées ou appliquées.', {
-    networkId: z.string().optional().describe('Filtrer par réseau'),
-    status: z.enum(['PLANNED', 'APPLIED', 'CANCELLED']).optional().describe('Filtrer par statut'),
+  server.registerTool('list_ip_migrations', {
+    description: 'Liste les migrations IP planifiées ou appliquées.',
+    inputSchema: {
+      networkId: z.string().optional(),
+      status: z.enum(['PLANNED', 'APPLIED', 'CANCELLED']).optional()
+    },
+    annotations: READ_ONLY_TOOL
   }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => work.listIpMigrations(a)));
 
-  server.tool('create_ip_migration', 'Planifie une migration d\'IP. Crée automatiquement une tâche liée qui, une fois validée, applique le changement dans le plan d\'adressage.',
-    {
-      networkId: z.string().describe('ID du réseau concerné'),
-      oldIp: z.string().describe('Adresse IP actuelle (ex: 10.0.1.15)'),
-      newIp: z.string().describe('Nouvelle adresse IP (ex: 10.0.1.20)'),
-      newHostname: z.string().optional().describe('Nouveau nom d\'hôte'),
-      newType: z.string().optional().describe('Nouveau type d\'équipement'),
-      notes: z.string().optional().describe('Notes sur la migration'),
-      interventionId: z.string().optional().describe('ID de l\'intervention parente'),
-      scheduledAt: z.string().optional().describe('Date planifiée ISO 8601'),
-    }, { ...ADDITIVE_WRITE_TOOL },
-    tool(ctx, MCP_SCOPES.IP_ADDRESSING_WRITE, (a) => work.createIpMigration(a, { userId })));
+  server.registerTool('create_ip_migration', {
+    description: 'Planifie une migration d\'IP. Crée automatiquement une tâche liée qui, une fois validée, applique le changement dans le plan d\'adressage.',
+    inputSchema: {
+      networkId: z.string(),
+      oldIp: z.string(),
+      newIp: z.string(),
+      newHostname: z.string().optional(),
+      newType: z.string().optional(),
+      notes: z.string().optional(),
+      interventionId: z.string().optional(),
+      scheduledAt: z.string().optional()
+    },
+    annotations: ADDITIVE_WRITE_TOOL
+  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_WRITE, (a) => work.createIpMigration(a, { userId })));
 
-  server.tool('apply_ip_migration', 'Applique manuellement une migration IP planifiée (met à jour le plan d\'adressage et valide la tâche liée).', {
-    migrationId: z.string().describe('ID de la migration à appliquer'),
-  }, { ...ADDITIVE_WRITE_TOOL },
-  tool(ctx, MCP_SCOPES.IP_ADDRESSING_WRITE, (a) => work.applyIpMigration(a, { userId })));
+  server.registerTool('apply_ip_migration', {
+    description: 'Applique manuellement une migration IP planifiée (met à jour le plan d\'adressage et valide la tâche liée).',
+    inputSchema: { migrationId: z.string() },
+    annotations: ADDITIVE_WRITE_TOOL
+  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_WRITE, (a) => work.applyIpMigration(a, { userId })));
 
   return server;
 }
