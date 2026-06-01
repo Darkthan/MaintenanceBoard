@@ -41,6 +41,9 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('id="kb-fab-wrap" class="hidden fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3"');
     expect(res.text).toContain('id="ip-fn-gateway"');
     expect(res.text).toContain("gateway: document.getElementById('ip-fn-gateway').value||null");
+    expect(res.text).toContain('IP de début *');
+    expect(res.text).toContain('IP de fin *');
+    expect(res.text).toContain("Saisissez une plage IP valide appartenant au réseau.");
     expect(res.text).toContain('Les images sont compressées automatiquement');
   });
 

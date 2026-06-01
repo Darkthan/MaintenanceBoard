@@ -323,10 +323,10 @@
     <form id="ip-form-range" class="px-6 py-5 space-y-3">
       <input type="hidden" id="ip-fr-id"/>
       <div class="grid grid-cols-2 gap-3">
-        <div><label class="block text-xs font-medium text-slate-600 mb-1">Début (offset) *</label>
-          <input id="ip-fr-start" type="number" min="0" required placeholder="1" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
-        <div><label class="block text-xs font-medium text-slate-600 mb-1">Fin (offset) *</label>
-          <input id="ip-fr-end" type="number" min="0" required placeholder="50" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">IP de début *</label>
+          <input id="ip-fr-start" type="text" required placeholder="10.0.0.1" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">IP de fin *</label>
+          <input id="ip-fr-end" type="text" required placeholder="10.0.0.50" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
       </div>
       <p id="ip-fr-preview" class="hidden text-xs text-slate-400 font-mono"></p>
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Nom *</label>
@@ -1664,6 +1664,7 @@ function ipOffset(cidr, ip) {
   try {
     const info = ipParseCidr(cidr);
     const p = ip.split('.').map(Number);
+    if (p.length !== 4 || p.some(x => !Number.isInteger(x) || x < 0 || x > 255)) return null;
     return ((p[0]*16777216+p[1]*65536+p[2]*256+p[3])>>>0) - info.networkBase;
   } catch { return null; }
 }
@@ -1901,10 +1902,11 @@ async function ipDelAddr(id) {
 
 // Formulaires plage
 function ipOpenRangeForm(range = null) {
+  const info = ipCurrentNetwork?.cidrInfo;
   document.getElementById('ip-modal-range-title').textContent = range ? 'Modifier la plage' : 'Nouvelle plage';
   document.getElementById('ip-fr-id').value = range?.id||'';
-  document.getElementById('ip-fr-start').value = range?.startHost??'';
-  document.getElementById('ip-fr-end').value = range?.endHost??'';
+  document.getElementById('ip-fr-start').value = range && info ? ipInt2str(info.networkBase + range.startHost) : '';
+  document.getElementById('ip-fr-end').value = range && info ? ipInt2str(info.networkBase + range.endHost) : '';
   document.getElementById('ip-fr-label').value = range?.label||'';
   document.getElementById('ip-fr-type').value = range?.rangeType||'STATIC';
   document.getElementById('ip-fr-error').classList.add('hidden');
@@ -1912,12 +1914,16 @@ function ipOpenRangeForm(range = null) {
   ipOpenModal('ip-modal-range');
 }
 function ipUpdateRangePreview() {
-  const s = parseInt(document.getElementById('ip-fr-start').value);
-  const e = parseInt(document.getElementById('ip-fr-end').value);
+  const startIp = document.getElementById('ip-fr-start').value.trim();
+  const endIp = document.getElementById('ip-fr-end').value.trim();
+  const s = ipOffset(ipCurrentNetwork?.cidr, startIp);
+  const e = ipOffset(ipCurrentNetwork?.cidr, endIp);
   const prev = document.getElementById('ip-fr-preview');
-  if (isNaN(s)||isNaN(e)||!ipCurrentNetwork?.cidrInfo) { prev.classList.add('hidden'); return; }
-  const info = ipCurrentNetwork.cidrInfo;
-  prev.textContent = `${ipInt2str(info.networkBase+s)} → ${ipInt2str(info.networkBase+e)} (${Math.max(0,e-s+1)} addr.)`;
+  if (!ipCurrentNetwork?.cidrInfo || s === null || e === null || s < 0 || e < s || e >= ipCurrentNetwork.cidrInfo.totalHosts) {
+    prev.classList.add('hidden');
+    return;
+  }
+  prev.textContent = `${startIp} → ${endIp} (${e-s+1} addr.)`;
   prev.classList.remove('hidden');
 }
 document.getElementById('ip-fr-start').addEventListener('input', ipUpdateRangePreview);
@@ -1925,9 +1931,16 @@ document.getElementById('ip-fr-end').addEventListener('input', ipUpdateRangePrev
 document.getElementById('ip-form-range').addEventListener('submit', async e => {
   e.preventDefault();
   const id = document.getElementById('ip-fr-id').value;
-  const body = { startHost:parseInt(document.getElementById('ip-fr-start').value), endHost:parseInt(document.getElementById('ip-fr-end').value),
-    label:document.getElementById('ip-fr-label').value, rangeType:document.getElementById('ip-fr-type').value };
+  const startHost = ipOffset(ipCurrentNetwork?.cidr, document.getElementById('ip-fr-start').value.trim());
+  const endHost = ipOffset(ipCurrentNetwork?.cidr, document.getElementById('ip-fr-end').value.trim());
   const errEl = document.getElementById('ip-fr-error'); errEl.classList.add('hidden');
+  if (!ipCurrentNetwork?.cidrInfo || startHost === null || endHost === null || startHost < 0 || endHost < startHost || endHost >= ipCurrentNetwork.cidrInfo.totalHosts) {
+    errEl.textContent = 'Saisissez une plage IP valide appartenant au réseau.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  const body = { startHost, endHost,
+    label:document.getElementById('ip-fr-label').value, rangeType:document.getElementById('ip-fr-type').value };
   try {
     const url = id?`/api/ip-networks/${ipCurrentNetwork.id}/ranges/${id}`:`/api/ip-networks/${ipCurrentNetwork.id}/ranges`;
     const res = await fetch(url, { method:id?'PATCH':'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(body) });

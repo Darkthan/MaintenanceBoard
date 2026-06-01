@@ -18,6 +18,11 @@ jest.mock('../src/lib/prisma', () => ({
     findMany: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn()
+  },
+  ipRangeDefinition: {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn()
   }
 }));
 
@@ -86,5 +91,31 @@ describe('ip addressing gateways', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('sous-réseau');
     expect(prisma.ipNetwork.create).not.toHaveBeenCalled();
+  });
+
+  it('enregistre une plage exprimee en offsets si elle reste dans le reseau', async () => {
+    prisma.ipNetwork.findUnique.mockResolvedValue({ id: 'network-1', cidr: '10.0.1.0/24' });
+    prisma.ipRangeDefinition.create.mockImplementation(async ({ data }) => ({ id: 'range-1', ...data }));
+
+    const res = await request(buildApp())
+      .post('/api/ip-networks/network-1/ranges')
+      .send({ startHost: 10, endHost: 50, label: 'DHCP', rangeType: 'DHCP' });
+
+    expect(res.status).toBe(201);
+    expect(prisma.ipRangeDefinition.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ startHost: 10, endHost: 50 })
+    });
+  });
+
+  it('refuse une plage qui depasse le sous-reseau', async () => {
+    prisma.ipNetwork.findUnique.mockResolvedValue({ id: 'network-1', cidr: '10.0.1.0/24' });
+
+    const res = await request(buildApp())
+      .post('/api/ip-networks/network-1/ranges')
+      .send({ startHost: 10, endHost: 300, label: 'Invalide' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('sous-réseau');
+    expect(prisma.ipRangeDefinition.create).not.toHaveBeenCalled();
   });
 });

@@ -72,6 +72,16 @@ function withStoredGateway(cidrInfo, gateway) {
   return cidrInfo && gateway ? { ...cidrInfo, gateway } : cidrInfo;
 }
 
+function validateRangeOffsets(cidr, startHost, endHost) {
+  const start = parseInt(startHost);
+  const end = parseInt(endHost);
+  const { totalHosts } = parseCidr(cidr);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end >= totalHosts) {
+    throw new Error('La plage doit appartenir au sous-réseau');
+  }
+  return { start, end };
+}
+
 function ipToHostOffset(networkCidr, ip) {
   const [netStr, prefixStr] = networkCidr.split('/');
   const prefix = parseInt(prefixStr, 10);
@@ -219,30 +229,45 @@ router.post('/:id/ranges',
   async (req, res, next) => {
     if (!validate(req, res)) return;
     const { startHost, endHost, label, rangeType } = req.body;
-    if (parseInt(endHost) < parseInt(startHost)) {
-      return res.status(400).json({ error: 'endHost doit être >= startHost' });
-    }
     try {
+      const network = await prisma.ipNetwork.findUnique({ where: { id: req.params.id } });
+      if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
+      const offsets = validateRangeOffsets(network.cidr, startHost, endHost);
       const range = await prisma.ipRangeDefinition.create({
         data: {
           networkId: req.params.id,
-          startHost: parseInt(startHost),
-          endHost: parseInt(endHost),
+          startHost: offsets.start,
+          endHost: offsets.end,
           label: label.trim(),
           rangeType: rangeType || 'STATIC',
         }
       });
       res.status(201).json(range);
-    } catch (err) { next(err); }
+    } catch (err) {
+      if (err.message.includes('plage') || err.message.includes('CIDR')) {
+        return res.status(400).json({ error: err.message });
+      }
+      next(err);
+    }
   }
 );
 
 // PATCH /api/ip-networks/:id/ranges/:rangeId
 router.patch('/:id/ranges/:rangeId', requireAuth, requireAdmin, async (req, res, next) => {
   try {
+    const [network, current] = await Promise.all([
+      prisma.ipNetwork.findUnique({ where: { id: req.params.id } }),
+      prisma.ipRangeDefinition.findUnique({ where: { id: req.params.rangeId } })
+    ]);
+    if (!network || !current) return res.status(404).json({ error: 'Plage introuvable' });
+    const offsets = validateRangeOffsets(
+      network.cidr,
+      req.body.startHost ?? current.startHost,
+      req.body.endHost ?? current.endHost
+    );
     const data = {};
-    if (req.body.startHost !== undefined) data.startHost = parseInt(req.body.startHost);
-    if (req.body.endHost !== undefined) data.endHost = parseInt(req.body.endHost);
+    if (req.body.startHost !== undefined) data.startHost = offsets.start;
+    if (req.body.endHost !== undefined) data.endHost = offsets.end;
     if (req.body.label !== undefined) data.label = req.body.label.trim();
     if (req.body.rangeType !== undefined) data.rangeType = req.body.rangeType;
     const range = await prisma.ipRangeDefinition.update({
@@ -250,7 +275,12 @@ router.patch('/:id/ranges/:rangeId', requireAuth, requireAdmin, async (req, res,
       data
     });
     res.json(range);
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.message.includes('plage') || err.message.includes('CIDR')) {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
 });
 
 // DELETE /api/ip-networks/:id/ranges/:rangeId
