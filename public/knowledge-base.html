@@ -398,15 +398,9 @@
       </button>
     </div>
     <div id="kb-fab-item-ip-network" class="hidden flex items-center gap-2">
-      <span class="bg-white rounded-lg shadow-md px-3 py-1.5 text-sm font-medium text-slate-700 whitespace-nowrap">Nouveau réseau IP</span>
+      <span class="bg-white rounded-lg shadow-md px-3 py-1.5 text-sm font-medium text-slate-700 whitespace-nowrap">Nouveau plan d'adressage</span>
       <button id="fab-new-ip-network" class="w-11 h-11 rounded-full bg-emerald-600 text-white shadow-lg flex items-center justify-center hover:bg-emerald-700 transition flex-shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
-      </button>
-    </div>
-    <div id="kb-fab-item-ip-range" class="hidden flex items-center gap-2">
-      <span class="bg-white rounded-lg shadow-md px-3 py-1.5 text-sm font-medium text-slate-700 whitespace-nowrap">Nouvelle plage réseau</span>
-      <button id="fab-new-ip-range" class="w-11 h-11 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center hover:bg-teal-700 transition flex-shrink-0">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
       </button>
     </div>
   </div>
@@ -1604,16 +1598,12 @@ drawioViewerModalEl.addEventListener('click', event => { if (event.target === dr
 let fabOpen = false;
 
 function updateFabForArticle(type) {
-  const isIp = type === 'ip-addressing';
-  const inDetail = isIp && ipCurrentNetwork !== null;
-  document.getElementById('kb-fab-item-article').classList.toggle('hidden', isIp);
-  document.getElementById('kb-fab-item-diagram').classList.toggle('hidden', isIp);
-  document.getElementById('kb-fab-item-ip-network').classList.toggle('hidden', !isIp);
-  document.getElementById('kb-fab-item-ip-range').classList.toggle('hidden', !inDetail);
-  // Couleur du bouton principal selon contexte
+  document.getElementById('kb-fab-item-article').classList.remove('hidden');
+  document.getElementById('kb-fab-item-diagram').classList.remove('hidden');
+  document.getElementById('kb-fab-item-ip-network').classList.remove('hidden');
   const btn = document.getElementById('kb-fab-btn');
   btn.className = btn.className.replace(/bg-\w+-\d+|hover:bg-\w+-\d+/g, '').trim() +
-    (isIp ? ' bg-emerald-600 hover:bg-emerald-700' : ' bg-blue-600 hover:bg-blue-700');
+    ' bg-blue-600 hover:bg-blue-700';
   closeFab();
 }
 
@@ -1643,8 +1633,13 @@ document.getElementById('kb-fab-btn').addEventListener('click', () => { fabOpen 
 document.getElementById('fab-new-article').addEventListener('click', () => { closeFab(); openEditor(); });
 document.getElementById('fab-new-diagram').addEventListener('click', () => { closeFab(); openDiagramEditor(); });
 
-document.getElementById('fab-new-ip-network').addEventListener('click', () => { closeFab(); ipOpenNetworkForm(); });
-document.getElementById('fab-new-ip-range').addEventListener('click', () => { closeFab(); if (ipCurrentNetwork) ipOpenRangeForm(); else showToast('Ouvrez d\'abord un réseau', 'info'); });
+document.getElementById('fab-new-ip-network').addEventListener('click', async () => {
+  closeFab();
+  if (selectedArticleId !== 'system-ip-addressing') {
+    await selectArticle('system-ip-addressing');
+  }
+  ipOpenNetworkForm();
+});
 
 // Fermer FAB si clic ailleurs
 document.addEventListener('click', e => {
@@ -2034,9 +2029,7 @@ requireLogin().then(user => {
     const fabWrap = document.getElementById('kb-fab-wrap');
     fabWrap.classList.remove('hidden');
     fabWrap.classList.add('flex');
-    // Afficher les items KB par défaut (pas en mode IP)
-    document.getElementById('kb-fab-item-article').classList.remove('hidden');
-    document.getElementById('kb-fab-item-diagram').classList.remove('hidden');
+    updateFabForArticle(selectedArticle?.type || 'article');
   }
   loadKnowledgeArticles();
 });
