@@ -273,7 +273,7 @@ function dynamicClientResponse(client, req) {
     grant_types: ['authorization_code', 'refresh_token'],
     response_types: ['code'],
     token_endpoint_auth_method: 'none',
-    scope: ALL_MCP_SCOPES.join(' '),
+    scope: [...ALL_MCP_SCOPES, 'offline_access'].join(' '),
     client_id_issued_at: now,
     registration_client_uri: `${config.appUrl.replace(/\/$/, '')}/oauth/register/${encodeURIComponent(client.id)}`
   };
@@ -508,7 +508,9 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
     const clientAllowedScopes = client.scopes;
     const userAllowedScopes = filterScopesForUser(clientAllowedScopes, user);
     const requestedScopes = scope ? scope.split(' ').filter(Boolean) : userAllowedScopes;
-    const issueRefreshToken = requestedScopes.includes(OFFLINE_ACCESS_SCOPE);
+    // Pour les clients OAuth dynamiques (ChatGPT, Claude…), toujours émettre un refresh token
+    // même si offline_access n'est pas explicitement demandé dans le scope.
+    const issueRefreshToken = requestedScopes.includes(OFFLINE_ACCESS_SCOPE) || isDirectMcpClientId(client.id);
 
     // Scopes cochés par l'utilisateur sur la page de consentement
     const userChecked = req.body.granted_scopes
