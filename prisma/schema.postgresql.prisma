@@ -191,6 +191,7 @@ model Equipment {
   loanResources   LoanResourceEquipment[]
   loanReservationSelections LoanReservationEquipment[]
   checkupItems    InterventionCheckupItem[]
+  ipAddresses     IpAddress[]
 
   @@map("equipment")
 }
@@ -770,4 +771,56 @@ model KanbanCard {
   @@index([columnId])
   @@index([projectId])
   @@map("kanban_cards")
+}
+
+// ── Plan d'adressage IP ────────────────────────────────────────────────────────
+
+model IpNetwork {
+  id          String   @id @default(uuid())
+  name        String
+  vlan        Int?
+  cidr        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  addresses   IpAddress[]
+  ranges      IpRangeDefinition[]
+
+  @@map("ip_networks")
+}
+
+model IpRangeDefinition {
+  id         String    @id @default(uuid())
+  networkId  String
+  startHost  Int
+  endHost    Int
+  label      String
+  rangeType  String    @default("STATIC")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  network    IpNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+  @@index([networkId])
+  @@map("ip_range_definitions")
+}
+
+model IpAddress {
+  id            String    @id @default(uuid())
+  networkId     String
+  ip            String
+  hostname      String?
+  equipmentType String?
+  description   String?
+  equipmentId   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  network       IpNetwork  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  equipment     Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+
+  @@unique([networkId, ip])
+  @@index([networkId])
+  @@map("ip_addresses")
 }

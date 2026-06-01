@@ -188,6 +188,7 @@ model Equipment {
   loanResources   LoanResourceEquipment[]
   loanReservationSelections LoanReservationEquipment[]
   checkupItems    InterventionCheckupItem[]
+  ipAddresses     IpAddress[]
 
   @@map("equipment")
 }
@@ -767,4 +768,56 @@ model LoanReservationEquipment {
   @@index([loanReservationId])
   @@index([equipmentId])
   @@map("loan_reservation_equipments")
+}
+
+// ── Plan d'adressage IP ────────────────────────────────────────────────────────
+
+model IpNetwork {
+  id          String   @id @default(uuid())
+  name        String
+  vlan        Int?
+  cidr        String                         // ex: "10.187.37.0/24"
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  addresses   IpAddress[]
+  ranges      IpRangeDefinition[]
+
+  @@map("ip_networks")
+}
+
+model IpRangeDefinition {
+  id         String    @id @default(uuid())
+  networkId  String
+  startHost  Int                              // offset depuis l'adresse réseau (ex: 1)
+  endHost    Int                              // offset fin (ex: 10)
+  label      String                           // ex: "Serveurs"
+  rangeType  String    @default("STATIC")    // STATIC | DHCP | RESERVED | OTHER
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  network    IpNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+  @@index([networkId])
+  @@map("ip_range_definitions")
+}
+
+model IpAddress {
+  id            String    @id @default(uuid())
+  networkId     String
+  ip            String
+  hostname      String?
+  equipmentType String?
+  description   String?
+  equipmentId   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  network       IpNetwork  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  equipment     Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+
+  @@unique([networkId, ip])
+  @@index([networkId])
+  @@map("ip_addresses")
 }
