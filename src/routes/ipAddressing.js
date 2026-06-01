@@ -64,6 +64,111 @@ function sortIpAddresses(addresses) {
   });
 }
 
+function parseAgentInfo(agentInfo) {
+  if (!agentInfo) return {};
+  if (typeof agentInfo === 'object') return agentInfo;
+  try { return JSON.parse(agentInfo); } catch { return {}; }
+}
+
+function mergeEquipmentAddresses(addresses, equipment, cidr) {
+  const { networkBase, totalHosts } = parseCidr(cidr);
+  const belongsToNetwork = ip => {
+    try {
+      const ipInt = ipToInt(ip);
+      return ipInt >= networkBase && ipInt < networkBase + totalHosts;
+    } catch {
+      return false;
+    }
+  };
+  const byIp = new Map(
+    addresses.filter(address => belongsToNetwork(address.ip)).map(address => [address.ip, { ...address }])
+  );
+
+  equipment.forEach(item => {
+    const info = parseAgentInfo(item.agentInfo);
+    if (!Array.isArray(info.ips)) return;
+
+    info.ips.forEach(rawIp => {
+      const ip = String(rawIp || '').trim();
+      if (!belongsToNetwork(ip)) return;
+
+      const current = byIp.get(ip);
+      const equipmentInfo = { id: item.id, name: item.name, type: item.type };
+      if (current) {
+        byIp.set(ip, {
+          ...current,
+          hostname: item.agentHostname || item.name || current.hostname,
+          equipmentType: item.type || current.equipmentType,
+          equipmentId: item.id,
+          equipment: equipmentInfo,
+        });
+        return;
+      }
+
+      byIp.set(ip, {
+        id: `equipment:${item.id}:${ip}`,
+        networkId: null,
+        ip,
+        hostname: item.agentHostname || item.name || null,
+        equipmentType: item.type || null,
+        description: null,
+        equipmentId: item.id,
+        equipment: equipmentInfo,
+        autoDiscovered: true,
+      });
+    });
+  });
+
+  return sortIpAddresses([...byIp.values()]);
+}
+
+async function loadEquipmentAddresses(addresses, cidr) {
+  const equipment = await prisma.equipment.findMany({
+    where: { agentInfo: { not: null } },
+    select: { id: true, name: true, type: true, agentHostname: true, agentInfo: true }
+  });
+  return mergeEquipmentAddresses(addresses, equipment, cidr);
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function addressesToCsv(addresses) {
+  const rows = addresses.map(address => [
+    address.ip,
+    address.hostname,
+    address.equipmentType,
+    address.description,
+  ].map(csvCell).join(','));
+  return ['ip,hostname,type,description', ...rows].join('\r\n');
+}
+
+function parseCsvLine(line) {
+  const cells = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (quoted && line[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === ',' && !quoted) {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
 function validateGateway(cidr, gateway) {
   if (!gateway) return null;
   const info = parseCidr(cidr);
@@ -141,7 +246,8 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
     let cidrInfo = null;
     try { cidrInfo = withStoredGateway(parseCidr(network.cidr), network.gateway); } catch {}
-    res.json({ ...network, addresses: sortIpAddresses(network.addresses), cidrInfo });
+    const addresses = await loadEquipmentAddresses(network.addresses, network.cidr);
+    res.json({ ...network, addresses, cidrInfo });
   } catch (err) { next(err); }
 });
 
@@ -317,12 +423,36 @@ router.get('/:id/addresses', requireAuth, async (req, res, next) => {
         { equipmentType: { contains: q } },
       ];
     }
-    const addresses = await prisma.ipAddress.findMany({
-      where,
-      orderBy: { ip: 'asc' },
-      include: { equipment: { select: { id: true, name: true, type: true } } }
-    });
-    res.json(sortIpAddresses(addresses));
+    const [network, addresses] = await Promise.all([
+      prisma.ipNetwork.findUnique({ where: { id: req.params.id }, select: { cidr: true } }),
+      prisma.ipAddress.findMany({
+        where,
+        orderBy: { ip: 'asc' },
+        include: { equipment: { select: { id: true, name: true, type: true } } }
+      })
+    ]);
+    if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
+    res.json(await loadEquipmentAddresses(addresses, network.cidr));
+  } catch (err) { next(err); }
+});
+
+// GET /api/ip-networks/:id/addresses/export
+router.get('/:id/addresses/export', requireAuth, async (req, res, next) => {
+  try {
+    const [network, addresses] = await Promise.all([
+      prisma.ipNetwork.findUnique({ where: { id: req.params.id }, select: { name: true, cidr: true } }),
+      prisma.ipAddress.findMany({
+        where: { networkId: req.params.id },
+        orderBy: { ip: 'asc' },
+        include: { equipment: { select: { id: true, name: true, type: true } } }
+      })
+    ]);
+    if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
+    const exported = await loadEquipmentAddresses(addresses, network.cidr);
+    const filename = `plan-adressage-${network.name || req.params.id}.csv`.replace(/[^a-zA-Z0-9._-]+/g, '-');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(`\uFEFF${addressesToCsv(exported)}`);
   } catch (err) { next(err); }
 });
 
@@ -387,11 +517,14 @@ router.post('/:id/addresses/import', requireAuth, requireAdmin, async (req, res,
   try {
     const { csv, skipErrors } = req.body;
     if (!csv) return res.status(400).json({ error: 'Contenu CSV requis' });
+    const network = await prisma.ipNetwork.findUnique({ where: { id: req.params.id }, select: { cidr: true } });
+    if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
+    const { networkBase, totalHosts } = parseCidr(network.cidr);
 
     const lines = csv.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return res.status(400).json({ error: 'CSV vide ou sans données' });
 
-    const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z_]/g, ''));
+    const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase().replace(/[^a-z_]/g, ''));
     const ipIdx          = header.indexOf('ip');
     const hostnameIdx    = header.indexOf('hostname');
     const typeIdx        = header.findIndex(h => ['equipmenttype', 'type'].includes(h));
@@ -402,10 +535,17 @@ router.post('/:id/addresses/import', requireAuth, requireAdmin, async (req, res,
     const results = { created: 0, updated: 0, errors: [] };
 
     for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+      const cols = parseCsvLine(lines[i]);
       const ip = cols[ipIdx];
-      if (!ip || !/^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
+      let ipInt = null;
+      try { ipInt = ipToInt(ip); } catch {}
+      if (ipInt === null) {
         results.errors.push({ line: i + 1, error: `IP invalide: "${ip}"` });
+        if (!skipErrors) break;
+        continue;
+      }
+      if (ipInt < networkBase || ipInt >= networkBase + totalHosts) {
+        results.errors.push({ line: i + 1, error: `IP hors du réseau ${network.cidr}: "${ip}"` });
         if (!skipErrors) break;
         continue;
       }
@@ -418,12 +558,16 @@ router.post('/:id/addresses/import', requireAuth, requireAdmin, async (req, res,
       };
 
       try {
+        const existing = await prisma.ipAddress.findUnique({
+          where: { networkId_ip: { networkId: req.params.id, ip } }
+        });
         await prisma.ipAddress.upsert({
           where: { networkId_ip: { networkId: req.params.id, ip } },
           create: { networkId: req.params.id, ...data },
           update: data,
         });
-        results.created++;
+        if (existing) results.updated++;
+        else results.created++;
       } catch (e) {
         results.errors.push({ line: i + 1, error: e.message });
         if (!skipErrors) break;
