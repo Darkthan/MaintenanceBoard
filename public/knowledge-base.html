@@ -1754,7 +1754,11 @@ function ipRenderDetail() {
 }
 
 function ipRenderRanges() {
-  const n = ipCurrentNetwork, info = n.cidrInfo;
+  const n = ipCurrentNetwork;
+  let info = n.cidrInfo;
+  if (info && !Number.isInteger(info.networkBase)) {
+    try { info = { ...info, networkBase: ipParseCidr(n.cidr).networkBase }; } catch {}
+  }
   const total = info ? info.totalHosts : 256;
   const bar = document.getElementById('ip-ranges-bar');
   const legend = document.getElementById('ip-ranges-legend');
@@ -1902,7 +1906,10 @@ async function ipDelAddr(id) {
 
 // Formulaires plage
 function ipOpenRangeForm(range = null) {
-  const info = ipCurrentNetwork?.cidrInfo;
+  let info = ipCurrentNetwork?.cidrInfo;
+  if (info && !Number.isInteger(info.networkBase)) {
+    try { info = { ...info, networkBase: ipParseCidr(ipCurrentNetwork.cidr).networkBase }; } catch {}
+  }
   document.getElementById('ip-modal-range-title').textContent = range ? 'Modifier la plage' : 'Nouvelle plage';
   document.getElementById('ip-fr-id').value = range?.id||'';
   document.getElementById('ip-fr-start').value = range && info ? ipInt2str(info.networkBase + range.startHost) : '';

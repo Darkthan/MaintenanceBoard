@@ -44,6 +44,7 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('IP de début *');
     expect(res.text).toContain('IP de fin *');
     expect(res.text).toContain("Saisissez une plage IP valide appartenant au réseau.");
+    expect(res.text).toContain("networkBase: ipParseCidr(n.cidr).networkBase");
     expect(res.text).toContain('Les images sont compressées automatiquement');
   });
 

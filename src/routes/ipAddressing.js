@@ -30,6 +30,7 @@ function parseCidr(cidr) {
 
   return {
     network: intToIp(networkBase),
+    networkBase,
     broadcast: intToIp(broadcast),
     gateway,
     prefix,

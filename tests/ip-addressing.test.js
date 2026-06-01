@@ -66,6 +66,7 @@ describe('ip addressing gateways', () => {
 
     expect(res.status).toBe(200);
     expect(res.body[0].cidrInfo.gateway).toBe('10.0.1.254');
+    expect(res.body[0].cidrInfo.networkBase).toBe(167772416);
   });
 
   it('modifie la passerelle d un reseau existant', async () => {
