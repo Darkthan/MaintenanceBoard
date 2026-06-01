@@ -23,6 +23,9 @@ jest.mock('../src/lib/prisma', () => ({
     create: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn()
+  },
+  ipAddress: {
+    findMany: jest.fn()
   }
 }));
 
@@ -118,5 +121,49 @@ describe('ip addressing gateways', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('sous-réseau');
     expect(prisma.ipRangeDefinition.create).not.toHaveBeenCalled();
+  });
+
+  it('trie les adresses IP octet par octet', async () => {
+    prisma.ipAddress.findMany.mockResolvedValue([
+      { id: 'ip-100', ip: '10.0.0.100' },
+      { id: 'ip-10', ip: '10.0.0.10' },
+      { id: 'ip-2', ip: '10.0.0.2' },
+      { id: 'ip-1', ip: '10.0.0.1' }
+    ]);
+
+    const res = await request(buildApp()).get('/api/ip-networks/network-1/addresses');
+
+    expect(res.status).toBe(200);
+    expect(res.body.map(address => address.ip)).toEqual([
+      '10.0.0.1',
+      '10.0.0.2',
+      '10.0.0.10',
+      '10.0.0.100'
+    ]);
+  });
+
+  it('trie aussi les adresses exposees dans le detail du reseau', async () => {
+    prisma.ipNetwork.findUnique.mockResolvedValue({
+      id: 'network-1',
+      cidr: '10.0.0.0/24',
+      gateway: null,
+      addresses: [
+        { id: 'ip-100', ip: '10.0.0.100' },
+        { id: 'ip-10', ip: '10.0.0.10' },
+        { id: 'ip-2', ip: '10.0.0.2' },
+        { id: 'ip-1', ip: '10.0.0.1' }
+      ],
+      ranges: []
+    });
+
+    const res = await request(buildApp()).get('/api/ip-networks/network-1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.addresses.map(address => address.ip)).toEqual([
+      '10.0.0.1',
+      '10.0.0.2',
+      '10.0.0.10',
+      '10.0.0.100'
+    ]);
   });
 });

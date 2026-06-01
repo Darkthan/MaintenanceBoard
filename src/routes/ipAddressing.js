@@ -54,6 +54,16 @@ function ipToInt(ip) {
   return (parts[0] << 24 | parts[1] << 16 | parts[2] << 8 | parts[3]) >>> 0;
 }
 
+function sortIpAddresses(addresses) {
+  return addresses.slice().sort((left, right) => {
+    try {
+      return ipToInt(left.ip) - ipToInt(right.ip);
+    } catch {
+      return String(left.ip || '').localeCompare(String(right.ip || ''), 'fr', { numeric: true });
+    }
+  });
+}
+
 function validateGateway(cidr, gateway) {
   if (!gateway) return null;
   const info = parseCidr(cidr);
@@ -131,7 +141,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
     let cidrInfo = null;
     try { cidrInfo = withStoredGateway(parseCidr(network.cidr), network.gateway); } catch {}
-    res.json({ ...network, cidrInfo });
+    res.json({ ...network, addresses: sortIpAddresses(network.addresses), cidrInfo });
   } catch (err) { next(err); }
 });
 
@@ -312,7 +322,7 @@ router.get('/:id/addresses', requireAuth, async (req, res, next) => {
       orderBy: { ip: 'asc' },
       include: { equipment: { select: { id: true, name: true, type: true } } }
     });
-    res.json(addresses);
+    res.json(sortIpAddresses(addresses));
   } catch (err) { next(err); }
 });
 
