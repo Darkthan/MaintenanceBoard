@@ -780,6 +780,7 @@ model IpNetwork {
   name        String
   vlan        Int?
   cidr        String
+  gateway     String?
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

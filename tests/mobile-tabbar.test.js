@@ -34,6 +34,8 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain('100dvh');
     expect(res.text).toContain('touch-action: manipulation');
     expect(res.text).toContain('[data-mobile-fab="true"]');
+    expect(res.text).toContain('const THRESHOLD = 140');
+    expect(res.text).toContain('const MIN_PULL_DURATION_MS = 350');
     expect(res.text).toContain("label: 'Accueil'");
   });
 });

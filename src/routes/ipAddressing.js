@@ -45,6 +45,33 @@ function intToIp(int) {
   return [(int >>> 24) & 0xFF, (int >>> 16) & 0xFF, (int >>> 8) & 0xFF, int & 0xFF].join('.');
 }
 
+function ipToInt(ip) {
+  const parts = String(ip || '').split('.').map(Number);
+  if (parts.length !== 4 || parts.some(p => !Number.isInteger(p) || p < 0 || p > 255)) {
+    throw new Error('Adresse IP invalide');
+  }
+  return (parts[0] << 24 | parts[1] << 16 | parts[2] << 8 | parts[3]) >>> 0;
+}
+
+function validateGateway(cidr, gateway) {
+  if (!gateway) return null;
+  const info = parseCidr(cidr);
+  const gatewayInt = ipToInt(gateway);
+  const networkInt = ipToInt(info.network);
+  const broadcastInt = ipToInt(info.broadcast);
+  if (gatewayInt < networkInt || gatewayInt > broadcastInt) {
+    throw new Error('La passerelle doit appartenir au sous-réseau');
+  }
+  if (info.prefix < 31 && (gatewayInt === networkInt || gatewayInt === broadcastInt)) {
+    throw new Error('La passerelle doit être une adresse utilisable du sous-réseau');
+  }
+  return gateway.trim();
+}
+
+function withStoredGateway(cidrInfo, gateway) {
+  return cidrInfo && gateway ? { ...cidrInfo, gateway } : cidrInfo;
+}
+
 function ipToHostOffset(networkCidr, ip) {
   const [netStr, prefixStr] = networkCidr.split('/');
   const prefix = parseInt(prefixStr, 10);
@@ -70,7 +97,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     });
     const result = networks.map(n => {
       let cidrInfo = null;
-      try { cidrInfo = parseCidr(n.cidr); } catch {}
+      try { cidrInfo = withStoredGateway(parseCidr(n.cidr), n.gateway); } catch {}
       return { ...n, cidrInfo };
     });
     res.json(result);
@@ -92,7 +119,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     });
     if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
     let cidrInfo = null;
-    try { cidrInfo = parseCidr(network.cidr); } catch {}
+    try { cidrInfo = withStoredGateway(parseCidr(network.cidr), network.gateway); } catch {}
     res.json({ ...network, cidrInfo });
   } catch (err) { next(err); }
 });
@@ -102,11 +129,13 @@ router.post('/',
   requireAuth, requireAdmin,
   body('name').trim().notEmpty().withMessage('Nom requis'),
   body('cidr').trim().notEmpty().withMessage('CIDR requis').matches(/^\d+\.\d+\.\d+\.\d+\/\d+$/).withMessage('Format CIDR invalide (ex: 10.0.0.0/24)'),
+  body('gateway').optional({ nullable: true, checkFalsy: true }).trim().matches(/^\d+\.\d+\.\d+\.\d+$/).withMessage('Format de passerelle invalide'),
   body('vlan').optional({ nullable: true }).isInt({ min: 1, max: 4094 }).withMessage('VLAN entre 1 et 4094'),
   async (req, res, next) => {
     if (!validate(req, res)) return;
     try {
       parseCidr(req.body.cidr); // valide le CIDR
+      validateGateway(req.body.cidr, req.body.gateway);
     } catch (e) {
       return res.status(400).json({ error: e.message });
     }
@@ -115,6 +144,7 @@ router.post('/',
         data: {
           name: req.body.name.trim(),
           cidr: req.body.cidr.trim(),
+          gateway: validateGateway(req.body.cidr, req.body.gateway),
           vlan: req.body.vlan ? parseInt(req.body.vlan) : null,
           description: req.body.description?.trim() || null,
         }
@@ -129,23 +159,32 @@ router.patch('/:id',
   requireAuth, requireAdmin,
   body('name').optional().trim().notEmpty(),
   body('cidr').optional().trim().matches(/^\d+\.\d+\.\d+\.\d+\/\d+$/),
+  body('gateway').optional({ nullable: true, checkFalsy: true }).trim().matches(/^\d+\.\d+\.\d+\.\d+$/),
   body('vlan').optional({ nullable: true }).isInt({ min: 1, max: 4094 }),
   async (req, res, next) => {
     if (!validate(req, res)) return;
-    if (req.body.cidr) {
-      try { parseCidr(req.body.cidr); } catch (e) {
-        return res.status(400).json({ error: e.message });
-      }
-    }
     try {
+      const current = await prisma.ipNetwork.findUnique({ where: { id: req.params.id } });
+      if (!current) return res.status(404).json({ error: 'Réseau introuvable' });
+      const cidr = req.body.cidr?.trim() || current.cidr;
+      parseCidr(cidr);
+      const gateway = req.body.gateway !== undefined
+        ? validateGateway(cidr, req.body.gateway)
+        : validateGateway(cidr, current.gateway);
       const data = {};
       if (req.body.name !== undefined) data.name = req.body.name.trim();
       if (req.body.cidr !== undefined) data.cidr = req.body.cidr.trim();
+      if (req.body.gateway !== undefined || req.body.cidr !== undefined) data.gateway = gateway;
       if (req.body.vlan !== undefined) data.vlan = req.body.vlan ? parseInt(req.body.vlan) : null;
       if (req.body.description !== undefined) data.description = req.body.description?.trim() || null;
       const network = await prisma.ipNetwork.update({ where: { id: req.params.id }, data });
       res.json(network);
-    } catch (err) { next(err); }
+    } catch (err) {
+      if (err.message.includes('CIDR') || err.message.includes('Adresse') || err.message.includes('passerelle')) {
+        return res.status(400).json({ error: err.message });
+      }
+      next(err);
+    }
   }
 );
 
@@ -355,7 +394,7 @@ router.post('/:id/addresses/import', requireAuth, requireAdmin, async (req, res,
 });
 
 // POST /api/ip-networks/import — Import CSV réseaux
-// Colonnes : name, cidr, vlan (opt), description (opt)
+// Colonnes : name, cidr, vlan (opt), gateway (opt), description (opt)
 router.post('/import', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { csv, skipErrors } = req.body;
@@ -368,6 +407,7 @@ router.post('/import', requireAuth, requireAdmin, async (req, res, next) => {
     const nameIdx = header.indexOf('name');
     const cidrIdx = header.indexOf('cidr');
     const vlanIdx = header.indexOf('vlan');
+    const gatewayIdx = header.indexOf('gateway');
     const descIdx = header.findIndex(h => ['description', 'desc'].includes(h));
 
     if (nameIdx === -1 || cidrIdx === -1) return res.status(400).json({ error: 'Colonnes "name" et "cidr" requises' });
@@ -385,6 +425,7 @@ router.post('/import', requireAuth, requireAdmin, async (req, res, next) => {
       }
       try {
         parseCidr(cidr);
+        validateGateway(cidr, gatewayIdx >= 0 ? cols[gatewayIdx] : null);
       } catch (e) {
         results.errors.push({ line: i + 1, error: `CIDR invalide: ${e.message}` });
         if (!skipErrors) break;
@@ -395,6 +436,7 @@ router.post('/import', requireAuth, requireAdmin, async (req, res, next) => {
           data: {
             name: name.trim(),
             cidr: cidr.trim(),
+            gateway: validateGateway(cidr, gatewayIdx >= 0 ? cols[gatewayIdx] : null),
             vlan: vlanIdx >= 0 && cols[vlanIdx] ? parseInt(cols[vlanIdx]) || null : null,
             description: descIdx >= 0 ? (cols[descIdx] || null) : null,
           }

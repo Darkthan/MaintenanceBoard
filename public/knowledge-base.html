@@ -266,6 +266,8 @@
         <div><label class="block text-xs font-medium text-slate-600 mb-1">VLAN</label>
           <input id="ip-fn-vlan" type="number" min="1" max="4094" placeholder="10" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
       </div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Passerelle</label>
+        <input id="ip-fn-gateway" type="text" placeholder="Calculée automatiquement si vide" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
       <div id="ip-cidr-preview" class="hidden rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs space-y-1">
         <div class="flex justify-between text-slate-500"><span>Réseau</span><span id="ip-prev-network" class="font-mono"></span></div>
         <div class="flex justify-between text-slate-500"><span>Masque</span><span id="ip-prev-mask" class="font-mono"></span></div>
@@ -350,7 +352,7 @@
       <button class="ip-modal-close text-slate-400 hover:text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
     </div>
     <div class="px-6 py-5 space-y-3">
-      <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 font-mono">name,cidr,vlan,description<br/>LAN Bureau,10.0.1.0/24,10,Postes de travail</div>
+      <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 font-mono">name,cidr,vlan,gateway,description<br/>LAN Bureau,10.0.1.0/24,10,10.0.1.254,Postes de travail</div>
       <input id="ip-import-networks-file" type="file" accept=".csv" class="block w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-emerald-50 file:text-emerald-700"/>
       <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer"><input id="ip-import-networks-skip" type="checkbox" class="rounded"/> Ignorer les lignes invalides</label>
       <p id="ip-import-networks-result" class="hidden text-sm"></p>
@@ -1708,7 +1710,7 @@ function ipRenderList(filter = '') {
         <div class="border-x border-slate-200"><p class="text-slate-400">Assignées</p><p class="font-semibold text-emerald-600">${n._count?.addresses ?? 0}</p></div>
         <div><p class="text-slate-400">Plages</p><p class="font-semibold text-slate-600">${n._count?.ranges ?? 0}</p></div>
       </div>
-      ${info ? `<p class="mt-2 text-xs text-slate-400 font-mono">GW: <span class="text-emerald-700 font-semibold">${info.gateway}</span></p>` : ''}`;
+      ${info ? `<p class="mt-2 text-xs text-slate-400 font-mono">GW: <span class="text-emerald-700 font-semibold">${escapeHtml(n.gateway || info.gateway)}</span></p>` : ''}`;
     card.addEventListener('click', () => ipOpenDetail(n.id));
     grid.appendChild(card);
   });
@@ -1737,7 +1739,7 @@ function ipRenderDetail() {
   if (n.description) { descEl.textContent = n.description; descEl.classList.remove('hidden'); } else descEl.classList.add('hidden');
   document.getElementById('ip-info-network').textContent = info ? `${info.network}/${info.prefix}` : n.cidr;
   document.getElementById('ip-info-mask').textContent = info?.subnetMask || '—';
-  document.getElementById('ip-info-gateway').textContent = info?.gateway || '—';
+  document.getElementById('ip-info-gateway').textContent = n.gateway || info?.gateway || '—';
   document.getElementById('ip-info-broadcast').textContent = info?.broadcast || '—';
   document.getElementById('ip-info-usable').textContent = info ? info.usableHosts.toLocaleString('fr-FR') : '—';
   document.getElementById('ip-info-assigned').textContent = ipCurrentAddresses.length;
@@ -1821,12 +1823,16 @@ function ipOpenNetworkForm(net = null) {
   document.getElementById('ip-fn-name').value = net?.name||'';
   document.getElementById('ip-fn-cidr').value = net?.cidr||'';
   document.getElementById('ip-fn-vlan').value = net?.vlan||'';
+  document.getElementById('ip-fn-gateway').value = net?.gateway||'';
   document.getElementById('ip-fn-desc').value = net?.description||'';
   document.getElementById('ip-fn-error').classList.add('hidden');
   ipUpdateCidrPreview(net?.cidr||'');
   ipOpenModal('ip-modal-network');
 }
 document.getElementById('ip-fn-cidr').addEventListener('input', e => ipUpdateCidrPreview(e.target.value));
+document.getElementById('ip-fn-gateway').addEventListener('input', () =>
+  ipUpdateCidrPreview(document.getElementById('ip-fn-cidr').value)
+);
 function ipUpdateCidrPreview(val) {
   const p = document.getElementById('ip-cidr-preview');
   if (!val || !/^\d+\.\d+\.\d+\.\d+\/\d+$/.test(val)) { p.classList.add('hidden'); return; }
@@ -1834,7 +1840,8 @@ function ipUpdateCidrPreview(val) {
     const info = ipParseCidr(val);
     document.getElementById('ip-prev-network').textContent = `${info.network}/${info.prefix}`;
     document.getElementById('ip-prev-mask').textContent = info.subnetMask;
-    document.getElementById('ip-prev-gateway').textContent = info.gateway;
+    document.getElementById('ip-prev-gateway').textContent =
+      document.getElementById('ip-fn-gateway').value.trim() || info.gateway;
     document.getElementById('ip-prev-broadcast').textContent = info.broadcast;
     document.getElementById('ip-prev-usable').textContent = info.usableHosts.toLocaleString('fr-FR');
     p.classList.remove('hidden');
@@ -1844,7 +1851,8 @@ document.getElementById('ip-form-network').addEventListener('submit', async e =>
   e.preventDefault();
   const id = document.getElementById('ip-fn-id').value;
   const body = { name: document.getElementById('ip-fn-name').value, cidr: document.getElementById('ip-fn-cidr').value,
-    vlan: document.getElementById('ip-fn-vlan').value||null, description: document.getElementById('ip-fn-desc').value||null };
+    vlan: document.getElementById('ip-fn-vlan').value||null, gateway: document.getElementById('ip-fn-gateway').value||null,
+    description: document.getElementById('ip-fn-desc').value||null };
   const errEl = document.getElementById('ip-fn-error'); errEl.classList.add('hidden');
   try {
     const res = await fetch(id?`/api/ip-networks/${id}`:'/api/ip-networks', {

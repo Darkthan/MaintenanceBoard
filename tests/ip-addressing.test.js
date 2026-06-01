@@ -1,0 +1,90 @@
+const express = require('express');
+const request = require('supertest');
+
+jest.mock('../src/middleware/auth', () => ({
+  requireAuth: (req, _res, next) => {
+    req.user = { id: 'admin-1', role: 'ADMIN', name: 'Admin', email: 'admin@test.com', isActive: true };
+    next();
+  }
+}));
+
+jest.mock('../src/middleware/roles', () => ({
+  requireAdmin: (_req, _res, next) => next()
+}));
+
+jest.mock('../src/lib/prisma', () => ({
+  ipNetwork: {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn()
+  }
+}));
+
+const prisma = require('../src/lib/prisma');
+const ipAddressingRouter = require('../src/routes/ipAddressing');
+
+function buildApp() {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/ip-networks', ipAddressingRouter);
+  app.use((err, _req, res, _next) => {
+    res.status(err.status || 500).json({ error: err.message });
+  });
+  return app;
+}
+
+describe('ip addressing gateways', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('enregistre une passerelle personnalisee a la creation', async () => {
+    prisma.ipNetwork.create.mockImplementation(async ({ data }) => ({ id: 'network-1', ...data }));
+
+    const res = await request(buildApp())
+      .post('/api/ip-networks')
+      .send({ name: 'LAN Bureau', cidr: '10.0.1.0/24', gateway: '10.0.1.254' });
+
+    expect(res.status).toBe(201);
+    expect(prisma.ipNetwork.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ gateway: '10.0.1.254' })
+    });
+  });
+
+  it('expose la passerelle personnalisee dans les informations CIDR', async () => {
+    prisma.ipNetwork.findMany.mockResolvedValue([
+      { id: 'network-1', name: 'LAN Bureau', cidr: '10.0.1.0/24', gateway: '10.0.1.254', _count: { addresses: 0, ranges: 0 } }
+    ]);
+
+    const res = await request(buildApp()).get('/api/ip-networks');
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].cidrInfo.gateway).toBe('10.0.1.254');
+  });
+
+  it('modifie la passerelle d un reseau existant', async () => {
+    prisma.ipNetwork.findUnique.mockResolvedValue({ id: 'network-1', cidr: '10.0.1.0/24', gateway: null });
+    prisma.ipNetwork.update.mockImplementation(async ({ data }) => ({ id: 'network-1', ...data }));
+
+    const res = await request(buildApp())
+      .patch('/api/ip-networks/network-1')
+      .send({ gateway: '10.0.1.253' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.ipNetwork.update).toHaveBeenCalledWith({
+      where: { id: 'network-1' },
+      data: { gateway: '10.0.1.253' }
+    });
+  });
+
+  it('refuse une passerelle hors du sous-reseau', async () => {
+    const res = await request(buildApp())
+      .post('/api/ip-networks')
+      .send({ name: 'LAN Bureau', cidr: '10.0.1.0/24', gateway: '10.0.2.1' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('sous-réseau');
+    expect(prisma.ipNetwork.create).not.toHaveBeenCalled();
+  });
+});

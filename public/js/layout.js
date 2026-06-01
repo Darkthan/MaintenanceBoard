@@ -2195,8 +2195,9 @@ if (document.readyState === 'loading') {
 (function () {
   if (!('ontouchstart' in window)) return; // desktop : no-op
 
-  const THRESHOLD = 80;
-  let startY = 0, pulling = false, pullDist = 0, refreshing = false;
+  const THRESHOLD = 140;
+  const MIN_PULL_DURATION_MS = 350;
+  let startY = 0, pullStartedAt = 0, pulling = false, pullDist = 0, refreshing = false;
 
   // Keyframe spinner
   const style = document.createElement('style');
@@ -2241,25 +2242,34 @@ if (document.readyState === 'loading') {
   document.addEventListener('touchstart', e => {
     if (refreshing || window.scrollY > 0) return;
     startY = e.touches[0].clientY;
+    pullStartedAt = Date.now();
     pulling = true;
   }, { passive: true });
 
   document.addEventListener('touchmove', e => {
     if (!pulling || refreshing) return;
+    if (window.scrollY > 0) {
+      pulling = false;
+      pullDist = 0;
+      hide();
+      return;
+    }
     pullDist = Math.max(0, e.touches[0].clientY - startY);
     if (pullDist < 8) return;
     const progress = Math.min(pullDist / THRESHOLD, 1);
     show(Math.min(pullDist * 0.45, 56));
     spinner.style.transform = `rotate(${progress * 320}deg)`;
-    label.textContent = pullDist >= THRESHOLD ? 'Relâchez pour actualiser' : 'Tirez pour actualiser';
+    const heldLongEnough = Date.now() - pullStartedAt >= MIN_PULL_DURATION_MS;
+    label.textContent = pullDist >= THRESHOLD && heldLongEnough ? 'Relâchez pour actualiser' : 'Tirez pour actualiser';
   }, { passive: true });
 
   document.addEventListener('touchend', async () => {
     if (!pulling || refreshing) return;
     pulling = false;
     const dist = pullDist;
+    const duration = Date.now() - pullStartedAt;
     pullDist = 0;
-    if (dist < THRESHOLD) { hide(); return; }
+    if (dist < THRESHOLD || duration < MIN_PULL_DURATION_MS) { hide(); return; }
 
     refreshing = true;
     showLoading();
