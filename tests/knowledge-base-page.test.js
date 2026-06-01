@@ -38,6 +38,7 @@ describe('knowledge base page', () => {
     expect(res.text).toContain("await selectArticle('system-ip-addressing')");
     expect(res.text).toContain("actions.classList.remove('pointer-events-none', 'opacity-0', 'scale-95')");
     expect(res.text).toContain("style.transform = 'rotate(45deg)'");
+    expect(res.text).toContain('id="kb-fab-wrap" class="hidden fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3"');
     expect(res.text).toContain('Les images sont compressées automatiquement');
   });
 
