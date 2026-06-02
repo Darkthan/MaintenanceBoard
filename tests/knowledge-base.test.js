@@ -117,6 +117,35 @@ describe('knowledge base routes', () => {
     }));
   });
 
+  it('stocke le placement des equipements dans un plan reseau', async () => {
+    const createRes = await request(buildApp())
+      .post('/api/knowledge-base')
+      .send({
+        type: 'network-diagram',
+        title: 'Infra bâtiment B',
+        topologyText: 'CORE-SW1 | switch | 10.0.0.2',
+        topologyLayout: {
+          'CORE-SW1': { x: 120, y: 260 }
+        }
+      });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.article).toEqual(expect.objectContaining({
+      topologyLayout: expect.stringContaining('"CORE-SW1"')
+    }));
+
+    const patchRes = await request(buildApp())
+      .patch(`/api/knowledge-base/${createRes.body.article.id}`)
+      .send({
+        topologyLayout: {
+          'CORE-SW1': { x: 220, y: 320 }
+        }
+      });
+
+    expect(patchRes.status).toBe(200);
+    expect(patchRes.body.article.topologyLayout).toContain('"x":220');
+  });
+
   it('filtre les articles par recherche et categorie', async () => {
     fs.writeFileSync(knowledgeBaseFile, JSON.stringify({
       articles: [

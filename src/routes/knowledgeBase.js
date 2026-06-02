@@ -123,7 +123,8 @@ function serializeKnowledgeArticle(article, { full = false } = {}) {
       ...(isNetworkDiagram ? {
         diagramXml: article.diagramXml || '',
         diagramSvg: article.diagramSvg || '',
-        topologyText: article.topologyText || ''
+        topologyText: article.topologyText || '',
+        topologyLayout: article.topologyLayout || ''
       } : {})
     } : {})
   };

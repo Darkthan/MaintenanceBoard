@@ -145,6 +145,18 @@ function validateKnowledgeBasePayload(payload, { partial = false } = {}) {
   const title = payload.title === undefined ? undefined : String(payload.title || '').trim();
   const content = payload.content === undefined ? undefined : String(payload.content || '').trim();
   const topologyText = payload.topologyText === undefined ? undefined : String(payload.topologyText || '').trim();
+  let topologyLayout;
+  if (payload.topologyLayout !== undefined) {
+    if (typeof payload.topologyLayout === 'string') {
+      topologyLayout = String(payload.topologyLayout || '').trim();
+    } else {
+      try {
+        topologyLayout = JSON.stringify(payload.topologyLayout || {});
+      } catch {
+        topologyLayout = '';
+      }
+    }
+  }
   const summary = payload.summary === undefined ? undefined : String(payload.summary || '').trim();
   const category = payload.category === undefined ? undefined : String(payload.category || '').trim();
   const tags = payload.tags === undefined ? undefined : normalizeTags(payload.tags);
@@ -164,6 +176,7 @@ function validateKnowledgeBasePayload(payload, { partial = false } = {}) {
     ...(title !== undefined ? { title } : {}),
     ...(content !== undefined ? { content } : {}),
     ...(topologyText !== undefined ? { topologyText } : {}),
+    ...(topologyLayout !== undefined ? { topologyLayout } : {}),
     ...(summary !== undefined ? { summary } : {}),
     ...(category !== undefined ? { category } : {}),
     ...(tags !== undefined ? { tags } : {}),
@@ -187,6 +200,7 @@ function createKnowledgeBaseArticle(payload, user) {
     tags: data.tags || [],
     content: data.content || '',
     topologyText: data.topologyText || '',
+    topologyLayout: data.topologyLayout || '',
     diagramXml: data.diagramXml || '',
     diagramSvg: data.diagramSvg || '',
     attachments: [],
@@ -211,6 +225,7 @@ function updateKnowledgeBaseArticle(article, payload, user) {
     ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
     ...(patch.content !== undefined ? { content: patch.content } : {}),
     ...(patch.topologyText !== undefined ? { topologyText: patch.topologyText } : {}),
+    ...(patch.topologyLayout !== undefined ? { topologyLayout: patch.topologyLayout } : {}),
     ...(patch.diagramXml !== undefined ? { diagramXml: patch.diagramXml } : {}),
     ...(patch.diagramSvg !== undefined ? { diagramSvg: patch.diagramSvg } : {}),
     updatedAt: new Date().toISOString(),

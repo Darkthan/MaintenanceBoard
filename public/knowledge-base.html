@@ -796,8 +796,13 @@
           </svg>
         </button>
       </div>
-      <div class="flex-1 min-h-0 overflow-auto p-5 bg-slate-50">
-        <div id="diagram-fullscreen-content"></div>
+      <div class="flex-1 min-h-0 overflow-hidden bg-slate-50 relative">
+        <div id="diagram-fullscreen-viewport" class="absolute inset-0 overflow-hidden touch-none">
+          <div id="diagram-fullscreen-content" class="absolute left-0 top-0"></div>
+        </div>
+        <div class="absolute left-4 bottom-4 rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-500 shadow-lg backdrop-blur">
+          Molette pour zoomer, glisser pour déplacer la vue, tirer un équipement pour le repositionner.
+        </div>
       </div>
     </div>
   </div>
@@ -1386,8 +1391,9 @@ async function selectArticle(articleId) {
     } else if (isNetworkDiagram) {
       articleContentEl.className = 'space-y-4 text-sm text-slate-700';
       const topologyText = String(article.topologyText || article.content || '').trim();
+      const topologyLayout = normalizeTopologyLayout(article.topologyLayout || {});
       if (topologyText) {
-        renderTopologyDiagramInto(articleContentEl, topologyText, { interactive: true, sourceText: topologyText });
+        renderTopologyDiagramInto(articleContentEl, topologyText, { interactive: true, sourceText: topologyText, layout: topologyLayout });
       } else if (article.diagramSvg) {
         articleContentEl.innerHTML = `<div class="w-full overflow-auto rounded-xl border border-slate-200 bg-white p-3">${DOMPurify.sanitize(article.diagramSvg, { USE_PROFILES: { svg: true, svgFilters: true } })}</div>`;
       } else {
@@ -1647,8 +1653,16 @@ let diagramEquipmentCurrentNode = null;
 let diagramEquipmentCurrentDetail = null;
 let diagramTopologyCurrentText = '';
 let diagramTopologyCurrentModel = null;
+let diagramTopologyCurrentLayout = {};
 let diagramFullscreenZoom = 1;
 let diagramFullscreenExploded = true;
+let diagramFullscreenPan = { x: 0, y: 0 };
+let diagramFullscreenLayout = {};
+let diagramFullscreenViewportEl = null;
+let diagramFullscreenStageEl = null;
+let diagramFullscreenInteraction = null;
+let diagramFullscreenSaveTimer = null;
+let diagramFullscreenSuppressClickUntil = 0;
 
 const diagramEditorModalEl = document.getElementById('diagram-editor-modal');
 const drawioIframeEl = document.getElementById('drawio-iframe');
@@ -1670,6 +1684,7 @@ const diagramEquipmentMetaEl = document.getElementById('diagram-equipment-meta')
 const diagramEquipmentOpenBtnEl = document.getElementById('diagram-equipment-open-btn');
 const diagramEquipmentCopyBtnEl = document.getElementById('diagram-equipment-copy-btn');
 const diagramFullscreenModalEl = document.getElementById('diagram-fullscreen-modal');
+const diagramFullscreenViewportEl = document.getElementById('diagram-fullscreen-viewport');
 const diagramFullscreenContentEl = document.getElementById('diagram-fullscreen-content');
 const diagramFullscreenTitleEl = document.getElementById('diagram-fullscreen-title');
 const diagramFullscreenMetaEl = document.getElementById('diagram-fullscreen-meta');
@@ -1831,6 +1846,33 @@ function isInterSwitchLink(link, model) {
   return !!(from && to && isSwitchLikeNode(from) && isSwitchLikeNode(to));
 }
 
+function parseTopologyLayout(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value && typeof value === 'object' ? value : {};
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeTopologyLayout(layout) {
+  const result = {};
+  Object.entries(parseTopologyLayout(layout)).forEach(([nodeId, pos]) => {
+    const x = Number(pos?.x);
+    const y = Number(pos?.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      result[nodeId] = { x, y };
+    }
+  });
+  return result;
+}
+
+function cloneTopologyLayout(layout) {
+  return JSON.parse(JSON.stringify(normalizeTopologyLayout(layout)));
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -1856,7 +1898,7 @@ function copyTextToClipboard(text) {
   });
 }
 
-function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview', model = null } = {}) {
+function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview', model = null, layout = null } = {}) {
   const modelData = model || parseTopologyText(text);
   diagramTopologyCurrentText = String(text || '');
   diagramTopologyCurrentModel = modelData;
@@ -1865,51 +1907,82 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   const visibleLinks = links.filter(link => isInterSwitchLink(link, modelData));
   const fullscreenActive = mode === 'fullscreen';
   const exploded = fullscreenActive ? diagramFullscreenExploded : false;
-  const zoom = fullscreenActive ? clamp(diagramFullscreenZoom, 0.7, 1.9) : 1;
 
   if (!nodes.length) {
     return {
       html: `<div class="rounded-3xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-500">Décris une topologie pour générer le schéma.</div>`,
       stats: 'Aucun équipement détecté.',
-      height: 220
+      height: 220,
+      positions: new Map()
     };
   }
 
-  const tiers = [[], [], []];
-  nodes.slice().sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
-    .forEach(node => tiers[Math.max(0, Math.min(2, node.tier || 2))].push(node));
-
   const nodeWidth = 230;
   const nodeHeight = 118;
-  const colGap = exploded ? 64 : 24;
-  const rowGap = exploded ? 108 : 54;
-  const pad = exploded ? 48 : 28;
-  const maxTierWidth = Math.max(...tiers.map(tier => Math.max(1, tier.length)));
-  const innerWidth = maxTierWidth * nodeWidth + Math.max(0, maxTierWidth - 1) * colGap;
-  const width = Math.max(860, pad * 2 + innerWidth);
-
-  const positions = new Map();
-  let maxRow = 0;
-
-  tiers.forEach((tierNodes, tierIndex) => {
-    const rowWidth = tierNodes.length * nodeWidth + Math.max(0, tierNodes.length - 1) * colGap;
-    const rowLeft = pad + Math.max(0, (width - pad * 2 - rowWidth) / 2);
-    const top = pad + tierIndex * (nodeHeight + rowGap);
-    maxRow = Math.max(maxRow, top + nodeHeight);
-    tierNodes.forEach((node, index) => {
-      positions.set(node.id, {
-        x: rowLeft + index * (nodeWidth + colGap),
-        y: top
-      });
-    });
-  });
-
-  const height = Math.max(360, maxRow + pad);
   const palette = {
     0: { border: 'border-indigo-200', bg: 'bg-indigo-50', text: 'text-indigo-700', dot: '#6366f1' },
     1: { border: 'border-purple-200', bg: 'bg-purple-50', text: 'text-purple-700', dot: '#a855f7' },
     2: { border: 'border-sky-200', bg: 'bg-sky-50', text: 'text-sky-700', dot: '#0ea5e9' }
   };
+
+  const positions = new Map();
+  const layoutData = normalizeTopologyLayout(layout);
+  const sortedNodes = nodes.slice().sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+  const tiers = [[], [], []];
+  sortedNodes.forEach(node => tiers[Math.max(0, Math.min(2, node.tier || 2))].push(node));
+
+  const colGap = exploded ? 84 : 34;
+  const rowGap = exploded ? 118 : 62;
+  const pad = exploded ? 72 : 36;
+
+  sortedNodes.forEach(node => {
+    const nodeLayout = layoutData[node.id];
+    if (nodeLayout) {
+      positions.set(node.id, { x: nodeLayout.x, y: nodeLayout.y, tier: node.tier || 2, fixed: true });
+    }
+  });
+
+  tiers.forEach((tierNodes, tierIndex) => {
+    const missing = tierNodes.filter(node => !positions.has(node.id));
+    if (!missing.length) return;
+    const rowWidth = missing.length * nodeWidth + Math.max(0, missing.length - 1) * colGap;
+    const rowLeft = pad + Math.max(0, (Math.max(860, rowWidth + pad * 2) - pad * 2 - rowWidth) / 2);
+    const top = pad + tierIndex * (nodeHeight + rowGap);
+    missing.forEach((node, index) => {
+      positions.set(node.id, {
+        x: rowLeft + index * (nodeWidth + colGap),
+        y: top,
+        tier: node.tier || 2,
+        fixed: false
+      });
+    });
+  });
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  positions.forEach(pos => {
+    minX = Math.min(minX, pos.x);
+    minY = Math.min(minY, pos.y);
+    maxX = Math.max(maxX, pos.x + nodeWidth);
+    maxY = Math.max(maxY, pos.y + nodeHeight);
+  });
+  const shiftX = minX < pad ? pad - minX : 0;
+  const shiftY = minY < pad ? pad - minY : 0;
+  if (shiftX || shiftY) {
+    positions.forEach(pos => {
+      pos.x += shiftX;
+      pos.y += shiftY;
+    });
+    minX += shiftX;
+    minY += shiftY;
+    maxX += shiftX;
+    maxY += shiftY;
+  }
+
+  const width = Math.max(860, Math.ceil(maxX + pad));
+  const height = Math.max(360, Math.ceil(maxY + pad));
 
   function getPortAnchor(pos, side, offsetIndex = 0, count = 1) {
     const step = 16;
@@ -1922,6 +1995,7 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     return { x: pos.x + nodeWidth, y: pos.y + nodeHeight / 2 + offset };
   }
 
+  const linkIndexByNode = new Map();
   const svgLines = visibleLinks.map(link => {
     const from = positions.get(link.from);
     const to = positions.get(link.to);
@@ -1934,10 +2008,12 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     const toSide = horizontal ? (from.x <= to.x ? 'left' : 'right') : (fromTier < toTier ? 'top' : 'bottom');
     const fromLinks = visibleLinks.filter(item => item.from === link.from || item.to === link.from);
     const toLinks = visibleLinks.filter(item => item.from === link.to || item.to === link.to);
-    const fromIndex = Math.max(0, fromLinks.findIndex(item => item === link));
-    const toIndex = Math.max(0, toLinks.findIndex(item => item === link));
-    const start = getPortAnchor(from, fromSide, fromIndex, Math.max(1, fromLinks.length));
-    const end = getPortAnchor(to, toSide, toIndex, Math.max(1, toLinks.length));
+    const fromIndex = linkIndexByNode.has(`${link.from}:${link.id}`) ? linkIndexByNode.get(`${link.from}:${link.id}`) : fromLinks.findIndex(item => item === link);
+    const toIndex = linkIndexByNode.has(`${link.to}:${link.id}`) ? linkIndexByNode.get(`${link.to}:${link.id}`) : toLinks.findIndex(item => item === link);
+    linkIndexByNode.set(`${link.from}:${link.id}`, fromIndex);
+    linkIndexByNode.set(`${link.to}:${link.id}`, toIndex);
+    const start = getPortAnchor(from, fromSide, Math.max(0, fromIndex), Math.max(1, fromLinks.length));
+    const end = getPortAnchor(to, toSide, Math.max(0, toIndex), Math.max(1, toLinks.length));
     const dx = Math.max(80, Math.abs(end.x - start.x) * 0.45);
     const dy = Math.max(60, Math.abs(end.y - start.y) * 0.5);
     const c1x = horizontal ? start.x + (end.x >= start.x ? dx : -dx) : start.x;
@@ -1950,7 +2026,7 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     `;
   }).join('');
 
-  const nodeMarkup = nodes.map(node => {
+  const nodeMarkup = sortedNodes.map(node => {
     const pos = positions.get(node.id);
     const paletteEntry = palette[Math.max(0, Math.min(2, node.tier || 2))];
     const portCount = node.ports.size;
@@ -1959,11 +2035,13 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
       node.ip ? escapeHtml(node.ip) : '',
       node.note ? escapeHtml(node.note) : ''
     ].filter(Boolean);
-    const attrs = interactive ? `data-diagram-node="${escapeHtml(node.id)}" role="button" tabindex="0"` : '';
+    const dragAttrs = interactive && fullscreenActive && isAdmin() ? 'data-diagram-node-draggable="1"' : '';
+    const attrs = interactive ? `data-diagram-node="${escapeHtml(node.id)}" role="button" tabindex="0" ${dragAttrs}` : '';
     return `
       <button type="button" ${attrs}
-        class="absolute w-[230px] rounded-3xl border ${paletteEntry.border} ${paletteEntry.bg} p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
-        style="left:${pos.x}px;top:${pos.y}px">
+        class="absolute w-[230px] rounded-3xl border ${paletteEntry.border} ${paletteEntry.bg} p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-400 ${interactive && fullscreenActive && isAdmin() ? 'cursor-grab active:cursor-grabbing' : ''}"
+        style="left:${pos.x}px;top:${pos.y}px"
+        data-node-id="${escapeHtml(node.id)}">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="text-[11px] font-semibold uppercase tracking-wide ${paletteEntry.text}">${escapeHtml(node.kind || 'Équipement')}</p>
@@ -1996,39 +2074,40 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   }).join('');
 
   const html = `
-    <div class="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 p-6 shadow-inner" style="width:${width * zoom}px; min-width:${width * zoom}px; height:${height * zoom}px; min-height:${height * zoom}px">
+    <div data-diagram-stage class="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 p-6 shadow-inner" style="width:${width}px; min-width:${width}px; height:${height}px; min-height:${height}px">
       <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.16),transparent_35%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.18),transparent_28%),linear-gradient(180deg,rgba(15,23,42,1),rgba(15,23,42,0.92))]"></div>
-      <div class="absolute inset-0 origin-top-left" style="width:${width}px; height:${height}px; transform:scale(${zoom});">
-        <svg class="absolute inset-0 h-full w-full" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="diagram-link-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#c4b5fd" />
-              <stop offset="100%" stop-color="#67e8f9" />
-            </linearGradient>
-            <marker id="diagram-arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,6 L8,3 z" fill="#c4b5fd" />
-            </marker>
-          </defs>
-          ${svgLines}
-        </svg>
-        ${nodeMarkup}
-        ${linkLabels}
-      </div>
+      <svg class="absolute inset-0 h-full w-full pointer-events-none" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="diagram-link-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#c4b5fd" />
+            <stop offset="100%" stop-color="#67e8f9" />
+          </linearGradient>
+          <marker id="diagram-arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L8,3 z" fill="#c4b5fd" />
+          </marker>
+        </defs>
+        ${svgLines}
+      </svg>
+      ${nodeMarkup}
+      ${linkLabels}
     </div>
   `;
 
   return {
     html,
     stats: `${nodes.length} équipement${nodes.length > 1 ? 's' : ''} · ${visibleLinks.length} liaison${visibleLinks.length > 1 ? 's' : ''} interswitch${links.length !== visibleLinks.length ? ` · ${links.length - visibleLinks.length} liaison${links.length - visibleLinks.length > 1 ? 's' : ''} masquée${links.length - visibleLinks.length > 1 ? 's' : ''}` : ''}`,
-    height
+    height,
+    width,
+    positions
   };
 }
 
-function renderTopologyDiagramInto(containerEl, text, { interactive = true, sourceText = '', mode = 'preview' } = {}) {
+function renderTopologyDiagramInto(containerEl, text, { interactive = true, sourceText = '', mode = 'preview', layout = null } = {}) {
   if (!containerEl) return;
   diagramTopologyCurrentText = String(text || '');
   diagramTopologyCurrentModel = parseTopologyText(text);
-  const result = getTopologyDiagramMarkup(text, { interactive, model: diagramTopologyCurrentModel, mode });
+  diagramTopologyCurrentLayout = normalizeTopologyLayout(layout);
+  const result = getTopologyDiagramMarkup(text, { interactive, model: diagramTopologyCurrentModel, mode, layout: diagramTopologyCurrentLayout });
   containerEl.innerHTML = `
     <div class="space-y-4">
       ${result.html}
@@ -2045,10 +2124,15 @@ function renderTopologyDiagramInto(containerEl, text, { interactive = true, sour
       ` : ''}
     </div>
   `;
+  const stageEl = containerEl.querySelector('[data-diagram-stage]');
+  if (stageEl) {
+    stageEl.dataset.diagramStage = '1';
+  }
   if (!interactive) return;
   containerEl.querySelectorAll('[data-diagram-node]').forEach(button => {
     const nodeName = button.dataset.diagramNode || '';
     button.addEventListener('click', () => {
+      if (Date.now() < diagramFullscreenSuppressClickUntil) return;
       const model = diagramTopologyCurrentModel || parseTopologyText(diagramTopologyCurrentText);
       const node = model.nodes.find(item => item.id === nodeName);
       if (node) openDiagramEquipmentModal(node);
@@ -2060,6 +2144,220 @@ function renderTopologyDiagramInto(containerEl, text, { interactive = true, sour
       }
     });
   });
+  return result;
+}
+
+function getCurrentTopologyLayoutFromStage() {
+  const layout = {};
+  if (!diagramFullscreenStageEl) return layout;
+  diagramFullscreenStageEl.querySelectorAll('[data-diagram-node]').forEach(nodeEl => {
+    const nodeId = nodeEl.dataset.nodeId;
+    if (!nodeId) return;
+    const left = Number.parseFloat(nodeEl.style.left || nodeEl.getAttribute('data-x') || '0');
+    const top = Number.parseFloat(nodeEl.style.top || nodeEl.getAttribute('data-y') || '0');
+    if (Number.isFinite(left) && Number.isFinite(top)) {
+      layout[nodeId] = { x: left, y: top };
+    }
+  });
+  return layout;
+}
+
+function applyFullscreenTopologyTransform() {
+  if (!diagramFullscreenStageEl) return;
+  diagramFullscreenStageEl.style.transformOrigin = '0 0';
+  diagramFullscreenStageEl.style.transform = `translate(${diagramFullscreenPan.x}px, ${diagramFullscreenPan.y}px) scale(${diagramFullscreenZoom})`;
+  diagramFullscreenZoomLabelEl.textContent = `${Math.round(clamp(diagramFullscreenZoom, 0.7, 1.9) * 100)}%`;
+  diagramFullscreenExplodedBtnEl.classList.toggle('bg-purple-50', !!diagramFullscreenExploded);
+  diagramFullscreenExplodedBtnEl.classList.toggle('text-purple-700', !!diagramFullscreenExploded);
+  diagramFullscreenExplodedBtnEl.classList.toggle('border-purple-200', !!diagramFullscreenExploded);
+  diagramFullscreenExplodedBtnEl.textContent = diagramFullscreenExploded ? 'Vue éclatée' : 'Vue compacte';
+}
+
+function scheduleFullscreenTopologyRender() {
+  if (diagramFullscreenInteraction?.raf) return;
+  diagramFullscreenInteraction = diagramFullscreenInteraction || {};
+  diagramFullscreenInteraction.raf = window.requestAnimationFrame(() => {
+    diagramFullscreenInteraction.raf = 0;
+    rerenderFullscreenTopology();
+  });
+}
+
+function fitFullscreenTopology() {
+  if (!diagramFullscreenViewportEl || !diagramFullscreenStageEl) return;
+  const viewportRect = diagramFullscreenViewportEl.getBoundingClientRect();
+  const stageRect = diagramFullscreenStageEl.getBoundingClientRect();
+  const baseWidth = stageRect.width || 1;
+  const baseHeight = stageRect.height || 1;
+  const fitZoom = clamp(Math.min(
+    (viewportRect.width - 96) / baseWidth,
+    (viewportRect.height - 96) / baseHeight,
+    1
+  ), 0.7, 1.4);
+  diagramFullscreenZoom = fitZoom;
+  diagramFullscreenPan = {
+    x: Math.max(32, (viewportRect.width - baseWidth * fitZoom) / 2),
+    y: Math.max(32, (viewportRect.height - baseHeight * fitZoom) / 2)
+  };
+  applyFullscreenTopologyTransform();
+}
+
+function saveFullscreenTopologyLayout() {
+  if (!isAdmin() || !selectedArticle || selectedArticle.type !== 'network-diagram') return;
+  const layout = normalizeTopologyLayout(diagramFullscreenLayout);
+  const topologyLayout = layout;
+  if (!Object.keys(topologyLayout).length) return;
+
+  if (diagramFullscreenSaveTimer) window.clearTimeout(diagramFullscreenSaveTimer);
+  diagramFullscreenSaveTimer = window.setTimeout(async () => {
+    try {
+      const response = await api.patch(`/knowledge-base/${encodeURIComponent(selectedArticle.id)}`, {
+        topologyLayout
+      });
+      selectedArticle = response.article || selectedArticle;
+      diagramFullscreenLayout = normalizeTopologyLayout(selectedArticle?.topologyLayout || diagramFullscreenLayout);
+      rerenderFullscreenTopology();
+      if (selectedArticle?.id === selectedArticleId && document.getElementById('knowledge-article-panel') && !articlePanelEl.classList.contains('hidden')) {
+        const topologyText = String(selectedArticle.topologyText || selectedArticle.content || '').trim();
+        if (topologyText) {
+          renderTopologyDiagramInto(articleContentEl, topologyText, {
+            interactive: true,
+            sourceText: topologyText,
+            mode: 'preview',
+            layout: diagramFullscreenLayout
+          });
+        }
+      }
+      showToast('Placement enregistré', 'success');
+    } catch (err) {
+      showToast(err.message || 'Impossible d’enregistrer le placement', 'error');
+    }
+  }, 220);
+}
+
+function initFullscreenTopologyInteractions() {
+  if (!diagramFullscreenViewportEl || !diagramFullscreenStageEl) return;
+  const viewport = diagramFullscreenViewportEl;
+  const stage = diagramFullscreenStageEl;
+
+  const onWheel = event => {
+    event.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    const cursorX = event.clientX - rect.left;
+    const cursorY = event.clientY - rect.top;
+    const factor = event.deltaY > 0 ? 0.92 : 1.08;
+    const nextZoom = clamp(diagramFullscreenZoom * factor, 0.7, 1.9);
+    const worldX = (cursorX - diagramFullscreenPan.x) / diagramFullscreenZoom;
+    const worldY = (cursorY - diagramFullscreenPan.y) / diagramFullscreenZoom;
+    diagramFullscreenPan.x = cursorX - worldX * nextZoom;
+    diagramFullscreenPan.y = cursorY - worldY * nextZoom;
+    diagramFullscreenZoom = nextZoom;
+    applyFullscreenTopologyTransform();
+  };
+
+  const state = {
+    mode: '',
+    startX: 0,
+    startY: 0,
+    startPanX: 0,
+    startPanY: 0,
+    startNodeX: 0,
+    startNodeY: 0,
+    nodeId: '',
+    moved: false
+  };
+
+  const onPointerMove = event => {
+    if (!state.mode) return;
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) state.moved = true;
+
+    if (state.mode === 'pan') {
+      diagramFullscreenPan.x = state.startPanX + dx;
+      diagramFullscreenPan.y = state.startPanY + dy;
+      applyFullscreenTopologyTransform();
+      return;
+    }
+
+    if (state.mode === 'drag' && state.nodeId) {
+      const nextX = state.startNodeX + (dx / diagramFullscreenZoom);
+      const nextY = state.startNodeY + (dy / diagramFullscreenZoom);
+      const clampedX = Math.max(0, nextX);
+      const clampedY = Math.max(0, nextY);
+      diagramFullscreenLayout[state.nodeId] = { x: clampedX, y: clampedY };
+      const safeNodeId = String(state.nodeId).replace(/"/g, '\\"');
+      const nodeEl = stage.querySelector(`[data-node-id="${safeNodeId}"]`);
+      if (nodeEl) {
+        nodeEl.style.left = `${clampedX}px`;
+        nodeEl.style.top = `${clampedY}px`;
+      }
+    }
+  };
+
+  const endInteraction = async () => {
+    if (!state.mode) return;
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', endInteraction);
+    window.removeEventListener('pointercancel', endInteraction);
+    const moved = state.moved;
+    const mode = state.mode;
+    state.mode = '';
+    if (mode === 'drag' && moved) {
+      diagramFullscreenSuppressClickUntil = Date.now() + 250;
+      diagramFullscreenLayout = getCurrentTopologyLayoutFromStage();
+      saveFullscreenTopologyLayout();
+    }
+  };
+
+  const onPointerDown = event => {
+    if (!diagramFullscreenModalEl || diagramFullscreenModalEl.classList.contains('hidden')) return;
+    const nodeBtn = event.target.closest?.('[data-diagram-node]');
+    if (nodeBtn && isAdmin()) {
+      const nodeId = nodeBtn.dataset.nodeId;
+      const rect = viewport.getBoundingClientRect();
+      const currentLayout = getCurrentTopologyLayoutFromStage();
+      const nodePos = currentLayout[nodeId] || { x: Number.parseFloat(nodeBtn.style.left) || 0, y: Number.parseFloat(nodeBtn.style.top) || 0 };
+      state.mode = 'drag';
+      state.nodeId = nodeId;
+      state.startX = event.clientX;
+      state.startY = event.clientY;
+      state.startNodeX = nodePos.x;
+      state.startNodeY = nodePos.y;
+      state.moved = false;
+      event.preventDefault();
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', endInteraction, { once: true });
+      window.addEventListener('pointercancel', endInteraction, { once: true });
+      return;
+    }
+
+    const stageTarget = event.target.closest?.('[data-diagram-stage]');
+    if (!stageTarget) return;
+    state.mode = 'pan';
+    state.startX = event.clientX;
+    state.startY = event.clientY;
+    state.startPanX = diagramFullscreenPan.x;
+    state.startPanY = diagramFullscreenPan.y;
+    state.moved = false;
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', endInteraction, { once: true });
+    window.addEventListener('pointercancel', endInteraction, { once: true });
+  };
+
+  viewport.addEventListener('wheel', onWheel, { passive: false });
+  viewport.addEventListener('pointerdown', onPointerDown);
+
+  diagramFullscreenInteraction = {
+    viewport,
+    stage,
+    cleanup() {
+      viewport.removeEventListener('wheel', onWheel);
+      viewport.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', endInteraction);
+      window.removeEventListener('pointercancel', endInteraction);
+    }
+  };
 }
 
 function openTopologyFullscreen() {
@@ -2068,14 +2366,21 @@ function openTopologyFullscreen() {
   const title = selectedArticle?.title || 'Schéma réseau';
   diagramFullscreenTitleEl.textContent = title;
   diagramFullscreenMetaEl.textContent = selectedArticle?.category ? selectedArticle.category : '';
-  diagramFullscreenZoom = clamp(diagramFullscreenZoom || 1, 0.7, 1.9);
+  if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
+  diagramFullscreenInteraction = null;
+  diagramFullscreenZoom = 1;
+  diagramFullscreenPan = { x: 32, y: 32 };
   diagramFullscreenExploded = true;
+  diagramFullscreenLayout = normalizeTopologyLayout(selectedArticle?.topologyLayout || {});
   renderTopologyDiagramInto(diagramFullscreenContentEl, topologyText, {
     interactive: true,
     sourceText: topologyText,
-    mode: 'fullscreen'
+    mode: 'fullscreen',
+    layout: diagramFullscreenLayout
   });
-  updateFullscreenTopologyControls();
+  diagramFullscreenStageEl = diagramFullscreenContentEl.querySelector('[data-diagram-stage]');
+  initFullscreenTopologyInteractions();
+  fitFullscreenTopology();
   diagramFullscreenModalEl.classList.remove('hidden');
   document.body.classList.add('overflow-hidden');
 }
@@ -2084,6 +2389,9 @@ function closeTopologyFullscreen() {
   diagramFullscreenModalEl.classList.add('hidden');
   document.body.classList.remove('overflow-hidden');
   diagramFullscreenContentEl.innerHTML = '';
+  if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
+  diagramFullscreenInteraction = null;
+  diagramFullscreenStageEl = null;
 }
 
 function updateFullscreenTopologyControls() {
@@ -2098,11 +2406,17 @@ function rerenderFullscreenTopology() {
   if (diagramFullscreenModalEl.classList.contains('hidden')) return;
   const topologyText = String(selectedArticle?.topologyText || selectedArticle?.content || '').trim();
   if (!topologyText) return;
+  if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
+  diagramFullscreenInteraction = null;
   renderTopologyDiagramInto(diagramFullscreenContentEl, topologyText, {
     interactive: true,
     sourceText: topologyText,
-    mode: 'fullscreen'
+    mode: 'fullscreen',
+    layout: diagramFullscreenLayout
   });
+  diagramFullscreenStageEl = diagramFullscreenContentEl.querySelector('[data-diagram-stage]');
+  initFullscreenTopologyInteractions();
+  if (diagramFullscreenStageEl) applyFullscreenTopologyTransform();
   updateFullscreenTopologyControls();
 }
 
@@ -2451,20 +2765,22 @@ document.getElementById('diagram-fullscreen-btn').addEventListener('click', open
 document.getElementById('close-diagram-fullscreen-btn').addEventListener('click', closeTopologyFullscreen);
 diagramFullscreenZoomInBtnEl.addEventListener('click', () => {
   diagramFullscreenZoom = clamp(diagramFullscreenZoom + 0.1, 0.7, 1.9);
-  rerenderFullscreenTopology();
+  applyFullscreenTopologyTransform();
 });
 diagramFullscreenZoomOutBtnEl.addEventListener('click', () => {
   diagramFullscreenZoom = clamp(diagramFullscreenZoom - 0.1, 0.7, 1.9);
-  rerenderFullscreenTopology();
+  applyFullscreenTopologyTransform();
 });
 diagramFullscreenResetBtnEl.addEventListener('click', () => {
   diagramFullscreenZoom = 1;
   diagramFullscreenExploded = true;
   rerenderFullscreenTopology();
+  fitFullscreenTopology();
 });
 diagramFullscreenExplodedBtnEl.addEventListener('click', () => {
   diagramFullscreenExploded = !diagramFullscreenExploded;
   rerenderFullscreenTopology();
+  fitFullscreenTopology();
 });
 diagramFullscreenModalEl.addEventListener('click', event => {
   if (event.target === diagramFullscreenModalEl) closeTopologyFullscreen();
