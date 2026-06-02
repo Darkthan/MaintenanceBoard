@@ -42,6 +42,10 @@
             Envoyer le lien de connexion
           </button>
         </div>
+        <div id="relay-banner" class="hidden rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 flex items-start gap-3">
+          <svg class="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z"/></svg>
+          <span>Si le formulaire s'est ouvert sur un autre onglet, vous pouvez <strong>fermer celui-ci</strong>. Sinon, continuez ici.</span>
+        </div>
         <form id="request-form" class="hidden space-y-4">
           <div class="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
             Connecté en tant que <strong id="authenticated-email"></strong>
@@ -157,6 +161,60 @@ let currentToken = null;
 let currentAccessToken = null;
 let currentRequesterName = '';
 let resources = [];
+let authChannel = null;
+
+// Ouvre la page en mode "relais d'auth" : diffuse le token aux onglets en attente
+// puis affiche un message de fermeture.
+function broadcastAuthAndShowRelay(token, accessToken) {
+  const key = `loan-auth-${token}`;
+  try {
+    const ch = new BroadcastChannel(key);
+    ch.postMessage({ type: 'loan-access-granted', token, accessToken });
+    ch.close();
+  } catch {}
+  try {
+    localStorage.setItem(key, JSON.stringify({ accessToken, ts: Date.now() }));
+    setTimeout(() => localStorage.removeItem(key), 10000);
+  } catch {}
+}
+
+// Après envoi du lien, écoute sur BroadcastChannel + storage pour auto-authentifier
+// l'onglet courant quand l'utilisateur clique le lien depuis son email.
+function waitForAuthBroadcast(token) {
+  if (authChannel) { try { authChannel.close(); } catch {} }
+  const key = `loan-auth-${token}`;
+  try {
+    authChannel = new BroadcastChannel(key);
+    authChannel.onmessage = (event) => {
+      if (event.data?.type === 'loan-access-granted' && event.data.token === token) {
+        authChannel.close();
+        authChannel = null;
+        loadLinkWithAccess(event.data.accessToken);
+      }
+    };
+  } catch {}
+  window._loanStorageHandler = (e) => {
+    if (e.key === key && e.newValue) {
+      try {
+        const data = JSON.parse(e.newValue);
+        if (data?.accessToken) loadLinkWithAccess(data.accessToken);
+      } catch {}
+    }
+  };
+  window.addEventListener('storage', window._loanStorageHandler);
+}
+
+async function loadLinkWithAccess(accessToken) {
+  if (window._loanStorageHandler) {
+    window.removeEventListener('storage', window._loanStorageHandler);
+  }
+  currentAccessToken = accessToken;
+  // Mettre à jour l'URL sans rechargement pour que F5 reste authentifié
+  const url = new URL(window.location.href);
+  url.searchParams.set('access', accessToken);
+  history.replaceState(null, '', url.toString());
+  await loadLink();
+}
 
 function getToken() {
   return new URLSearchParams(window.location.search).get('token') || '';
@@ -703,6 +761,13 @@ async function loadLink() {
       return;
     }
 
+    // Si la page a été ouverte via le lien email (access dans l'URL initiale),
+    // diffuser le token aux onglets qui attendaient puis montrer la bannière.
+    if (getAccessToken()) {
+      broadcastAuthAndShowRelay(currentToken, data.accessToken || currentAccessToken);
+      document.getElementById('relay-banner').classList.remove('hidden');
+    }
+
     resources = Array.isArray(data.resources) ? data.resources : [];
     currentAccessToken = data.accessToken || currentAccessToken;
     currentRequesterName = data.requesterName || '';
@@ -753,7 +818,8 @@ document.getElementById('send-auth-link-btn').addEventListener('click', async ()
 
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload.error || payload.errors?.[0]?.msg || 'Erreur lors de l’envoi du lien');
-    setFeedback('auth-feedback', 'success', payload.message || 'Un lien de connexion a été envoyé.');
+    setFeedback('auth-feedback', 'success', 'Lien envoyé ! Cliquez sur le lien dans votre email — le formulaire s\'ouvrira automatiquement sur cette page.');
+    waitForAuthBroadcast(currentToken);
   } catch (err) {
     setFeedback('auth-feedback', 'error', err.message);
   }
