@@ -65,6 +65,10 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined #mobile-tabbar-shell {
         display: block !important;
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 35;
+        pointer-events: none;
         /* Pas de position:fixed ni contain:layout — sur iOS Safari, contain:layout
            crée un containing block pour les enfants position:fixed, les positionnant
            par rapport au shell (height:0) au lieu du viewport → tab bar hors écran */
@@ -73,14 +77,12 @@ function ensureResponsiveStyles() {
       #mobile-tabbar-bar,
       #mobile-tabbar-sheet {
         pointer-events: auto;
-        -webkit-transform: translateZ(0);
-        transform: translateZ(0);
         -webkit-backface-visibility: hidden;
         backface-visibility: hidden;
       }
 
       body.app-mobile-refined #mobile-tabbar-bar {
-        position: fixed !important;
+        position: absolute !important;
         inset: auto 0 0 0 !important;
         z-index: 40;
         touch-action: manipulation;
@@ -100,6 +102,8 @@ function ensureResponsiveStyles() {
       }
 
       body.app-mobile-refined #mobile-tabbar-sheet {
+        position: absolute !important;
+        inset: auto 0 0 0 !important;
         max-height: min(82dvh, 34rem);
         overflow-y: auto;
         overscroll-behavior: contain;

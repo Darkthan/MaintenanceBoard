@@ -30,6 +30,7 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain('--mobile-content-clearance');
     expect(res.text).toContain('--mobile-fab-clearance');
     expect(res.text).toContain('position: fixed');
+    expect(res.text).toContain('position: absolute !important');
     expect(res.text).toContain('overscroll-behavior-y: none');
     expect(res.text).toContain('100dvh');
     expect(res.text).toContain('touch-action: manipulation');
