@@ -184,8 +184,51 @@ function validateGateway(cidr, gateway) {
   return gateway.trim();
 }
 
-function withStoredGateway(cidrInfo, gateway) {
-  return cidrInfo && gateway ? { ...cidrInfo, gateway } : cidrInfo;
+function parseGatewayList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap(item => parseGatewayList(item));
+  }
+
+  const text = String(value).trim();
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.flatMap(item => parseGatewayList(item));
+  } catch {}
+
+  return text
+    .split(/[\n,;]/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeSecondaryGateways(cidr, value, primaryGateway = null) {
+  const seen = new Set();
+  const gateways = [];
+  parseGatewayList(value).forEach(entry => {
+    const normalized = validateGateway(cidr, entry);
+    if (!normalized) return;
+    if (primaryGateway && normalized === primaryGateway) return;
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    gateways.push(normalized);
+  });
+  return gateways;
+}
+
+function serializeSecondaryGateways(cidr, value, primaryGateway = null) {
+  const gateways = normalizeSecondaryGateways(cidr, value, primaryGateway);
+  return gateways.length ? JSON.stringify(gateways) : null;
+}
+
+function withStoredGateway(cidrInfo, gateway, secondaryGateways) {
+  return cidrInfo ? {
+    ...cidrInfo,
+    gateway: gateway || cidrInfo.gateway,
+    secondaryGateways: parseGatewayList(secondaryGateways)
+  } : cidrInfo;
 }
 
 function validateRangeOffsets(cidr, startHost, endHost) {
@@ -217,6 +260,7 @@ function serializeNetworkSnapshot(network) {
       vlan: network.vlan,
       cidr: network.cidr,
       gateway: network.gateway,
+      secondaryGateways: parseGatewayList(network.secondaryGateways),
       description: network.description,
     },
     ranges: (network.ranges || []).map(({ id, startHost, endHost, label, rangeType }) => ({
@@ -234,6 +278,7 @@ function parseNetworkSnapshot(revision) {
     if (!snapshot?.network || !Array.isArray(snapshot.ranges) || !Array.isArray(snapshot.addresses)) {
       throw new Error();
     }
+    snapshot.network.secondaryGateways = parseGatewayList(snapshot.network.secondaryGateways);
     return snapshot;
   } catch {
     throw new Error('Instantané d historique invalide');
@@ -263,6 +308,11 @@ function validateRestoredSections(snapshot, current, sections) {
   const addresses = sections.includes('addresses') ? snapshot.addresses : current.addresses;
   const { networkBase, totalHosts } = parseCidr(cidr);
   validateGateway(cidr, sections.includes('network') ? snapshot.network.gateway : current.gateway);
+  normalizeSecondaryGateways(
+    cidr,
+    sections.includes('network') ? snapshot.network.secondaryGateways : current.secondaryGateways,
+    sections.includes('network') ? snapshot.network.gateway : current.gateway
+  );
   ranges.forEach(range => validateRangeOffsets(cidr, range.startHost, range.endHost));
   addresses.forEach(address => {
     const ipInt = ipToInt(address.ip);
@@ -285,8 +335,8 @@ router.get('/', requireAuth, async (req, res, next) => {
     });
     const result = networks.map(n => {
       let cidrInfo = null;
-      try { cidrInfo = withStoredGateway(parseCidr(n.cidr), n.gateway); } catch {}
-      return { ...n, cidrInfo };
+      try { cidrInfo = withStoredGateway(parseCidr(n.cidr), n.gateway, n.secondaryGateways); } catch {}
+      return { ...n, secondaryGateways: parseGatewayList(n.secondaryGateways), cidrInfo };
     });
     res.json(result);
   } catch (err) { next(err); }
@@ -307,9 +357,9 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     });
     if (!network) return res.status(404).json({ error: 'Réseau introuvable' });
     let cidrInfo = null;
-    try { cidrInfo = withStoredGateway(parseCidr(network.cidr), network.gateway); } catch {}
+    try { cidrInfo = withStoredGateway(parseCidr(network.cidr), network.gateway, network.secondaryGateways); } catch {}
     const addresses = await loadEquipmentAddresses(network.addresses, network.cidr);
-    res.json({ ...network, addresses, cidrInfo });
+    res.json({ ...network, secondaryGateways: parseGatewayList(network.secondaryGateways), addresses, cidrInfo });
   } catch (err) { next(err); }
 });
 
@@ -365,7 +415,18 @@ router.post('/:id/history/:revisionId/restore', requireAuth, requireAdmin, async
       if (sections.includes('network')) {
         await tx.ipNetwork.update({
           where: { id: req.params.id },
-          data: snapshot.network
+          data: {
+            name: snapshot.network.name,
+            vlan: snapshot.network.vlan,
+            cidr: snapshot.network.cidr,
+            gateway: snapshot.network.gateway,
+            secondaryGateways: serializeSecondaryGateways(
+              snapshot.network.cidr,
+              snapshot.network.secondaryGateways,
+              snapshot.network.gateway
+            ),
+            description: snapshot.network.description
+          }
         });
       }
       if (sections.includes('ranges')) {
@@ -415,11 +476,12 @@ router.post('/',
           name: req.body.name.trim(),
           cidr: req.body.cidr.trim(),
           gateway: validateGateway(req.body.cidr, req.body.gateway),
+          secondaryGateways: serializeSecondaryGateways(req.body.cidr, req.body.secondaryGateways, validateGateway(req.body.cidr, req.body.gateway)),
           vlan: req.body.vlan ? parseInt(req.body.vlan) : null,
           description: req.body.description?.trim() || null,
         }
       });
-      res.status(201).json(network);
+      res.status(201).json({ ...network, secondaryGateways: parseGatewayList(network.secondaryGateways) });
     } catch (err) { next(err); }
   }
 );
@@ -441,15 +503,19 @@ router.patch('/:id',
       const gateway = req.body.gateway !== undefined
         ? validateGateway(cidr, req.body.gateway)
         : validateGateway(cidr, current.gateway);
+      const secondaryGateways = req.body.secondaryGateways !== undefined
+        ? serializeSecondaryGateways(cidr, req.body.secondaryGateways, gateway)
+        : serializeSecondaryGateways(cidr, current.secondaryGateways, gateway);
       const data = {};
       if (req.body.name !== undefined) data.name = req.body.name.trim();
       if (req.body.cidr !== undefined) data.cidr = req.body.cidr.trim();
       if (req.body.gateway !== undefined || req.body.cidr !== undefined) data.gateway = gateway;
+      if (req.body.secondaryGateways !== undefined || req.body.cidr !== undefined || req.body.gateway !== undefined) data.secondaryGateways = secondaryGateways;
       if (req.body.vlan !== undefined) data.vlan = req.body.vlan ? parseInt(req.body.vlan) : null;
       if (req.body.description !== undefined) data.description = req.body.description?.trim() || null;
       await createNetworkRevision(req.params.id, 'Modification du réseau', req.user);
       const network = await prisma.ipNetwork.update({ where: { id: req.params.id }, data });
-      res.json(network);
+      res.json({ ...network, secondaryGateways: parseGatewayList(network.secondaryGateways) });
     } catch (err) {
       if (err.message.includes('CIDR') || err.message.includes('Adresse') || err.message.includes('passerelle')) {
         return res.status(400).json({ error: err.message });
@@ -791,7 +857,7 @@ router.post('/:id/addresses/import', requireAuth, requireAdmin, async (req, res,
 });
 
 // POST /api/ip-networks/import — Import CSV réseaux
-// Colonnes : name, cidr, vlan (opt), gateway (opt), description (opt)
+// Colonnes : name, cidr, vlan (opt), gateway (opt), secondaryGateways (opt), description (opt)
 router.post('/import', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { csv, skipErrors } = req.body;
@@ -805,6 +871,7 @@ router.post('/import', requireAuth, requireAdmin, async (req, res, next) => {
     const cidrIdx = header.indexOf('cidr');
     const vlanIdx = header.indexOf('vlan');
     const gatewayIdx = header.indexOf('gateway');
+    const secondaryGatewaysIdx = header.findIndex(h => ['secondarygateways', 'secondary_gateway', 'secondary_gateways'].includes(h));
     const descIdx = header.findIndex(h => ['description', 'desc'].includes(h));
 
     if (nameIdx === -1 || cidrIdx === -1) return res.status(400).json({ error: 'Colonnes "name" et "cidr" requises' });
@@ -823,6 +890,9 @@ router.post('/import', requireAuth, requireAdmin, async (req, res, next) => {
       try {
         parseCidr(cidr);
         validateGateway(cidr, gatewayIdx >= 0 ? cols[gatewayIdx] : null);
+        if (secondaryGatewaysIdx >= 0) {
+          normalizeSecondaryGateways(cidr, cols[secondaryGatewaysIdx] || null, gatewayIdx >= 0 ? cols[gatewayIdx] : null);
+        }
       } catch (e) {
         results.errors.push({ line: i + 1, error: `CIDR invalide: ${e.message}` });
         if (!skipErrors) break;
@@ -834,6 +904,9 @@ router.post('/import', requireAuth, requireAdmin, async (req, res, next) => {
             name: name.trim(),
             cidr: cidr.trim(),
             gateway: validateGateway(cidr, gatewayIdx >= 0 ? cols[gatewayIdx] : null),
+            secondaryGateways: secondaryGatewaysIdx >= 0
+              ? serializeSecondaryGateways(cidr, cols[secondaryGatewaysIdx] || null, validateGateway(cidr, gatewayIdx >= 0 ? cols[gatewayIdx] : null))
+              : null,
             vlan: vlanIdx >= 0 && cols[vlanIdx] ? parseInt(cols[vlanIdx]) || null : null,
             description: descIdx >= 0 ? (cols[descIdx] || null) : null,
           }
@@ -974,4 +1047,3 @@ router.delete('/migrations/:migrationId', requireAuth, requireAdmin, async (req,
 const { applyMigration } = require('../services/ipMigrationService');
 
 module.exports = { router, applyMigration };
-

@@ -204,6 +204,10 @@
                     <div class="flex justify-between"><dt class="text-slate-400">Réseau</dt><dd id="ip-info-network" class="font-mono font-medium text-slate-700"></dd></div>
                     <div class="flex justify-between"><dt class="text-slate-400">Masque</dt><dd id="ip-info-mask" class="font-mono text-slate-600"></dd></div>
                     <div class="flex justify-between"><dt class="text-slate-400">Passerelle</dt><dd id="ip-info-gateway" class="font-mono text-emerald-700 font-bold"></dd></div>
+                    <div id="ip-info-secondary-wrap" class="hidden">
+                      <dt class="text-slate-400">Passerelles secondaires</dt>
+                      <dd id="ip-info-secondary" class="mt-1 space-y-1"></dd>
+                    </div>
                     <div class="flex justify-between"><dt class="text-slate-400">Broadcast</dt><dd id="ip-info-broadcast" class="font-mono text-slate-600"></dd></div>
                     <div class="flex justify-between"><dt class="text-slate-400">Hôtes</dt><dd id="ip-info-usable" class="font-semibold text-slate-700"></dd></div>
                     <div class="flex justify-between"><dt class="text-slate-400">Assignées</dt><dd id="ip-info-assigned" class="font-semibold text-emerald-600"></dd></div>
@@ -284,10 +288,18 @@
       </div>
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Passerelle</label>
         <input id="ip-fn-gateway" type="text" placeholder="Calculée automatiquement si vide" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"/></div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Passerelles secondaires</label>
+        <textarea id="ip-fn-secondary-gateways" rows="2" placeholder="10.0.1.253, 10.0.1.252" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"></textarea>
+        <p class="mt-1 text-[11px] text-slate-400">Sépare les IP par une virgule, un point-virgule ou un retour à la ligne.</p>
+      </div>
       <div id="ip-cidr-preview" class="hidden rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs space-y-1">
         <div class="flex justify-between text-slate-500"><span>Réseau</span><span id="ip-prev-network" class="font-mono"></span></div>
         <div class="flex justify-between text-slate-500"><span>Masque</span><span id="ip-prev-mask" class="font-mono"></span></div>
         <div class="flex justify-between text-emerald-700 font-bold"><span>Passerelle</span><span id="ip-prev-gateway" class="font-mono"></span></div>
+        <div class="hidden" id="ip-prev-secondary-row">
+          <div class="flex justify-between text-slate-500"><span>Secondaires</span><span id="ip-prev-secondary" class="font-mono text-right"></span></div>
+        </div>
         <div class="flex justify-between text-slate-500"><span>Broadcast</span><span id="ip-prev-broadcast" class="font-mono"></span></div>
         <div class="flex justify-between text-slate-700 font-medium"><span>Hôtes utilisables</span><span id="ip-prev-usable"></span></div>
       </div>
@@ -1760,6 +1772,18 @@ function ipOffset(cidr, ip) {
   } catch { return null; }
 }
 
+function ipParseSecondaryGateways(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap(item => ipParseSecondaryGateways(item));
+  const text = String(value).trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.flatMap(item => ipParseSecondaryGateways(item));
+  } catch {}
+  return text.split(/[\n,;]/).map(item => item.trim()).filter(Boolean);
+}
+
 const IP_RANGE_COLORS = {
   STATIC:   { bg:'bg-blue-500',   light:'bg-blue-100 text-blue-800',   label:'Statique' },
   DHCP:     { bg:'bg-amber-400',  light:'bg-amber-100 text-amber-800',  label:'DHCP' },
@@ -1839,6 +1863,16 @@ function ipRenderDetail() {
   document.getElementById('ip-info-network').textContent = info ? `${info.network}/${info.prefix}` : n.cidr;
   document.getElementById('ip-info-mask').textContent = info?.subnetMask || '—';
   document.getElementById('ip-info-gateway').textContent = n.gateway || info?.gateway || '—';
+  const secondaryGateways = ipParseSecondaryGateways(n.secondaryGateways);
+  const secondaryWrap = document.getElementById('ip-info-secondary-wrap');
+  const secondaryEl = document.getElementById('ip-info-secondary');
+  if (secondaryGateways.length) {
+    secondaryEl.innerHTML = secondaryGateways.map(ip => `<span class="block font-mono text-emerald-700">${escapeHtml(ip)}</span>`).join('');
+    secondaryWrap.classList.remove('hidden');
+  } else {
+    secondaryEl.innerHTML = '';
+    secondaryWrap.classList.add('hidden');
+  }
   document.getElementById('ip-info-broadcast').textContent = info?.broadcast || '—';
   document.getElementById('ip-info-usable').textContent = info ? info.usableHosts.toLocaleString('fr-FR') : '—';
   document.getElementById('ip-info-assigned').textContent = ipCurrentAddresses.length;
@@ -2096,6 +2130,7 @@ function ipOpenNetworkForm(net = null) {
   document.getElementById('ip-fn-cidr').value = net?.cidr||'';
   document.getElementById('ip-fn-vlan').value = net?.vlan||'';
   document.getElementById('ip-fn-gateway').value = net?.gateway||'';
+  document.getElementById('ip-fn-secondary-gateways').value = ipParseSecondaryGateways(net?.secondaryGateways).join(', ');
   document.getElementById('ip-fn-desc').value = net?.description||'';
   document.getElementById('ip-fn-error').classList.add('hidden');
   ipUpdateCidrPreview(net?.cidr||'');
@@ -2103,6 +2138,9 @@ function ipOpenNetworkForm(net = null) {
 }
 document.getElementById('ip-fn-cidr').addEventListener('input', e => ipUpdateCidrPreview(e.target.value));
 document.getElementById('ip-fn-gateway').addEventListener('input', () =>
+  ipUpdateCidrPreview(document.getElementById('ip-fn-cidr').value)
+);
+document.getElementById('ip-fn-secondary-gateways').addEventListener('input', () =>
   ipUpdateCidrPreview(document.getElementById('ip-fn-cidr').value)
 );
 function ipUpdateCidrPreview(val) {
@@ -2114,6 +2152,15 @@ function ipUpdateCidrPreview(val) {
     document.getElementById('ip-prev-mask').textContent = info.subnetMask;
     document.getElementById('ip-prev-gateway').textContent =
       document.getElementById('ip-fn-gateway').value.trim() || info.gateway;
+    const secondaryGateways = ipParseSecondaryGateways(document.getElementById('ip-fn-secondary-gateways').value);
+    const secondaryRow = document.getElementById('ip-prev-secondary-row');
+    if (secondaryGateways.length) {
+      document.getElementById('ip-prev-secondary').textContent = secondaryGateways.join(' · ');
+      secondaryRow.classList.remove('hidden');
+    } else {
+      document.getElementById('ip-prev-secondary').textContent = '';
+      secondaryRow.classList.add('hidden');
+    }
     document.getElementById('ip-prev-broadcast').textContent = info.broadcast;
     document.getElementById('ip-prev-usable').textContent = info.usableHosts.toLocaleString('fr-FR');
     p.classList.remove('hidden');
@@ -2124,6 +2171,7 @@ document.getElementById('ip-form-network').addEventListener('submit', async e =>
   const id = document.getElementById('ip-fn-id').value;
   const body = { name: document.getElementById('ip-fn-name').value, cidr: document.getElementById('ip-fn-cidr').value,
     vlan: document.getElementById('ip-fn-vlan').value||null, gateway: document.getElementById('ip-fn-gateway').value||null,
+    secondaryGateways: document.getElementById('ip-fn-secondary-gateways').value||null,
     description: document.getElementById('ip-fn-desc').value||null };
   const errEl = document.getElementById('ip-fn-error'); errEl.classList.add('hidden');
   try {

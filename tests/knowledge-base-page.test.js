@@ -41,6 +41,8 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('id="kb-fab-wrap" class="hidden fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3"');
     expect(res.text).toContain('id="ip-fn-gateway"');
     expect(res.text).toContain("gateway: document.getElementById('ip-fn-gateway').value||null");
+    expect(res.text).toContain('id="ip-fn-secondary-gateways"');
+    expect(res.text).toContain('secondaryGateways: document.getElementById(\'ip-fn-secondary-gateways\').value||null');
     expect(res.text).toContain('IP de début *');
     expect(res.text).toContain('IP de fin *');
     expect(res.text).toContain("Saisissez une plage IP valide appartenant au réseau.");
@@ -54,6 +56,8 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('id="ip-unassigned-limit-note"');
     expect(res.text).toContain('id="ip-btn-export-addresses"');
     expect(res.text).toContain('/addresses/export');
+    expect(res.text).toContain('id="ip-info-secondary-wrap"');
+    expect(res.text).toContain('id="ip-prev-secondary-row"');
     expect(res.text).toContain('id="ip-btn-history"');
     expect(res.text).toContain('id="ip-modal-history"');
     expect(res.text).toContain('/history/${revisionId}/restore');

@@ -79,15 +79,37 @@ describe('ip addressing gateways', () => {
     });
   });
 
+  it('enregistre des passerelles secondaires a la creation', async () => {
+    prisma.ipNetwork.create.mockImplementation(async ({ data }) => ({ id: 'network-1', ...data }));
+
+    const res = await request(buildApp())
+      .post('/api/ip-networks')
+      .send({
+        name: 'LAN Bureau',
+        cidr: '10.0.1.0/24',
+        gateway: '10.0.1.254',
+        secondaryGateways: '10.0.1.253, 10.0.1.252'
+      });
+
+    expect(res.status).toBe(201);
+    expect(prisma.ipNetwork.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        secondaryGateways: JSON.stringify(['10.0.1.253', '10.0.1.252'])
+      })
+    });
+  });
+
   it('expose la passerelle personnalisee dans les informations CIDR', async () => {
     prisma.ipNetwork.findMany.mockResolvedValue([
-      { id: 'network-1', name: 'LAN Bureau', cidr: '10.0.1.0/24', gateway: '10.0.1.254', _count: { addresses: 0, ranges: 0 } }
+      { id: 'network-1', name: 'LAN Bureau', cidr: '10.0.1.0/24', gateway: '10.0.1.254', secondaryGateways: '["10.0.1.253"]', _count: { addresses: 0, ranges: 0 } }
     ]);
 
     const res = await request(buildApp()).get('/api/ip-networks');
 
     expect(res.status).toBe(200);
     expect(res.body[0].cidrInfo.gateway).toBe('10.0.1.254');
+    expect(res.body[0].secondaryGateways).toEqual(['10.0.1.253']);
+    expect(res.body[0].cidrInfo.secondaryGateways).toEqual(['10.0.1.253']);
     expect(res.body[0].cidrInfo.networkBase).toBe(167772416);
   });
 
@@ -102,7 +124,29 @@ describe('ip addressing gateways', () => {
     expect(res.status).toBe(200);
     expect(prisma.ipNetwork.update).toHaveBeenCalledWith({
       where: { id: 'network-1' },
-      data: { gateway: '10.0.1.253' }
+      data: expect.objectContaining({ gateway: '10.0.1.253' })
+    });
+  });
+
+  it('modifie les passerelles secondaires d un reseau existant', async () => {
+    prisma.ipNetwork.findUnique.mockResolvedValue({
+      id: 'network-1',
+      cidr: '10.0.1.0/24',
+      gateway: '10.0.1.254',
+      secondaryGateways: '["10.0.1.253"]'
+    });
+    prisma.ipNetwork.update.mockImplementation(async ({ data }) => ({ id: 'network-1', ...data }));
+
+    const res = await request(buildApp())
+      .patch('/api/ip-networks/network-1')
+      .send({ secondaryGateways: '10.0.1.252\n10.0.1.251' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.ipNetwork.update).toHaveBeenCalledWith({
+      where: { id: 'network-1' },
+      data: expect.objectContaining({
+        secondaryGateways: JSON.stringify(['10.0.1.252', '10.0.1.251'])
+      })
     });
   });
 

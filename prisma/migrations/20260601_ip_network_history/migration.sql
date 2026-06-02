@@ -10,3 +10,4 @@ CREATE TABLE IF NOT EXISTS "ip_network_revisions" (
 );
 
 CREATE INDEX IF NOT EXISTS "ip_network_revisions_networkId_createdAt_idx" ON "ip_network_revisions"("networkId", "createdAt");
+ALTER TABLE "ip_networks" ADD COLUMN IF NOT EXISTS "secondaryGateways" TEXT;

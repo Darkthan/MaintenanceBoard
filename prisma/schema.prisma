@@ -813,6 +813,7 @@ model IpNetwork {
   vlan        Int?
   cidr        String                         // ex: "10.187.37.0/24"
   gateway     String?                        // null = première IP utilisable calculée depuis le CIDR
+  secondaryGateways String?                  // JSON sérialisé des passerelles secondaires
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
