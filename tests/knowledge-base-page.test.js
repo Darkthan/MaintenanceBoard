@@ -58,6 +58,7 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('/addresses/export');
     expect(res.text).toContain('id="ip-info-secondary-wrap"');
     expect(res.text).toContain('id="ip-prev-secondary-row"');
+    expect(res.text).toContain('dispo ·');
     expect(res.text).toContain('id="ip-btn-history"');
     expect(res.text).toContain('id="ip-modal-history"');
     expect(res.text).toContain('/history/${revisionId}/restore');

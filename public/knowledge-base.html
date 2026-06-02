@@ -1784,12 +1784,39 @@ function ipParseSecondaryGateways(value) {
   return text.split(/[\n,;]/).map(item => item.trim()).filter(Boolean);
 }
 
-const IP_RANGE_COLORS = {
-  STATIC:   { bg:'bg-blue-500',   light:'bg-blue-100 text-blue-800',   label:'Statique' },
-  DHCP:     { bg:'bg-amber-400',  light:'bg-amber-100 text-amber-800',  label:'DHCP' },
-  RESERVED: { bg:'bg-slate-400',  light:'bg-slate-100 text-slate-700',  label:'Réservé' },
-  OTHER:    { bg:'bg-purple-400', light:'bg-purple-100 text-purple-800', label:'Autre' },
+const IP_RANGE_TYPE_LABELS = {
+  STATIC: 'Statique',
+  DHCP: 'DHCP',
+  RESERVED: 'Réservé',
+  OTHER: 'Autre',
 };
+
+const IP_RANGE_PALETTES = [
+  { fill: 'bg-sky-500', soft: 'bg-sky-100 text-sky-800', dot: 'bg-sky-500', ring: 'ring-sky-300' },
+  { fill: 'bg-amber-400', soft: 'bg-amber-100 text-amber-800', dot: 'bg-amber-500', ring: 'ring-amber-300' },
+  { fill: 'bg-emerald-500', soft: 'bg-emerald-100 text-emerald-800', dot: 'bg-emerald-500', ring: 'ring-emerald-300' },
+  { fill: 'bg-violet-500', soft: 'bg-violet-100 text-violet-800', dot: 'bg-violet-500', ring: 'ring-violet-300' },
+  { fill: 'bg-rose-500', soft: 'bg-rose-100 text-rose-800', dot: 'bg-rose-500', ring: 'ring-rose-300' },
+  { fill: 'bg-cyan-500', soft: 'bg-cyan-100 text-cyan-800', dot: 'bg-cyan-500', ring: 'ring-cyan-300' },
+  { fill: 'bg-lime-500', soft: 'bg-lime-100 text-lime-800', dot: 'bg-lime-500', ring: 'ring-lime-300' },
+  { fill: 'bg-fuchsia-500', soft: 'bg-fuchsia-100 text-fuchsia-800', dot: 'bg-fuchsia-500', ring: 'ring-fuchsia-300' },
+];
+
+function ipGetRangePalette(index) {
+  return IP_RANGE_PALETTES[index % IP_RANGE_PALETTES.length];
+}
+
+function ipGetRangeStats(range) {
+  const total = Math.max(0, range.endHost - range.startHost + 1);
+  if (!Number.isFinite(total) || !ipCurrentNetwork?.cidr) {
+    return { total, assigned: 0, available: total };
+  }
+  const assigned = ipCurrentAddresses.filter(address => {
+    const offset = ipOffset(ipCurrentNetwork.cidr, address.ip);
+    return offset !== null && offset >= range.startHost && offset <= range.endHost;
+  }).length;
+  return { total, assigned, available: Math.max(0, total - assigned) };
+}
 
 let ipNetworks = [], ipCurrentNetwork = null, ipCurrentAddresses = [], ipCurrentRanges = [], ipCurrentMigrations = [];
 let ipBulkEditing = false, ipBulkDeletedIds = new Set(), ipBulkDraft = new Map();
@@ -1899,25 +1926,30 @@ function ipRenderRanges() {
   bar.innerHTML = ''; legend.innerHTML = ''; list.innerHTML = '';
   if (!ipCurrentRanges.length) { document.getElementById('ip-ranges-empty').classList.remove('hidden'); return; }
   document.getElementById('ip-ranges-empty').classList.add('hidden');
-  ipCurrentRanges.forEach(r => {
-    const col = IP_RANGE_COLORS[r.rangeType] || IP_RANGE_COLORS.OTHER;
+  ipCurrentRanges.forEach((r, index) => {
+    const tone = ipGetRangePalette(index);
+    const typeLabel = IP_RANGE_TYPE_LABELS[r.rangeType] || IP_RANGE_TYPE_LABELS.OTHER;
+    const stats = ipGetRangeStats(r);
     const w = Math.max(1, ((r.endHost - r.startHost + 1) / total) * 100);
     const seg = document.createElement('div');
-    seg.className = `${col.bg} h-full`; seg.style.width = `${w}%`;
-    seg.title = `${r.label}: ${r.startHost}–${r.endHost}`; bar.appendChild(seg);
+    seg.className = `${tone.fill} h-full`; seg.style.width = `${w}%`;
+    seg.title = `${r.label}: ${r.startHost}–${r.endHost} · ${stats.available} IP disponibles`; bar.appendChild(seg);
     const badge = document.createElement('span');
-    badge.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${col.light}`;
-    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${col.bg}"></span>${escapeHtml(r.label)}`;
+    badge.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${tone.soft}`;
+    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${tone.dot}"></span>${escapeHtml(r.label)}`;
     legend.appendChild(badge);
     const startIp = info ? ipInt2str(info.networkBase + r.startHost) : `+${r.startHost}`;
     const endIp   = info ? ipInt2str(info.networkBase + r.endHost)   : `+${r.endHost}`;
     const item = document.createElement('div');
-    item.className = 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 text-xs';
-    item.innerHTML = `<span class="w-2 h-2 rounded-full ${col.bg} flex-shrink-0"></span>
+    item.className = `flex items-start gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 text-xs border border-transparent ${r.rangeType === 'RESERVED' ? 'ring-1 ring-slate-200' : 'hover:border-slate-200'}`;
+    item.innerHTML = `<span class="w-2 h-2 rounded-full ${tone.fill} flex-shrink-0 mt-1"></span>
       <span class="flex-1 font-medium text-slate-700">${escapeHtml(r.label)}</span>
       <span class="font-mono text-slate-400">${startIp} – ${endIp}</span>
-      <span class="px-1.5 py-0.5 rounded ${col.light}">${col.label}</span>
-      <span class="text-slate-400">${(r.endHost-r.startHost+1).toLocaleString('fr-FR')} IP</span>
+      <div class="ml-auto flex flex-col items-end gap-1">
+        <span class="px-1.5 py-0.5 rounded ${r.rangeType === 'RESERVED' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}">${typeLabel}</span>
+        <span class="text-slate-400">${stats.total.toLocaleString('fr-FR')} IP</span>
+        <span class="font-medium ${r.rangeType === 'RESERVED' ? 'text-amber-700' : 'text-emerald-700'}">${stats.available.toLocaleString('fr-FR')} dispo · ${stats.assigned.toLocaleString('fr-FR')} occupées</span>
+      </div>
       ${isAdmin() ? `<button class="ip-edit-range text-slate-300 hover:text-blue-500 transition" data-id="${r.id}">✎</button>
         <button class="ip-del-range text-slate-300 hover:text-red-500 transition" data-id="${r.id}">✕</button>` : ''}`;
     list.appendChild(item);
@@ -1938,9 +1970,12 @@ function ipRenderAddresses(filter = '') {
   empty.classList.add('hidden');
   const info = ipCurrentNetwork.cidrInfo;
   tbody.innerHTML = filtered.map(a => {
-    const off = info ? ipOffset(ipCurrentNetwork.cidr, a.ip) : null;
-    const rng = off !== null ? ipCurrentRanges.find(r => off >= r.startHost && off <= r.endHost) : null;
-    const col = rng ? (IP_RANGE_COLORS[rng.rangeType]||IP_RANGE_COLORS.OTHER) : null;
+    const rng = info ? ipCurrentRanges.find(r => {
+      const offset = ipOffset(ipCurrentNetwork.cidr, a.ip);
+      return offset !== null && offset >= r.startHost && offset <= r.endHost;
+    }) : null;
+    const rangeIndex = rng ? ipCurrentRanges.findIndex(r => r.id === rng.id) : -1;
+    const tone = rangeIndex >= 0 ? ipGetRangePalette(rangeIndex) : null;
     const deleted = ipBulkDeletedIds.has(a.id);
     const editable = ipBulkEditing && !a.autoDiscovered && !a.unassigned;
     const draft = editable ? (ipBulkDraft.get(a.id) || a) : a;
@@ -1961,7 +1996,7 @@ function ipRenderAddresses(filter = '') {
       <td class="px-3 py-2 text-xs text-slate-500 max-w-[120px] truncate">${editable
         ? `<input data-ip-field="description" value="${escapeHtml(draft.description||'')}" class="w-40 px-2 py-1 border border-slate-200 rounded"/>`
         : a.description?escapeHtml(a.description):'<span class="text-slate-300">—</span>'}</td>
-      <td class="px-3 py-2 text-xs">${rng?`<span class="px-1.5 py-0.5 rounded-full text-xs ${col.light}">${escapeHtml(rng.label)}</span>`:'<span class="text-slate-300">—</span>'}</td>
+      <td class="px-3 py-2 text-xs">${rng?`<span class="px-1.5 py-0.5 rounded-full text-xs ${tone?tone.soft:'bg-slate-100 text-slate-700'}">${escapeHtml(rng.label)}</span>`:'<span class="text-slate-300">—</span>'}</td>
       <td class="px-3 py-2 text-xs">${(() => { const mig = ipCurrentMigrations.find(m => m.oldIp === a.ip); return mig ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>${escapeHtml(mig.newIp)}</span>` : '<span class="text-slate-300">—</span>'; })()}</td>
       <td class="px-3 py-2">
         <div class="flex gap-1 justify-end">
