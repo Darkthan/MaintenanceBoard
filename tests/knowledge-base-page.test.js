@@ -44,6 +44,8 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('id="diagram-equipment-modal"');
     expect(res.text).toContain('id="diagram-fullscreen-modal"');
     expect(res.text).toContain('id="diagram-fullscreen-btn"');
+    expect(res.text).toContain('id="diagram-fullscreen-zoom-in"');
+    expect(res.text).toContain('id="diagram-fullscreen-exploded"');
     expect(res.text).toContain('id="diagram-mode-text-btn"');
     expect(res.text).toContain('id="ip-fn-gateway"');
     expect(res.text).toContain("gateway: document.getElementById('ip-fn-gateway').value||null");
