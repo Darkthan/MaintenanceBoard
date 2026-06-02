@@ -54,6 +54,7 @@ model User {
   refreshTokens        RefreshToken[]
   agentTokens          AgentToken[]
   mcpTokens            McpToken[]
+  mcpRefreshTokens     McpRefreshToken[]
   loginLogs            LoginLog[]
   orderAttachments     OrderAttachment[]
   signatureRequests    SignatureRequest[]
@@ -103,9 +104,29 @@ model McpToken {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdBy        User             @relation(fields: [createdById], references: [id])
+  mcpRefreshTokens McpRefreshToken[]
 
   @@map("mcp_tokens")
+}
+
+model McpRefreshToken {
+  id         String    @id @default(uuid())
+  tokenHash  String    @unique
+  userId     String
+  mcpTokenId String?
+  clientId   String
+  scopes     String    @default("[]")
+  expiresAt  DateTime
+  ttlDays    Int?
+  createdAt  DateTime  @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mcpToken McpToken? @relation(fields: [mcpTokenId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([mcpTokenId])
+  @@map("mcp_refresh_tokens")
 }
 
 model Passkey {
