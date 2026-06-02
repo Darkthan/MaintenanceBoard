@@ -147,7 +147,7 @@
           </article>
 
           <!-- ── Plan d'adressage IP (embarqué) ─────────────────────────── -->
-          <div id="ip-panel" class="hidden h-full flex flex-col overflow-y-auto">
+          <div id="ip-panel" class="hidden h-full flex flex-col overflow-y-auto pb-20">
 
             <!-- Vue liste réseaux -->
             <div id="ip-view-list" class="p-5 flex flex-col gap-4">
@@ -252,7 +252,7 @@
                     <tbody id="ip-addresses-tbody"></tbody>
                   </table>
                 </div>
-                <div id="ip-addresses-empty" class="hidden text-center py-8 text-slate-400 text-xs">Aucune adresse enregistrée</div>
+                <div id="ip-addresses-empty" class="hidden text-center py-8 text-slate-400 text-xs pb-20">Aucune adresse enregistrée</div>
               </div>
             </div>
           </div>
@@ -475,9 +475,9 @@
 </div>
 
 <!-- ── FAB speed-dial ────────────────────────────────────────────────────── -->
-<div id="kb-fab-wrap" class="hidden fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3">
+<div id="kb-fab-wrap" class="hidden fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3" style="width:fit-content">
   <!-- Actions -->
-  <div id="kb-fab-actions" class="flex flex-col-reverse gap-2 items-end pointer-events-none opacity-0 scale-95 origin-bottom-right transition-all duration-200 ease-out">
+  <div id="kb-fab-actions" class="flex flex-col-reverse gap-2 items-end pointer-events-none opacity-0 scale-95 origin-bottom-right transition-all duration-200 ease-out" style="width:fit-content">
     <div id="kb-fab-item-article" class="hidden flex items-center gap-2">
       <span class="bg-white rounded-lg shadow-md px-3 py-1.5 text-sm font-medium text-slate-700 whitespace-nowrap">Nouvel article</span>
       <button id="fab-new-article" class="w-11 h-11 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center hover:bg-blue-700 transition flex-shrink-0">
