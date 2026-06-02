@@ -1386,11 +1386,10 @@ async function selectArticle(articleId) {
       ipShowPanel();
       return;
     } else if (isNetworkDiagram) {
-      articleContentEl.className = 'space-y-4 text-sm text-slate-700';
       const topologyText = String(article.topologyText || article.content || '').trim();
       const topologyLayout = normalizeTopologyLayout(article.topologyLayout || {});
       if (topologyText) {
-        renderTopologyDiagramInto(articleContentEl, topologyText, { interactive: true, sourceText: topologyText, layout: topologyLayout });
+        renderTopologyTextView(articleContentEl, topologyText, topologyLayout);
       } else if (article.diagramSvg) {
         articleContentEl.innerHTML = `<div class="w-full overflow-auto rounded-xl border border-slate-200 bg-white p-3">${DOMPurify.sanitize(article.diagramSvg, { USE_PROFILES: { svg: true, svgFilters: true } })}</div>`;
       } else {
@@ -2195,6 +2194,34 @@ function renderTopologyDiagramInto(containerEl, text, { interactive = true, sour
   return result;
 }
 
+function renderTopologyTextView(containerEl, text, layout = null) {
+  if (!containerEl) return;
+  const safeText = String(text || '').trim();
+  containerEl.className = 'space-y-4 text-sm text-slate-700';
+  containerEl.innerHTML = `
+    <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Plan réseau en texte</p>
+          <p class="mt-1 text-sm text-slate-500">La description s’affiche d’abord. Le schéma réel s’ouvre au clic.</p>
+        </div>
+        <button id="diagram-open-real-btn" type="button" class="rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700">Voir le schéma réel</button>
+      </div>
+      <pre class="mt-4 max-h-[48vh] overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-slate-50 p-4 text-xs leading-6 text-slate-700">${escapeHtml(safeText || 'Aucune topologie textuelle enregistrée.')}</pre>
+    </div>
+  `;
+  const openBtn = containerEl.querySelector('#diagram-open-real-btn');
+  if (openBtn) {
+    openBtn.addEventListener('click', () => openTopologyFullscreen());
+  }
+  if (layout && Object.keys(normalizeTopologyLayout(layout)).length) {
+    const hint = document.createElement('div');
+    hint.className = 'rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500';
+    hint.textContent = 'Un placement enregistré existe pour ce plan. Il sera utilisé dans le schéma réel.';
+    containerEl.appendChild(hint);
+  }
+}
+
 function getCurrentTopologyLayoutFromStage() {
   const layout = {};
   if (!diagramFullscreenStageEl) return layout;
@@ -2263,12 +2290,7 @@ function saveFullscreenTopologyLayout() {
       if (selectedArticle?.id === selectedArticleId && document.getElementById('knowledge-article-panel') && !articlePanelEl.classList.contains('hidden')) {
         const topologyText = String(selectedArticle.topologyText || selectedArticle.content || '').trim();
         if (topologyText) {
-          renderTopologyDiagramInto(articleContentEl, topologyText, {
-            interactive: true,
-            sourceText: topologyText,
-            mode: 'preview',
-            layout: diagramFullscreenLayout
-          });
+          renderTopologyTextView(articleContentEl, topologyText, diagramFullscreenLayout);
         }
       }
       showToast('Placement enregistré', 'success');
