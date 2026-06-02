@@ -90,6 +90,33 @@ describe('knowledge base routes', () => {
     expect(readRes.body.content).toContain('# Etapes');
   });
 
+  it('stocke le texte de topologie d un plan reseau', async () => {
+    const createRes = await request(buildApp())
+      .post('/api/knowledge-base')
+      .send({
+        type: 'network-diagram',
+        title: 'Infra bâtiment A',
+        category: 'Réseau',
+        summary: 'Plan textuel',
+        content: 'CORE-SW1 | switch | 10.0.0.2\nCORE-SW1 Gi1/0/1 -> FW-EDGE eth0',
+        topologyText: 'CORE-SW1 | switch | 10.0.0.2\nCORE-SW1 Gi1/0/1 -> FW-EDGE eth0'
+      });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.article).toEqual(expect.objectContaining({
+      type: 'network-diagram',
+      topologyText: expect.stringContaining('CORE-SW1'),
+      content: expect.stringContaining('FW-EDGE')
+    }));
+
+    const readRes = await request(buildApp()).get(`/api/knowledge-base/${createRes.body.article.id}`);
+    expect(readRes.status).toBe(200);
+    expect(readRes.body).toEqual(expect.objectContaining({
+      topologyText: expect.stringContaining('Gi1/0/1'),
+      diagramSvg: ''
+    }));
+  });
+
   it('filtre les articles par recherche et categorie', async () => {
     fs.writeFileSync(knowledgeBaseFile, JSON.stringify({
       articles: [

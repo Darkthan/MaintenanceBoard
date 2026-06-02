@@ -643,6 +643,10 @@
               class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 w-44" />
           </label>
         </div>
+        <div class="flex items-center gap-2 shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+          <button id="diagram-mode-text-btn" type="button" class="rounded-xl px-3 py-2 text-sm font-medium transition bg-white text-purple-700 shadow-sm">Texte</button>
+          <button id="diagram-mode-drawio-btn" type="button" class="rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition">Draw.io</button>
+        </div>
         <div class="flex items-center gap-2 shrink-0">
           <span id="diagram-editor-feedback" class="text-sm text-slate-500"></span>
           <button id="cancel-diagram-btn" type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
@@ -654,17 +658,52 @@
           </button>
         </div>
       </div>
-      <div class="flex-1 min-h-0 relative">
-        <div id="diagram-loading" class="absolute inset-0 flex items-center justify-center bg-white z-10">
-          <div class="flex flex-col items-center gap-3 text-slate-400">
-            <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-            </svg>
-            <p class="text-sm">Chargement de l'éditeur draw.io…</p>
+      <div class="flex-1 min-h-0 relative overflow-hidden">
+        <div id="diagram-text-mode" class="h-full min-h-0 flex flex-col lg:flex-row">
+          <div class="w-full lg:w-[38rem] border-b lg:border-b-0 lg:border-r border-slate-200 bg-white p-5 overflow-y-auto">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-slate-900">Saisie textuelle</p>
+                <p class="mt-1 text-xs text-slate-500">Décris tes équipements et leurs liaisons en texte. Le schéma se met à jour en direct.</p>
+              </div>
+              <button id="diagram-format-help-btn" type="button" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition">Exemple</button>
+            </div>
+            <label class="mt-4 block">
+              <span class="mb-2 block text-xs font-medium text-slate-500">Topologie</span>
+              <textarea id="diagram-topology-input" rows="20" spellcheck="false"
+                placeholder="CORE-SW1 | switch | 10.0.0.2 | coeur de reseau | equipment=Core switch&#10;ACCESS-SW1 | switch | 10.0.0.3&#10;FW-EDGE | firewall | 10.0.0.1 | sortie internet&#10;&#10;CORE-SW1 Gi1/0/1 -> FW-EDGE eth0&#10;CORE-SW1 Gi1/0/2 -> ACCESS-SW1 Gi1/0/48&#10;ACCESS-SW1 Gi1/0/1 -> PC-12"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 font-mono text-[13px] leading-6 text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 resize-y"></textarea>
+            </label>
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+              <p class="font-semibold text-slate-800">Format conseillé</p>
+              <p class="mt-2">1 ligne par équipement: <span class="font-mono">Nom | type | IP | note | equipment=requete</span></p>
+              <p class="mt-1">1 ligne par liaison: <span class="font-mono">CORE Gi1/0/1 -> ACCESS Gi1/0/48</span></p>
+              <p class="mt-1">Utilise <span class="font-mono">&lt;-&gt;</span> pour une liaison bidirectionnelle.</p>
+            </div>
+          </div>
+          <div class="flex-1 min-h-0 bg-slate-50 p-5 overflow-auto">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-slate-900">Aperçu interactif</p>
+                <p id="diagram-topology-stats" class="mt-1 text-xs text-slate-500">Aucune topologie chargée.</p>
+              </div>
+              <p id="diagram-topology-status" class="text-xs text-slate-500"></p>
+            </div>
+            <div id="diagram-topology-preview" class="mt-4"></div>
           </div>
         </div>
-        <iframe id="drawio-iframe" src="" class="w-full h-full border-0 hidden" title="Éditeur draw.io"></iframe>
+        <div id="diagram-drawio-mode" class="hidden h-full min-h-0 relative">
+          <div id="diagram-loading" class="absolute inset-0 flex items-center justify-center bg-white z-10">
+            <div class="flex flex-col items-center gap-3 text-slate-400">
+              <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <p class="text-sm">Chargement de l'éditeur draw.io…</p>
+            </div>
+          </div>
+          <iframe id="drawio-iframe" src="" class="w-full h-full border-0 hidden" title="Éditeur draw.io"></iframe>
+        </div>
       </div>
     </div>
   </div>
@@ -696,6 +735,36 @@
           </div>
         </div>
         <iframe id="drawio-viewer-iframe" src="" class="w-full h-full border-0 hidden" title="Visualisation draw.io"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal configuration équipement -->
+<div id="diagram-equipment-modal" class="hidden fixed inset-0 z-[135] bg-slate-950/60 backdrop-blur-sm">
+  <div class="h-full flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Équipement lié</p>
+          <h2 id="diagram-equipment-title" class="text-lg font-semibold text-slate-900">Configuration</h2>
+        </div>
+        <button id="close-diagram-equipment-btn" type="button" class="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="flex-1 min-h-0 overflow-auto p-5">
+        <div id="diagram-equipment-loading" class="text-sm text-slate-500">Chargement...</div>
+        <div id="diagram-equipment-content" class="hidden space-y-4"></div>
+      </div>
+      <div class="border-t border-slate-200 px-5 py-4 flex items-center justify-between gap-3">
+        <p id="diagram-equipment-meta" class="text-xs text-slate-500"></p>
+        <div class="flex items-center gap-2">
+          <button id="diagram-equipment-copy-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Copier la conf</button>
+          <button id="diagram-equipment-open-btn" type="button" class="rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition">Ouvrir la fiche</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1279,13 +1348,17 @@ async function selectArticle(articleId) {
       ipShowPanel();
       return;
     } else if (isNetworkDiagram) {
-      if (article.diagramSvg) {
+      articleContentEl.className = 'space-y-4 text-sm text-slate-700';
+      const topologyText = String(article.topologyText || article.content || '').trim();
+      if (topologyText) {
+        renderTopologyDiagramInto(articleContentEl, topologyText, { interactive: true, sourceText: topologyText });
+      } else if (article.diagramSvg) {
         articleContentEl.innerHTML = `<div class="w-full overflow-auto rounded-xl border border-slate-200 bg-white p-3">${DOMPurify.sanitize(article.diagramSvg, { USE_PROFILES: { svg: true, svgFilters: true } })}</div>`;
       } else {
-        articleContentEl.textContent = 'Aucun diagramme enregistré. Cliquez sur Modifier pour créer le plan.';
-        articleContentEl.className = 'text-slate-400 text-sm italic';
+        articleContentEl.innerHTML = '<p class="text-slate-400 text-sm italic">Aucun schéma enregistré. Clique sur Modifier pour créer le plan.</p>';
       }
     } else {
+      articleContentEl.className = 'space-y-3 text-sm text-slate-700';
       articleContentEl.innerHTML = renderRichText(article.content || '');
       initMermaidInEl(articleContentEl);
     }
@@ -1526,16 +1599,489 @@ function initMermaidInEl(containerEl) {
   mermaid.run({ nodes: containerEl.querySelectorAll('.mermaid') });
 }
 
-// ── draw.io network diagram editor ───────────────────────────────────────────
+// ── Plan réseau textuel / draw.io ────────────────────────────────────────────
 
 let diagramEditorArticleId = '';
 let _diagramCurrentXml = '';
 let _diagramPendingSave = false;
+let diagramEditorMode = 'text';
+let diagramTopologyPreviewToken = 0;
+let diagramEquipmentCurrentNode = null;
+let diagramEquipmentCurrentDetail = null;
 
 const diagramEditorModalEl = document.getElementById('diagram-editor-modal');
 const drawioIframeEl = document.getElementById('drawio-iframe');
 const diagramLoadingEl = document.getElementById('diagram-loading');
 const diagramFeedbackEl = document.getElementById('diagram-editor-feedback');
+const diagramTextModeEl = document.getElementById('diagram-text-mode');
+const diagramDrawioModeEl = document.getElementById('diagram-drawio-mode');
+const diagramTopologyInputEl = document.getElementById('diagram-topology-input');
+const diagramTopologyPreviewEl = document.getElementById('diagram-topology-preview');
+const diagramTopologyStatsEl = document.getElementById('diagram-topology-stats');
+const diagramTopologyStatusEl = document.getElementById('diagram-topology-status');
+const diagramModeTextBtnEl = document.getElementById('diagram-mode-text-btn');
+const diagramModeDrawioBtnEl = document.getElementById('diagram-mode-drawio-btn');
+const diagramEquipmentModalEl = document.getElementById('diagram-equipment-modal');
+const diagramEquipmentLoadingEl = document.getElementById('diagram-equipment-loading');
+const diagramEquipmentContentEl = document.getElementById('diagram-equipment-content');
+const diagramEquipmentTitleEl = document.getElementById('diagram-equipment-title');
+const diagramEquipmentMetaEl = document.getElementById('diagram-equipment-meta');
+const diagramEquipmentOpenBtnEl = document.getElementById('diagram-equipment-open-btn');
+const diagramEquipmentCopyBtnEl = document.getElementById('diagram-equipment-copy-btn');
+
+function normalizeTopologyName(value) {
+  return String(value || '').trim();
+}
+
+function parseTopologyText(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const nodes = new Map();
+  const links = [];
+
+  function ensureNode(name) {
+    const nodeName = normalizeTopologyName(name);
+    if (!nodeName) return null;
+    if (!nodes.has(nodeName)) {
+      nodes.set(nodeName, {
+        id: nodeName,
+        name: nodeName,
+        kind: '',
+        ip: '',
+        note: '',
+        equipmentQuery: '',
+        equipmentId: '',
+        ports: new Set(),
+        order: nodes.size
+      });
+    }
+    return nodes.get(nodeName);
+  }
+
+  function parseNodeLine(line) {
+    const parts = line.split('|').map(part => part.trim());
+    if (parts.length < 2) return false;
+    const node = ensureNode(parts[0]);
+    if (!node) return false;
+    node.kind = parts[1] || node.kind;
+    node.ip = parts[2] || node.ip;
+    node.note = parts[3] || node.note;
+    const meta = parts.slice(4).join(' | ');
+    if (meta) {
+      meta.split(/[;,]/).map(part => part.trim()).filter(Boolean).forEach(part => {
+        const [rawKey, ...rest] = part.split('=');
+        if (!rawKey || !rest.length) return;
+        const key = normalizeTopologyName(rawKey).toLowerCase();
+        const value = rest.join('=').trim();
+        if (!value) return;
+        if (key === 'equipment' || key === 'device' || key === 'host') node.equipmentQuery = value;
+        else if (key === 'equipmentid' || key === 'id') node.equipmentId = value;
+      });
+    }
+    return true;
+  }
+
+  function parseEndpoint(raw) {
+    const value = normalizeTopologyName(raw);
+    if (!value) return { name: '', port: '' };
+    let name = value;
+    let port = '';
+    const bracket = value.match(/^(.*?)[\[\(](.+?)[\]\)]$/);
+    if (bracket) {
+      name = bracket[1].trim();
+      port = bracket[2].trim();
+    } else {
+      const colonIndex = value.lastIndexOf(':');
+      if (colonIndex > 0 && !value.includes('://')) {
+        name = value.slice(0, colonIndex).trim();
+        port = value.slice(colonIndex + 1).trim();
+      } else {
+        const tokens = value.split(/\s+/);
+        if (tokens.length > 1) {
+          name = tokens.shift().trim();
+          port = tokens.join(' ').trim();
+        }
+      }
+    }
+    return { name, port };
+  }
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) return;
+    if (trimmed.includes('->') || trimmed.includes('<->')) {
+      const arrow = trimmed.includes('<->') ? '<->' : '->';
+      const [leftRaw, rightRaw] = trimmed.split(arrow);
+      const left = parseEndpoint(leftRaw);
+      const right = parseEndpoint(rightRaw);
+      if (!left.name || !right.name) return;
+      const leftNode = ensureNode(left.name);
+      const rightNode = ensureNode(right.name);
+      if (!leftNode || !rightNode) return;
+      if (left.port) leftNode.ports.add(left.port);
+      if (right.port) rightNode.ports.add(right.port);
+      links.push({
+        id: `link-${index}`,
+        from: leftNode.id,
+        to: rightNode.id,
+        fromPort: left.port,
+        toPort: right.port,
+        bidirectional: arrow === '<->'
+      });
+      return;
+    }
+    if (trimmed.includes('|')) {
+      if (parseNodeLine(trimmed)) return;
+    }
+    ensureNode(trimmed);
+  });
+
+  const nodesArray = Array.from(nodes.values());
+
+  nodesArray.forEach(node => {
+    node.linkCount = 0;
+    node.linkPartners = new Set();
+  });
+  links.forEach(link => {
+    const from = nodes.get(link.from);
+    const to = nodes.get(link.to);
+    if (from) {
+      from.linkCount += 1;
+      from.linkPartners.add(to?.id || '');
+      if (link.fromPort) from.ports.add(link.fromPort);
+    }
+    if (to) {
+      to.linkCount += 1;
+      to.linkPartners.add(from?.id || '');
+      if (link.toPort) to.ports.add(link.toPort);
+    }
+  });
+
+  nodesArray.forEach(node => {
+    const signature = `${node.kind} ${node.name} ${node.note}`.toLowerCase();
+    if (/core|routeur|router|firewall|fw|gateway|wan|edge/.test(signature)) node.tier = 0;
+    else if (/switch|sw|stack|distribution|access|l2|l3/.test(signature)) node.tier = 1;
+    else if (node.linkCount > 2) node.tier = 1;
+    else node.tier = 2;
+  });
+
+  return { nodes: nodesArray, links };
+}
+
+function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview' } = {}) {
+  const model = parseTopologyText(text);
+  const nodes = model.nodes;
+  const links = model.links;
+
+  if (!nodes.length) {
+    return {
+      html: `<div class="rounded-3xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-500">Décris une topologie pour générer le schéma.</div>`,
+      stats: 'Aucun équipement détecté.',
+      height: 220
+    };
+  }
+
+  const tiers = [[], [], []];
+  nodes.slice().sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
+    .forEach(node => tiers[Math.max(0, Math.min(2, node.tier || 2))].push(node));
+
+  const nodeWidth = 230;
+  const nodeHeight = 118;
+  const colGap = 24;
+  const rowGap = 54;
+  const pad = 28;
+  const innerWidth = Math.max(...tiers.map(tier => Math.max(1, tier.length))) * nodeWidth + Math.max(0, Math.max(...tiers.map(tier => tier.length)) - 1) * colGap;
+  const width = Math.max(860, pad * 2 + innerWidth);
+
+  const positions = new Map();
+  let maxRow = 0;
+
+  tiers.forEach((tierNodes, tierIndex) => {
+    const rowWidth = tierNodes.length * nodeWidth + Math.max(0, tierNodes.length - 1) * colGap;
+    const rowLeft = pad + Math.max(0, (width - pad * 2 - rowWidth) / 2);
+    const top = pad + tierIndex * (nodeHeight + rowGap);
+    maxRow = Math.max(maxRow, top + nodeHeight);
+    tierNodes.forEach((node, index) => {
+      positions.set(node.id, {
+        x: rowLeft + index * (nodeWidth + colGap),
+        y: top
+      });
+    });
+  });
+
+  const height = Math.max(360, maxRow + pad);
+  const palette = {
+    0: { border: 'border-indigo-200', bg: 'bg-indigo-50', text: 'text-indigo-700', dot: '#6366f1' },
+    1: { border: 'border-purple-200', bg: 'bg-purple-50', text: 'text-purple-700', dot: '#a855f7' },
+    2: { border: 'border-sky-200', bg: 'bg-sky-50', text: 'text-sky-700', dot: '#0ea5e9' }
+  };
+
+  const svgLines = links.map(link => {
+    const from = positions.get(link.from);
+    const to = positions.get(link.to);
+    if (!from || !to) return '';
+    const x1 = from.x + nodeWidth / 2;
+    const y1 = from.y + nodeHeight / 2;
+    const x2 = to.x + nodeWidth / 2;
+    const y2 = to.y + nodeHeight / 2;
+    const dy = Math.max(48, Math.abs(y2 - y1) * 0.5);
+    const c1y = y1 + (y2 >= y1 ? dy : -dy);
+    const c2y = y2 - (y2 >= y1 ? dy : -dy);
+    return `
+      <path d="M ${x1} ${y1} C ${x1} ${c1y}, ${x2} ${c2y}, ${x2} ${y2}" fill="none" stroke="url(#diagram-link-gradient)" stroke-width="2.5" stroke-linecap="round"
+        ${link.bidirectional ? 'marker-start="url(#diagram-arrow)" marker-end="url(#diagram-arrow)"' : 'marker-end="url(#diagram-arrow)"'} />
+    `;
+  }).join('');
+
+  const nodeMarkup = nodes.map(node => {
+    const pos = positions.get(node.id);
+    const paletteEntry = palette[Math.max(0, Math.min(2, node.tier || 2))];
+    const portCount = node.ports.size;
+    const summaryBits = [
+      node.kind ? escapeHtml(node.kind) : '',
+      node.ip ? escapeHtml(node.ip) : '',
+      node.note ? escapeHtml(node.note) : ''
+    ].filter(Boolean);
+    const attrs = interactive ? `data-diagram-node="${escapeHtml(node.id)}" role="button" tabindex="0"` : '';
+    return `
+      <button type="button" ${attrs}
+        class="absolute w-[230px] rounded-3xl border ${paletteEntry.border} ${paletteEntry.bg} p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+        style="left:${pos.x}px;top:${pos.y}px">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[11px] font-semibold uppercase tracking-wide ${paletteEntry.text}">${escapeHtml(node.kind || 'Équipement')}</p>
+            <h3 class="mt-1 truncate text-sm font-semibold text-slate-900">${escapeHtml(node.name)}</h3>
+          </div>
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm" style="background:${paletteEntry.dot}">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+            </svg>
+          </div>
+        </div>
+        <div class="mt-3 space-y-1 text-xs text-slate-600">
+          ${node.ip ? `<p class="truncate"><span class="font-medium text-slate-500">IP</span> ${escapeHtml(node.ip)}</p>` : ''}
+          ${summaryBits.length ? `<p class="line-clamp-2 leading-5 text-slate-500">${summaryBits.join(' · ')}</p>` : ''}
+          <p class="text-slate-400">${portCount ? `${portCount} port${portCount > 1 ? 's' : ''} référencé${portCount > 1 ? 's' : ''}` : 'Aucun port référencé'}</p>
+        </div>
+      </button>
+    `;
+  }).join('');
+
+  const linkLabels = links.map(link => {
+    const from = positions.get(link.from);
+    const to = positions.get(link.to);
+    if (!from || !to) return '';
+    const x = (from.x + to.x) / 2 + nodeWidth / 2;
+    const y = (from.y + to.y) / 2 + nodeHeight / 2;
+    const label = [link.fromPort, link.toPort].filter(Boolean).join(' ↔ ');
+    if (!label) return '';
+    return `<div class="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-slate-900/90 px-3 py-1 text-[11px] font-medium text-white shadow-lg" style="left:${x}px;top:${y}px">${escapeHtml(label)}</div>`;
+  }).join('');
+
+  const html = `
+    <div class="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 p-6 shadow-inner" style="min-width:${width}px; min-height:${height}px">
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.16),transparent_35%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.18),transparent_28%),linear-gradient(180deg,rgba(15,23,42,1),rgba(15,23,42,0.92))]"></div>
+      <svg class="absolute inset-0 h-full w-full" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="diagram-link-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#c4b5fd" />
+            <stop offset="100%" stop-color="#67e8f9" />
+          </linearGradient>
+          <marker id="diagram-arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L8,3 z" fill="#c4b5fd" />
+          </marker>
+        </defs>
+        ${svgLines}
+      </svg>
+      ${nodeMarkup}
+      ${linkLabels}
+    </div>
+  `;
+
+  return {
+    html,
+    stats: `${nodes.length} équipement${nodes.length > 1 ? 's' : ''} · ${links.length} liaison${links.length > 1 ? 's' : ''}`,
+    height
+  };
+}
+
+function renderTopologyDiagramInto(containerEl, text, { interactive = true, sourceText = '' } = {}) {
+  if (!containerEl) return;
+  const result = getTopologyDiagramMarkup(text, { interactive });
+  containerEl.innerHTML = `
+    <div class="space-y-4">
+      ${result.html}
+      ${sourceText ? `
+        <details class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <summary class="cursor-pointer text-sm font-medium text-slate-700">Texte source</summary>
+          <pre class="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">${escapeHtml(sourceText)}</pre>
+        </details>
+      ` : ''}
+      ${interactive ? `
+        <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
+          Clique sur un équipement pour ouvrir sa configuration.
+        </div>
+      ` : ''}
+    </div>
+  `;
+  if (!interactive) return;
+  containerEl.querySelectorAll('[data-diagram-node]').forEach(button => {
+    const nodeName = button.dataset.diagramNode || '';
+    button.addEventListener('click', () => {
+      const model = parseTopologyText(text);
+      const node = model.nodes.find(item => item.id === nodeName);
+      if (node) openDiagramEquipmentModal(node);
+    });
+    button.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        button.click();
+      }
+    });
+  });
+}
+
+function scheduleTopologyPreview() {
+  const token = ++diagramTopologyPreviewToken;
+  window.requestAnimationFrame(() => {
+    if (token !== diagramTopologyPreviewToken || !diagramTopologyPreviewEl) return;
+    const text = diagramTopologyInputEl?.value || '';
+    const result = getTopologyDiagramMarkup(text, { interactive: false, mode: 'editor' });
+    diagramTopologyPreviewEl.innerHTML = result.html;
+    diagramTopologyStatsEl.textContent = result.stats;
+    diagramTopologyStatusEl.textContent = text.trim() ? 'Mise à jour automatique' : '';
+  });
+}
+
+function setDiagramEditorMode(mode) {
+  diagramEditorMode = mode === 'drawio' ? 'drawio' : 'text';
+  diagramTextModeEl.classList.toggle('hidden', diagramEditorMode !== 'text');
+  diagramDrawioModeEl.classList.toggle('hidden', diagramEditorMode !== 'drawio');
+  diagramModeTextBtnEl.className = diagramEditorMode === 'text'
+    ? 'rounded-xl px-3 py-2 text-sm font-medium transition bg-white text-purple-700 shadow-sm'
+    : 'rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition';
+  diagramModeDrawioBtnEl.className = diagramEditorMode === 'drawio'
+    ? 'rounded-xl px-3 py-2 text-sm font-medium transition bg-white text-purple-700 shadow-sm'
+    : 'rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition';
+  if (diagramEditorMode === 'text') {
+    scheduleTopologyPreview();
+  } else if (!drawioIframeEl.src) {
+    diagramLoadingEl.classList.remove('hidden');
+    drawioIframeEl.classList.add('hidden');
+    drawioIframeEl.src = 'https://embed.diagrams.net/?embed=1&spin=1&proto=json&libraries=1&lang=fr';
+  }
+}
+
+async function resolveEquipmentNode(node) {
+  const query = String(node?.equipmentId || node?.equipmentQuery || node?.name || '').trim();
+  if (!query) return null;
+  if (node?.equipmentId) {
+    try {
+      const detail = await api.get(`/equipment/${encodeURIComponent(node.equipmentId)}`);
+      return detail;
+    } catch {}
+  }
+
+  try {
+    const search = await api.get('/equipment', { search: query, limit: 20 });
+    const candidates = Array.isArray(search?.data) ? search.data : [];
+    const normalizedQuery = query.toLowerCase();
+    const exact = candidates.find(item => {
+      const names = [item.name, item.agentHostname, item.serialNumber].filter(Boolean).map(value => String(value).toLowerCase());
+      return names.includes(normalizedQuery);
+    }) || candidates[0];
+    if (!exact?.id) return null;
+    return await api.get(`/equipment/${encodeURIComponent(exact.id)}`);
+  } catch {
+    return null;
+  }
+}
+
+function formatTopologyConf(detail) {
+  const info = detail?.agentInfo
+    ? (typeof detail.agentInfo === 'string' ? (() => { try { return JSON.parse(detail.agentInfo); } catch { return {}; } })() : detail.agentInfo)
+    : {};
+  const ips = Array.isArray(info.ips) ? info.ips : [];
+  return {
+    title: detail?.name || detail?.agentHostname || 'Équipement',
+    lines: [
+      detail?.agentHostname ? `Hostname: ${detail.agentHostname}` : null,
+      detail?.type ? `Type: ${detail.type}` : null,
+      detail?.status ? `Statut: ${detail.status}` : null,
+      detail?.room ? `Salle: ${detail.room.name || detail.room.number || ''}`.trim() : null,
+      ips.length ? `IP: ${ips.join(', ')}` : null,
+      detail?.supplier?.name ? `Fournisseur: ${detail.supplier.name}` : null
+    ].filter(Boolean),
+    raw: JSON.stringify(detail || {}, null, 2)
+  };
+}
+
+async function openDiagramEquipmentModal(node) {
+  diagramEquipmentCurrentNode = node || null;
+  diagramEquipmentCurrentDetail = null;
+  diagramEquipmentModalEl.classList.remove('hidden');
+  document.body.classList.add('overflow-hidden');
+  diagramEquipmentLoadingEl.classList.remove('hidden');
+  diagramEquipmentLoadingEl.textContent = 'Chargement...';
+  diagramEquipmentContentEl.classList.add('hidden');
+  diagramEquipmentContentEl.innerHTML = '';
+  diagramEquipmentMetaEl.textContent = '';
+  diagramEquipmentTitleEl.textContent = normalizeTopologyName(node?.name) || 'Équipement';
+  diagramEquipmentOpenBtnEl.disabled = true;
+  diagramEquipmentCopyBtnEl.disabled = true;
+
+  const detail = await resolveEquipmentNode(node);
+  if (!detail) {
+    diagramEquipmentLoadingEl.textContent = 'Aucun équipement correspondant trouvé.';
+    diagramEquipmentTitleEl.textContent = normalizeTopologyName(node?.name) || 'Équipement';
+    diagramEquipmentOpenBtnEl.disabled = true;
+    diagramEquipmentCopyBtnEl.disabled = true;
+    return;
+  }
+
+  diagramEquipmentCurrentDetail = detail;
+  const conf = formatTopologyConf(detail);
+  diagramEquipmentTitleEl.textContent = conf.title;
+  diagramEquipmentMetaEl.textContent = detail?.id ? `ID équipement: ${detail.id}` : '';
+  diagramEquipmentContentEl.innerHTML = `
+    <div class="grid gap-3 md:grid-cols-2">
+      ${conf.lines.map(line => `
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">${escapeHtml(line)}</div>
+      `).join('')}
+    </div>
+    <div class="rounded-3xl border border-slate-200 bg-slate-950 p-4">
+      <div class="mb-2 flex items-center justify-between gap-2">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">Configuration brute</p>
+        <span class="text-[11px] text-slate-400">JSON complet</span>
+      </div>
+      <pre class="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-slate-100">${escapeHtml(conf.raw)}</pre>
+    </div>
+  `;
+  diagramEquipmentLoadingEl.classList.add('hidden');
+  diagramEquipmentContentEl.classList.remove('hidden');
+  diagramEquipmentOpenBtnEl.disabled = false;
+  diagramEquipmentCopyBtnEl.disabled = false;
+  diagramEquipmentOpenBtnEl.onclick = () => {
+    if (detail?.id) window.location.href = `/equipment.html?focus=${encodeURIComponent(detail.id)}`;
+  };
+  diagramEquipmentCopyBtnEl.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(conf.raw);
+      showToast('Configuration copiée', 'success');
+    } catch {
+      showToast('Copie impossible', 'error');
+    }
+  };
+}
+
+function closeDiagramEquipmentModal() {
+  diagramEquipmentModalEl.classList.add('hidden');
+  document.body.classList.remove('overflow-hidden');
+  diagramEquipmentLoadingEl.textContent = 'Chargement...';
+  diagramEquipmentLoadingEl.classList.remove('hidden');
+  diagramEquipmentContentEl.classList.add('hidden');
+  diagramEquipmentCurrentNode = null;
+  diagramEquipmentCurrentDetail = null;
+}
 
 function openDiagramEditor(article) {
   if (!isAdmin()) return;
@@ -1548,15 +2094,20 @@ function openDiagramEditor(article) {
   diagramFeedbackEl.textContent = '';
   _diagramCurrentXml = article?.diagramXml || '';
   _diagramPendingSave = false;
-
-  diagramLoadingEl.classList.remove('hidden');
-  drawioIframeEl.classList.add('hidden');
-  drawioIframeEl.src = 'https://embed.diagrams.net/?embed=1&spin=1&proto=json&libraries=1&lang=fr';
+  diagramTopologyInputEl.value = article?.topologyText || article?.content || '';
+  setDiagramEditorMode((article?.diagramXml && !(article?.topologyText || article?.content)) ? 'drawio' : 'text');
+  if (diagramEditorMode === 'drawio') {
+    diagramLoadingEl.classList.remove('hidden');
+    drawioIframeEl.classList.add('hidden');
+    drawioIframeEl.src = 'https://embed.diagrams.net/?embed=1&spin=1&proto=json&libraries=1&lang=fr';
+  }
   diagramEditorModalEl.classList.remove('hidden');
   document.body.classList.add('overflow-hidden');
+  scheduleTopologyPreview();
 }
 
 function closeDiagramEditor() {
+  closeDiagramEquipmentModal();
   diagramEditorModalEl.classList.add('hidden');
   document.body.classList.remove('overflow-hidden');
   drawioIframeEl.src = '';
@@ -1569,6 +2120,23 @@ function closeDiagramEditor() {
 function sendToDrawio(msg) {
   drawioIframeEl.contentWindow?.postMessage(JSON.stringify(msg), '*');
 }
+
+diagramModeTextBtnEl.addEventListener('click', () => setDiagramEditorMode('text'));
+diagramModeDrawioBtnEl.addEventListener('click', () => setDiagramEditorMode('drawio'));
+diagramTopologyInputEl.addEventListener('input', scheduleTopologyPreview);
+document.getElementById('diagram-format-help-btn').addEventListener('click', () => {
+  diagramTopologyInputEl.value = [
+    'CORE-SW1 | switch | 10.0.0.2 | coeur de reseau | equipment=Core switch',
+    'ACCESS-SW1 | switch | 10.0.0.3 | baie A | equipment=Switch accès baie A',
+    'FW-EDGE | firewall | 10.0.0.1 | sortie internet | equipment=Firewall edge',
+    '',
+    'CORE-SW1 Gi1/0/1 -> FW-EDGE eth0',
+    'CORE-SW1 Gi1/0/2 -> ACCESS-SW1 Gi1/0/48',
+    'ACCESS-SW1 Gi1/0/1 -> PC-12 eth0'
+  ].join('\n');
+  setDiagramEditorMode('text');
+  scheduleTopologyPreview();
+});
 
 window.addEventListener('message', event => {
   if (event.source !== drawioIframeEl.contentWindow) return;
@@ -1603,6 +2171,12 @@ document.getElementById('save-diagram-btn').addEventListener('click', () => {
     diagramFeedbackEl.className = 'text-sm text-red-600';
     return;
   }
+
+  if (diagramEditorMode === 'text') {
+    saveDiagram('');
+    return;
+  }
+
   _diagramPendingSave = true;
   diagramFeedbackEl.textContent = 'Export en cours…';
   diagramFeedbackEl.className = 'text-sm text-slate-500';
@@ -1614,6 +2188,7 @@ async function saveDiagram(svgData) {
   const category = document.getElementById('diagram-category-input').value.trim();
   const tags = document.getElementById('diagram-tags-input').value.trim();
   const summary = document.getElementById('diagram-summary-input').value.trim();
+  const topologyText = diagramTopologyInputEl.value.trim();
 
   diagramFeedbackEl.textContent = 'Enregistrement…';
   diagramFeedbackEl.className = 'text-sm text-slate-500';
@@ -1624,9 +2199,10 @@ async function saveDiagram(svgData) {
     category,
     tags,
     summary,
-    content: '',
-    diagramXml: _diagramCurrentXml,
-    diagramSvg: svgData || ''
+    content: topologyText,
+    topologyText,
+    diagramXml: diagramEditorMode === 'drawio' ? _diagramCurrentXml : '',
+    diagramSvg: diagramEditorMode === 'drawio' ? (svgData || '') : ''
   };
 
   try {
@@ -1647,6 +2223,10 @@ async function saveDiagram(svgData) {
 
 document.getElementById('cancel-diagram-btn').addEventListener('click', closeDiagramEditor);
 document.getElementById('close-diagram-btn').addEventListener('click', closeDiagramEditor);
+document.getElementById('close-diagram-equipment-btn').addEventListener('click', closeDiagramEquipmentModal);
+diagramEquipmentModalEl.addEventListener('click', event => {
+  if (event.target === diagramEquipmentModalEl) closeDiagramEquipmentModal();
+});
 
 // ── Viewer draw.io (fichiers .drawio attachés) ────────────────────────────────
 

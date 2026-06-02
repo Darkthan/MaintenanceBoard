@@ -39,6 +39,10 @@ describe('knowledge base page', () => {
     expect(res.text).toContain("actions.classList.remove('pointer-events-none', 'opacity-0', 'scale-95')");
     expect(res.text).toContain("style.transform = 'rotate(45deg)'");
     expect(res.text).toContain('id="kb-fab-wrap" class="hidden fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3"');
+    expect(res.text).toContain('id="diagram-topology-input"');
+    expect(res.text).toContain('id="diagram-topology-preview"');
+    expect(res.text).toContain('id="diagram-equipment-modal"');
+    expect(res.text).toContain('id="diagram-mode-text-btn"');
     expect(res.text).toContain('id="ip-fn-gateway"');
     expect(res.text).toContain("gateway: document.getElementById('ip-fn-gateway').value||null");
     expect(res.text).toContain('id="ip-fn-secondary-gateways"');

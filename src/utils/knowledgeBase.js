@@ -144,6 +144,7 @@ const VALID_ARTICLE_TYPES = ['article', 'network-diagram', 'ip-addressing'];
 function validateKnowledgeBasePayload(payload, { partial = false } = {}) {
   const title = payload.title === undefined ? undefined : String(payload.title || '').trim();
   const content = payload.content === undefined ? undefined : String(payload.content || '').trim();
+  const topologyText = payload.topologyText === undefined ? undefined : String(payload.topologyText || '').trim();
   const summary = payload.summary === undefined ? undefined : String(payload.summary || '').trim();
   const category = payload.category === undefined ? undefined : String(payload.category || '').trim();
   const tags = payload.tags === undefined ? undefined : normalizeTags(payload.tags);
@@ -162,6 +163,7 @@ function validateKnowledgeBasePayload(payload, { partial = false } = {}) {
   return {
     ...(title !== undefined ? { title } : {}),
     ...(content !== undefined ? { content } : {}),
+    ...(topologyText !== undefined ? { topologyText } : {}),
     ...(summary !== undefined ? { summary } : {}),
     ...(category !== undefined ? { category } : {}),
     ...(tags !== undefined ? { tags } : {}),
@@ -184,6 +186,7 @@ function createKnowledgeBaseArticle(payload, user) {
     category: data.category || '',
     tags: data.tags || [],
     content: data.content || '',
+    topologyText: data.topologyText || '',
     diagramXml: data.diagramXml || '',
     diagramSvg: data.diagramSvg || '',
     attachments: [],
@@ -207,6 +210,7 @@ function updateKnowledgeBaseArticle(article, payload, user) {
     ...(patch.category !== undefined ? { category: patch.category } : {}),
     ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
     ...(patch.content !== undefined ? { content: patch.content } : {}),
+    ...(patch.topologyText !== undefined ? { topologyText: patch.topologyText } : {}),
     ...(patch.diagramXml !== undefined ? { diagramXml: patch.diagramXml } : {}),
     ...(patch.diagramSvg !== undefined ? { diagramSvg: patch.diagramSvg } : {}),
     updatedAt: new Date().toISOString(),

@@ -122,7 +122,8 @@ function serializeKnowledgeArticle(article, { full = false } = {}) {
       attachments: attachments.map(attachment => serializeKnowledgeAttachment(article.id, attachment)),
       ...(isNetworkDiagram ? {
         diagramXml: article.diagramXml || '',
-        diagramSvg: article.diagramSvg || ''
+        diagramSvg: article.diagramSvg || '',
+        topologyText: article.topologyText || ''
       } : {})
     } : {})
   };
@@ -177,6 +178,7 @@ router.get('/', requireAuth, (req, res) => {
       article.category,
       ...(Array.isArray(article.tags) ? article.tags : []),
       article.content,
+      article.topologyText,
       ...((Array.isArray(article.attachments) ? article.attachments : []).map(attachment => attachment.name))
     ].filter(Boolean).join(' '));
 
