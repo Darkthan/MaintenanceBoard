@@ -46,7 +46,7 @@ jest.mock('../src/lib/prisma', () => ({
 }));
 
 const prisma = require('../src/lib/prisma');
-const ipAddressingRouter = require('../src/routes/ipAddressing');
+const { router: ipAddressingRouter } = require('../src/routes/ipAddressing');
 
 function buildApp() {
   const app = express();
