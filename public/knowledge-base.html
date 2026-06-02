@@ -2031,7 +2031,7 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   const height = Math.max(340, Math.ceil(maxY + pad));
 
   function getPortAnchor(pos, side, offsetIndex = 0, count = 1) {
-    const step = 16;
+    const step = 14;
     const spread = (count - 1) * step;
     const start = -spread / 2;
     const offset = start + offsetIndex * step;
@@ -2041,33 +2041,62 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     return { x: pos.x + nodeWidth, y: pos.y + nodeHeight / 2 + offset };
   }
 
+  function buildOrthogonalLinkPath(start, end, orientation, laneOffset = 0) {
+    const exitGap = 18;
+    const bendGap = 22 + Math.min(30, Math.abs(laneOffset) * 0.2);
+    if (orientation === 'horizontal') {
+      const startDir = start.x <= end.x ? 1 : -1;
+      const endDir = -startDir;
+      const startExitX = start.x + startDir * exitGap;
+      const endEntryX = end.x + endDir * exitGap;
+      const laneY = clamp(
+        (start.y + end.y) / 2 + laneOffset,
+        Math.min(start.y, end.y) - bendGap,
+        Math.max(start.y, end.y) + bendGap
+      );
+      return `M ${start.x} ${start.y} H ${startExitX} V ${laneY} H ${endEntryX} V ${end.y} H ${end.x}`;
+    }
+
+    const startDir = start.y <= end.y ? 1 : -1;
+    const endDir = -startDir;
+    const startExitY = start.y + startDir * exitGap;
+    const endEntryY = end.y + endDir * exitGap;
+    const laneX = clamp(
+      (start.x + end.x) / 2 + laneOffset,
+      Math.min(start.x, end.x) - bendGap,
+      Math.max(start.x, end.x) + bendGap
+    );
+    return `M ${start.x} ${start.y} V ${startExitY} H ${laneX} V ${endEntryY} H ${end.x} V ${end.y}`;
+  }
+
   const linkIndexByNode = new Map();
   const svgLines = visibleLinks.map(link => {
     const from = positions.get(link.from);
     const to = positions.get(link.to);
     if (!from || !to) return '';
-    const fromTier = from.tier || 2;
-    const toTier = to.tier || 2;
-    const sameTier = fromTier === toTier;
-    const horizontal = sameTier;
-    const fromSide = horizontal ? (from.x <= to.x ? 'right' : 'left') : (fromTier < toTier ? 'bottom' : 'top');
-    const toSide = horizontal ? (from.x <= to.x ? 'left' : 'right') : (fromTier < toTier ? 'top' : 'bottom');
     const fromLinks = visibleLinks.filter(item => item.from === link.from || item.to === link.from);
     const toLinks = visibleLinks.filter(item => item.from === link.to || item.to === link.to);
     const fromIndex = linkIndexByNode.has(`${link.from}:${link.id}`) ? linkIndexByNode.get(`${link.from}:${link.id}`) : fromLinks.findIndex(item => item === link);
     const toIndex = linkIndexByNode.has(`${link.to}:${link.id}`) ? linkIndexByNode.get(`${link.to}:${link.id}`) : toLinks.findIndex(item => item === link);
     linkIndexByNode.set(`${link.from}:${link.id}`, fromIndex);
     linkIndexByNode.set(`${link.to}:${link.id}`, toIndex);
+    const startCenter = { x: from.x + nodeWidth / 2, y: from.y + nodeHeight / 2 };
+    const endCenter = { x: to.x + nodeWidth / 2, y: to.y + nodeHeight / 2 };
+    const horizontalPrimary = Math.abs(endCenter.x - startCenter.x) >= Math.abs(endCenter.y - startCenter.y);
+    const fromSide = horizontalPrimary
+      ? (endCenter.x >= startCenter.x ? 'right' : 'left')
+      : (endCenter.y >= startCenter.y ? 'bottom' : 'top');
+    const toSide = horizontalPrimary
+      ? (endCenter.x >= startCenter.x ? 'left' : 'right')
+      : (endCenter.y >= startCenter.y ? 'top' : 'bottom');
     const start = getPortAnchor(from, fromSide, Math.max(0, fromIndex), Math.max(1, fromLinks.length));
     const end = getPortAnchor(to, toSide, Math.max(0, toIndex), Math.max(1, toLinks.length));
-    const dx = Math.max(80, Math.abs(end.x - start.x) * 0.45);
-    const dy = Math.max(60, Math.abs(end.y - start.y) * 0.5);
-    const c1x = horizontal ? start.x + (end.x >= start.x ? dx : -dx) : start.x;
-    const c1y = horizontal ? start.y : start.y + (end.y >= start.y ? dy : -dy);
-    const c2x = horizontal ? end.x - (end.x >= start.x ? dx : -dx) : end.x;
-    const c2y = horizontal ? end.y : end.y - (end.y >= start.y ? dy : -dy);
+    const laneCount = Math.max(fromLinks.length, toLinks.length);
+    const laneIndex = Math.max(0, Math.max(fromIndex, toIndex));
+    const laneOffset = (laneIndex - (laneCount - 1) / 2) * 18;
+    const path = buildOrthogonalLinkPath(start, end, horizontalPrimary ? 'horizontal' : 'vertical', laneOffset);
     return `
-      <path d="M ${start.x} ${start.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${end.x} ${end.y}" fill="none" stroke="url(#diagram-link-gradient)" stroke-width="2.5" stroke-linecap="round"
+      <path d="${path}" fill="none" stroke="url(#diagram-link-gradient)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
         stroke-opacity="0.8"
         ${link.bidirectional ? 'marker-start="url(#diagram-arrow)" marker-end="url(#diagram-arrow)"' : 'marker-end="url(#diagram-arrow)"'} />
     `;
