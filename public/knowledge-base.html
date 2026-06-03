@@ -1788,87 +1788,125 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   });
 
   const rootNode = sortedNodes.slice().sort((a, b) => {
-    const scoreA = (adjacency.get(a.id)?.size || 0) * 3 + (a.ports?.size || 0);
-    const scoreB = (adjacency.get(b.id)?.size || 0) * 3 + (b.ports?.size || 0);
+    const scoreA = (adjacency.get(a.id)?.size || 0) * 4 + (a.ports?.size || 0);
+    const scoreB = (adjacency.get(b.id)?.size || 0) * 4 + (b.ports?.size || 0);
     if (scoreA !== scoreB) return scoreB - scoreA;
     return a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
   })[0] || sortedNodes[0];
 
-  const levels = new Map();
-  const visited = new Set([rootNode.id]);
-  const queue = [{ id: rootNode.id, level: 0 }];
-  while (queue.length) {
-    const current = queue.shift();
-    if (!levels.has(current.level)) levels.set(current.level, []);
-    const currentNode = sortedNodes.find(node => node.id === current.id);
-    if (currentNode) levels.get(current.level).push(currentNode);
-    const neighbors = Array.from(adjacency.get(current.id) || []);
-    neighbors.forEach(nextId => {
-      if (visited.has(nextId)) return;
-      visited.add(nextId);
-      queue.push({ id: nextId, level: current.level + 1 });
-    });
-  }
-  sortedNodes.forEach(node => {
-    if (visited.has(node.id)) return;
-    const fallbackLevel = 3;
-    if (!levels.has(fallbackLevel)) levels.set(fallbackLevel, []);
-    levels.get(fallbackLevel).push(node);
-  });
-
-  const levelEntries = Array.from(levels.entries()).sort((a, b) => a[0] - b[0]);
-  const pad = fullscreenActive ? 56 : 40;
-  const baseRadius = fullscreenActive ? 118 : 108;
-  const radiusStep = fullscreenActive ? 132 : 122;
-
-  const centerLayout = layoutData[rootNode.id];
-  const centerX = centerLayout ? centerLayout.x : 0;
-  const centerY = centerLayout ? centerLayout.y : 0;
-  if (centerLayout) {
-    positions.set(rootNode.id, { x: centerLayout.x, y: centerLayout.y, tier: 0, fixed: true });
-  } else {
-    positions.set(rootNode.id, { x: -nodeWidth / 2, y: -nodeHeight / 2, tier: 0, fixed: false });
-  }
-
-  levelEntries.forEach(([level, levelNodes]) => {
-    if (level === 0) return;
-    const arranged = levelNodes.slice().sort((a, b) => {
-      const degreeA = adjacency.get(a.id)?.size || 0;
-      const degreeB = adjacency.get(b.id)?.size || 0;
-      if (degreeA !== degreeB) return degreeB - degreeA;
-      return a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
-    });
-    const radius = baseRadius + (level - 1) * radiusStep;
-    const startAngle = -Math.PI / 2 + level * 0.18;
-    arranged.forEach((node, index) => {
-      const nodeLayout = layoutData[node.id];
-      if (nodeLayout) {
-        positions.set(node.id, { x: nodeLayout.x, y: nodeLayout.y, tier: level, fixed: true });
-        return;
-      }
-      const angle = arranged.length === 1 ? startAngle : startAngle + (index / arranged.length) * Math.PI * 2;
-      positions.set(node.id, {
-        x: centerX + Math.cos(angle) * radius - nodeWidth / 2,
-        y: centerY + Math.sin(angle) * radius - nodeHeight / 2,
-        tier: level,
-        fixed: false
-      });
-    });
-  });
-
+  const centerX = 0;
+  const centerY = 0;
+  const nodeStates = new Map();
+  const seedRadius = fullscreenActive ? 160 : 180;
   sortedNodes.forEach((node, index) => {
-    if (positions.has(node.id)) return;
-    const nodeLayout = layoutData[node.id];
-    if (nodeLayout) {
-      positions.set(node.id, { x: nodeLayout.x, y: nodeLayout.y, tier: node.tier || 2, fixed: true });
-      return;
-    }
-    const angle = (index / Math.max(1, sortedNodes.length)) * Math.PI * 2;
-    positions.set(node.id, {
-      x: centerX + Math.cos(angle) * (baseRadius + radiusStep * 1.5) - nodeWidth / 2,
-      y: centerY + Math.sin(angle) * (baseRadius + radiusStep * 1.5) - nodeHeight / 2,
-      tier: node.tier || 2,
-      fixed: false
+    const layoutPos = layoutData[node.id];
+    const angle = sortedNodes.length === 1 ? 0 : (index / sortedNodes.length) * Math.PI * 2;
+    nodeStates.set(node.id, {
+      x: layoutPos?.x ?? (Math.cos(angle) * seedRadius),
+      y: layoutPos?.y ?? (Math.sin(angle) * seedRadius),
+      vx: 0,
+      vy: 0,
+      fixed: false,
+      tier: node.tier || 2
+    });
+  });
+  if (nodeStates.has(rootNode.id)) {
+    const rootState = nodeStates.get(rootNode.id);
+    rootState.x = layoutData[rootNode.id]?.x ?? 0;
+    rootState.y = layoutData[rootNode.id]?.y ?? 0;
+  }
+
+  const iterations = Math.min(180, 80 + sortedNodes.length * 3);
+  const repulsion = fullscreenActive ? 3400 : 3000;
+  const springLength = fullscreenActive ? 190 : 210;
+  const springStrength = 0.018;
+  const centerStrength = 0.008;
+  const collisionPadding = 18;
+  const damping = 0.86;
+
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    sortedNodes.forEach((nodeA, indexA) => {
+      const stateA = nodeStates.get(nodeA.id);
+      if (!stateA || stateA.fixed) return;
+      for (let indexB = indexA + 1; indexB < sortedNodes.length; indexB += 1) {
+        const nodeB = sortedNodes[indexB];
+        const stateB = nodeStates.get(nodeB.id);
+        if (!stateB) continue;
+        const dx = stateA.x - stateB.x;
+        const dy = stateA.y - stateB.y;
+        const distSq = Math.max(120, dx * dx + dy * dy);
+        const force = repulsion / distSq;
+        const nx = dx * force;
+        const ny = dy * force;
+        if (!stateA.fixed) {
+          stateA.vx += nx;
+          stateA.vy += ny;
+        }
+        if (!stateB.fixed) {
+          stateB.vx -= nx;
+          stateB.vy -= ny;
+        }
+
+        const minDist = (nodeWidth * 0.72) + (nodeHeight * 0.72) + collisionPadding;
+        const dist = Math.sqrt(distSq);
+        if (dist < minDist) {
+          const overlap = (minDist - dist) / Math.max(minDist, 1);
+          const push = overlap * 1.2;
+          const px = (dx / Math.max(dist, 1)) * push;
+          const py = (dy / Math.max(dist, 1)) * push;
+          if (!stateA.fixed) {
+            stateA.vx += px;
+            stateA.vy += py;
+          }
+          if (!stateB.fixed) {
+            stateB.vx -= px;
+            stateB.vy -= py;
+          }
+        }
+      }
+    });
+
+    links.forEach(link => {
+      const source = nodeStates.get(link.from);
+      const target = nodeStates.get(link.to);
+      if (!source || !target) return;
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      const offset = dist - springLength;
+      const force = offset * springStrength;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      if (!source.fixed) {
+        source.vx += fx;
+        source.vy += fy;
+      }
+      if (!target.fixed) {
+        target.vx -= fx;
+        target.vy -= fy;
+      }
+    });
+
+    nodeStates.forEach((state, nodeId) => {
+      if (state.fixed) return;
+      const node = sortedNodes.find(item => item.id === nodeId);
+      const degree = Math.max(1, adjacency.get(nodeId)?.size || 0);
+      const tierPull = node?.tier === 0 ? 1.8 : node?.tier === 1 ? 1.2 : 1;
+      state.vx += (centerX - state.x) * centerStrength * tierPull;
+      state.vy += (centerY - state.y) * centerStrength * tierPull;
+      state.vx *= damping;
+      state.vy *= damping;
+      state.x += clamp(state.vx, -18, 18);
+      state.y += clamp(state.vy, -18, 18);
+    });
+  }
+
+  nodeStates.forEach((state, nodeId) => {
+    positions.set(nodeId, {
+      x: state.x,
+      y: state.y,
+      tier: state.tier,
+      fixed: state.fixed
     });
   });
 
