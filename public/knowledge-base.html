@@ -1979,16 +1979,16 @@ function mountTopologyGraph(containerEl, { text = '', layout = null, interactive
       solver: 'forceAtlas2Based',
       forceAtlas2Based: {
         theta: 0.55,
-        gravitationalConstant: -65,
-        centralGravity: 0.02,
-        springLength: 145,
-        springConstant: 0.08,
-        damping: 0.52,
+        gravitationalConstant: -42,
+        centralGravity: 0.035,
+        springLength: 135,
+        springConstant: 0.055,
+        damping: 0.78,
         avoidOverlap: 1
       },
       stabilization: {
         enabled: true,
-        iterations: 220,
+        iterations: 320,
         updateInterval: 20,
         fit: true
       }
