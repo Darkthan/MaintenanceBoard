@@ -703,12 +703,13 @@
 <!-- Knowledge graph fullscreen modal -->
 <div id="diagram-topology-fullscreen-modal" class="hidden fixed inset-0 z-[140] bg-slate-950">
   <div class="flex h-full flex-col">
-    <div class="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-3 text-white">
-      <div class="min-w-0">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Knowledge graph</p>
-        <h2 id="diagram-topology-fullscreen-title" class="truncate text-lg font-semibold">Vue plein écran</h2>
-      </div>
-      <div class="flex items-center gap-2 flex-wrap justify-end">
+      <div class="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-3 text-white">
+        <div class="min-w-0">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Knowledge graph</p>
+          <h2 id="diagram-topology-fullscreen-title" class="truncate text-lg font-semibold">Vue plein écran</h2>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap justify-end">
+        <button id="diagram-topology-fullscreen-edit-links" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 transition">Déplacer liens</button>
         <button id="diagram-topology-fullscreen-fit" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 transition">Ajuster</button>
         <button id="diagram-topology-fullscreen-reset" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 transition">Réinitialiser</button>
         <button id="diagram-topology-fullscreen-zoom-out" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 transition">-</button>
@@ -1565,6 +1566,7 @@ let diagramTopologyCurrentLayout = {};
 let diagramTopologyCurrentGraphContainer = null;
 let diagramTopologyCurrentGraph = null;
 let diagramTopologyFullscreenSource = '';
+let diagramTopologyFullscreenEditLinks = false;
 
 const diagramEditorModalEl = document.getElementById('diagram-editor-modal');
 const diagramFeedbackEl = document.getElementById('diagram-editor-feedback');
@@ -1583,6 +1585,7 @@ const diagramTopologyFullscreenResetBtnEl = document.getElementById('diagram-top
 const diagramTopologyFullscreenZoomInBtnEl = document.getElementById('diagram-topology-fullscreen-zoom-in');
 const diagramTopologyFullscreenZoomOutBtnEl = document.getElementById('diagram-topology-fullscreen-zoom-out');
 const diagramTopologyFullscreenCloseBtnEl = document.getElementById('diagram-topology-fullscreen-close');
+const diagramTopologyFullscreenEditLinksBtnEl = document.getElementById('diagram-topology-fullscreen-edit-links');
 
 function normalizeTopologyName(value) {
   return String(value || '').trim();
@@ -1974,6 +1977,29 @@ function mountTopologyGraph(containerEl, { text = '', layout = null, interactive
         align: 'top'
       }
     },
+    manipulation: {
+      enabled: false,
+      initiallyActive: false,
+      addNode: false,
+      addEdge: false,
+      editEdge: true,
+      deleteNode: false,
+      deleteEdge: false,
+      controlNodeStyle: {
+        shape: 'dot',
+        size: 8,
+        color: {
+          background: '#f8fafc',
+          border: '#f472b6',
+          highlight: {
+            background: '#fff1f2',
+            border: '#f472b6'
+          }
+        },
+        borderWidth: 2,
+        borderWidthSelected: 2
+      }
+    },
     physics: {
       enabled: true,
       solver: 'forceAtlas2Based',
@@ -2110,6 +2136,7 @@ async function openTopologyFullscreen(text, layout = null, title = 'Vue plein é
     onNodeClick: openDiagramEquipmentModal
   });
   diagramTopologyFullscreenStatsEl.textContent = getTopologyGraphStats(parseTopologyText(text));
+  setTopologyFullscreenEditLinks(false);
   if (diagramTopologyFullscreenModalEl.requestFullscreen && !document.fullscreenElement) {
     try {
       await diagramTopologyFullscreenModalEl.requestFullscreen();
@@ -2137,6 +2164,25 @@ function zoomTopologyFullscreen(delta) {
   graph.moveTo({ position, scale: nextScale, animation: false });
 }
 
+function setTopologyFullscreenEditLinks(active) {
+  const graph = diagramTopologyGraphInstances.get(diagramTopologyFullscreenGraphEl);
+  diagramTopologyFullscreenEditLinks = !!active;
+  if (diagramTopologyFullscreenEditLinksBtnEl) {
+    diagramTopologyFullscreenEditLinksBtnEl.className = diagramTopologyFullscreenEditLinks
+      ? 'rounded-xl border border-fuchsia-300 bg-fuchsia-500/20 px-3 py-2 text-xs font-medium text-white hover:bg-fuchsia-500/30 transition'
+      : 'rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 transition';
+    diagramTopologyFullscreenEditLinksBtnEl.textContent = diagramTopologyFullscreenEditLinks ? 'Fin édition liens' : 'Déplacer liens';
+  }
+  if (!graph) return;
+  try {
+    if (diagramTopologyFullscreenEditLinks) {
+      graph.editEdgeMode();
+    } else {
+      graph.disableEditMode();
+    }
+  } catch {}
+}
+
 function fitTopologyFullscreen() {
   const graph = diagramTopologyGraphInstances.get(diagramTopologyFullscreenGraphEl);
   if (graph) graph.fit({ animation: false });
@@ -2154,6 +2200,7 @@ function resetTopologyFullscreen() {
     onNodeClick: openDiagramEquipmentModal
   });
   diagramTopologyFullscreenStatsEl.textContent = getTopologyGraphStats(parseTopologyText(text));
+  setTopologyFullscreenEditLinks(false);
 }
 
 function setDiagramEditorMode(mode) {
@@ -2425,6 +2472,7 @@ diagramTopologyFullscreenFitBtnEl?.addEventListener('click', fitTopologyFullscre
 diagramTopologyFullscreenResetBtnEl?.addEventListener('click', resetTopologyFullscreen);
 diagramTopologyFullscreenZoomInBtnEl?.addEventListener('click', () => zoomTopologyFullscreen(0.2));
 diagramTopologyFullscreenZoomOutBtnEl?.addEventListener('click', () => zoomTopologyFullscreen(-0.2));
+diagramTopologyFullscreenEditLinksBtnEl?.addEventListener('click', () => setTopologyFullscreenEditLinks(!diagramTopologyFullscreenEditLinks));
 
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement && diagramTopologyFullscreenModalEl && !diagramTopologyFullscreenModalEl.classList.contains('hidden')) {
