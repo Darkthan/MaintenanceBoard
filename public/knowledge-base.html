@@ -765,6 +765,8 @@
       <div class="border-t border-slate-200 px-5 py-4 flex items-center justify-between gap-3">
         <p id="diagram-equipment-meta" class="text-xs text-slate-500"></p>
         <div class="flex items-center gap-2">
+          <input id="diagram-equipment-config-input" type="file" class="hidden" accept=".txt,.cfg,.conf,.log,.xml,.json,.ini,.yaml,.yml,.sh,.ps1,.bat" />
+          <button id="diagram-equipment-upload-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Ajouter une conf</button>
           <button id="diagram-equipment-copy-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Copier la conf</button>
           <button id="diagram-equipment-open-btn" type="button" class="rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition">Ouvrir la fiche</button>
         </div>
@@ -1647,6 +1649,7 @@ let diagramEditorMode = 'text';
 let diagramTopologyPreviewToken = 0;
 let diagramEquipmentCurrentNode = null;
 let diagramEquipmentCurrentDetail = null;
+let diagramEquipmentCurrentAttachments = [];
 let diagramTopologyCurrentText = '';
 let diagramTopologyCurrentModel = null;
 let diagramTopologyCurrentLayout = {};
@@ -1677,6 +1680,8 @@ const diagramEquipmentLoadingEl = document.getElementById('diagram-equipment-loa
 const diagramEquipmentContentEl = document.getElementById('diagram-equipment-content');
 const diagramEquipmentTitleEl = document.getElementById('diagram-equipment-title');
 const diagramEquipmentMetaEl = document.getElementById('diagram-equipment-meta');
+const diagramEquipmentUploadBtnEl = document.getElementById('diagram-equipment-upload-btn');
+const diagramEquipmentConfigInputEl = document.getElementById('diagram-equipment-config-input');
 const diagramEquipmentOpenBtnEl = document.getElementById('diagram-equipment-open-btn');
 const diagramEquipmentCopyBtnEl = document.getElementById('diagram-equipment-copy-btn');
 const diagramFullscreenModalEl = document.getElementById('diagram-fullscreen-modal');
@@ -1921,13 +1926,19 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     };
   }
 
-  const nodeWidth = 224;
-  const nodeHeight = 112;
-  const palette = {
-    0: { border: 'border-indigo-200', bg: 'bg-white/95', text: 'text-indigo-700', dot: '#6366f1' },
-    1: { border: 'border-purple-200', bg: 'bg-white/95', text: 'text-purple-700', dot: '#a855f7' },
-    2: { border: 'border-sky-200', bg: 'bg-white/95', text: 'text-sky-700', dot: '#0ea5e9' }
-  };
+  const nodeWidth = fullscreenActive ? 208 : 224;
+  const nodeHeight = fullscreenActive ? 98 : 112;
+  const palette = fullscreenActive
+    ? {
+        0: { border: 'border-indigo-400/20', bg: 'bg-slate-900/80 backdrop-blur-md', text: 'text-indigo-200', dot: '#818cf8', chip: 'bg-indigo-400/10 text-indigo-100 border-indigo-300/10' },
+        1: { border: 'border-purple-400/20', bg: 'bg-slate-900/80 backdrop-blur-md', text: 'text-purple-200', dot: '#c084fc', chip: 'bg-purple-400/10 text-purple-100 border-purple-300/10' },
+        2: { border: 'border-cyan-400/20', bg: 'bg-slate-900/80 backdrop-blur-md', text: 'text-cyan-200', dot: '#22d3ee', chip: 'bg-cyan-400/10 text-cyan-100 border-cyan-300/10' }
+      }
+    : {
+        0: { border: 'border-indigo-200', bg: 'bg-white/95', text: 'text-indigo-700', dot: '#6366f1', chip: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+        1: { border: 'border-purple-200', bg: 'bg-white/95', text: 'text-purple-700', dot: '#a855f7', chip: 'bg-purple-50 text-purple-700 border-purple-100' },
+        2: { border: 'border-sky-200', bg: 'bg-white/95', text: 'text-sky-700', dot: '#0ea5e9', chip: 'bg-sky-50 text-sky-700 border-sky-100' }
+      };
 
   const positions = new Map();
   const layoutData = normalizeTopologyLayout(layout);
@@ -2106,6 +2117,8 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     const pos = positions.get(node.id);
     const paletteEntry = palette[Math.max(0, Math.min(2, node.tier || 2))];
     const portCount = node.ports.size;
+    const visiblePorts = Array.from(node.ports).slice(0, fullscreenActive ? 4 : 3);
+    const extraPorts = Math.max(0, portCount - visiblePorts.length);
     const summaryBits = [
       node.kind ? escapeHtml(node.kind) : '',
       node.ip ? escapeHtml(node.ip) : '',
@@ -2115,30 +2128,32 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     const attrs = interactive ? `data-diagram-node="${escapeHtml(node.id)}" role="button" tabindex="0" ${dragAttrs}` : '';
     return `
       <button type="button" ${attrs}
-        class="absolute w-[224px] rounded-2xl border ${paletteEntry.border} ${paletteEntry.bg} p-3.5 text-left shadow-[0_10px_28px_rgba(15,23,42,0.10)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(15,23,42,0.14)] focus:outline-none focus:ring-2 focus:ring-purple-400 ${interactive && fullscreenActive && isAdmin() ? 'cursor-grab active:cursor-grabbing' : ''}"
-        style="left:${pos.x}px;top:${pos.y}px"
+        class="absolute ${fullscreenActive ? 'w-[208px]' : 'w-[224px]'} rounded-2xl border ${paletteEntry.border} ${paletteEntry.bg} p-3 text-left ${fullscreenActive ? 'shadow-[0_14px_32px_rgba(2,6,23,0.35)]' : 'shadow-[0_10px_28px_rgba(15,23,42,0.10)]'} transition hover:-translate-y-0.5 hover:${fullscreenActive ? 'shadow-[0_18px_38px_rgba(2,6,23,0.42)]' : 'shadow-[0_14px_36px_rgba(15,23,42,0.14)]'} focus:outline-none focus:ring-2 focus:ring-purple-400 ${interactive && fullscreenActive && isAdmin() ? 'cursor-grab active:cursor-grabbing' : ''}"
+        style="left:${pos.x}px;top:${pos.y}px;width:${nodeWidth}px"
         data-node-id="${escapeHtml(node.id)}">
-        <div class="flex items-start justify-between gap-2.5">
-          <div class="min-w-0">
+        <div class="flex items-start gap-3">
+          <span class="mt-1.5 h-3 w-3 shrink-0 rounded-full" style="background:${paletteEntry.dot}; box-shadow:0 0 0 4px ${fullscreenActive ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'}"></span>
+          <div class="min-w-0 flex-1">
             <p class="text-[11px] font-semibold uppercase tracking-wide ${paletteEntry.text}">${escapeHtml(node.kind || 'Équipement')}</p>
-            <h3 class="mt-0.5 truncate text-sm font-semibold text-slate-900">${escapeHtml(node.name)}</h3>
-          </div>
-          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white shadow-sm" style="background:${paletteEntry.dot}">
-            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-            </svg>
+            <h3 class="mt-0.5 truncate text-sm font-semibold ${fullscreenActive ? 'text-slate-100' : 'text-slate-900'}">${escapeHtml(node.name)}</h3>
           </div>
         </div>
-        <div class="mt-2.5 space-y-1 text-xs text-slate-600">
-          ${node.ip ? `<p class="truncate"><span class="font-medium text-slate-500">IP</span> ${escapeHtml(node.ip)}</p>` : ''}
-          ${summaryBits.length ? `<p class="line-clamp-2 leading-5 text-slate-500">${summaryBits.join(' · ')}</p>` : ''}
-          <p class="text-slate-400">${portCount ? `${portCount} port${portCount > 1 ? 's' : ''} référencé${portCount > 1 ? 's' : ''}` : 'Aucun port référencé'}</p>
+        <div class="mt-3 space-y-2 text-xs ${fullscreenActive ? 'text-slate-300' : 'text-slate-600'}">
+          ${node.ip ? `<p class="truncate"><span class="font-medium ${fullscreenActive ? 'text-slate-400' : 'text-slate-500'}">IP</span> ${escapeHtml(node.ip)}</p>` : ''}
+          ${summaryBits.length ? `<p class="line-clamp-2 leading-5 ${fullscreenActive ? 'text-slate-400' : 'text-slate-500'}">${summaryBits.join(' · ')}</p>` : ''}
+          <div class="flex flex-wrap gap-1.5">
+            ${visiblePorts.map(port => `
+              <span class="inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[10px] ${paletteEntry.chip}">${escapeHtml(port)}</span>
+            `).join('')}
+            ${extraPorts ? `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${paletteEntry.chip}">+${extraPorts}</span>` : ''}
+          </div>
+          <p class="${fullscreenActive ? 'text-slate-500' : 'text-slate-400'}">${portCount ? `${portCount} port${portCount > 1 ? 's' : ''} référencé${portCount > 1 ? 's' : ''}` : 'Aucun port référencé'}</p>
         </div>
       </button>
     `;
   }).join('');
 
-  const linkLabels = visibleLinks.map(link => {
+  const linkLabels = fullscreenActive ? '' : visibleLinks.map(link => {
     const from = positions.get(link.from);
     const to = positions.get(link.to);
     if (!from || !to) return '';
@@ -2610,9 +2625,69 @@ function formatTopologyConf(detail) {
   };
 }
 
+function formatEquipmentAttachmentLabel(attachment) {
+  const mime = String(attachment?.mimetype || '').toLowerCase();
+  const filename = String(attachment?.filename || attachment?.name || '');
+  if (mime.includes('json')) return 'JSON';
+  if (mime.includes('xml')) return 'XML';
+  if (mime.includes('yaml') || mime.includes('yml')) return 'YAML';
+  if (mime.includes('text') || mime.includes('plain')) return 'Texte';
+  const ext = filename.includes('.') ? filename.split('.').pop().toUpperCase() : '';
+  return ext && ext.length <= 5 ? ext : 'Fichier';
+}
+
+async function loadDiagramEquipmentAttachments(equipmentId) {
+  if (!equipmentId) {
+    diagramEquipmentCurrentAttachments = [];
+    return [];
+  }
+  try {
+    const attachments = await api.get(`/equipment/${encodeURIComponent(equipmentId)}/attachments`);
+    diagramEquipmentCurrentAttachments = Array.isArray(attachments) ? attachments : [];
+    return diagramEquipmentCurrentAttachments;
+  } catch {
+    diagramEquipmentCurrentAttachments = [];
+    return [];
+  }
+}
+
+function renderDiagramEquipmentAttachments() {
+  const attachments = Array.isArray(diagramEquipmentCurrentAttachments) ? diagramEquipmentCurrentAttachments : [];
+  return `
+    <div id="diagram-equipment-attachments-wrap" class="rounded-3xl border border-slate-200 bg-white p-4">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Fichiers de configuration</p>
+          <p class="mt-1 text-sm text-slate-500">${attachments.length ? `${attachments.length} fichier${attachments.length > 1 ? 's' : ''} joint${attachments.length > 1 ? 's' : ''}` : 'Aucun fichier joint'}</p>
+        </div>
+        <button id="diagram-equipment-upload-inline-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Ajouter un fichier</button>
+      </div>
+      <div class="mt-4 space-y-2">
+        ${attachments.length ? attachments.map(attachment => `
+          <a href="${attachment.downloadUrl || attachment.url}" target="_blank" rel="noopener noreferrer" class="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-purple-200 hover:bg-purple-50/60">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-slate-800">${escapeHtml(attachment.filename || attachment.name || 'Fichier')}</p>
+                <p class="mt-1 text-xs text-slate-400">${escapeHtml(formatEquipmentAttachmentLabel(attachment))} · ${escapeHtml(formatFileSize(attachment.size))}${attachment.uploader?.name || attachment.uploadedByName ? ` · ${escapeHtml(attachment.uploader?.name || attachment.uploadedByName)}` : ''}</p>
+              </div>
+              <span class="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-slate-500 shadow-sm">Ouvrir</span>
+            </div>
+          </a>
+        `).join('') : '<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">Dépose ici une config, un export ou un journal d’équipement.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function wireDiagramEquipmentAttachmentActions() {
+  const inlineUploadBtn = diagramEquipmentContentEl.querySelector('#diagram-equipment-upload-inline-btn');
+  if (inlineUploadBtn) inlineUploadBtn.onclick = () => diagramEquipmentConfigInputEl?.click();
+}
+
 async function openDiagramEquipmentModal(node) {
   diagramEquipmentCurrentNode = node || null;
   diagramEquipmentCurrentDetail = null;
+  diagramEquipmentCurrentAttachments = [];
   diagramEquipmentModalEl.classList.remove('hidden');
   document.body.classList.add('overflow-hidden');
   diagramEquipmentLoadingEl.classList.remove('hidden');
@@ -2623,6 +2698,8 @@ async function openDiagramEquipmentModal(node) {
   diagramEquipmentTitleEl.textContent = normalizeTopologyName(node?.name) || 'Équipement';
   diagramEquipmentOpenBtnEl.disabled = true;
   diagramEquipmentCopyBtnEl.disabled = true;
+  diagramEquipmentUploadBtnEl.disabled = true;
+  diagramEquipmentUploadBtnEl.onclick = null;
 
   const detail = await resolveEquipmentNode(node);
   if (!detail) {
@@ -2630,11 +2707,13 @@ async function openDiagramEquipmentModal(node) {
     diagramEquipmentTitleEl.textContent = normalizeTopologyName(node?.name) || 'Équipement';
     diagramEquipmentOpenBtnEl.disabled = true;
     diagramEquipmentCopyBtnEl.disabled = true;
+    diagramEquipmentUploadBtnEl.disabled = true;
     return;
   }
 
   diagramEquipmentCurrentDetail = detail;
   const conf = formatTopologyConf(detail);
+  await loadDiagramEquipmentAttachments(detail.id);
   const model = diagramTopologyCurrentModel || parseTopologyText(diagramTopologyCurrentText);
   const nodeLinks = model.links.filter(link => link.from === node?.id || link.to === node?.id);
   const portRows = nodeLinks.map(link => {
@@ -2684,6 +2763,7 @@ async function openDiagramEquipmentModal(node) {
         }).join('') : '<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">Aucun port référencé dans la topologie.</div>'}
       </div>
     </div>
+    ${renderDiagramEquipmentAttachments()}
     <div class="grid gap-3 md:grid-cols-2">
       ${conf.lines.map(line => `
         <button type="button" data-copy-text="${escapeHtml(line)}" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 transition hover:border-purple-200 hover:bg-purple-50/60">
@@ -2703,6 +2783,7 @@ async function openDiagramEquipmentModal(node) {
   diagramEquipmentContentEl.classList.remove('hidden');
   diagramEquipmentOpenBtnEl.disabled = false;
   diagramEquipmentCopyBtnEl.disabled = false;
+  diagramEquipmentUploadBtnEl.disabled = false;
   diagramEquipmentOpenBtnEl.onclick = () => {
     if (detail?.id) window.location.href = `/equipment.html?focus=${encodeURIComponent(detail.id)}`;
   };
@@ -2714,6 +2795,8 @@ async function openDiagramEquipmentModal(node) {
       showToast('Copie impossible', 'error');
     }
   };
+  diagramEquipmentUploadBtnEl.onclick = () => diagramEquipmentConfigInputEl?.click();
+  wireDiagramEquipmentAttachmentActions();
   diagramEquipmentContentEl.querySelectorAll('[data-copy-text]').forEach(el => {
     el.addEventListener('click', async () => {
       const ok = await copyTextToClipboard(el.dataset.copyText);
@@ -2730,6 +2813,7 @@ function closeDiagramEquipmentModal() {
   diagramEquipmentContentEl.classList.add('hidden');
   diagramEquipmentCurrentNode = null;
   diagramEquipmentCurrentDetail = null;
+  diagramEquipmentCurrentAttachments = [];
 }
 
 function openDiagramEditor(article) {
@@ -2875,6 +2959,36 @@ document.getElementById('close-diagram-btn').addEventListener('click', closeDiag
 document.getElementById('close-diagram-equipment-btn').addEventListener('click', closeDiagramEquipmentModal);
 diagramEquipmentModalEl.addEventListener('click', event => {
   if (event.target === diagramEquipmentModalEl) closeDiagramEquipmentModal();
+});
+diagramEquipmentConfigInputEl.addEventListener('change', async () => {
+  const file = diagramEquipmentConfigInputEl.files?.[0];
+  const equipmentId = diagramEquipmentCurrentDetail?.id;
+  if (!file || !equipmentId) {
+    diagramEquipmentConfigInputEl.value = '';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('category', 'OTHER');
+  formData.append('notes', 'Configuration réseau');
+  diagramEquipmentUploadBtnEl.disabled = true;
+
+  try {
+    const response = await api.upload(`/equipment/${encodeURIComponent(equipmentId)}/attachments`, formData);
+    showToast(response?.filename ? 'Fichier ajouté' : 'Fichier ajouté', 'success');
+    await loadDiagramEquipmentAttachments(equipmentId);
+    const attachmentsWrap = diagramEquipmentContentEl.querySelector('#diagram-equipment-attachments-wrap');
+    if (attachmentsWrap) {
+      attachmentsWrap.outerHTML = renderDiagramEquipmentAttachments();
+      wireDiagramEquipmentAttachmentActions();
+    }
+  } catch (err) {
+    showToast(err.message || 'Impossible d’ajouter le fichier', 'error');
+  } finally {
+    diagramEquipmentUploadBtnEl.disabled = false;
+    diagramEquipmentConfigInputEl.value = '';
+  }
 });
 document.getElementById('diagram-fullscreen-btn').addEventListener('click', openTopologyFullscreen);
 document.getElementById('close-diagram-fullscreen-btn').addEventListener('click', closeTopologyFullscreen);
