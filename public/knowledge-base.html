@@ -1890,7 +1890,6 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     nodeStates.forEach((state, nodeId) => {
       if (state.fixed) return;
       const node = sortedNodes.find(item => item.id === nodeId);
-      const degree = Math.max(1, adjacency.get(nodeId)?.size || 0);
       const tierPull = node?.tier === 0 ? 1.8 : node?.tier === 1 ? 1.2 : 1;
       state.vx += (centerX - state.x) * centerStrength * tierPull;
       state.vy += (centerY - state.y) * centerStrength * tierPull;
@@ -1901,6 +1900,7 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     });
   }
 
+  const pad = fullscreenActive ? 72 : 56;
   nodeStates.forEach((state, nodeId) => {
     positions.set(nodeId, {
       x: state.x,
