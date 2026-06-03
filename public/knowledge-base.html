@@ -785,7 +785,6 @@
       </div>
       <p id="diagram-fullscreen-meta" class="hidden truncate text-xs text-slate-400 sm:block"></p>
       <div class="ml-auto flex items-center gap-2">
-        <button id="diagram-fullscreen-view-mode" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 transition hover:bg-white/10">Vue cercle</button>
         <button id="diagram-fullscreen-zoom-out" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 transition hover:bg-white/10">-</button>
         <span id="diagram-fullscreen-zoom-label" class="min-w-14 text-center text-xs font-medium text-slate-300">100%</span>
         <button id="diagram-fullscreen-zoom-in" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 transition hover:bg-white/10">+</button>
@@ -801,30 +800,6 @@
       <div id="diagram-fullscreen-viewport" class="absolute inset-0 overflow-hidden touch-none overscroll-contain">
           <div id="diagram-fullscreen-content" class="absolute left-0 top-0"></div>
       </div>
-      <aside id="diagram-fullscreen-detail-panel" class="hidden absolute right-3 top-3 bottom-3 z-10 w-[min(26rem,calc(100vw-1.5rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white/96 shadow-2xl backdrop-blur">
-        <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-          <div class="min-w-0">
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-purple-600">Fiche matériel</p>
-            <h3 id="diagram-fullscreen-detail-title" class="truncate text-base font-semibold text-slate-900">Équipement</h3>
-          </div>
-          <button id="diagram-fullscreen-detail-close" type="button" class="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-          <p id="diagram-fullscreen-detail-meta" class="text-xs text-slate-500"></p>
-          <div class="flex items-center gap-2">
-            <input id="diagram-fullscreen-detail-input" type="file" class="hidden" accept=".txt,.cfg,.conf,.log,.xml,.json,.ini,.yaml,.yml,.sh,.ps1,.bat" />
-            <button id="diagram-fullscreen-detail-upload" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Ajouter une conf</button>
-            <button id="diagram-fullscreen-detail-open" type="button" class="rounded-xl bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700 transition">Ouvrir</button>
-          </div>
-        </div>
-        <div class="h-[calc(100%-8.6rem)] overflow-auto p-4">
-          <div id="diagram-fullscreen-detail-content" class="space-y-4"></div>
-        </div>
-      </aside>
       <div class="pointer-events-none absolute left-4 bottom-4 hidden max-w-md rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2 text-xs text-slate-300 shadow-lg backdrop-blur sm:block">
         Molette pour zoomer, glisser pour déplacer la vue, tirer un équipement pour le repositionner.
       </div>
@@ -1680,11 +1655,7 @@ let diagramTopologyCurrentModel = null;
 let diagramTopologyCurrentLayout = {};
 let diagramFullscreenZoom = 1;
 let diagramFullscreenPan = { x: 0, y: 0 };
-let diagramFullscreenViewMode = 'graph';
 let diagramFullscreenLayout = {};
-let diagramFullscreenDetailNode = null;
-let diagramFullscreenDetailDetail = null;
-let diagramFullscreenDetailAttachments = [];
 let diagramFullscreenViewportEl = null;
 let diagramFullscreenStageEl = null;
 let diagramFullscreenInteraction = null;
@@ -1722,15 +1693,6 @@ const diagramFullscreenZoomInBtnEl = document.getElementById('diagram-fullscreen
 const diagramFullscreenZoomOutBtnEl = document.getElementById('diagram-fullscreen-zoom-out');
 const diagramFullscreenZoomLabelEl = document.getElementById('diagram-fullscreen-zoom-label');
 const diagramFullscreenResetBtnEl = document.getElementById('diagram-fullscreen-reset');
-const diagramFullscreenViewModeBtnEl = document.getElementById('diagram-fullscreen-view-mode');
-const diagramFullscreenDetailPanelEl = document.getElementById('diagram-fullscreen-detail-panel');
-const diagramFullscreenDetailTitleEl = document.getElementById('diagram-fullscreen-detail-title');
-const diagramFullscreenDetailMetaEl = document.getElementById('diagram-fullscreen-detail-meta');
-const diagramFullscreenDetailContentEl = document.getElementById('diagram-fullscreen-detail-content');
-const diagramFullscreenDetailOpenBtnEl = document.getElementById('diagram-fullscreen-detail-open');
-const diagramFullscreenDetailUploadBtnEl = document.getElementById('diagram-fullscreen-detail-upload');
-const diagramFullscreenDetailInputEl = document.getElementById('diagram-fullscreen-detail-input');
-const diagramFullscreenDetailCloseBtnEl = document.getElementById('diagram-fullscreen-detail-close');
 
 function normalizeTopologyName(value) {
   return String(value || '').trim();
@@ -1884,70 +1846,6 @@ function isInterSwitchLink(link, model) {
   return !!(from && to && isSwitchLikeNode(from) && isSwitchLikeNode(to));
 }
 
-function chooseTopologyRootNode(nodes, links) {
-  if (!nodes.length) return null;
-  const degree = new Map();
-  const signatures = nodes.map(node => ({
-    node,
-    signature: getTopologyNodeSignature(node)
-  }));
-  links.forEach(link => {
-    degree.set(link.from, (degree.get(link.from) || 0) + 1);
-    degree.set(link.to, (degree.get(link.to) || 0) + 1);
-  });
-
-  let best = null;
-  let bestScore = -Infinity;
-  signatures.forEach(({ node, signature }) => {
-    const linkCount = degree.get(node.id) || 0;
-    const coreBonus = /core|routeur|router|firewall|gateway|wan|edge|distribution/.test(signature) ? 120 : 0;
-    const switchBonus = isSwitchLikeNode(node) ? 30 : 0;
-    const score = coreBonus + switchBonus + linkCount * 12 + (node.order ? Math.max(0, 12 - node.order) : 12);
-    if (score > bestScore) {
-      bestScore = score;
-      best = node;
-    }
-  });
-  return best || nodes[0];
-}
-
-function buildTopologyLevels(rootId, nodes, links) {
-  const adjacency = new Map();
-  nodes.forEach(node => adjacency.set(node.id, new Set()));
-  links.forEach(link => {
-    if (!adjacency.has(link.from)) adjacency.set(link.from, new Set());
-    if (!adjacency.has(link.to)) adjacency.set(link.to, new Set());
-    adjacency.get(link.from).add(link.to);
-    adjacency.get(link.to).add(link.from);
-  });
-
-  const distance = new Map();
-  const queue = [rootId];
-  distance.set(rootId, 0);
-
-  while (queue.length) {
-    const current = queue.shift();
-    const nextDistance = (distance.get(current) || 0) + 1;
-    (adjacency.get(current) || []).forEach(nextId => {
-      if (distance.has(nextId)) return;
-      distance.set(nextId, nextDistance);
-      queue.push(nextId);
-    });
-  }
-
-  nodes.forEach(node => {
-    if (!distance.has(node.id)) distance.set(node.id, Math.max(...distance.values(), 0) + 1);
-  });
-
-  const levels = new Map();
-  nodes.forEach(node => {
-    const level = distance.get(node.id) || 0;
-    if (!levels.has(level)) levels.set(level, []);
-    levels.get(level).push(node);
-  });
-  return { distance, levels, adjacency };
-}
-
 function parseTopologyLayout(value) {
   if (!value) return {};
   if (typeof value === 'object') return value && typeof value === 'object' ? value : {};
@@ -2000,7 +1898,7 @@ function copyTextToClipboard(text) {
   });
 }
 
-function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview', model = null, layout = null, layoutMode = 'graph' } = {}) {
+function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview', model = null, layout = null } = {}) {
   const modelData = model || parseTopologyText(text);
   diagramTopologyCurrentText = String(text || '');
   diagramTopologyCurrentModel = modelData;
@@ -2008,17 +1906,6 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   const links = modelData.links;
   const visibleLinks = links.filter(link => isInterSwitchLink(link, modelData));
   const fullscreenActive = mode === 'fullscreen';
-  const circleMode = fullscreenActive && layoutMode === 'circle';
-  const exploded = fullscreenActive;
-  const nodesById = new Map(nodes.map(node => [node.id, node]));
-  const adjacency = new Map();
-
-  links.forEach(link => {
-    if (!adjacency.has(link.from)) adjacency.set(link.from, new Set());
-    if (!adjacency.has(link.to)) adjacency.set(link.to, new Set());
-    adjacency.get(link.from).add(link.to);
-    adjacency.get(link.to).add(link.from);
-  });
 
   if (!nodes.length) {
     return {
@@ -2029,125 +1916,115 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     };
   }
 
-  const nodeWidth = circleMode ? 176 : (fullscreenActive ? 208 : 224);
-  const nodeHeight = circleMode ? 56 : (fullscreenActive ? 98 : 112);
+  const nodeWidth = fullscreenActive ? 150 : 176;
+  const nodeHeight = fullscreenActive ? 42 : 46;
   const palette = fullscreenActive
     ? {
-        0: { border: 'border-indigo-400/20', bg: 'bg-slate-900/80 backdrop-blur-md', text: 'text-indigo-200', dot: '#818cf8', chip: 'bg-indigo-400/10 text-indigo-100 border-indigo-300/10' },
-        1: { border: 'border-purple-400/20', bg: 'bg-slate-900/80 backdrop-blur-md', text: 'text-purple-200', dot: '#c084fc', chip: 'bg-purple-400/10 text-purple-100 border-purple-300/10' },
-        2: { border: 'border-cyan-400/20', bg: 'bg-slate-900/80 backdrop-blur-md', text: 'text-cyan-200', dot: '#22d3ee', chip: 'bg-cyan-400/10 text-cyan-100 border-cyan-300/10' }
+        0: { border: 'border-indigo-400/20', bg: 'bg-slate-900/90 backdrop-blur-md', text: 'text-indigo-100', dot: '#818cf8' },
+        1: { border: 'border-purple-400/20', bg: 'bg-slate-900/90 backdrop-blur-md', text: 'text-purple-100', dot: '#c084fc' },
+        2: { border: 'border-cyan-400/20', bg: 'bg-slate-900/90 backdrop-blur-md', text: 'text-cyan-100', dot: '#22d3ee' }
       }
     : {
-        0: { border: 'border-indigo-200', bg: 'bg-white/95', text: 'text-indigo-700', dot: '#6366f1', chip: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
-        1: { border: 'border-purple-200', bg: 'bg-white/95', text: 'text-purple-700', dot: '#a855f7', chip: 'bg-purple-50 text-purple-700 border-purple-100' },
-        2: { border: 'border-sky-200', bg: 'bg-white/95', text: 'text-sky-700', dot: '#0ea5e9', chip: 'bg-sky-50 text-sky-700 border-sky-100' }
+        0: { border: 'border-indigo-200', bg: 'bg-white/96', text: 'text-indigo-700', dot: '#6366f1' },
+        1: { border: 'border-purple-200', bg: 'bg-white/96', text: 'text-purple-700', dot: '#a855f7' },
+        2: { border: 'border-sky-200', bg: 'bg-white/96', text: 'text-sky-700', dot: '#0ea5e9' }
       };
 
   const positions = new Map();
   const layoutData = normalizeTopologyLayout(layout);
   const sortedNodes = nodes.slice().sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
-  const tiers = [[], [], []];
-  sortedNodes.forEach(node => tiers[Math.max(0, Math.min(2, node.tier || 2))].push(node));
+  const adjacency = new Map();
+  links.forEach(link => {
+    if (!adjacency.has(link.from)) adjacency.set(link.from, new Set());
+    if (!adjacency.has(link.to)) adjacency.set(link.to, new Set());
+    adjacency.get(link.from).add(link.to);
+    adjacency.get(link.to).add(link.from);
+  });
 
-  const tierOrderMap = new Map();
-  const rebuildTierOrderMap = () => {
-    tiers.forEach((tierNodes, tierIndex) => {
-      tierNodes.forEach((node, index) => {
-        const layoutPos = layoutData[node.id];
-        const fallback = tierIndex * 1000 + index;
-        tierOrderMap.set(node.id, layoutPos ? tierIndex * 1000 + layoutPos.x : fallback);
-      });
-    });
-  };
+  const rootNode = sortedNodes.slice().sort((a, b) => {
+    const scoreA = (adjacency.get(a.id)?.size || 0) * 3 + (a.ports?.size || 0);
+    const scoreB = (adjacency.get(b.id)?.size || 0) * 3 + (b.ports?.size || 0);
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    return a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+  })[0] || sortedNodes[0];
 
-  const getNodeRankScore = node => {
-    const linkedIds = adjacency.get(node.id);
-    if (!linkedIds || !linkedIds.size) return Number.isFinite(node.order) ? node.order : 0;
-    let sum = 0;
-    let weight = 0;
-    linkedIds.forEach(linkedId => {
-      const linkedNode = nodesById.get(linkedId);
-      const rank = tierOrderMap.get(linkedId);
-      if (!linkedNode || !Number.isFinite(rank)) return;
-      const tierDiff = Math.abs((linkedNode.tier || 2) - (node.tier || 2));
-      const linkedWeight = tierDiff === 0 ? 0.75 : 1 / (tierDiff + 0.35);
-      sum += rank * linkedWeight;
-      weight += linkedWeight;
+  const levels = new Map();
+  const visited = new Set([rootNode.id]);
+  const queue = [{ id: rootNode.id, level: 0 }];
+  while (queue.length) {
+    const current = queue.shift();
+    if (!levels.has(current.level)) levels.set(current.level, []);
+    const currentNode = sortedNodes.find(node => node.id === current.id);
+    if (currentNode) levels.get(current.level).push(currentNode);
+    const neighbors = Array.from(adjacency.get(current.id) || []);
+    neighbors.forEach(nextId => {
+      if (visited.has(nextId)) return;
+      visited.add(nextId);
+      queue.push({ id: nextId, level: current.level + 1 });
     });
-    if (!weight) return Number.isFinite(node.order) ? node.order : 0;
-    return sum / weight;
-  };
+  }
+  sortedNodes.forEach(node => {
+    if (visited.has(node.id)) return;
+    const fallbackLevel = 3;
+    if (!levels.has(fallbackLevel)) levels.set(fallbackLevel, []);
+    levels.get(fallbackLevel).push(node);
+  });
 
-  rebuildTierOrderMap();
-  for (let pass = 0; pass < 3; pass += 1) {
-    tiers.forEach(tierNodes => {
-      tierNodes.sort((a, b) => {
-        const scoreA = getNodeRankScore(a);
-        const scoreB = getNodeRankScore(b);
-        if (scoreA !== scoreB) return scoreA - scoreB;
-        return a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
-      });
-    });
-    rebuildTierOrderMap();
+  const levelEntries = Array.from(levels.entries()).sort((a, b) => a[0] - b[0]);
+  const pad = fullscreenActive ? 56 : 40;
+  const baseRadius = fullscreenActive ? 118 : 108;
+  const radiusStep = fullscreenActive ? 132 : 122;
+
+  const centerLayout = layoutData[rootNode.id];
+  const centerX = centerLayout ? centerLayout.x : 0;
+  const centerY = centerLayout ? centerLayout.y : 0;
+  if (centerLayout) {
+    positions.set(rootNode.id, { x: centerLayout.x, y: centerLayout.y, tier: 0, fixed: true });
+  } else {
+    positions.set(rootNode.id, { x: -nodeWidth / 2, y: -nodeHeight / 2, tier: 0, fixed: false });
   }
 
-  const pad = exploded ? 72 : 36;
-  if (circleMode) {
-    const rootNode = chooseTopologyRootNode(sortedNodes, links) || sortedNodes[0];
-    const topologyLevels = buildTopologyLevels(rootNode.id, sortedNodes, links);
-    const levelEntries = Array.from(topologyLevels.levels.entries()).sort((a, b) => a[0] - b[0]);
-    const maxLevel = levelEntries.length ? levelEntries[levelEntries.length - 1][0] : 0;
-    const baseRadius = 120;
-    const stepRadius = Math.max(130, 120 + maxLevel * 6);
-    levelEntries.forEach(([level, levelNodes]) => {
-      const count = levelNodes.length;
-      const radius = level === 0 ? 0 : baseRadius + (level - 1) * stepRadius;
-      const orderBase = level === 0 ? -Math.PI / 2 : -Math.PI / 2 + ((level % 2) * 0.18);
-      const radiusJitter = Math.max(0, 16 - level * 2);
-      const arranged = levelNodes.slice().sort((a, b) => {
-        const degreeA = (topologyLevels.adjacency.get(a.id)?.size || 0);
-        const degreeB = (topologyLevels.adjacency.get(b.id)?.size || 0);
-        if (degreeA !== degreeB) return degreeB - degreeA;
-        return a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
-      });
-      arranged.forEach((node, index) => {
-        const angle = count === 1 ? orderBase : orderBase + (index / count) * Math.PI * 2;
-        const offset = count === 1 ? 0 : (index % 2 === 0 ? radiusJitter : -radiusJitter);
-        positions.set(node.id, {
-          x: Math.cos(angle) * (radius + offset) - nodeWidth / 2,
-          y: Math.sin(angle) * (radius + offset) - nodeHeight / 2,
-          tier: node.tier || 2,
-          fixed: false
-        });
-      });
+  levelEntries.forEach(([level, levelNodes]) => {
+    if (level === 0) return;
+    const arranged = levelNodes.slice().sort((a, b) => {
+      const degreeA = adjacency.get(a.id)?.size || 0;
+      const degreeB = adjacency.get(b.id)?.size || 0;
+      if (degreeA !== degreeB) return degreeB - degreeA;
+      return a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
     });
-  } else {
-    const colGap = exploded ? 84 : 34;
-    const rowGap = exploded ? 118 : 62;
-
-    sortedNodes.forEach(node => {
+    const radius = baseRadius + (level - 1) * radiusStep;
+    const startAngle = -Math.PI / 2 + level * 0.18;
+    arranged.forEach((node, index) => {
       const nodeLayout = layoutData[node.id];
       if (nodeLayout) {
-        positions.set(node.id, { x: nodeLayout.x, y: nodeLayout.y, tier: node.tier || 2, fixed: true });
+        positions.set(node.id, { x: nodeLayout.x, y: nodeLayout.y, tier: level, fixed: true });
+        return;
       }
-    });
-
-    tiers.forEach((tierNodes, tierIndex) => {
-      const missing = tierNodes.filter(node => !positions.has(node.id));
-      if (!missing.length) return;
-      const rowWidth = missing.length * nodeWidth + Math.max(0, missing.length - 1) * colGap;
-      const rowLeft = pad + Math.max(0, (Math.max(960, rowWidth + pad * 2) - pad * 2 - rowWidth) / 2);
-      const top = pad + tierIndex * (nodeHeight + rowGap);
-      missing.forEach((node, index) => {
-        positions.set(node.id, {
-          x: rowLeft + index * (nodeWidth + colGap),
-          y: top,
-          tier: node.tier || 2,
-          fixed: false
-        });
+      const angle = arranged.length === 1 ? startAngle : startAngle + (index / arranged.length) * Math.PI * 2;
+      positions.set(node.id, {
+        x: centerX + Math.cos(angle) * radius - nodeWidth / 2,
+        y: centerY + Math.sin(angle) * radius - nodeHeight / 2,
+        tier: level,
+        fixed: false
       });
     });
-  }
+  });
+
+  sortedNodes.forEach((node, index) => {
+    if (positions.has(node.id)) return;
+    const nodeLayout = layoutData[node.id];
+    if (nodeLayout) {
+      positions.set(node.id, { x: nodeLayout.x, y: nodeLayout.y, tier: node.tier || 2, fixed: true });
+      return;
+    }
+    const angle = (index / Math.max(1, sortedNodes.length)) * Math.PI * 2;
+    positions.set(node.id, {
+      x: centerX + Math.cos(angle) * (baseRadius + radiusStep * 1.5) - nodeWidth / 2,
+      y: centerY + Math.sin(angle) * (baseRadius + radiusStep * 1.5) - nodeHeight / 2,
+      tier: node.tier || 2,
+      fixed: false
+    });
+  });
 
   let minX = Infinity;
   let minY = Infinity;
@@ -2172,16 +2049,11 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     maxY += shiftY;
   }
 
-  const diagramCenter = {
-    x: (minX + maxX) / 2,
-    y: (minY + maxY) / 2
-  };
-
   const width = Math.max(860, Math.ceil(maxX + pad));
   const height = Math.max(340, Math.ceil(maxY + pad));
 
   function getPortAnchor(pos, side, offsetIndex = 0, count = 1) {
-    const step = 14;
+    const step = 12;
     const spread = (count - 1) * step;
     const start = -spread / 2;
     const offset = start + offsetIndex * step;
@@ -2219,20 +2091,6 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     return `M ${start.x} ${start.y} V ${startExitY} H ${laneX} V ${endEntryY} H ${end.x} V ${end.y}`;
   }
 
-  function buildRadialLinkPath(start, end, center, laneOffset = 0) {
-    const pull = 0.42;
-    const spread = Math.max(18, Math.min(48, Math.abs(laneOffset) * 0.35));
-    const startCtrl = {
-      x: start.x + (center.x - start.x) * pull + Math.sign(center.x - start.x || 1) * spread * 0.12,
-      y: start.y + (center.y - start.y) * pull + Math.sign(center.y - start.y || 1) * spread * 0.12
-    };
-    const endCtrl = {
-      x: end.x + (center.x - end.x) * pull - Math.sign(center.x - end.x || 1) * spread * 0.12,
-      y: end.y + (center.y - end.y) * pull - Math.sign(center.y - end.y || 1) * spread * 0.12
-    };
-    return `M ${start.x} ${start.y} C ${startCtrl.x} ${startCtrl.y}, ${endCtrl.x} ${endCtrl.y}, ${end.x} ${end.y}`;
-  }
-
   const linkIndexByNode = new Map();
   const linkInfos = [];
   const svgLines = visibleLinks.map(link => {
@@ -2258,16 +2116,14 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     const end = getPortAnchor(to, toSide, Math.max(0, toIndex), Math.max(1, toLinks.length));
     const laneCount = Math.max(fromLinks.length, toLinks.length);
     const laneIndex = Math.max(0, Math.max(fromIndex, toIndex));
-    const laneOffset = (laneIndex - (laneCount - 1) / 2) * 18;
-    const path = circleMode
-      ? buildRadialLinkPath(start, end, diagramCenter, laneOffset)
-      : buildOrthogonalLinkPath(start, end, horizontalPrimary ? 'horizontal' : 'vertical', laneOffset);
+    const laneOffset = (laneIndex - (laneCount - 1) / 2) * 16;
+    const path = buildOrthogonalLinkPath(start, end, horizontalPrimary ? 'horizontal' : 'vertical', laneOffset);
     const labelText = [link.fromPort, link.toPort].filter(Boolean).join(' ↔ ');
     if (labelText) {
       linkInfos.push({ start, end, labelText, pathCenter: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 } });
     }
     return `
-      <path d="${path}" fill="none" stroke="url(#diagram-link-gradient)" stroke-width="${circleMode ? '1.9' : '2.2'}" stroke-linecap="round" stroke-linejoin="round"
+      <path d="${path}" fill="none" stroke="url(#diagram-link-gradient)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
         stroke-opacity="0.8"
         ${link.bidirectional ? 'marker-start="url(#diagram-arrow)" marker-end="url(#diagram-arrow)"' : 'marker-end="url(#diagram-arrow)"'} />
     `;
@@ -2276,18 +2132,17 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   const nodeMarkup = sortedNodes.map(node => {
     const pos = positions.get(node.id);
     const paletteEntry = palette[Math.max(0, Math.min(2, node.tier || 2))];
-    const portCount = node.ports.size;
     const dragAttrs = interactive && fullscreenActive && isAdmin() ? 'data-diagram-node-draggable="1"' : '';
     const attrs = interactive ? `data-diagram-node="${escapeHtml(node.id)}" role="button" tabindex="0" ${dragAttrs}` : '';
     return `
       <button type="button" ${attrs}
-        class="absolute ${fullscreenActive ? 'w-[176px]' : 'w-[208px]'} rounded-2xl border ${paletteEntry.border} ${paletteEntry.bg} p-3 text-left ${fullscreenActive ? 'shadow-[0_14px_32px_rgba(2,6,23,0.35)]' : 'shadow-[0_10px_28px_rgba(15,23,42,0.10)]'} transition hover:-translate-y-0.5 hover:${fullscreenActive ? 'shadow-[0_18px_38px_rgba(2,6,23,0.42)]' : 'shadow-[0_14px_36px_rgba(15,23,42,0.14)]'} focus:outline-none focus:ring-2 focus:ring-purple-400 ${interactive && fullscreenActive && isAdmin() ? 'cursor-grab active:cursor-grabbing' : ''}"
+        class="absolute ${fullscreenActive ? 'w-[150px]' : 'w-[176px]'} rounded-2xl border ${paletteEntry.border} ${paletteEntry.bg} p-2.5 text-left ${fullscreenActive ? 'shadow-[0_12px_28px_rgba(2,6,23,0.32)]' : 'shadow-[0_10px_22px_rgba(15,23,42,0.10)]'} transition hover:-translate-y-0.5 hover:${fullscreenActive ? 'shadow-[0_16px_34px_rgba(2,6,23,0.38)]' : 'shadow-[0_12px_30px_rgba(15,23,42,0.13)]'} focus:outline-none focus:ring-2 focus:ring-purple-400 ${interactive && fullscreenActive && isAdmin() ? 'cursor-grab active:cursor-grabbing' : ''}"
         style="left:${pos.x}px;top:${pos.y}px;width:${nodeWidth}px;height:${nodeHeight}px"
         data-node-id="${escapeHtml(node.id)}">
-        <div class="flex h-full items-center gap-3">
-          <span class="h-3.5 w-3.5 shrink-0 rounded-full" style="background:${paletteEntry.dot}; box-shadow:0 0 0 5px ${fullscreenActive ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'}"></span>
+        <div class="flex h-full items-center gap-2.5">
+          <span class="h-3 w-3 shrink-0 rounded-full" style="background:${paletteEntry.dot}; box-shadow:0 0 0 5px ${fullscreenActive ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'}"></span>
           <div class="min-w-0">
-            <h3 class="truncate text-sm font-semibold ${fullscreenActive ? 'text-slate-100' : 'text-slate-900'}">${escapeHtml(node.name)}</h3>
+            <h3 class="truncate text-[13px] font-semibold ${paletteEntry.text}">${escapeHtml(node.name)}</h3>
           </div>
         </div>
       </button>
@@ -2295,9 +2150,9 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   }).join('');
 
   const linkLabels = linkInfos.map(info => {
-    const x = info.pathCenter.x + (circleMode ? 0 : 0);
-    const y = info.pathCenter.y + (circleMode ? 0 : 0);
-    return `<div class="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border ${fullscreenActive ? 'border-white/10 bg-slate-900/85 text-white' : 'border-white/60 bg-slate-900/85 text-white'} px-2.5 py-0.5 text-[10px] font-medium shadow-md" style="left:${x}px;top:${y}px">${escapeHtml(info.labelText)}</div>`;
+    const x = info.pathCenter.x;
+    const y = info.pathCenter.y;
+    return `<div class="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border ${fullscreenActive ? 'border-white/10 bg-slate-900/88 text-white' : 'border-white/60 bg-slate-900/88 text-white'} px-2 py-0.5 text-[10px] font-medium shadow-md" style="left:${x}px;top:${y}px">${escapeHtml(info.labelText)}</div>`;
   }).join('');
 
   const html = `
@@ -2363,8 +2218,7 @@ function renderTopologyDiagramInto(containerEl, text, { interactive = true, sour
       const model = diagramTopologyCurrentModel || parseTopologyText(diagramTopologyCurrentText);
       const node = model.nodes.find(item => item.id === nodeName);
       if (!node) return;
-      if (mode === 'fullscreen') openTopologyEquipmentPanel(node);
-      else openDiagramEquipmentModal(node);
+      openDiagramEquipmentModal(node);
     });
     button.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -2618,20 +2472,16 @@ function openTopologyFullscreen() {
   diagramFullscreenInteraction = null;
   diagramFullscreenZoom = 1;
   diagramFullscreenPan = { x: 32, y: 32 };
-  diagramFullscreenViewMode = 'graph';
-  closeTopologyEquipmentPanel();
   diagramFullscreenLayout = normalizeTopologyLayout(selectedArticle?.topologyLayout || {});
   renderTopologyDiagramInto(diagramFullscreenContentEl, topologyText, {
     interactive: true,
     sourceText: topologyText,
     mode: 'fullscreen',
-    layout: diagramFullscreenLayout,
-    layoutMode: diagramFullscreenViewMode
+    layout: diagramFullscreenLayout
   });
   diagramFullscreenStageEl = diagramFullscreenContentEl.querySelector('[data-diagram-stage]');
   initFullscreenTopologyInteractions();
   fitFullscreenTopology();
-  updateFullscreenTopologyControls();
   diagramFullscreenModalEl.classList.remove('hidden');
   document.body.classList.add('overflow-hidden');
   if (diagramFullscreenModalEl.requestFullscreen) {
@@ -2652,7 +2502,6 @@ function closeTopologyFullscreen() {
     diagramFullscreenModalEl.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
     diagramFullscreenContentEl.innerHTML = '';
-    closeTopologyEquipmentPanel();
     if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
     diagramFullscreenInteraction = null;
     diagramFullscreenStageEl = null;
@@ -2665,7 +2514,6 @@ function closeTopologyFullscreen() {
   diagramFullscreenModalEl.classList.add('hidden');
   document.body.classList.remove('overflow-hidden');
   diagramFullscreenContentEl.innerHTML = '';
-  closeTopologyEquipmentPanel();
   if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
   diagramFullscreenInteraction = null;
   diagramFullscreenStageEl = null;
@@ -2674,8 +2522,6 @@ function closeTopologyFullscreen() {
 
 function updateFullscreenTopologyControls() {
   diagramFullscreenZoomLabelEl.textContent = `${Math.round(clamp(diagramFullscreenZoom, 0.7, 1.9) * 100)}%`;
-  diagramFullscreenViewModeBtnEl.textContent = diagramFullscreenViewMode === 'circle' ? 'Vue graphe' : 'Vue cercle';
-  diagramFullscreenViewModeBtnEl.classList.toggle('bg-white/10', diagramFullscreenViewMode === 'circle');
 }
 
 function rerenderFullscreenTopology() {
@@ -2688,8 +2534,7 @@ function rerenderFullscreenTopology() {
     interactive: true,
     sourceText: topologyText,
     mode: 'fullscreen',
-    layout: diagramFullscreenLayout,
-    layoutMode: diagramFullscreenViewMode
+    layout: diagramFullscreenLayout
   });
   diagramFullscreenStageEl = diagramFullscreenContentEl.querySelector('[data-diagram-stage]');
   initFullscreenTopologyInteractions();
@@ -2829,134 +2674,6 @@ function renderDiagramEquipmentAttachments() {
 function wireDiagramEquipmentAttachmentActions() {
   const inlineUploadBtn = diagramEquipmentContentEl.querySelector('#diagram-equipment-upload-inline-btn');
   if (inlineUploadBtn) inlineUploadBtn.onclick = () => diagramEquipmentConfigInputEl?.click();
-}
-
-function renderFullscreenDetailAttachments() {
-  const attachments = Array.isArray(diagramFullscreenDetailAttachments) ? diagramFullscreenDetailAttachments : [];
-  return `
-    <div id="diagram-fullscreen-detail-attachments" class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-      <div class="flex items-center justify-between gap-3">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Fichiers de conf</p>
-          <p class="mt-1 text-sm text-slate-500">${attachments.length ? `${attachments.length} fichier${attachments.length > 1 ? 's' : ''}` : 'Aucun fichier joint'}</p>
-        </div>
-      </div>
-      <div class="mt-3 space-y-2">
-        ${attachments.length ? attachments.map(attachment => `
-          <a href="${attachment.downloadUrl || attachment.url}" target="_blank" rel="noopener noreferrer" class="block rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:border-purple-200 hover:bg-purple-50/60">
-            <p class="truncate font-medium text-slate-800">${escapeHtml(attachment.filename || attachment.name || 'Fichier')}</p>
-            <p class="mt-1 text-xs text-slate-400">${escapeHtml(formatEquipmentAttachmentLabel(attachment))} · ${escapeHtml(formatFileSize(attachment.size))}</p>
-          </a>
-        `).join('') : '<div class="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">Ajoute ici une configuration, un journal ou un export.</div>'}
-      </div>
-    </div>
-  `;
-}
-
-function renderFullscreenDetailPortRows(portRows = [], node = null) {
-  if (!portRows.length) {
-    return '<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">Aucune liaison détectée.</div>';
-  }
-  return `
-    <div class="space-y-2">
-      ${portRows.map(row => `
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <div class="flex items-center justify-between gap-3">
-            <p class="font-mono text-sm font-semibold text-slate-800">${escapeHtml(row.localPort)}</p>
-            <span class="text-[11px] text-slate-400">${row.interSwitch ? 'inter-switch' : 'terminaison'}</span>
-          </div>
-          <p class="mt-1 text-sm text-slate-600">${escapeHtml(row.bidirectional ? '↔' : '→')} ${escapeHtml(row.otherName)}${row.remotePort ? ` <span class="font-mono text-slate-500">(${escapeHtml(row.remotePort)})</span>` : ''}</p>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-
-async function openTopologyEquipmentPanel(node) {
-  diagramFullscreenDetailNode = node || null;
-  diagramFullscreenDetailDetail = null;
-  diagramFullscreenDetailAttachments = [];
-  diagramFullscreenDetailPanelEl.classList.remove('hidden');
-  diagramFullscreenDetailTitleEl.textContent = normalizeTopologyName(node?.name) || 'Équipement';
-  diagramFullscreenDetailMetaEl.textContent = 'Chargement...';
-  diagramFullscreenDetailContentEl.innerHTML = '<div class="text-sm text-slate-500">Chargement...</div>';
-  diagramFullscreenDetailOpenBtnEl.disabled = true;
-  diagramFullscreenDetailUploadBtnEl.disabled = true;
-
-  const detail = await resolveEquipmentNode(node);
-  if (!detail) {
-    diagramFullscreenDetailMetaEl.textContent = 'Aucun équipement correspondant trouvé.';
-    diagramFullscreenDetailContentEl.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">Aucun équipement trouvé.</div>';
-    return;
-  }
-
-  diagramFullscreenDetailDetail = detail;
-  const conf = formatTopologyConf(detail);
-  const model = diagramTopologyCurrentModel || parseTopologyText(diagramTopologyCurrentText);
-  const nodeLinks = model.links.filter(link => link.from === node?.id || link.to === node?.id);
-  const portRows = nodeLinks.map(link => {
-    const outbound = link.from === node?.id;
-    const otherName = outbound ? link.to : link.from;
-    const otherNode = model.nodes.find(item => item.id === otherName);
-    const localPort = outbound ? link.fromPort : link.toPort;
-    const remotePort = outbound ? link.toPort : link.fromPort;
-    return {
-      localPort: localPort || 'port non précisé',
-      otherName: otherNode?.name || otherName || 'équipement inconnu',
-      remotePort: remotePort || '',
-      bidirectional: !!link.bidirectional,
-      interSwitch: isSwitchLikeNode(node) && isSwitchLikeNode(otherNode)
-    };
-  });
-
-  await loadDiagramEquipmentAttachments(detail.id);
-  diagramFullscreenDetailAttachments = diagramEquipmentCurrentAttachments.slice();
-  diagramFullscreenDetailTitleEl.textContent = conf.title;
-  diagramFullscreenDetailMetaEl.textContent = detail?.id ? `ID équipement: ${detail.id}` : '';
-  diagramFullscreenDetailContentEl.innerHTML = `
-    <div class="space-y-4">
-      <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-        <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Ports et liaisons</p>
-        <div class="mt-3">
-          ${renderFullscreenDetailPortRows(portRows, node)}
-        </div>
-      </div>
-      ${renderFullscreenDetailAttachments()}
-      <div class="grid gap-2">
-        ${conf.lines.map(line => `
-          <button type="button" data-copy-text="${escapeHtml(line)}" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 hover:border-purple-200 hover:bg-purple-50/60">
-            ${escapeHtml(line)}
-          </button>
-        `).join('')}
-      </div>
-      <button type="button" data-copy-text="${escapeHtml(conf.raw)}" class="rounded-3xl border border-slate-200 bg-slate-950 p-4 text-left transition hover:border-purple-400">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">Configuration brute</p>
-          <span class="text-[11px] text-slate-400">clic pour copier</span>
-        </div>
-        <pre class="max-h-[18rem] overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-slate-100">${escapeHtml(conf.raw)}</pre>
-      </button>
-    </div>
-  `;
-  diagramFullscreenDetailOpenBtnEl.disabled = false;
-  diagramFullscreenDetailUploadBtnEl.disabled = false;
-  diagramFullscreenDetailOpenBtnEl.onclick = () => {
-    if (detail?.id) window.location.href = `/equipment.html?focus=${encodeURIComponent(detail.id)}`;
-  };
-  diagramFullscreenDetailUploadBtnEl.onclick = () => diagramFullscreenDetailInputEl?.click();
-  diagramFullscreenDetailContentEl.querySelectorAll('[data-copy-text]').forEach(el => {
-    el.addEventListener('click', async () => {
-      const ok = await copyTextToClipboard(el.dataset.copyText);
-      showToast(ok ? 'Copié' : 'Copie impossible', ok ? 'success' : 'error');
-    });
-  });
-}
-
-function closeTopologyEquipmentPanel() {
-  diagramFullscreenDetailPanelEl.classList.add('hidden');
-  diagramFullscreenDetailNode = null;
-  diagramFullscreenDetailDetail = null;
-  diagramFullscreenDetailAttachments = [];
 }
 
 async function openDiagramEquipmentModal(node) {
@@ -3265,45 +2982,8 @@ diagramEquipmentConfigInputEl.addEventListener('change', async () => {
     diagramEquipmentConfigInputEl.value = '';
   }
 });
-diagramFullscreenDetailCloseBtnEl.addEventListener('click', closeTopologyEquipmentPanel);
-diagramFullscreenDetailPanelEl.addEventListener('click', event => {
-  if (event.target === diagramFullscreenDetailPanelEl) closeTopologyEquipmentPanel();
-});
-diagramFullscreenDetailInputEl.addEventListener('change', async () => {
-  const file = diagramFullscreenDetailInputEl.files?.[0];
-  const equipmentId = diagramFullscreenDetailDetail?.id;
-  if (!file || !equipmentId) {
-    diagramFullscreenDetailInputEl.value = '';
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('category', 'OTHER');
-  formData.append('notes', 'Configuration réseau');
-  diagramFullscreenDetailUploadBtnEl.disabled = true;
-
-  try {
-    await api.upload(`/equipment/${encodeURIComponent(equipmentId)}/attachments`, formData);
-    showToast('Fichier ajouté', 'success');
-    await loadDiagramEquipmentAttachments(equipmentId);
-    diagramFullscreenDetailAttachments = diagramEquipmentCurrentAttachments.slice();
-    const attachmentsWrap = diagramFullscreenDetailContentEl.querySelector('#diagram-fullscreen-detail-attachments');
-    if (attachmentsWrap) attachmentsWrap.outerHTML = renderFullscreenDetailAttachments();
-  } catch (err) {
-    showToast(err.message || 'Impossible d’ajouter le fichier', 'error');
-  } finally {
-    diagramFullscreenDetailUploadBtnEl.disabled = false;
-    diagramFullscreenDetailInputEl.value = '';
-  }
-});
 document.getElementById('diagram-fullscreen-btn').addEventListener('click', openTopologyFullscreen);
 document.getElementById('close-diagram-fullscreen-btn').addEventListener('click', closeTopologyFullscreen);
-diagramFullscreenViewModeBtnEl.addEventListener('click', () => {
-  diagramFullscreenViewMode = diagramFullscreenViewMode === 'circle' ? 'graph' : 'circle';
-  rerenderFullscreenTopology();
-  fitFullscreenTopology();
-});
 diagramFullscreenZoomInBtnEl.addEventListener('click', () => {
   diagramFullscreenZoom = clamp(diagramFullscreenZoom + 0.1, 0.7, 1.9);
   applyFullscreenTopologyTransform();
