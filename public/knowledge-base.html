@@ -1527,6 +1527,9 @@ function initMermaidInEl(containerEl) {
 let diagramEditorArticleId = '';
 let diagramEditorMode = 'text';
 let diagramTopologyPreviewToken = 0;
+let diagramTopologyCurrentText = '';
+let diagramTopologyCurrentModel = null;
+let diagramTopologyCurrentLayout = {};
 
 const diagramEditorModalEl = document.getElementById('diagram-editor-modal');
 const diagramFeedbackEl = document.getElementById('diagram-editor-feedback');
@@ -1747,7 +1750,7 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   diagramTopologyCurrentModel = modelData;
   const nodes = modelData.nodes;
   const links = modelData.links;
-  const visibleLinks = links.filter(link => isInterSwitchLink(link, modelData));
+  const graphLinks = links;
   const fullscreenActive = mode === 'fullscreen';
 
   if (!nodes.length) {
@@ -1759,8 +1762,8 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     };
   }
 
-  const nodeWidth = fullscreenActive ? 150 : 176;
-  const nodeHeight = fullscreenActive ? 42 : 46;
+  const nodeWidth = fullscreenActive ? 148 : 160;
+  const nodeHeight = fullscreenActive ? 68 : 72;
   const palette = fullscreenActive
     ? {
         0: { border: 'border-indigo-400/20', bg: 'bg-slate-900/90 backdrop-blur-md', text: 'text-indigo-100', dot: '#818cf8' },
@@ -1935,13 +1938,12 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   }
 
   const linkIndexByNode = new Map();
-  const linkInfos = [];
-  const svgLines = visibleLinks.map(link => {
+  const svgLines = graphLinks.map(link => {
     const from = positions.get(link.from);
     const to = positions.get(link.to);
     if (!from || !to) return '';
-    const fromLinks = visibleLinks.filter(item => item.from === link.from || item.to === link.from);
-    const toLinks = visibleLinks.filter(item => item.from === link.to || item.to === link.to);
+    const fromLinks = graphLinks.filter(item => item.from === link.from || item.to === link.from);
+    const toLinks = graphLinks.filter(item => item.from === link.to || item.to === link.to);
     const fromIndex = linkIndexByNode.has(`${link.from}:${link.id}`) ? linkIndexByNode.get(`${link.from}:${link.id}`) : fromLinks.findIndex(item => item === link);
     const toIndex = linkIndexByNode.has(`${link.to}:${link.id}`) ? linkIndexByNode.get(`${link.to}:${link.id}`) : toLinks.findIndex(item => item === link);
     linkIndexByNode.set(`${link.from}:${link.id}`, fromIndex);
@@ -1961,13 +1963,9 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     const laneIndex = Math.max(0, Math.max(fromIndex, toIndex));
     const laneOffset = (laneIndex - (laneCount - 1) / 2) * 16;
     const path = buildOrthogonalLinkPath(start, end, horizontalPrimary ? 'horizontal' : 'vertical', laneOffset);
-    const labelText = [link.fromPort, link.toPort].filter(Boolean).join(' ↔ ');
-    if (labelText) {
-      linkInfos.push({ start, end, labelText, pathCenter: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 } });
-    }
     return `
       <path d="${path}" fill="none" stroke="url(#diagram-link-gradient)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
-        stroke-opacity="0.8"
+        stroke-opacity="${link.bidirectional ? '0.88' : '0.65'}"
         ${link.bidirectional ? 'marker-start="url(#diagram-arrow)" marker-end="url(#diagram-arrow)"' : 'marker-end="url(#diagram-arrow)"'} />
     `;
   }).join('');
@@ -1975,27 +1973,18 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   const nodeMarkup = sortedNodes.map(node => {
     const pos = positions.get(node.id);
     const paletteEntry = palette[Math.max(0, Math.min(2, node.tier || 2))];
-    const dragAttrs = interactive && fullscreenActive && isAdmin() ? 'data-diagram-node-draggable="1"' : '';
-    const attrs = interactive ? `data-diagram-node="${escapeHtml(node.id)}" role="button" tabindex="0" ${dragAttrs}` : '';
+    const attrs = interactive ? `data-diagram-node="${escapeHtml(node.id)}" role="button" tabindex="0"` : '';
     return `
       <button type="button" ${attrs}
-        class="absolute ${fullscreenActive ? 'w-[150px]' : 'w-[176px]'} rounded-2xl border ${paletteEntry.border} ${paletteEntry.bg} p-2.5 text-left ${fullscreenActive ? 'shadow-[0_12px_28px_rgba(2,6,23,0.32)]' : 'shadow-[0_10px_22px_rgba(15,23,42,0.10)]'} transition hover:-translate-y-0.5 hover:${fullscreenActive ? 'shadow-[0_16px_34px_rgba(2,6,23,0.38)]' : 'shadow-[0_12px_30px_rgba(15,23,42,0.13)]'} focus:outline-none focus:ring-2 focus:ring-purple-400 ${interactive && fullscreenActive && isAdmin() ? 'cursor-grab active:cursor-grabbing' : ''}"
+        class="absolute ${fullscreenActive ? 'w-[148px]' : 'w-[160px]'} rounded-3xl border border-white/10 ${fullscreenActive ? 'bg-slate-900/88 shadow-[0_16px_30px_rgba(2,6,23,0.34)]' : 'bg-white/96 shadow-[0_12px_28px_rgba(15,23,42,0.12)]'} p-3 text-center backdrop-blur transition hover:-translate-y-0.5 hover:${fullscreenActive ? 'shadow-[0_20px_36px_rgba(2,6,23,0.42)]' : 'shadow-[0_16px_32px_rgba(15,23,42,0.16)]'} focus:outline-none focus:ring-2 focus:ring-purple-400"
         style="left:${pos.x}px;top:${pos.y}px;width:${nodeWidth}px;height:${nodeHeight}px"
         data-node-id="${escapeHtml(node.id)}">
-        <div class="flex h-full items-center gap-2.5">
-          <span class="h-3 w-3 shrink-0 rounded-full" style="background:${paletteEntry.dot}; box-shadow:0 0 0 5px ${fullscreenActive ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'}"></span>
-          <div class="min-w-0">
-            <h3 class="truncate text-[13px] font-semibold ${paletteEntry.text}">${escapeHtml(node.name)}</h3>
-          </div>
+        <div class="flex h-full flex-col items-center justify-center gap-2">
+          <span class="h-4 w-4 rounded-full" style="background:${paletteEntry.dot}; box-shadow:0 0 0 7px ${fullscreenActive ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'}"></span>
+          <h3 class="max-w-full truncate text-[13px] font-semibold ${paletteEntry.text}">${escapeHtml(node.name)}</h3>
         </div>
       </button>
     `;
-  }).join('');
-
-  const linkLabels = linkInfos.map(info => {
-    const x = info.pathCenter.x;
-    const y = info.pathCenter.y;
-    return `<div class="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border ${fullscreenActive ? 'border-white/10 bg-slate-900/88 text-white' : 'border-white/60 bg-slate-900/88 text-white'} px-2 py-0.5 text-[10px] font-medium shadow-md" style="left:${x}px;top:${y}px">${escapeHtml(info.labelText)}</div>`;
   }).join('');
 
   const html = `
@@ -2014,13 +2003,12 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
         ${svgLines}
       </svg>
       ${nodeMarkup}
-      ${linkLabels}
     </div>
   `;
 
   return {
     html,
-    stats: `${nodes.length} équipement${nodes.length > 1 ? 's' : ''} · ${visibleLinks.length} liaison${visibleLinks.length > 1 ? 's' : ''} interswitch${links.length !== visibleLinks.length ? ` · ${links.length - visibleLinks.length} liaison${links.length - visibleLinks.length > 1 ? 's' : ''} masquée${links.length - visibleLinks.length > 1 ? 's' : ''}` : ''}`,
+    stats: `${nodes.length} nœud${nodes.length > 1 ? 's' : ''} · ${graphLinks.length} liaison${graphLinks.length > 1 ? 's' : ''}`,
     height,
     width,
     positions
@@ -2057,7 +2045,6 @@ function renderTopologyDiagramInto(containerEl, text, { interactive = true, sour
   containerEl.querySelectorAll('[data-diagram-node]').forEach(button => {
     const nodeName = button.dataset.diagramNode || '';
     button.addEventListener('click', () => {
-      if (Date.now() < diagramFullscreenSuppressClickUntil) return;
       const model = diagramTopologyCurrentModel || parseTopologyText(diagramTopologyCurrentText);
       const node = model.nodes.find(item => item.id === nodeName);
       if (!node) return;
@@ -2076,29 +2063,35 @@ function renderTopologyDiagramInto(containerEl, text, { interactive = true, sour
 function renderTopologyTextView(containerEl, text, layout = null) {
   if (!containerEl) return;
   const safeText = String(text || '').trim();
+  const graph = getTopologyDiagramMarkup(safeText, { interactive: true, mode: 'editor' });
   containerEl.className = 'space-y-4 text-sm text-slate-700';
   containerEl.innerHTML = `
-    <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+    <div class="rounded-3xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+      <div class="flex items-center justify-between gap-3 px-1 pb-3">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Plan réseau en texte</p>
-          <p class="mt-1 text-sm text-slate-500">La description s’affiche ici telle qu’elle a été saisie.</p>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Knowledge graph</p>
+          <p class="mt-1 text-sm text-slate-500">Le graphe se met à jour à chaque frappe dans la description.</p>
         </div>
+        <p class="text-xs text-slate-500">${escapeHtml(graph.stats)}</p>
       </div>
-      <pre class="mt-4 max-h-[48vh] overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-slate-50 p-4 text-xs leading-6 text-slate-700">${escapeHtml(safeText || 'Aucune topologie textuelle enregistrée.')}</pre>
+      <div class="overflow-auto rounded-[2rem]">${graph.html}</div>
+      <details class="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <summary class="cursor-pointer text-sm font-medium text-slate-700">Texte source</summary>
+        <pre class="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">${escapeHtml(safeText || 'Aucune topologie textuelle enregistrée.')}</pre>
+      </details>
     </div>
   `;
+}
+
 function scheduleTopologyPreview() {
   const token = ++diagramTopologyPreviewToken;
   window.requestAnimationFrame(() => {
     if (token !== diagramTopologyPreviewToken || !diagramTopologyPreviewEl) return;
     const text = diagramTopologyInputEl?.value || '';
-    const safeText = String(text || '').trim();
-    diagramTopologyPreviewEl.innerHTML = safeText
-      ? `<div class="rounded-2xl border border-slate-200 bg-white p-4"><pre class="whitespace-pre-wrap break-words text-xs leading-6 text-slate-700">${escapeHtml(safeText)}</pre></div>`
-      : '<div class="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">Aucune topologie chargée.</div>';
-    diagramTopologyStatsEl.textContent = safeText ? `${safeText.split(/\r?\n/).filter(Boolean).length} ligne(s)` : 'Aucune topologie chargée.';
-    diagramTopologyStatusEl.textContent = text.trim() ? 'Mise à jour automatique' : '';
+    const graph = getTopologyDiagramMarkup(text, { interactive: false, mode: 'preview' });
+    diagramTopologyPreviewEl.innerHTML = graph.html;
+    diagramTopologyStatsEl.textContent = graph.stats;
+    diagramTopologyStatusEl.textContent = String(text || '').trim() ? 'Mise à jour automatique' : '';
   });
 }
 
