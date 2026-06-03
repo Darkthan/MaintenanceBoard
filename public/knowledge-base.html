@@ -801,6 +801,30 @@
       <div id="diagram-fullscreen-viewport" class="absolute inset-0 overflow-hidden touch-none overscroll-contain">
           <div id="diagram-fullscreen-content" class="absolute left-0 top-0"></div>
       </div>
+      <aside id="diagram-fullscreen-detail-panel" class="hidden absolute right-3 top-3 bottom-3 z-10 w-[min(26rem,calc(100vw-1.5rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white/96 shadow-2xl backdrop-blur">
+        <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div class="min-w-0">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-purple-600">Fiche matériel</p>
+            <h3 id="diagram-fullscreen-detail-title" class="truncate text-base font-semibold text-slate-900">Équipement</h3>
+          </div>
+          <button id="diagram-fullscreen-detail-close" type="button" class="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+          <p id="diagram-fullscreen-detail-meta" class="text-xs text-slate-500"></p>
+          <div class="flex items-center gap-2">
+            <input id="diagram-fullscreen-detail-input" type="file" class="hidden" accept=".txt,.cfg,.conf,.log,.xml,.json,.ini,.yaml,.yml,.sh,.ps1,.bat" />
+            <button id="diagram-fullscreen-detail-upload" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Ajouter une conf</button>
+            <button id="diagram-fullscreen-detail-open" type="button" class="rounded-xl bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700 transition">Ouvrir</button>
+          </div>
+        </div>
+        <div class="h-[calc(100%-8.6rem)] overflow-auto p-4">
+          <div id="diagram-fullscreen-detail-content" class="space-y-4"></div>
+        </div>
+      </aside>
       <div class="pointer-events-none absolute left-4 bottom-4 hidden max-w-md rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2 text-xs text-slate-300 shadow-lg backdrop-blur sm:block">
         Molette pour zoomer, glisser pour déplacer la vue, tirer un équipement pour le repositionner.
       </div>
@@ -1658,6 +1682,9 @@ let diagramFullscreenZoom = 1;
 let diagramFullscreenPan = { x: 0, y: 0 };
 let diagramFullscreenViewMode = 'graph';
 let diagramFullscreenLayout = {};
+let diagramFullscreenDetailNode = null;
+let diagramFullscreenDetailDetail = null;
+let diagramFullscreenDetailAttachments = [];
 let diagramFullscreenViewportEl = null;
 let diagramFullscreenStageEl = null;
 let diagramFullscreenInteraction = null;
@@ -1696,6 +1723,14 @@ const diagramFullscreenZoomOutBtnEl = document.getElementById('diagram-fullscree
 const diagramFullscreenZoomLabelEl = document.getElementById('diagram-fullscreen-zoom-label');
 const diagramFullscreenResetBtnEl = document.getElementById('diagram-fullscreen-reset');
 const diagramFullscreenViewModeBtnEl = document.getElementById('diagram-fullscreen-view-mode');
+const diagramFullscreenDetailPanelEl = document.getElementById('diagram-fullscreen-detail-panel');
+const diagramFullscreenDetailTitleEl = document.getElementById('diagram-fullscreen-detail-title');
+const diagramFullscreenDetailMetaEl = document.getElementById('diagram-fullscreen-detail-meta');
+const diagramFullscreenDetailContentEl = document.getElementById('diagram-fullscreen-detail-content');
+const diagramFullscreenDetailOpenBtnEl = document.getElementById('diagram-fullscreen-detail-open');
+const diagramFullscreenDetailUploadBtnEl = document.getElementById('diagram-fullscreen-detail-upload');
+const diagramFullscreenDetailInputEl = document.getElementById('diagram-fullscreen-detail-input');
+const diagramFullscreenDetailCloseBtnEl = document.getElementById('diagram-fullscreen-detail-close');
 
 function normalizeTopologyName(value) {
   return String(value || '').trim();
@@ -1849,6 +1884,70 @@ function isInterSwitchLink(link, model) {
   return !!(from && to && isSwitchLikeNode(from) && isSwitchLikeNode(to));
 }
 
+function chooseTopologyRootNode(nodes, links) {
+  if (!nodes.length) return null;
+  const degree = new Map();
+  const signatures = nodes.map(node => ({
+    node,
+    signature: getTopologyNodeSignature(node)
+  }));
+  links.forEach(link => {
+    degree.set(link.from, (degree.get(link.from) || 0) + 1);
+    degree.set(link.to, (degree.get(link.to) || 0) + 1);
+  });
+
+  let best = null;
+  let bestScore = -Infinity;
+  signatures.forEach(({ node, signature }) => {
+    const linkCount = degree.get(node.id) || 0;
+    const coreBonus = /core|routeur|router|firewall|gateway|wan|edge|distribution/.test(signature) ? 120 : 0;
+    const switchBonus = isSwitchLikeNode(node) ? 30 : 0;
+    const score = coreBonus + switchBonus + linkCount * 12 + (node.order ? Math.max(0, 12 - node.order) : 12);
+    if (score > bestScore) {
+      bestScore = score;
+      best = node;
+    }
+  });
+  return best || nodes[0];
+}
+
+function buildTopologyLevels(rootId, nodes, links) {
+  const adjacency = new Map();
+  nodes.forEach(node => adjacency.set(node.id, new Set()));
+  links.forEach(link => {
+    if (!adjacency.has(link.from)) adjacency.set(link.from, new Set());
+    if (!adjacency.has(link.to)) adjacency.set(link.to, new Set());
+    adjacency.get(link.from).add(link.to);
+    adjacency.get(link.to).add(link.from);
+  });
+
+  const distance = new Map();
+  const queue = [rootId];
+  distance.set(rootId, 0);
+
+  while (queue.length) {
+    const current = queue.shift();
+    const nextDistance = (distance.get(current) || 0) + 1;
+    (adjacency.get(current) || []).forEach(nextId => {
+      if (distance.has(nextId)) return;
+      distance.set(nextId, nextDistance);
+      queue.push(nextId);
+    });
+  }
+
+  nodes.forEach(node => {
+    if (!distance.has(node.id)) distance.set(node.id, Math.max(...distance.values(), 0) + 1);
+  });
+
+  const levels = new Map();
+  nodes.forEach(node => {
+    const level = distance.get(node.id) || 0;
+    if (!levels.has(level)) levels.set(level, []);
+    levels.get(level).push(node);
+  });
+  return { distance, levels, adjacency };
+}
+
 function parseTopologyLayout(value) {
   if (!value) return {};
   if (typeof value === 'object') return value && typeof value === 'object' ? value : {};
@@ -1930,8 +2029,8 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     };
   }
 
-  const nodeWidth = fullscreenActive ? 208 : 224;
-  const nodeHeight = fullscreenActive ? 98 : 112;
+  const nodeWidth = circleMode ? 176 : (fullscreenActive ? 208 : 224);
+  const nodeHeight = circleMode ? 56 : (fullscreenActive ? 98 : 112);
   const palette = fullscreenActive
     ? {
         0: { border: 'border-indigo-400/20', bg: 'bg-slate-900/80 backdrop-blur-md', text: 'text-indigo-200', dot: '#818cf8', chip: 'bg-indigo-400/10 text-indigo-100 border-indigo-300/10' },
@@ -1994,25 +2093,29 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
 
   const pad = exploded ? 72 : 36;
   if (circleMode) {
-    const ringRadii = [
-      0,
-      Math.max(230, 170 + tiers[1].length * 18),
-      Math.max(360, 280 + tiers[2].length * 22)
-    ];
-
-    tiers.forEach((tierNodes, tierIndex) => {
-      const count = tierNodes.length;
-      if (!count) return;
-      const ringRadius = tierIndex === 0
-        ? (count > 1 ? 96 : 0)
-        : ringRadii[tierIndex];
-      const angleOffset = tierIndex === 0 ? -Math.PI / 2 : -Math.PI / 2 + (tierIndex * 0.18);
-      const step = count > 1 ? (Math.PI * 2) / count : 0;
-      tierNodes.forEach((node, index) => {
-        const angle = count === 1 ? angleOffset : angleOffset + index * step;
+    const rootNode = chooseTopologyRootNode(sortedNodes, links) || sortedNodes[0];
+    const topologyLevels = buildTopologyLevels(rootNode.id, sortedNodes, links);
+    const levelEntries = Array.from(topologyLevels.levels.entries()).sort((a, b) => a[0] - b[0]);
+    const maxLevel = levelEntries.length ? levelEntries[levelEntries.length - 1][0] : 0;
+    const baseRadius = 120;
+    const stepRadius = Math.max(130, 120 + maxLevel * 6);
+    levelEntries.forEach(([level, levelNodes]) => {
+      const count = levelNodes.length;
+      const radius = level === 0 ? 0 : baseRadius + (level - 1) * stepRadius;
+      const orderBase = level === 0 ? -Math.PI / 2 : -Math.PI / 2 + ((level % 2) * 0.18);
+      const radiusJitter = Math.max(0, 16 - level * 2);
+      const arranged = levelNodes.slice().sort((a, b) => {
+        const degreeA = (topologyLevels.adjacency.get(a.id)?.size || 0);
+        const degreeB = (topologyLevels.adjacency.get(b.id)?.size || 0);
+        if (degreeA !== degreeB) return degreeB - degreeA;
+        return a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+      });
+      arranged.forEach((node, index) => {
+        const angle = count === 1 ? orderBase : orderBase + (index / count) * Math.PI * 2;
+        const offset = count === 1 ? 0 : (index % 2 === 0 ? radiusJitter : -radiusJitter);
         positions.set(node.id, {
-          x: Math.cos(angle) * ringRadius - nodeWidth / 2,
-          y: Math.sin(angle) * ringRadius - nodeHeight / 2,
+          x: Math.cos(angle) * (radius + offset) - nodeWidth / 2,
+          y: Math.sin(angle) * (radius + offset) - nodeHeight / 2,
           tier: node.tier || 2,
           fixed: false
         });
@@ -2131,6 +2234,7 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
   }
 
   const linkIndexByNode = new Map();
+  const linkInfos = [];
   const svgLines = visibleLinks.map(link => {
     const from = positions.get(link.from);
     const to = positions.get(link.to);
@@ -2158,6 +2262,10 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     const path = circleMode
       ? buildRadialLinkPath(start, end, diagramCenter, laneOffset)
       : buildOrthogonalLinkPath(start, end, horizontalPrimary ? 'horizontal' : 'vertical', laneOffset);
+    const labelText = [link.fromPort, link.toPort].filter(Boolean).join(' ↔ ');
+    if (labelText) {
+      linkInfos.push({ start, end, labelText, pathCenter: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 } });
+    }
     return `
       <path d="${path}" fill="none" stroke="url(#diagram-link-gradient)" stroke-width="${circleMode ? '1.9' : '2.2'}" stroke-linecap="round" stroke-linejoin="round"
         stroke-opacity="0.8"
@@ -2169,51 +2277,27 @@ function getTopologyDiagramMarkup(text, { interactive = false, mode = 'preview',
     const pos = positions.get(node.id);
     const paletteEntry = palette[Math.max(0, Math.min(2, node.tier || 2))];
     const portCount = node.ports.size;
-    const visiblePorts = Array.from(node.ports).slice(0, fullscreenActive ? 4 : 3);
-    const extraPorts = Math.max(0, portCount - visiblePorts.length);
-    const summaryBits = [
-      node.kind ? escapeHtml(node.kind) : '',
-      node.ip ? escapeHtml(node.ip) : '',
-      node.note ? escapeHtml(node.note) : ''
-    ].filter(Boolean);
     const dragAttrs = interactive && fullscreenActive && isAdmin() ? 'data-diagram-node-draggable="1"' : '';
     const attrs = interactive ? `data-diagram-node="${escapeHtml(node.id)}" role="button" tabindex="0" ${dragAttrs}` : '';
     return `
       <button type="button" ${attrs}
-        class="absolute ${fullscreenActive ? 'w-[208px]' : 'w-[224px]'} rounded-2xl border ${paletteEntry.border} ${paletteEntry.bg} p-3 text-left ${fullscreenActive ? 'shadow-[0_14px_32px_rgba(2,6,23,0.35)]' : 'shadow-[0_10px_28px_rgba(15,23,42,0.10)]'} transition hover:-translate-y-0.5 hover:${fullscreenActive ? 'shadow-[0_18px_38px_rgba(2,6,23,0.42)]' : 'shadow-[0_14px_36px_rgba(15,23,42,0.14)]'} focus:outline-none focus:ring-2 focus:ring-purple-400 ${interactive && fullscreenActive && isAdmin() ? 'cursor-grab active:cursor-grabbing' : ''}"
-        style="left:${pos.x}px;top:${pos.y}px;width:${nodeWidth}px"
+        class="absolute ${fullscreenActive ? 'w-[176px]' : 'w-[208px]'} rounded-2xl border ${paletteEntry.border} ${paletteEntry.bg} p-3 text-left ${fullscreenActive ? 'shadow-[0_14px_32px_rgba(2,6,23,0.35)]' : 'shadow-[0_10px_28px_rgba(15,23,42,0.10)]'} transition hover:-translate-y-0.5 hover:${fullscreenActive ? 'shadow-[0_18px_38px_rgba(2,6,23,0.42)]' : 'shadow-[0_14px_36px_rgba(15,23,42,0.14)]'} focus:outline-none focus:ring-2 focus:ring-purple-400 ${interactive && fullscreenActive && isAdmin() ? 'cursor-grab active:cursor-grabbing' : ''}"
+        style="left:${pos.x}px;top:${pos.y}px;width:${nodeWidth}px;height:${nodeHeight}px"
         data-node-id="${escapeHtml(node.id)}">
-        <div class="flex items-start gap-3">
-          <span class="mt-1.5 h-3 w-3 shrink-0 rounded-full" style="background:${paletteEntry.dot}; box-shadow:0 0 0 4px ${fullscreenActive ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'}"></span>
-          <div class="min-w-0 flex-1">
-            <p class="text-[11px] font-semibold uppercase tracking-wide ${paletteEntry.text}">${escapeHtml(node.kind || 'Équipement')}</p>
-            <h3 class="mt-0.5 truncate text-sm font-semibold ${fullscreenActive ? 'text-slate-100' : 'text-slate-900'}">${escapeHtml(node.name)}</h3>
+        <div class="flex h-full items-center gap-3">
+          <span class="h-3.5 w-3.5 shrink-0 rounded-full" style="background:${paletteEntry.dot}; box-shadow:0 0 0 5px ${fullscreenActive ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'}"></span>
+          <div class="min-w-0">
+            <h3 class="truncate text-sm font-semibold ${fullscreenActive ? 'text-slate-100' : 'text-slate-900'}">${escapeHtml(node.name)}</h3>
           </div>
-        </div>
-        <div class="mt-3 space-y-2 text-xs ${fullscreenActive ? 'text-slate-300' : 'text-slate-600'}">
-          ${node.ip ? `<p class="truncate"><span class="font-medium ${fullscreenActive ? 'text-slate-400' : 'text-slate-500'}">IP</span> ${escapeHtml(node.ip)}</p>` : ''}
-          ${summaryBits.length ? `<p class="line-clamp-2 leading-5 ${fullscreenActive ? 'text-slate-400' : 'text-slate-500'}">${summaryBits.join(' · ')}</p>` : ''}
-          <div class="flex flex-wrap gap-1.5">
-            ${visiblePorts.map(port => `
-              <span class="inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[10px] ${paletteEntry.chip}">${escapeHtml(port)}</span>
-            `).join('')}
-            ${extraPorts ? `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${paletteEntry.chip}">+${extraPorts}</span>` : ''}
-          </div>
-          <p class="${fullscreenActive ? 'text-slate-500' : 'text-slate-400'}">${portCount ? `${portCount} port${portCount > 1 ? 's' : ''} référencé${portCount > 1 ? 's' : ''}` : 'Aucun port référencé'}</p>
         </div>
       </button>
     `;
   }).join('');
 
-  const linkLabels = fullscreenActive ? '' : visibleLinks.map(link => {
-    const from = positions.get(link.from);
-    const to = positions.get(link.to);
-    if (!from || !to) return '';
-    const x = (from.x + to.x) / 2 + nodeWidth / 2;
-    const y = (from.y + to.y) / 2 + nodeHeight / 2;
-    const label = [link.fromPort, link.toPort].filter(Boolean).join(' ↔ ');
-    if (!label) return '';
-    return `<div class="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/60 bg-slate-900/85 px-2.5 py-0.5 text-[10px] font-medium text-white shadow-md" style="left:${x}px;top:${y}px">${escapeHtml(label)}</div>`;
+  const linkLabels = linkInfos.map(info => {
+    const x = info.pathCenter.x + (circleMode ? 0 : 0);
+    const y = info.pathCenter.y + (circleMode ? 0 : 0);
+    return `<div class="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border ${fullscreenActive ? 'border-white/10 bg-slate-900/85 text-white' : 'border-white/60 bg-slate-900/85 text-white'} px-2.5 py-0.5 text-[10px] font-medium shadow-md" style="left:${x}px;top:${y}px">${escapeHtml(info.labelText)}</div>`;
   }).join('');
 
   const html = `
@@ -2278,7 +2362,9 @@ function renderTopologyDiagramInto(containerEl, text, { interactive = true, sour
       if (Date.now() < diagramFullscreenSuppressClickUntil) return;
       const model = diagramTopologyCurrentModel || parseTopologyText(diagramTopologyCurrentText);
       const node = model.nodes.find(item => item.id === nodeName);
-      if (node) openDiagramEquipmentModal(node);
+      if (!node) return;
+      if (mode === 'fullscreen') openTopologyEquipmentPanel(node);
+      else openDiagramEquipmentModal(node);
     });
     button.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -2533,6 +2619,7 @@ function openTopologyFullscreen() {
   diagramFullscreenZoom = 1;
   diagramFullscreenPan = { x: 32, y: 32 };
   diagramFullscreenViewMode = 'graph';
+  closeTopologyEquipmentPanel();
   diagramFullscreenLayout = normalizeTopologyLayout(selectedArticle?.topologyLayout || {});
   renderTopologyDiagramInto(diagramFullscreenContentEl, topologyText, {
     interactive: true,
@@ -2565,6 +2652,7 @@ function closeTopologyFullscreen() {
     diagramFullscreenModalEl.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
     diagramFullscreenContentEl.innerHTML = '';
+    closeTopologyEquipmentPanel();
     if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
     diagramFullscreenInteraction = null;
     diagramFullscreenStageEl = null;
@@ -2577,6 +2665,7 @@ function closeTopologyFullscreen() {
   diagramFullscreenModalEl.classList.add('hidden');
   document.body.classList.remove('overflow-hidden');
   diagramFullscreenContentEl.innerHTML = '';
+  closeTopologyEquipmentPanel();
   if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
   diagramFullscreenInteraction = null;
   diagramFullscreenStageEl = null;
@@ -2740,6 +2829,134 @@ function renderDiagramEquipmentAttachments() {
 function wireDiagramEquipmentAttachmentActions() {
   const inlineUploadBtn = diagramEquipmentContentEl.querySelector('#diagram-equipment-upload-inline-btn');
   if (inlineUploadBtn) inlineUploadBtn.onclick = () => diagramEquipmentConfigInputEl?.click();
+}
+
+function renderFullscreenDetailAttachments() {
+  const attachments = Array.isArray(diagramFullscreenDetailAttachments) ? diagramFullscreenDetailAttachments : [];
+  return `
+    <div id="diagram-fullscreen-detail-attachments" class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Fichiers de conf</p>
+          <p class="mt-1 text-sm text-slate-500">${attachments.length ? `${attachments.length} fichier${attachments.length > 1 ? 's' : ''}` : 'Aucun fichier joint'}</p>
+        </div>
+      </div>
+      <div class="mt-3 space-y-2">
+        ${attachments.length ? attachments.map(attachment => `
+          <a href="${attachment.downloadUrl || attachment.url}" target="_blank" rel="noopener noreferrer" class="block rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:border-purple-200 hover:bg-purple-50/60">
+            <p class="truncate font-medium text-slate-800">${escapeHtml(attachment.filename || attachment.name || 'Fichier')}</p>
+            <p class="mt-1 text-xs text-slate-400">${escapeHtml(formatEquipmentAttachmentLabel(attachment))} · ${escapeHtml(formatFileSize(attachment.size))}</p>
+          </a>
+        `).join('') : '<div class="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">Ajoute ici une configuration, un journal ou un export.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderFullscreenDetailPortRows(portRows = [], node = null) {
+  if (!portRows.length) {
+    return '<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">Aucune liaison détectée.</div>';
+  }
+  return `
+    <div class="space-y-2">
+      ${portRows.map(row => `
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div class="flex items-center justify-between gap-3">
+            <p class="font-mono text-sm font-semibold text-slate-800">${escapeHtml(row.localPort)}</p>
+            <span class="text-[11px] text-slate-400">${row.interSwitch ? 'inter-switch' : 'terminaison'}</span>
+          </div>
+          <p class="mt-1 text-sm text-slate-600">${escapeHtml(row.bidirectional ? '↔' : '→')} ${escapeHtml(row.otherName)}${row.remotePort ? ` <span class="font-mono text-slate-500">(${escapeHtml(row.remotePort)})</span>` : ''}</p>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function openTopologyEquipmentPanel(node) {
+  diagramFullscreenDetailNode = node || null;
+  diagramFullscreenDetailDetail = null;
+  diagramFullscreenDetailAttachments = [];
+  diagramFullscreenDetailPanelEl.classList.remove('hidden');
+  diagramFullscreenDetailTitleEl.textContent = normalizeTopologyName(node?.name) || 'Équipement';
+  diagramFullscreenDetailMetaEl.textContent = 'Chargement...';
+  diagramFullscreenDetailContentEl.innerHTML = '<div class="text-sm text-slate-500">Chargement...</div>';
+  diagramFullscreenDetailOpenBtnEl.disabled = true;
+  diagramFullscreenDetailUploadBtnEl.disabled = true;
+
+  const detail = await resolveEquipmentNode(node);
+  if (!detail) {
+    diagramFullscreenDetailMetaEl.textContent = 'Aucun équipement correspondant trouvé.';
+    diagramFullscreenDetailContentEl.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">Aucun équipement trouvé.</div>';
+    return;
+  }
+
+  diagramFullscreenDetailDetail = detail;
+  const conf = formatTopologyConf(detail);
+  const model = diagramTopologyCurrentModel || parseTopologyText(diagramTopologyCurrentText);
+  const nodeLinks = model.links.filter(link => link.from === node?.id || link.to === node?.id);
+  const portRows = nodeLinks.map(link => {
+    const outbound = link.from === node?.id;
+    const otherName = outbound ? link.to : link.from;
+    const otherNode = model.nodes.find(item => item.id === otherName);
+    const localPort = outbound ? link.fromPort : link.toPort;
+    const remotePort = outbound ? link.toPort : link.fromPort;
+    return {
+      localPort: localPort || 'port non précisé',
+      otherName: otherNode?.name || otherName || 'équipement inconnu',
+      remotePort: remotePort || '',
+      bidirectional: !!link.bidirectional,
+      interSwitch: isSwitchLikeNode(node) && isSwitchLikeNode(otherNode)
+    };
+  });
+
+  await loadDiagramEquipmentAttachments(detail.id);
+  diagramFullscreenDetailAttachments = diagramEquipmentCurrentAttachments.slice();
+  diagramFullscreenDetailTitleEl.textContent = conf.title;
+  diagramFullscreenDetailMetaEl.textContent = detail?.id ? `ID équipement: ${detail.id}` : '';
+  diagramFullscreenDetailContentEl.innerHTML = `
+    <div class="space-y-4">
+      <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Ports et liaisons</p>
+        <div class="mt-3">
+          ${renderFullscreenDetailPortRows(portRows, node)}
+        </div>
+      </div>
+      ${renderFullscreenDetailAttachments()}
+      <div class="grid gap-2">
+        ${conf.lines.map(line => `
+          <button type="button" data-copy-text="${escapeHtml(line)}" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 hover:border-purple-200 hover:bg-purple-50/60">
+            ${escapeHtml(line)}
+          </button>
+        `).join('')}
+      </div>
+      <button type="button" data-copy-text="${escapeHtml(conf.raw)}" class="rounded-3xl border border-slate-200 bg-slate-950 p-4 text-left transition hover:border-purple-400">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">Configuration brute</p>
+          <span class="text-[11px] text-slate-400">clic pour copier</span>
+        </div>
+        <pre class="max-h-[18rem] overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-slate-100">${escapeHtml(conf.raw)}</pre>
+      </button>
+    </div>
+  `;
+  diagramFullscreenDetailOpenBtnEl.disabled = false;
+  diagramFullscreenDetailUploadBtnEl.disabled = false;
+  diagramFullscreenDetailOpenBtnEl.onclick = () => {
+    if (detail?.id) window.location.href = `/equipment.html?focus=${encodeURIComponent(detail.id)}`;
+  };
+  diagramFullscreenDetailUploadBtnEl.onclick = () => diagramFullscreenDetailInputEl?.click();
+  diagramFullscreenDetailContentEl.querySelectorAll('[data-copy-text]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const ok = await copyTextToClipboard(el.dataset.copyText);
+      showToast(ok ? 'Copié' : 'Copie impossible', ok ? 'success' : 'error');
+    });
+  });
+}
+
+function closeTopologyEquipmentPanel() {
+  diagramFullscreenDetailPanelEl.classList.add('hidden');
+  diagramFullscreenDetailNode = null;
+  diagramFullscreenDetailDetail = null;
+  diagramFullscreenDetailAttachments = [];
 }
 
 async function openDiagramEquipmentModal(node) {
@@ -3046,6 +3263,38 @@ diagramEquipmentConfigInputEl.addEventListener('change', async () => {
   } finally {
     diagramEquipmentUploadBtnEl.disabled = false;
     diagramEquipmentConfigInputEl.value = '';
+  }
+});
+diagramFullscreenDetailCloseBtnEl.addEventListener('click', closeTopologyEquipmentPanel);
+diagramFullscreenDetailPanelEl.addEventListener('click', event => {
+  if (event.target === diagramFullscreenDetailPanelEl) closeTopologyEquipmentPanel();
+});
+diagramFullscreenDetailInputEl.addEventListener('change', async () => {
+  const file = diagramFullscreenDetailInputEl.files?.[0];
+  const equipmentId = diagramFullscreenDetailDetail?.id;
+  if (!file || !equipmentId) {
+    diagramFullscreenDetailInputEl.value = '';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('category', 'OTHER');
+  formData.append('notes', 'Configuration réseau');
+  diagramFullscreenDetailUploadBtnEl.disabled = true;
+
+  try {
+    await api.upload(`/equipment/${encodeURIComponent(equipmentId)}/attachments`, formData);
+    showToast('Fichier ajouté', 'success');
+    await loadDiagramEquipmentAttachments(equipmentId);
+    diagramFullscreenDetailAttachments = diagramEquipmentCurrentAttachments.slice();
+    const attachmentsWrap = diagramFullscreenDetailContentEl.querySelector('#diagram-fullscreen-detail-attachments');
+    if (attachmentsWrap) attachmentsWrap.outerHTML = renderFullscreenDetailAttachments();
+  } catch (err) {
+    showToast(err.message || 'Impossible d’ajouter le fichier', 'error');
+  } finally {
+    diagramFullscreenDetailUploadBtnEl.disabled = false;
+    diagramFullscreenDetailInputEl.value = '';
   }
 });
 document.getElementById('diagram-fullscreen-btn').addEventListener('click', openTopologyFullscreen);
