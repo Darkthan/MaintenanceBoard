@@ -126,7 +126,6 @@
                   <div id="article-tags" class="mt-4 flex flex-wrap gap-2"></div>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <button id="diagram-fullscreen-btn" type="button" class="hidden rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Plein écran</button>
                   <div id="article-admin-actions" class="hidden items-center gap-2">
                     <button id="edit-article-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Modifier</button>
                     <button id="delete-article-btn" type="button" class="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition">Supprimer</button>
@@ -648,7 +647,6 @@
         </div>
         <div class="flex items-center gap-2 shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-1">
           <button id="diagram-mode-text-btn" type="button" class="rounded-xl px-3 py-2 text-sm font-medium transition bg-white text-purple-700 shadow-sm">Texte</button>
-          <button id="diagram-mode-drawio-btn" type="button" class="rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition">Draw.io</button>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <span id="diagram-editor-feedback" class="text-sm text-slate-500"></span>
@@ -695,113 +693,6 @@
             <div id="diagram-topology-preview" class="mt-4"></div>
           </div>
         </div>
-        <div id="diagram-drawio-mode" class="hidden h-full min-h-0 relative">
-          <div id="diagram-loading" class="absolute inset-0 flex items-center justify-center bg-white z-10">
-            <div class="flex flex-col items-center gap-3 text-slate-400">
-              <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-              </svg>
-              <p class="text-sm">Chargement de l'éditeur draw.io…</p>
-            </div>
-          </div>
-          <iframe id="drawio-iframe" src="" class="w-full h-full border-0 hidden" title="Éditeur draw.io"></iframe>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Viewer draw.io (fichiers .drawio attachés) -->
-<div id="drawio-viewer-modal" class="hidden fixed inset-0 z-[140] bg-slate-950/60 backdrop-blur-sm">
-  <div class="h-full flex flex-col p-4">
-    <div class="bg-white rounded-2xl flex flex-col h-full overflow-hidden shadow-2xl">
-      <div class="flex items-center gap-3 border-b border-slate-200 px-5 py-4 shrink-0 flex-wrap">
-        <div class="shrink-0">
-          <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Diagramme draw.io</p>
-          <h2 id="drawio-viewer-title" class="text-base font-semibold text-slate-900 truncate max-w-xs sm:max-w-lg"></h2>
-        </div>
-        <button id="close-drawio-viewer-btn" type="button" class="ml-auto rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <div class="flex-1 min-h-0 relative">
-        <div id="drawio-viewer-loading" class="absolute inset-0 flex items-center justify-center bg-white z-10">
-          <div class="flex flex-col items-center gap-3 text-slate-400">
-            <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-            </svg>
-            <p class="text-sm">Chargement du diagramme…</p>
-          </div>
-        </div>
-        <iframe id="drawio-viewer-iframe" src="" class="w-full h-full border-0 hidden" title="Visualisation draw.io"></iframe>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Modal configuration équipement -->
-<div id="diagram-equipment-modal" class="hidden fixed inset-0 z-[135] bg-slate-950/60 backdrop-blur-sm">
-  <div class="h-full flex items-center justify-center p-4">
-    <div class="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-      <div class="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-purple-600">Équipement lié</p>
-          <h2 id="diagram-equipment-title" class="text-lg font-semibold text-slate-900">Configuration</h2>
-        </div>
-        <button id="close-diagram-equipment-btn" type="button" class="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <div class="flex-1 min-h-0 overflow-auto p-5">
-        <div id="diagram-equipment-loading" class="text-sm text-slate-500">Chargement...</div>
-        <div id="diagram-equipment-content" class="hidden space-y-4"></div>
-      </div>
-      <div class="border-t border-slate-200 px-5 py-4 flex items-center justify-between gap-3">
-        <p id="diagram-equipment-meta" class="text-xs text-slate-500"></p>
-        <div class="flex items-center gap-2">
-          <input id="diagram-equipment-config-input" type="file" class="hidden" accept=".txt,.cfg,.conf,.log,.xml,.json,.ini,.yaml,.yml,.sh,.ps1,.bat" />
-          <button id="diagram-equipment-upload-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Ajouter une conf</button>
-          <button id="diagram-equipment-copy-btn" type="button" class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">Copier la conf</button>
-          <button id="diagram-equipment-open-btn" type="button" class="rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition">Ouvrir la fiche</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Modal schéma plein écran -->
-<div id="diagram-fullscreen-modal" class="hidden fixed inset-0 z-[145] bg-slate-950">
-  <div class="flex h-full flex-col">
-    <div class="flex items-center gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-3 text-white">
-      <div class="min-w-0">
-        <p class="text-[11px] font-semibold uppercase tracking-wide text-purple-300">Schéma réseau</p>
-        <h2 id="diagram-fullscreen-title" class="truncate text-base font-semibold sm:text-lg">Plein écran</h2>
-      </div>
-      <p id="diagram-fullscreen-meta" class="hidden truncate text-xs text-slate-400 sm:block"></p>
-      <div class="ml-auto flex items-center gap-2">
-        <button id="diagram-fullscreen-zoom-out" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 transition hover:bg-white/10">-</button>
-        <span id="diagram-fullscreen-zoom-label" class="min-w-14 text-center text-xs font-medium text-slate-300">100%</span>
-        <button id="diagram-fullscreen-zoom-in" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 transition hover:bg-white/10">+</button>
-        <button id="diagram-fullscreen-reset" type="button" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 transition hover:bg-white/10">Ajuster</button>
-        <button id="close-diagram-fullscreen-btn" type="button" class="rounded-full p-2 text-slate-300 transition hover:bg-white/10 hover:text-white">
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    </div>
-    <div class="relative flex-1 overflow-hidden bg-slate-950">
-      <div id="diagram-fullscreen-viewport" class="absolute inset-0 overflow-hidden touch-none overscroll-contain">
-          <div id="diagram-fullscreen-content" class="absolute left-0 top-0"></div>
-      </div>
-      <div class="pointer-events-none absolute left-4 bottom-4 hidden max-w-md rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2 text-xs text-slate-300 shadow-lg backdrop-blur sm:block">
-        Molette pour zoomer, glisser pour déplacer la vue, tirer un équipement pour le repositionner.
       </div>
     </div>
   </div>
@@ -840,7 +731,6 @@ const articleDocumentsWrapEl = document.getElementById('article-documents-wrap')
 const articleDocumentsEl = document.getElementById('article-documents');
 const newArticleBtnEl = null; // déplacé vers le FAB speed-dial
 const articleAdminActionsEl = document.getElementById('article-admin-actions');
-const diagramFullscreenBtnEl = document.getElementById('diagram-fullscreen-btn');
 const editorModalEl = document.getElementById('knowledge-editor-modal');
 const editorFormEl = document.getElementById('knowledge-editor-form');
 const editorTitleEl = document.getElementById('editor-title');
@@ -1380,22 +1270,16 @@ async function selectArticle(articleId) {
       article.updatedByName ? `Mis à jour par ${article.updatedByName}` : null,
       article.updatedAt ? `le ${formatDateTime(article.updatedAt)}` : null
     ].filter(Boolean).join(' ');
-    diagramFullscreenBtnEl.classList.toggle('hidden', !isNetworkDiagram);
-    diagramFullscreenBtnEl.onclick = isNetworkDiagram ? () => openTopologyFullscreen() : null;
-
     if (isIpAddressing) {
       articlePanelEl.classList.add('hidden'); // pas de header article pour ce type
       ipShowPanel();
       return;
     } else if (isNetworkDiagram) {
       const topologyText = String(article.topologyText || article.content || '').trim();
-      const topologyLayout = normalizeTopologyLayout(article.topologyLayout || {});
       if (topologyText) {
-        renderTopologyTextView(articleContentEl, topologyText, topologyLayout);
-      } else if (article.diagramSvg) {
-        articleContentEl.innerHTML = `<div class="w-full overflow-auto rounded-xl border border-slate-200 bg-white p-3">${DOMPurify.sanitize(article.diagramSvg, { USE_PROFILES: { svg: true, svgFilters: true } })}</div>`;
+        renderTopologyTextView(articleContentEl, topologyText);
       } else {
-        articleContentEl.innerHTML = '<p class="text-slate-400 text-sm italic">Aucun schéma enregistré. Clique sur Modifier pour créer le plan.</p>';
+        articleContentEl.innerHTML = '<p class="text-slate-400 text-sm italic">Aucun plan texte enregistré. Clique sur Modifier pour créer le plan.</p>';
       }
     } else {
       articleContentEl.className = 'space-y-3 text-sm text-slate-700';
@@ -1616,9 +1500,7 @@ editorFormEl.addEventListener('submit', async event => {
 
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
-    if (!diagramFullscreenModalEl?.classList.contains('hidden')) closeTopologyFullscreen();
-    else if (!drawioViewerModalEl?.classList.contains('hidden')) closeDrawioViewer();
-    else if (!diagramEditorModalEl.classList.contains('hidden')) closeDiagramEditor();
+    if (!diagramEditorModalEl.classList.contains('hidden')) closeDiagramEditor();
     else if (!editorModalEl.classList.contains('hidden')) closeEditor();
   }
 });
@@ -1640,59 +1522,20 @@ function initMermaidInEl(containerEl) {
   mermaid.run({ nodes: containerEl.querySelectorAll('.mermaid') });
 }
 
-// ── Plan réseau textuel / draw.io ────────────────────────────────────────────
+// ── Plan réseau textuel ─────────────────────────────────────────────────────
 
 let diagramEditorArticleId = '';
-let _diagramCurrentXml = '';
-let _diagramPendingSave = false;
 let diagramEditorMode = 'text';
 let diagramTopologyPreviewToken = 0;
-let diagramEquipmentCurrentNode = null;
-let diagramEquipmentCurrentDetail = null;
-let diagramEquipmentCurrentAttachments = [];
-let diagramTopologyCurrentText = '';
-let diagramTopologyCurrentModel = null;
-let diagramTopologyCurrentLayout = {};
-let diagramFullscreenZoom = 1;
-let diagramFullscreenPan = { x: 0, y: 0 };
-let diagramFullscreenLayout = {};
-let diagramFullscreenViewportEl = null;
-let diagramFullscreenStageEl = null;
-let diagramFullscreenInteraction = null;
-let diagramFullscreenSaveTimer = null;
-let diagramFullscreenSuppressClickUntil = 0;
-let diagramFullscreenClosing = false;
 
 const diagramEditorModalEl = document.getElementById('diagram-editor-modal');
-const drawioIframeEl = document.getElementById('drawio-iframe');
-const diagramLoadingEl = document.getElementById('diagram-loading');
 const diagramFeedbackEl = document.getElementById('diagram-editor-feedback');
 const diagramTextModeEl = document.getElementById('diagram-text-mode');
-const diagramDrawioModeEl = document.getElementById('diagram-drawio-mode');
 const diagramTopologyInputEl = document.getElementById('diagram-topology-input');
 const diagramTopologyPreviewEl = document.getElementById('diagram-topology-preview');
 const diagramTopologyStatsEl = document.getElementById('diagram-topology-stats');
 const diagramTopologyStatusEl = document.getElementById('diagram-topology-status');
 const diagramModeTextBtnEl = document.getElementById('diagram-mode-text-btn');
-const diagramModeDrawioBtnEl = document.getElementById('diagram-mode-drawio-btn');
-const diagramEquipmentModalEl = document.getElementById('diagram-equipment-modal');
-const diagramEquipmentLoadingEl = document.getElementById('diagram-equipment-loading');
-const diagramEquipmentContentEl = document.getElementById('diagram-equipment-content');
-const diagramEquipmentTitleEl = document.getElementById('diagram-equipment-title');
-const diagramEquipmentMetaEl = document.getElementById('diagram-equipment-meta');
-const diagramEquipmentUploadBtnEl = document.getElementById('diagram-equipment-upload-btn');
-const diagramEquipmentConfigInputEl = document.getElementById('diagram-equipment-config-input');
-const diagramEquipmentOpenBtnEl = document.getElementById('diagram-equipment-open-btn');
-const diagramEquipmentCopyBtnEl = document.getElementById('diagram-equipment-copy-btn');
-const diagramFullscreenModalEl = document.getElementById('diagram-fullscreen-modal');
-diagramFullscreenViewportEl = document.getElementById('diagram-fullscreen-viewport');
-const diagramFullscreenContentEl = document.getElementById('diagram-fullscreen-content');
-const diagramFullscreenTitleEl = document.getElementById('diagram-fullscreen-title');
-const diagramFullscreenMetaEl = document.getElementById('diagram-fullscreen-meta');
-const diagramFullscreenZoomInBtnEl = document.getElementById('diagram-fullscreen-zoom-in');
-const diagramFullscreenZoomOutBtnEl = document.getElementById('diagram-fullscreen-zoom-out');
-const diagramFullscreenZoomLabelEl = document.getElementById('diagram-fullscreen-zoom-label');
-const diagramFullscreenResetBtnEl = document.getElementById('diagram-fullscreen-reset');
 
 function normalizeTopologyName(value) {
   return String(value || '').trim();
@@ -2239,338 +2082,31 @@ function renderTopologyTextView(containerEl, text, layout = null) {
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
         <div>
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Plan réseau en texte</p>
-          <p class="mt-1 text-sm text-slate-500">La description s’affiche d’abord. Le schéma réel s’ouvre au clic.</p>
+          <p class="mt-1 text-sm text-slate-500">La description s’affiche ici telle qu’elle a été saisie.</p>
         </div>
-        <button id="diagram-open-real-btn" type="button" class="rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700">Voir le schéma réel</button>
       </div>
       <pre class="mt-4 max-h-[48vh] overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-slate-50 p-4 text-xs leading-6 text-slate-700">${escapeHtml(safeText || 'Aucune topologie textuelle enregistrée.')}</pre>
     </div>
   `;
-  const openBtn = containerEl.querySelector('#diagram-open-real-btn');
-  if (openBtn) {
-    openBtn.addEventListener('click', () => openTopologyFullscreen());
-  }
-  if (layout && Object.keys(normalizeTopologyLayout(layout)).length) {
-    const hint = document.createElement('div');
-    hint.className = 'rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500';
-    hint.textContent = 'Un placement enregistré existe pour ce plan. Il sera utilisé dans le schéma réel.';
-    containerEl.appendChild(hint);
-  }
-}
-
-function getCurrentTopologyLayoutFromStage() {
-  const layout = {};
-  if (!diagramFullscreenStageEl) return layout;
-  diagramFullscreenStageEl.querySelectorAll('[data-diagram-node]').forEach(nodeEl => {
-    const nodeId = nodeEl.dataset.nodeId;
-    if (!nodeId) return;
-    const left = Number.parseFloat(nodeEl.style.left || nodeEl.getAttribute('data-x') || '0');
-    const top = Number.parseFloat(nodeEl.style.top || nodeEl.getAttribute('data-y') || '0');
-    if (Number.isFinite(left) && Number.isFinite(top)) {
-      layout[nodeId] = { x: left, y: top };
-    }
-  });
-  return layout;
-}
-
-function applyFullscreenTopologyTransform() {
-  if (!diagramFullscreenStageEl) return;
-  diagramFullscreenStageEl.style.transformOrigin = '0 0';
-  diagramFullscreenStageEl.style.transform = `translate(${diagramFullscreenPan.x}px, ${diagramFullscreenPan.y}px) scale(${diagramFullscreenZoom})`;
-  diagramFullscreenZoomLabelEl.textContent = `${Math.round(clamp(diagramFullscreenZoom, 0.7, 1.9) * 100)}%`;
-}
-
-function scheduleFullscreenTopologyRender() {
-  if (diagramFullscreenInteraction?.raf) return;
-  diagramFullscreenInteraction = diagramFullscreenInteraction || {};
-  diagramFullscreenInteraction.raf = window.requestAnimationFrame(() => {
-    diagramFullscreenInteraction.raf = 0;
-    rerenderFullscreenTopology();
-  });
-}
-
-function fitFullscreenTopology() {
-  if (!diagramFullscreenViewportEl || !diagramFullscreenStageEl) return;
-  const viewportRect = diagramFullscreenViewportEl.getBoundingClientRect();
-  const stageRect = diagramFullscreenStageEl.getBoundingClientRect();
-  const baseWidth = stageRect.width || 1;
-  const baseHeight = stageRect.height || 1;
-  const fitZoom = clamp(Math.min(
-    (viewportRect.width - 48) / baseWidth,
-    (viewportRect.height - 48) / baseHeight,
-    1
-  ), 0.7, 1.5);
-  diagramFullscreenZoom = fitZoom;
-  diagramFullscreenPan = {
-    x: Math.max(24, (viewportRect.width - baseWidth * fitZoom) / 2),
-    y: Math.max(24, (viewportRect.height - baseHeight * fitZoom) / 2)
-  };
-  applyFullscreenTopologyTransform();
-}
-
-function saveFullscreenTopologyLayout() {
-  if (!isAdmin() || !selectedArticle || selectedArticle.type !== 'network-diagram') return;
-  const layout = normalizeTopologyLayout(diagramFullscreenLayout);
-  const topologyLayout = layout;
-  if (!Object.keys(topologyLayout).length) return;
-
-  if (diagramFullscreenSaveTimer) window.clearTimeout(diagramFullscreenSaveTimer);
-  diagramFullscreenSaveTimer = window.setTimeout(async () => {
-    try {
-      const response = await api.patch(`/knowledge-base/${encodeURIComponent(selectedArticle.id)}`, {
-        topologyLayout
-      });
-      selectedArticle = response.article || selectedArticle;
-      diagramFullscreenLayout = normalizeTopologyLayout(selectedArticle?.topologyLayout || diagramFullscreenLayout);
-      rerenderFullscreenTopology();
-      if (selectedArticle?.id === selectedArticleId && document.getElementById('knowledge-article-panel') && !articlePanelEl.classList.contains('hidden')) {
-        const topologyText = String(selectedArticle.topologyText || selectedArticle.content || '').trim();
-        if (topologyText) {
-          renderTopologyTextView(articleContentEl, topologyText, diagramFullscreenLayout);
-        }
-      }
-      showToast('Placement enregistré', 'success');
-    } catch (err) {
-      showToast(err.message || 'Impossible d’enregistrer le placement', 'error');
-    }
-  }, 220);
-}
-
-function initFullscreenTopologyInteractions() {
-  if (!diagramFullscreenViewportEl || !diagramFullscreenStageEl) return;
-  const viewport = diagramFullscreenViewportEl;
-  const stage = diagramFullscreenStageEl;
-
-  const onWheel = event => {
-    event.preventDefault();
-    const rect = viewport.getBoundingClientRect();
-    const cursorX = event.clientX - rect.left;
-    const cursorY = event.clientY - rect.top;
-    const factor = Math.exp(-event.deltaY * 0.0012);
-    const nextZoom = clamp(diagramFullscreenZoom * factor, 0.7, 1.9);
-    const worldX = (cursorX - diagramFullscreenPan.x) / diagramFullscreenZoom;
-    const worldY = (cursorY - diagramFullscreenPan.y) / diagramFullscreenZoom;
-    diagramFullscreenPan.x = cursorX - worldX * nextZoom;
-    diagramFullscreenPan.y = cursorY - worldY * nextZoom;
-    diagramFullscreenZoom = nextZoom;
-    applyFullscreenTopologyTransform();
-  };
-
-  const state = {
-    mode: '',
-    startX: 0,
-    startY: 0,
-    startPanX: 0,
-    startPanY: 0,
-    startNodeX: 0,
-    startNodeY: 0,
-    nodeId: '',
-    moved: false
-  };
-
-  const onPointerMove = event => {
-    if (!state.mode) return;
-    const dx = event.clientX - state.startX;
-    const dy = event.clientY - state.startY;
-    if (Math.abs(dx) + Math.abs(dy) > 3) state.moved = true;
-
-    if (state.mode === 'pan') {
-      diagramFullscreenPan.x = state.startPanX + dx;
-      diagramFullscreenPan.y = state.startPanY + dy;
-      applyFullscreenTopologyTransform();
-      return;
-    }
-
-    if (state.mode === 'drag' && state.nodeId) {
-      const nextX = state.startNodeX + (dx / diagramFullscreenZoom);
-      const nextY = state.startNodeY + (dy / diagramFullscreenZoom);
-      const clampedX = Math.max(0, nextX);
-      const clampedY = Math.max(0, nextY);
-      diagramFullscreenLayout[state.nodeId] = { x: clampedX, y: clampedY };
-      const safeNodeId = String(state.nodeId).replace(/"/g, '\\"');
-      const nodeEl = stage.querySelector(`[data-node-id="${safeNodeId}"]`);
-      if (nodeEl) {
-        nodeEl.style.left = `${clampedX}px`;
-        nodeEl.style.top = `${clampedY}px`;
-      }
-    }
-  };
-
-  const endInteraction = async () => {
-    if (!state.mode) return;
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', endInteraction);
-    window.removeEventListener('pointercancel', endInteraction);
-    const moved = state.moved;
-    const mode = state.mode;
-    state.mode = '';
-    if (mode === 'drag' && moved) {
-      diagramFullscreenSuppressClickUntil = Date.now() + 250;
-      diagramFullscreenLayout = getCurrentTopologyLayoutFromStage();
-      saveFullscreenTopologyLayout();
-    }
-  };
-
-  const onPointerDown = event => {
-    if (!diagramFullscreenModalEl || diagramFullscreenModalEl.classList.contains('hidden')) return;
-    const nodeBtn = event.target.closest?.('[data-diagram-node]');
-    if (nodeBtn && isAdmin()) {
-      const nodeId = nodeBtn.dataset.nodeId;
-      const rect = viewport.getBoundingClientRect();
-      const currentLayout = getCurrentTopologyLayoutFromStage();
-      const nodePos = currentLayout[nodeId] || { x: Number.parseFloat(nodeBtn.style.left) || 0, y: Number.parseFloat(nodeBtn.style.top) || 0 };
-      state.mode = 'drag';
-      state.nodeId = nodeId;
-      state.startX = event.clientX;
-      state.startY = event.clientY;
-      state.startNodeX = nodePos.x;
-      state.startNodeY = nodePos.y;
-      state.moved = false;
-      event.preventDefault();
-      window.addEventListener('pointermove', onPointerMove);
-      window.addEventListener('pointerup', endInteraction, { once: true });
-      window.addEventListener('pointercancel', endInteraction, { once: true });
-      return;
-    }
-
-    const stageTarget = event.target.closest?.('[data-diagram-stage]');
-    if (!stageTarget) return;
-    state.mode = 'pan';
-    state.startX = event.clientX;
-    state.startY = event.clientY;
-    state.startPanX = diagramFullscreenPan.x;
-    state.startPanY = diagramFullscreenPan.y;
-    state.moved = false;
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', endInteraction, { once: true });
-    window.addEventListener('pointercancel', endInteraction, { once: true });
-  };
-
-  viewport.addEventListener('wheel', onWheel, { passive: false });
-  viewport.addEventListener('pointerdown', onPointerDown);
-
-  diagramFullscreenInteraction = {
-    viewport,
-    stage,
-    cleanup() {
-      viewport.removeEventListener('wheel', onWheel);
-      viewport.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', endInteraction);
-      window.removeEventListener('pointercancel', endInteraction);
-    }
-  };
-}
-
-function openTopologyFullscreen() {
-  const topologyText = String(selectedArticle?.topologyText || selectedArticle?.content || '').trim();
-  if (!topologyText) return;
-  const title = selectedArticle?.title || 'Schéma réseau';
-  diagramFullscreenTitleEl.textContent = title;
-  diagramFullscreenMetaEl.textContent = selectedArticle?.category ? selectedArticle.category : '';
-  if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
-  diagramFullscreenInteraction = null;
-  diagramFullscreenZoom = 1;
-  diagramFullscreenPan = { x: 32, y: 32 };
-  diagramFullscreenLayout = normalizeTopologyLayout(selectedArticle?.topologyLayout || {});
-  renderTopologyDiagramInto(diagramFullscreenContentEl, topologyText, {
-    interactive: true,
-    sourceText: topologyText,
-    mode: 'fullscreen',
-    layout: diagramFullscreenLayout
-  });
-  diagramFullscreenStageEl = diagramFullscreenContentEl.querySelector('[data-diagram-stage]');
-  initFullscreenTopologyInteractions();
-  fitFullscreenTopology();
-  diagramFullscreenModalEl.classList.remove('hidden');
-  document.body.classList.add('overflow-hidden');
-  if (diagramFullscreenModalEl.requestFullscreen) {
-    try {
-      Promise.resolve(diagramFullscreenModalEl.requestFullscreen({ navigationUI: 'hide' })).catch(() => {});
-    } catch {
-      try {
-        Promise.resolve(diagramFullscreenModalEl.requestFullscreen()).catch(() => {});
-      } catch {}
-    }
-  }
-}
-
-function closeTopologyFullscreen() {
-  if (diagramFullscreenClosing) return;
-  diagramFullscreenClosing = true;
-  const finish = () => {
-    diagramFullscreenModalEl.classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-    diagramFullscreenContentEl.innerHTML = '';
-    if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
-    diagramFullscreenInteraction = null;
-    diagramFullscreenStageEl = null;
-    diagramFullscreenClosing = false;
-  };
-  if (document.fullscreenElement === diagramFullscreenModalEl && document.exitFullscreen) {
-    document.exitFullscreen().catch(() => {}).finally(finish);
-    return;
-  }
-  diagramFullscreenModalEl.classList.add('hidden');
-  document.body.classList.remove('overflow-hidden');
-  diagramFullscreenContentEl.innerHTML = '';
-  if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
-  diagramFullscreenInteraction = null;
-  diagramFullscreenStageEl = null;
-  diagramFullscreenClosing = false;
-}
-
-function updateFullscreenTopologyControls() {
-  diagramFullscreenZoomLabelEl.textContent = `${Math.round(clamp(diagramFullscreenZoom, 0.7, 1.9) * 100)}%`;
-}
-
-function rerenderFullscreenTopology() {
-  if (diagramFullscreenModalEl.classList.contains('hidden')) return;
-  const topologyText = String(selectedArticle?.topologyText || selectedArticle?.content || '').trim();
-  if (!topologyText) return;
-  if (diagramFullscreenInteraction?.cleanup) diagramFullscreenInteraction.cleanup();
-  diagramFullscreenInteraction = null;
-  renderTopologyDiagramInto(diagramFullscreenContentEl, topologyText, {
-    interactive: true,
-    sourceText: topologyText,
-    mode: 'fullscreen',
-    layout: diagramFullscreenLayout
-  });
-  diagramFullscreenStageEl = diagramFullscreenContentEl.querySelector('[data-diagram-stage]');
-  initFullscreenTopologyInteractions();
-  if (diagramFullscreenStageEl) applyFullscreenTopologyTransform();
-  updateFullscreenTopologyControls();
-}
-
 function scheduleTopologyPreview() {
   const token = ++diagramTopologyPreviewToken;
   window.requestAnimationFrame(() => {
     if (token !== diagramTopologyPreviewToken || !diagramTopologyPreviewEl) return;
     const text = diagramTopologyInputEl?.value || '';
-    const result = getTopologyDiagramMarkup(text, { interactive: false, mode: 'editor' });
-    diagramTopologyPreviewEl.innerHTML = result.html;
-    diagramTopologyStatsEl.textContent = result.stats;
+    const safeText = String(text || '').trim();
+    diagramTopologyPreviewEl.innerHTML = safeText
+      ? `<div class="rounded-2xl border border-slate-200 bg-white p-4"><pre class="whitespace-pre-wrap break-words text-xs leading-6 text-slate-700">${escapeHtml(safeText)}</pre></div>`
+      : '<div class="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">Aucune topologie chargée.</div>';
+    diagramTopologyStatsEl.textContent = safeText ? `${safeText.split(/\r?\n/).filter(Boolean).length} ligne(s)` : 'Aucune topologie chargée.';
     diagramTopologyStatusEl.textContent = text.trim() ? 'Mise à jour automatique' : '';
   });
 }
 
 function setDiagramEditorMode(mode) {
-  diagramEditorMode = mode === 'drawio' ? 'drawio' : 'text';
+  diagramEditorMode = 'text';
   diagramTextModeEl.classList.toggle('hidden', diagramEditorMode !== 'text');
-  diagramDrawioModeEl.classList.toggle('hidden', diagramEditorMode !== 'drawio');
-  diagramModeTextBtnEl.className = diagramEditorMode === 'text'
-    ? 'rounded-xl px-3 py-2 text-sm font-medium transition bg-white text-purple-700 shadow-sm'
-    : 'rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition';
-  diagramModeDrawioBtnEl.className = diagramEditorMode === 'drawio'
-    ? 'rounded-xl px-3 py-2 text-sm font-medium transition bg-white text-purple-700 shadow-sm'
-    : 'rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition';
-  if (diagramEditorMode === 'text') {
-    scheduleTopologyPreview();
-  } else if (!drawioIframeEl.src) {
-    diagramLoadingEl.classList.remove('hidden');
-    drawioIframeEl.classList.add('hidden');
-    drawioIframeEl.src = 'https://embed.diagrams.net/?embed=1&spin=1&proto=json&libraries=1&lang=fr';
-  }
+  diagramModeTextBtnEl.className = 'rounded-xl px-3 py-2 text-sm font-medium transition bg-white text-purple-700 shadow-sm';
+  scheduleTopologyPreview();
 }
 
 async function resolveEquipmentNode(node) {
@@ -2817,37 +2353,19 @@ function openDiagramEditor(article) {
   document.getElementById('diagram-tags-input').value = Array.isArray(article?.tags) ? article.tags.join(', ') : '';
   document.getElementById('diagram-summary-input').value = article?.summary || '';
   diagramFeedbackEl.textContent = '';
-  _diagramCurrentXml = article?.diagramXml || '';
-  _diagramPendingSave = false;
   diagramTopologyInputEl.value = article?.topologyText || article?.content || '';
-  setDiagramEditorMode((article?.diagramXml && !(article?.topologyText || article?.content)) ? 'drawio' : 'text');
-  if (diagramEditorMode === 'drawio') {
-    diagramLoadingEl.classList.remove('hidden');
-    drawioIframeEl.classList.add('hidden');
-    drawioIframeEl.src = 'https://embed.diagrams.net/?embed=1&spin=1&proto=json&libraries=1&lang=fr';
-  }
+  setDiagramEditorMode('text');
   diagramEditorModalEl.classList.remove('hidden');
   document.body.classList.add('overflow-hidden');
   scheduleTopologyPreview();
 }
 
 function closeDiagramEditor() {
-  closeDiagramEquipmentModal();
   diagramEditorModalEl.classList.add('hidden');
   document.body.classList.remove('overflow-hidden');
-  drawioIframeEl.src = '';
-  drawioIframeEl.classList.add('hidden');
-  diagramLoadingEl.classList.remove('hidden');
-  _diagramCurrentXml = '';
-  _diagramPendingSave = false;
-}
-
-function sendToDrawio(msg) {
-  drawioIframeEl.contentWindow?.postMessage(JSON.stringify(msg), '*');
 }
 
 diagramModeTextBtnEl.addEventListener('click', () => setDiagramEditorMode('text'));
-diagramModeDrawioBtnEl.addEventListener('click', () => setDiagramEditorMode('drawio'));
 diagramTopologyInputEl.addEventListener('input', scheduleTopologyPreview);
 document.getElementById('diagram-format-help-btn').addEventListener('click', () => {
   diagramTopologyInputEl.value = [
@@ -2863,32 +2381,6 @@ document.getElementById('diagram-format-help-btn').addEventListener('click', () 
   scheduleTopologyPreview();
 });
 
-window.addEventListener('message', event => {
-  if (event.source !== drawioIframeEl.contentWindow) return;
-  let msg;
-  try { msg = JSON.parse(event.data); } catch { return; }
-
-  if (msg.event === 'init') {
-    diagramLoadingEl.classList.add('hidden');
-    drawioIframeEl.classList.remove('hidden');
-    sendToDrawio({
-      action: 'load',
-      xml: _diagramCurrentXml ||
-        '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>'
-    });
-  } else if (msg.event === 'autosave' || msg.event === 'save') {
-    if (msg.xml) _diagramCurrentXml = msg.xml;
-  } else if (msg.event === 'export') {
-    if (_diagramPendingSave) {
-      _diagramPendingSave = false;
-      if (msg.xml) _diagramCurrentXml = msg.xml;
-      saveDiagram(msg.data || '');
-    }
-  } else if (msg.event === 'exit') {
-    closeDiagramEditor();
-  }
-});
-
 document.getElementById('save-diagram-btn').addEventListener('click', () => {
   const title = document.getElementById('diagram-title-input').value.trim();
   if (!title) {
@@ -2897,18 +2389,10 @@ document.getElementById('save-diagram-btn').addEventListener('click', () => {
     return;
   }
 
-  if (diagramEditorMode === 'text') {
-    saveDiagram('');
-    return;
-  }
-
-  _diagramPendingSave = true;
-  diagramFeedbackEl.textContent = 'Export en cours…';
-  diagramFeedbackEl.className = 'text-sm text-slate-500';
-  sendToDrawio({ action: 'export', format: 'svg' });
+  saveDiagram();
 });
 
-async function saveDiagram(svgData) {
+async function saveDiagram() {
   const title = document.getElementById('diagram-title-input').value.trim();
   const category = document.getElementById('diagram-category-input').value.trim();
   const tags = document.getElementById('diagram-tags-input').value.trim();
@@ -2925,9 +2409,7 @@ async function saveDiagram(svgData) {
     tags,
     summary,
     content: topologyText,
-    topologyText,
-    diagramXml: diagramEditorMode === 'drawio' ? _diagramCurrentXml : '',
-    diagramSvg: diagramEditorMode === 'drawio' ? (svgData || '') : ''
+    topologyText
   };
 
   try {
@@ -2942,120 +2424,11 @@ async function saveDiagram(svgData) {
   } catch (err) {
     diagramFeedbackEl.textContent = err.message || "Impossible d'enregistrer le plan.";
     diagramFeedbackEl.className = 'text-sm text-red-600';
-    _diagramPendingSave = false;
   }
 }
 
 document.getElementById('cancel-diagram-btn').addEventListener('click', closeDiagramEditor);
 document.getElementById('close-diagram-btn').addEventListener('click', closeDiagramEditor);
-document.getElementById('close-diagram-equipment-btn').addEventListener('click', closeDiagramEquipmentModal);
-diagramEquipmentModalEl.addEventListener('click', event => {
-  if (event.target === diagramEquipmentModalEl) closeDiagramEquipmentModal();
-});
-diagramEquipmentConfigInputEl.addEventListener('change', async () => {
-  const file = diagramEquipmentConfigInputEl.files?.[0];
-  const equipmentId = diagramEquipmentCurrentDetail?.id;
-  if (!file || !equipmentId) {
-    diagramEquipmentConfigInputEl.value = '';
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('category', 'OTHER');
-  formData.append('notes', 'Configuration réseau');
-  diagramEquipmentUploadBtnEl.disabled = true;
-
-  try {
-    const response = await api.upload(`/equipment/${encodeURIComponent(equipmentId)}/attachments`, formData);
-    showToast(response?.filename ? 'Fichier ajouté' : 'Fichier ajouté', 'success');
-    await loadDiagramEquipmentAttachments(equipmentId);
-    const attachmentsWrap = diagramEquipmentContentEl.querySelector('#diagram-equipment-attachments-wrap');
-    if (attachmentsWrap) {
-      attachmentsWrap.outerHTML = renderDiagramEquipmentAttachments();
-      wireDiagramEquipmentAttachmentActions();
-    }
-  } catch (err) {
-    showToast(err.message || 'Impossible d’ajouter le fichier', 'error');
-  } finally {
-    diagramEquipmentUploadBtnEl.disabled = false;
-    diagramEquipmentConfigInputEl.value = '';
-  }
-});
-document.getElementById('diagram-fullscreen-btn').addEventListener('click', openTopologyFullscreen);
-document.getElementById('close-diagram-fullscreen-btn').addEventListener('click', closeTopologyFullscreen);
-diagramFullscreenZoomInBtnEl.addEventListener('click', () => {
-  diagramFullscreenZoom = clamp(diagramFullscreenZoom + 0.1, 0.7, 1.9);
-  applyFullscreenTopologyTransform();
-});
-diagramFullscreenZoomOutBtnEl.addEventListener('click', () => {
-  diagramFullscreenZoom = clamp(diagramFullscreenZoom - 0.1, 0.7, 1.9);
-  applyFullscreenTopologyTransform();
-});
-diagramFullscreenResetBtnEl.addEventListener('click', () => {
-  diagramFullscreenZoom = 1;
-  rerenderFullscreenTopology();
-  fitFullscreenTopology();
-});
-diagramFullscreenModalEl.addEventListener('click', event => {
-  if (event.target === diagramFullscreenModalEl) closeTopologyFullscreen();
-});
-document.addEventListener('fullscreenchange', () => {
-  if (diagramFullscreenClosing) return;
-  if (!diagramFullscreenModalEl.classList.contains('hidden') && document.fullscreenElement !== diagramFullscreenModalEl) {
-    closeTopologyFullscreen();
-  }
-});
-
-// ── Viewer draw.io (fichiers .drawio attachés) ────────────────────────────────
-
-let _viewerCurrentXml = '';
-const drawioViewerModalEl = document.getElementById('drawio-viewer-modal');
-const drawioViewerIframeEl = document.getElementById('drawio-viewer-iframe');
-const drawioViewerLoadingEl = document.getElementById('drawio-viewer-loading');
-
-async function openDrawioViewer(attachment) {
-  document.getElementById('drawio-viewer-title').textContent = attachment.name || 'Diagramme';
-  drawioViewerLoadingEl.classList.remove('hidden');
-  drawioViewerIframeEl.classList.add('hidden');
-  drawioViewerIframeEl.src = '';
-  drawioViewerModalEl.classList.remove('hidden');
-  document.body.classList.add('overflow-hidden');
-
-  try {
-    const res = await fetch(attachment.url, { credentials: 'include' });
-    if (!res.ok) throw new Error('Impossible de charger le fichier');
-    _viewerCurrentXml = await res.text();
-    drawioViewerIframeEl.src = 'https://embed.diagrams.net/?embed=1&spin=1&proto=json&lang=fr&libraries=0';
-  } catch (err) {
-    drawioViewerLoadingEl.innerHTML = `<p class="text-red-500 text-sm">${err.message}</p>`;
-  }
-}
-
-function closeDrawioViewer() {
-  drawioViewerModalEl.classList.add('hidden');
-  document.body.classList.remove('overflow-hidden');
-  drawioViewerIframeEl.src = '';
-  drawioViewerIframeEl.classList.add('hidden');
-  drawioViewerLoadingEl.classList.remove('hidden');
-  _viewerCurrentXml = '';
-}
-
-window.addEventListener('message', event => {
-  if (event.source !== drawioViewerIframeEl.contentWindow) return;
-  let msg;
-  try { msg = JSON.parse(event.data); } catch { return; }
-  if (msg.event === 'init') {
-    drawioViewerLoadingEl.classList.add('hidden');
-    drawioViewerIframeEl.classList.remove('hidden');
-    drawioViewerIframeEl.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: _viewerCurrentXml }), '*');
-  } else if (msg.event === 'exit') {
-    closeDrawioViewer();
-  }
-});
-
-document.getElementById('close-drawio-viewer-btn').addEventListener('click', closeDrawioViewer);
-drawioViewerModalEl.addEventListener('click', event => { if (event.target === drawioViewerModalEl) closeDrawioViewer(); });
 
 // ── FAB speed-dial ────────────────────────────────────────────────────────────
 let fabOpen = false;
