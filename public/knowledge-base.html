@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Base de connaissance – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/styles/vis-network.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <style>
@@ -1821,43 +1822,97 @@ function getTopologyRootNode(nodes, links) {
   })[0] || nodes[0] || null;
 }
 
-function buildTopologyGraphElements(text) {
+function buildTopologyGraphData(text) {
   const model = parseTopologyText(text);
   const nodes = model.nodes.slice().sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
   const rootNode = getTopologyRootNode(nodes, model.links);
-  const elements = [
-    ...nodes.map(node => ({
-      data: {
-        id: node.id,
-        label: node.name,
-        tier: Math.max(0, Math.min(2, Number(node.tier) || 2)),
-        kind: node.kind || '',
-        note: node.note || '',
-        ip: node.ip || '',
-        equipmentId: node.equipmentId || '',
-        equipmentQuery: node.equipmentQuery || '',
-        ports: Array.from(node.ports || [])
+  const adjacency = new Map();
+  model.links.forEach(link => {
+    if (!adjacency.has(link.from)) adjacency.set(link.from, new Set());
+    if (!adjacency.has(link.to)) adjacency.set(link.to, new Set());
+    adjacency.get(link.from).add(link.to);
+    adjacency.get(link.to).add(link.from);
+  });
+  const degrees = new Map(nodes.map(node => [node.id, adjacency.get(node.id)?.size || 0]));
+  const nodeData = nodes.map(node => {
+    const tier = Math.max(0, Math.min(2, Number(node.tier) || 2));
+    const palette = [
+      { bg: '#6366f1', border: '#a5b4fc' },
+      { bg: '#a855f7', border: '#d8b4fe' },
+      { bg: '#06b6d4', border: '#67e8f9' }
+    ][tier];
+    const layoutPos = diagramTopologyCurrentLayout?.[node.id];
+    return {
+      id: node.id,
+      label: node.name,
+      title: [
+        node.kind ? `Type: ${node.kind}` : null,
+        node.ip ? `IP: ${node.ip}` : null,
+        node.note ? `Note: ${node.note}` : null,
+        node.equipmentQuery ? `Recherche: ${node.equipmentQuery}` : null
+      ].filter(Boolean).join('\n'),
+      x: layoutPos?.x,
+      y: layoutPos?.y,
+      mass: 1 + Math.min(6, degrees.get(node.id) || 0),
+      shape: 'dot',
+      size: 10 + Math.min(8, Math.max(0, degrees.get(node.id) || 0)),
+      fixed: false,
+      color: {
+        background: palette.bg,
+        border: palette.border,
+        highlight: { background: '#f472b6', border: '#f8fafc' },
+        hover: { background: palette.bg, border: '#f8fafc' }
+      },
+      font: {
+        color: '#e2e8f0',
+        size: 13,
+        face: 'Inter, system-ui, sans-serif',
+        vadjust: 24,
+        strokeWidth: 2,
+        strokeColor: '#0f172a'
       }
-    })),
-    ...model.links.map((link, index) => ({
-      data: {
-        id: link.id || `${link.from}:${link.fromPort || ''}->${link.to}:${link.toPort || ''}:${index}`,
-        source: link.from,
-        target: link.to,
-        label: [link.fromPort || 'port', link.toPort || 'port'].join(link.bidirectional ? ' ↔ ' : ' → '),
-        fromPort: link.fromPort || '',
-        toPort: link.toPort || '',
-        bidirectional: !!link.bidirectional
-      }
-    }))
-  ];
-  return { model, nodes, rootNode, elements };
+    };
+  });
+
+  const edgeData = model.links.map((link, index) => ({
+    id: link.id || `${link.from}:${link.fromPort || ''}->${link.to}:${link.toPort || ''}:${index}`,
+    from: link.from,
+    to: link.to,
+    arrows: link.bidirectional ? 'to, from' : 'to',
+    label: [link.fromPort || 'port', link.toPort || 'port'].join(link.bidirectional ? ' ↔ ' : ' → '),
+    title: [
+      link.fromPort ? `Port source: ${link.fromPort}` : null,
+      link.toPort ? `Port cible: ${link.toPort}` : null,
+      link.bidirectional ? 'Bidirectionnel' : 'Unidirectionnel'
+    ].filter(Boolean).join('\n'),
+    color: {
+      color: 'rgba(148, 163, 184, 0.9)',
+      highlight: '#f472b6',
+      hover: '#c084fc',
+      opacity: 1
+    },
+    font: {
+      color: '#cbd5e1',
+      size: 10,
+      face: 'Inter, system-ui, sans-serif',
+      align: 'top',
+      strokeWidth: 2,
+      strokeColor: '#0f172a'
+    },
+    smooth: {
+      enabled: true,
+      type: 'dynamic',
+      roundness: 0.25
+    }
+  }));
+
+  return { model, nodes, rootNode, nodeData, edgeData };
 }
 
 function mountTopologyGraph(containerEl, { text = '', layout = null, interactive = true, fitOnRender = true, onNodeClick = null } = {}) {
   if (!containerEl) return null;
   destroyTopologyGraph(containerEl);
-  if (typeof cytoscape !== 'function') {
+  if (typeof vis === 'undefined' || typeof vis.Network !== 'function' || typeof vis.DataSet !== 'function') {
     containerEl.innerHTML = `
       <div class="flex h-full min-h-[320px] items-center justify-center rounded-[2rem] border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-500">
         La librairie de graphe n’est pas disponible.
@@ -1866,12 +1921,11 @@ function mountTopologyGraph(containerEl, { text = '', layout = null, interactive
     return null;
   }
 
-  const safeText = String(text || '');
-  const graph = buildTopologyGraphElements(safeText);
-  diagramTopologyCurrentText = safeText;
-  diagramTopologyCurrentModel = graph.model;
+  diagramTopologyCurrentText = String(text || '');
+  diagramTopologyCurrentModel = parseTopologyText(diagramTopologyCurrentText);
   diagramTopologyCurrentLayout = normalizeTopologyLayout(layout);
 
+  const graph = buildTopologyGraphData(diagramTopologyCurrentText);
   if (!graph.nodes.length) {
     containerEl.innerHTML = `
       <div class="flex h-full min-h-[320px] items-center justify-center rounded-[2rem] border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-500">
@@ -1881,146 +1935,94 @@ function mountTopologyGraph(containerEl, { text = '', layout = null, interactive
     return null;
   }
 
-  const hasPresetLayout = Object.keys(diagramTopologyCurrentLayout).length > 0;
-  const cy = cytoscape({
-    container: containerEl,
-    elements: graph.elements,
-    layout: hasPresetLayout
-      ? {
-          name: 'preset',
-          positions: node => diagramTopologyCurrentLayout[node.id] || undefined,
-          fit: false,
-          animate: false
-        }
-      : {
-          name: 'breadthfirst',
-          directed: true,
-          roots: graph.rootNode ? [graph.rootNode.id] : undefined,
-          circle: false,
-          spacingFactor: 1.45,
-          fit: false,
-          animate: false
-        },
-    wheelSensitivity: 0.16,
-    minZoom: 0.15,
-    maxZoom: 3.2,
-    style: [
-      {
-        selector: 'core',
-        style: {
-          'active-bg-opacity': 0.08,
-          'selection-box-color': '#c084fc',
-          'selection-box-opacity': 0.12
-        }
+  const network = new vis.Network(containerEl, {
+    nodes: new vis.DataSet(graph.nodeData),
+    edges: new vis.DataSet(graph.edgeData)
+  }, {
+    autoResize: true,
+    width: '100%',
+    height: '100%',
+    layout: {
+      improvedLayout: true,
+      randomSeed: 7
+    },
+    interaction: {
+      hover: true,
+      dragNodes: true,
+      dragView: true,
+      zoomView: true,
+      keyboard: true,
+      multiselect: false
+    },
+    manipulation: false,
+    nodes: {
+      shape: 'dot'
+    },
+    edges: {
+      width: 2,
+      selectionWidth: 2,
+      hoverWidth: 1.5,
+      color: {
+        color: 'rgba(148, 163, 184, 0.9)',
+        highlight: '#f472b6',
+        hover: '#c084fc'
       },
-      {
-        selector: 'node',
-        style: {
-          width: 12,
-          height: 12,
-          shape: 'ellipse',
-          'background-color': ele => {
-            const tier = Number(ele.data('tier')) || 2;
-            return ['#818cf8', '#c084fc', '#22d3ee'][Math.max(0, Math.min(2, tier))];
-          },
-          'border-width': 2,
-          'border-color': 'rgba(15, 23, 42, 0.25)',
-          label: 'data(label)',
-          color: interactive ? '#e2e8f0' : '#cbd5e1',
-          'font-size': 12,
-          'font-weight': 600,
-          'text-valign': 'bottom',
-          'text-halign': 'center',
-          'text-margin-y': 12,
-          'text-wrap': 'wrap',
-          'text-max-width': 130,
-          'text-outline-width': 2,
-          'text-outline-color': '#0f172a',
-          'text-background-color': '#0f172a',
-          'text-background-opacity': 0.22,
-          'text-background-padding': 4,
-          'text-background-shape': 'round-rectangle',
-          'text-background-margin': 2,
-          'overlay-padding': 10,
-          'z-index-compare': 'manual'
-        }
-      },
-      {
-        selector: 'node:selected',
-        style: {
-          'border-width': 3,
-          'border-color': '#f8fafc',
-          'background-color': '#f472b6'
-        }
-      },
-      {
-        selector: 'edge',
-        style: {
-          width: 2.2,
-          'line-color': 'rgba(148, 163, 184, 0.95)',
-          'target-arrow-color': 'rgba(148, 163, 184, 0.95)',
-          'source-arrow-color': 'rgba(148, 163, 184, 0.95)',
-          'target-arrow-shape': 'triangle',
-          'source-arrow-shape': ele => (ele.data('bidirectional') ? 'triangle' : 'none'),
-          'curve-style': 'straight',
-          label: 'data(label)',
-          color: '#cbd5e1',
-          'font-size': 10,
-          'font-weight': 600,
-          'text-rotation': 'autorotate',
-          'text-margin-y': -4,
-          'text-background-color': '#0f172a',
-          'text-background-opacity': 0.84,
-          'text-background-padding': 3,
-          'text-background-shape': 'round-rectangle',
-          'text-background-margin': 2,
-          'text-outline-width': 2,
-          'text-outline-color': '#0f172a'
-        }
-      },
-      {
-        selector: 'edge:selected',
-        style: {
-          'line-color': '#f472b6',
-          'target-arrow-color': '#f472b6',
-          'source-arrow-color': '#f472b6'
-        }
+      font: {
+        color: '#cbd5e1',
+        size: 10,
+        face: 'Inter, system-ui, sans-serif',
+        align: 'top'
       }
-    ],
-    userZoomingEnabled: true,
-    userPanningEnabled: true,
-    boxSelectionEnabled: false,
-    autoungrabify: false
+    },
+    physics: {
+      enabled: true,
+      solver: 'forceAtlas2Based',
+      forceAtlas2Based: {
+        theta: 0.55,
+        gravitationalConstant: -65,
+        centralGravity: 0.02,
+        springLength: 145,
+        springConstant: 0.08,
+        damping: 0.52,
+        avoidOverlap: 1
+      },
+      stabilization: {
+        enabled: true,
+        iterations: 220,
+        updateInterval: 20,
+        fit: true
+      }
+    }
   });
 
-  diagramTopologyGraphInstances.set(containerEl, cy);
-  cy.ready(() => {
+  diagramTopologyGraphInstances.set(containerEl, network);
+
+  network.once('stabilized', () => {
     if (fitOnRender) {
-      cy.fit(undefined, 42);
+      try { network.fit({ animation: false }); } catch { network.fit(); }
     }
   });
-  cy.on('tap', 'node', evt => {
-    if (!interactive) return;
-    const nodeData = evt.target?.data() || {};
-    const modelNode = graph.model.nodes.find(item => item.id === nodeData.id);
-    if (modelNode) {
-      (onNodeClick || openDiagramEquipmentModal)(modelNode);
-    }
-  });
-
-  if (interactive) {
-    cy.on('mouseover', 'node', evt => {
-      evt.target.style('cursor', 'pointer');
+  if (!layout || !Object.keys(diagramTopologyCurrentLayout).length) {
+    setTimeout(() => {
+      try { network.fit({ animation: false }); } catch {}
+    }, 0);
+  }
+  if (interactive && typeof onNodeClick === 'function') {
+    network.on('click', params => {
+      if (!params.nodes || !params.nodes.length) return;
+      const nodeId = params.nodes[0];
+      const modelNode = graph.model.nodes.find(item => item.id === nodeId);
+      if (modelNode) onNodeClick(modelNode);
     });
   }
 
-  return cy;
+  return network;
 }
 
 function renderTopologyGraphView(containerEl, { text, layout = null, sourceText = '', showSourceText = true, showFullscreenButton = true, title = 'Knowledge graph', interactive = true } = {}) {
   if (!containerEl) return null;
   const safeText = String(text || '').trim();
-  const graph = buildTopologyGraphElements(safeText);
+  const graph = buildTopologyGraphData(safeText);
   const stats = getTopologyGraphStats(graph.model);
   containerEl.className = 'space-y-4 text-sm text-slate-700';
   containerEl.innerHTML = `
@@ -2129,13 +2131,15 @@ function closeTopologyFullscreen() {
 function zoomTopologyFullscreen(delta) {
   const graph = diagramTopologyGraphInstances.get(diagramTopologyFullscreenGraphEl);
   if (!graph) return;
-  const zoom = graph.zoom();
-  graph.zoom({ level: clamp(zoom + delta, 0.15, 3.2) });
+  const zoom = graph.getScale ? graph.getScale() : 1;
+  const nextScale = clamp(zoom + delta, 0.15, 3.2);
+  const position = graph.getViewPosition ? graph.getViewPosition() : { x: 0, y: 0 };
+  graph.moveTo({ position, scale: nextScale, animation: false });
 }
 
 function fitTopologyFullscreen() {
   const graph = diagramTopologyGraphInstances.get(diagramTopologyFullscreenGraphEl);
-  if (graph) graph.fit(undefined, 42);
+  if (graph) graph.fit({ animation: false });
 }
 
 function resetTopologyFullscreen() {
