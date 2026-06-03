@@ -45,6 +45,7 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('id="diagram-fullscreen-modal"');
     expect(res.text).toContain('id="diagram-fullscreen-btn"');
     expect(res.text).toContain('id="diagram-fullscreen-viewport"');
+    expect(res.text).toContain('id="diagram-fullscreen-view-mode"');
     expect(res.text).toContain('id="diagram-fullscreen-zoom-in"');
     expect(res.text).toContain('id="diagram-mode-text-btn"');
     expect(res.text).toContain('id="diagram-open-real-btn"');
