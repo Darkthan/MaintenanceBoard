@@ -20,6 +20,7 @@ enum EquipStatus {
   INACTIVE
   REPAIR
   DECOMMISSIONED
+  DEEE
 }
 
 enum IntStatus {

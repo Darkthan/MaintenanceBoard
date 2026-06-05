@@ -1,9 +1,85 @@
 const express = require('express');
 const router = express.Router();
-const { optionalAuth } = require('../middleware/auth');
+const { optionalAuth, requireAuth } = require('../middleware/auth');
 const qrService = require('../services/qrService');
 
 const prisma = require('../lib/prisma');
+
+function normalizeScannedValue(value) {
+  return String(value || '').trim();
+}
+
+function getQueryParamFromUrl(value, paramName) {
+  try {
+    const parsed = new URL(value);
+    return parsed.searchParams.get(paramName);
+  } catch {
+    return null;
+  }
+}
+
+function extractSerialFromStructuredPayload(value) {
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    for (const key of ['serialNumber', 'serial', 'sn', 'serviceTag', 'assetSerial']) {
+      if (parsed[key]) return normalizeScannedValue(parsed[key]);
+    }
+  } catch {}
+
+  return null;
+}
+
+function extractSerialFromKeyValuePayload(value) {
+  const match = value.match(/(?:^|[;\n\r,\s])(?:serialNumber|serial|s\/?n|sn|serviceTag|assetSerial)\s*[:=]\s*([^;\n\r,]+)/i);
+  return match ? normalizeScannedValue(match[1]) : null;
+}
+
+function extractScanLookup(value) {
+  const raw = normalizeScannedValue(value);
+  if (!raw) return { raw: '', token: null, serialNumber: null };
+
+  const token = getQueryParamFromUrl(raw, 'token');
+  if (token) return { raw, token: normalizeScannedValue(token), serialNumber: null };
+
+  const pathTokenMatch = raw.match(/\/scan\/?([^/?#\s]+)$/i);
+  if (pathTokenMatch) return { raw, token: normalizeScannedValue(pathTokenMatch[1]), serialNumber: null };
+
+  const serialFromUrl = ['serialNumber', 'serial', 'sn', 'serviceTag'].map(param => getQueryParamFromUrl(raw, param)).find(Boolean);
+  if (serialFromUrl) return { raw, token: null, serialNumber: normalizeScannedValue(serialFromUrl) };
+
+  const serialNumber = extractSerialFromStructuredPayload(raw) || extractSerialFromKeyValuePayload(raw) || raw;
+  return { raw, token: null, serialNumber: normalizeScannedValue(serialNumber) };
+}
+
+async function resolveEquipmentByQrToken(token) {
+  if (!token) return null;
+  return prisma.equipment.findUnique({
+    where: { qrToken: token },
+    include: {
+      room: { select: { id: true, name: true, number: true, building: true } }
+    }
+  });
+}
+
+async function resolveRoomByQrToken(token) {
+  if (!token) return null;
+  return prisma.room.findUnique({
+    where: { qrToken: token },
+    select: { id: true, name: true, number: true, building: true, qrToken: true }
+  });
+}
+
+async function resolveEquipmentBySerialNumber(serialNumber) {
+  if (!serialNumber) return null;
+  return prisma.equipment.findFirst({
+    where: { serialNumber: { equals: serialNumber } },
+    include: {
+      room: { select: { id: true, name: true, number: true, building: true } }
+    }
+  });
+}
 
 // GET /api/qrcode/resolve/:token - Résoudre un token (salle ou équipement)
 // Accessible sans auth pour permettre le scan mobile
@@ -16,7 +92,7 @@ router.get('/resolve/:token', optionalAuth, async (req, res, next) => {
       where: { qrToken: token },
       include: {
         equipment: {
-          where: { status: { not: 'DECOMMISSIONED' } },
+          where: { status: { notIn: ['DECOMMISSIONED', 'DEEE'] } },
           select: { id: true, name: true, type: true, brand: true, model: true, status: true }
         },
         interventions: {
@@ -61,6 +137,59 @@ router.get('/resolve/:token', optionalAuth, async (req, res, next) => {
     }
 
     res.status(404).json({ error: 'Token QR inconnu ou expiré' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/qrcode/scan/resolve - Résoudre une lecture brute de scanner mobile
+// Accepte un QR MaintenanceBoard, une URL contenant ?token=..., un JSON simple,
+// un couple cle=valeur ou directement un numéro de série.
+router.post('/scan/resolve', requireAuth, async (req, res, next) => {
+  try {
+    const lookup = extractScanLookup(req.body?.code || req.body?.value || req.body?.text);
+    if (!lookup.raw) return res.status(400).json({ error: 'Code scanné manquant' });
+
+    if (lookup.token) {
+      const [equipment, room] = await Promise.all([
+        resolveEquipmentByQrToken(lookup.token),
+        resolveRoomByQrToken(lookup.token)
+      ]);
+
+      if (equipment) {
+        return res.json({
+          type: 'equipment',
+          match: 'qrToken',
+          data: equipment,
+          href: `/equipment.html?focus=${encodeURIComponent(equipment.id)}`,
+          scanUrl: qrService.getScanUrl(lookup.token)
+        });
+      }
+
+      if (room) {
+        return res.json({
+          type: 'room',
+          match: 'qrToken',
+          data: room,
+          href: `/scan.html?token=${encodeURIComponent(lookup.token)}`,
+          scanUrl: qrService.getScanUrl(lookup.token)
+        });
+      }
+    }
+
+    const equipment = await resolveEquipmentBySerialNumber(lookup.serialNumber);
+    if (equipment) {
+      return res.json({
+        type: 'equipment',
+        match: 'serialNumber',
+        serialNumber: lookup.serialNumber,
+        data: equipment,
+        href: `/equipment.html?focus=${encodeURIComponent(equipment.id)}`
+      });
+    }
+
+    res.status(404).json({
+      error: 'Aucun équipement trouvé pour ce code',
+      serialNumber: lookup.serialNumber || null
+    });
   } catch (err) { next(err); }
 });
 

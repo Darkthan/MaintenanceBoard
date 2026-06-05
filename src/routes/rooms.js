@@ -78,7 +78,7 @@ router.get('/by-token/:token', async (req, res, next) => {
     const room = await prisma.room.findUnique({
       where: { qrToken: req.params.token },
       include: {
-        equipment: { where: { status: { not: 'DECOMMISSIONED' } } },
+        equipment: { where: { status: { notIn: ['DECOMMISSIONED', 'DEEE'] } } },
         _count: { select: { interventions: true } }
       }
     });

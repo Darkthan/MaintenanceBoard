@@ -34,7 +34,7 @@ const validate = (req, res) => {
   return true;
 };
 
-const VALID_STATUSES = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED'];
+const VALID_STATUSES = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE'];
 const tableMissing = err => err?.code === 'P2021';
 const supportsInsensitiveMode = !(process.env.DATABASE_URL ?? 'file:./prisma/dev.db').startsWith('file:');
 
@@ -48,6 +48,56 @@ function equalsFilter(value) {
   return supportsInsensitiveMode
     ? { equals: value, mode: 'insensitive' }
     : { equals: value };
+}
+
+function normalizeScannedValue(value) {
+  return String(value || '').trim();
+}
+
+function getQueryParamFromUrl(value, paramName) {
+  try {
+    return new URL(value).searchParams.get(paramName);
+  } catch {
+    return null;
+  }
+}
+
+function extractSerialFromScan(value) {
+  const raw = normalizeScannedValue(value);
+  if (!raw) return '';
+
+  const serialFromUrl = ['serialNumber', 'serial', 'sn', 'serviceTag'].map(param => getQueryParamFromUrl(raw, param)).find(Boolean);
+  if (serialFromUrl) return normalizeScannedValue(serialFromUrl);
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      for (const key of ['serialNumber', 'serial', 'sn', 'serviceTag', 'assetSerial']) {
+        if (parsed[key]) return normalizeScannedValue(parsed[key]);
+      }
+    }
+  } catch {}
+
+  const kvMatch = raw.match(/(?:^|[;\n\r,\s])(?:serialNumber|serial|s\/?n|sn|serviceTag|assetSerial)\s*[:=]\s*([^;\n\r,]+)/i);
+  if (kvMatch) return normalizeScannedValue(kvMatch[1]);
+
+  return raw;
+}
+
+function extractQrTokenFromScan(value) {
+  const raw = normalizeScannedValue(value);
+  if (!raw) return '';
+  const token = getQueryParamFromUrl(raw, 'token');
+  if (token) return normalizeScannedValue(token);
+  const pathTokenMatch = raw.match(/\/scan\/?([^/?#\s]+)$/i);
+  return pathTokenMatch ? normalizeScannedValue(pathTokenMatch[1]) : '';
+}
+
+function buildDeeeEquipmentName({ brand, model, type, serialNumber }) {
+  const label = [type, brand, model].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+  if (label) return label;
+  if (serialNumber) return `Equipement DEEE ${serialNumber}`;
+  return `Equipement DEEE ${new Date().toISOString().slice(0, 10)}`;
 }
 
 function serializeEquipmentAttachment(attachment) {
@@ -98,7 +148,11 @@ router.get('/', requireAuth, async (req, res, next) => {
         { agentInfo: containsFilter(search) }
       ];
     }
-    if (status && VALID_STATUSES.includes(status)) where.status = status;
+    if (status && VALID_STATUSES.includes(status)) {
+      where.status = status;
+    } else {
+      where.status = { not: 'DEEE' };
+    }
     if (type) where.type = containsFilter(type);
     if (roomId) where.roomId = roomId === 'null' ? null : roomId;
     if (discoverySource && ['MANUAL', 'AGENT'].includes(discoverySource)) where.discoverySource = discoverySource;
@@ -313,6 +367,72 @@ router.post('/',
       res.status(201).json(equip);
     } catch (err) {
       if (err.code === 'P2002') return res.status(409).json({ error: 'Ce numéro de série est déjà utilisé' });
+      next(err);
+    }
+  }
+);
+
+// POST /api/equipment/deee - Basculer ou créer une fiche pour départ DEEE
+router.post('/deee',
+  requireAuth, requireAdmin,
+  async (req, res, next) => {
+    try {
+      const code = normalizeScannedValue(req.body?.code || req.body?.scanValue);
+      const qrToken = normalizeScannedValue(req.body?.qrToken || extractQrTokenFromScan(code));
+      let serialNumber = normalizeScannedValue(req.body?.serialNumber || extractSerialFromScan(code));
+      if (qrToken && serialNumber === code) serialNumber = '';
+      const equipmentId = normalizeScannedValue(req.body?.equipmentId);
+      const brand = normalizeScannedValue(req.body?.brand);
+      const model = normalizeScannedValue(req.body?.model);
+      const type = normalizeScannedValue(req.body?.type);
+      const description = normalizeScannedValue(req.body?.description);
+
+      let existing = null;
+      if (equipmentId) {
+        existing = await prisma.equipment.findUnique({ where: { id: equipmentId } });
+      }
+      if (!existing && serialNumber) {
+        existing = await prisma.equipment.findUnique({ where: { serialNumber } });
+      }
+      if (!existing && qrToken) {
+        existing = await prisma.equipment.findUnique({ where: { qrToken } });
+      }
+
+      if (existing) {
+        const updated = await prisma.equipment.update({
+          where: { id: existing.id },
+          data: {
+            status: 'DEEE',
+            roomId: null,
+            ...(description ? { description: existing.description ? `${existing.description}\n\nDEEE : ${description}` : `DEEE : ${description}` } : {})
+          },
+          include: { room: { select: { id: true, name: true, number: true } }, supplierRef: { select: { id: true, name: true } } }
+        });
+        return res.json({ action: 'updated', equipment: serializeEquipmentDetail(updated) });
+      }
+
+      if (![brand, model, type, serialNumber].some(Boolean)) {
+        return res.status(400).json({ error: 'Renseignez au moins une information : marque, modèle, type ou numéro de série.' });
+      }
+
+      const created = await prisma.equipment.create({
+        data: {
+          name: buildDeeeEquipmentName({ brand, model, type, serialNumber }),
+          type: type || 'DEEE',
+          brand: brand || null,
+          model: model || null,
+          serialNumber: serialNumber || null,
+          status: 'DEEE',
+          description: description || null,
+          roomId: null
+        },
+        include: { room: { select: { id: true, name: true, number: true } }, supplierRef: { select: { id: true, name: true } } }
+      });
+
+      res.status(201).json({ action: 'created', equipment: serializeEquipmentDetail(created) });
+    } catch (err) {
+      if (err.code === 'P2002') return res.status(409).json({ error: 'Ce numéro de série est déjà utilisé' });
+      if (err.code === 'P2025') return res.status(404).json({ error: 'Équipement introuvable' });
       next(err);
     }
   }

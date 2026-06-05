@@ -38,5 +38,8 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain('const THRESHOLD = 140');
     expect(res.text).toContain('const MIN_PULL_DURATION_MS = 350');
     expect(res.text).toContain("label: 'Accueil'");
+    expect(res.text).toContain("href: '/scan-code.html'");
+    expect(res.text).toContain("label: 'Scanner'");
+    expect(res.text).toContain("const coreIds = ['dashboard', 'scanner', 'equipment', 'interventions']");
   });
 });

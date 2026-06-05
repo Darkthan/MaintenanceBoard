@@ -166,7 +166,7 @@ function sortCheckupEquipment(items = []) {
 }
 
 function buildCheckupEquipmentWhere({ search, building, roomId, type }) {
-  const clauses = [{ status: { not: 'DECOMMISSIONED' } }];
+  const clauses = [{ status: { notIn: ['DECOMMISSIONED', 'DEEE'] } }];
 
   if (building) clauses.push({ room: { building: containsFilter(building) } });
   if (roomId) clauses.push({ roomId });
@@ -701,7 +701,7 @@ router.post('/',
         const equipmentList = sortCheckupEquipment(await prisma.equipment.findMany({
           where: {
             id: { in: requestedEquipmentIds },
-            status: { not: 'DECOMMISSIONED' }
+            status: { notIn: ['DECOMMISSIONED', 'DEEE'] }
           },
           select: {
             id: true,

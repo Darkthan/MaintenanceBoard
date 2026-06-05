@@ -110,6 +110,12 @@ describe('GET /api/search', () => {
     expect(res.body.results.some(r => r.type === 'action' && r.href === '/qr-print.html')).toBe(true);
   });
 
+  it('propose le scanner de codes equipement dans les actions rapides', async () => {
+    const res = await request(app).get('/api/search?q=code barre');
+    expect(res.status).toBe(200);
+    expect(res.body.results.some(r => r.type === 'action' && r.href === '/scan-code.html')).toBe(true);
+  });
+
   it('propose la documentation interne dans les actions rapides', async () => {
     const res = await request(app).get('/api/search?q=documentation');
     expect(res.status).toBe(200);

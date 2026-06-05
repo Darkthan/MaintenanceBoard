@@ -16,7 +16,8 @@ const EQUIPMENT_STATUS_LABELS = {
   ACTIVE: 'Actif',
   INACTIVE: 'Inactif',
   REPAIR: 'En reparation',
-  DECOMMISSIONED: 'Declasse'
+  DECOMMISSIONED: 'Declasse',
+  DEEE: 'DEEE'
 };
 
 const INTERVENTION_STATUS_LABELS = {
@@ -193,6 +194,18 @@ const ACTIONS = [
     preview: {
       title: 'Filtre rapide',
       description: 'Affiche la liste des equipements actuellement en reparation.'
+    }
+  },
+  {
+    id: 'action:scan-equipment-code',
+    title: 'Scanner code-barres / QR',
+    subtitle: 'Ouvrir la fiche depuis une etiquette equipement',
+    href: '/scan-code.html',
+    keywords: ['scanner', 'scan', 'code barre', 'code-barres', 'barcode', 'qr', 'qrcode', 'numero de serie', 'serial', 'sn', 'etiquette', 'equipement', 'materiel'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'Scan etiquette',
+      description: 'Ouvre le scanner mobile pour lire un QR code ou un code-barres de numero de serie.'
     }
   },
   {

@@ -199,7 +199,7 @@ function validateEquipmentRow(row, index) {
     errors.push(`Ligne ${rowNum}: Le champ 'type' est obligatoire`);
   }
 
-  const validStatuses = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED'];
+  const validStatuses = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE'];
   const status = firstNonEmpty(row.status).toUpperCase() || 'ACTIVE';
   if (!validStatuses.includes(status)) {
     errors.push(`Ligne ${rowNum}: Statut invalide '${row.status}'. Valeurs acceptées : ${validStatuses.join(', ')}`);

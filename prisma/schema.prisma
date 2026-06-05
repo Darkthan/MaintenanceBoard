@@ -159,7 +159,7 @@ model Equipment {
   brand           String?
   model           String?
   serialNumber    String?   @unique
-  status          String    @default("ACTIVE")     // ACTIVE | INACTIVE | REPAIR | DECOMMISSIONED
+  status          String    @default("ACTIVE")     // ACTIVE | INACTIVE | REPAIR | DECOMMISSIONED | DEEE
   description     String?
   purchaseDate    DateTime?
   warrantyEnd     DateTime?

@@ -40,6 +40,12 @@
         <h1 class="text-xl font-semibold text-slate-800">Gestion des équipements</h1>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
+        <a href="/scan-code.html" title="Scanner un QR code ou un code-barres" aria-label="Scanner un QR code ou un code-barres"
+          class="flex h-10 w-10 items-center justify-center bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 8h10M7 12h10M7 16h6"/>
+          </svg>
+        </a>
         <a href="/qr-print.html?type=equipment" class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h6m0 0l-3-3m3 3l-3 3M7 7h10M7 12h4m-4 5h4M5 3h10a2 2 0 012 2v4H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
           Imprimer QR
@@ -62,6 +68,11 @@
     </header>
 
     <div class="flex-1 p-6 space-y-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="tab-inventory" type="button" class="rounded-lg px-4 py-2 text-sm font-medium transition">Inventaire</button>
+        <button id="tab-deee" type="button" class="rounded-lg px-4 py-2 text-sm font-medium transition">DEEE</button>
+      </div>
+
       <!-- Filtres -->
       <div data-mobile-filters="true" class="bg-white rounded-xl border border-slate-200 p-4 flex gap-3 flex-wrap">
         <input id="search-input" type="search" placeholder="Nom, numéro de série, marque..."
@@ -72,6 +83,7 @@
           <option value="INACTIVE">Inactif</option>
           <option value="REPAIR">En réparation</option>
           <option value="DECOMMISSIONED">Déclassé</option>
+          <option value="DEEE">DEEE</option>
         </select>
         <select id="source-filter" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">Toutes les sources</option>
@@ -373,6 +385,7 @@
             <option value="INACTIVE">Inactif</option>
             <option value="REPAIR">En réparation</option>
             <option value="DECOMMISSIONED">Déclassé</option>
+            <option value="DEEE">DEEE</option>
           </select>
         </div>
         <div>
@@ -420,6 +433,63 @@
       <div class="flex justify-end gap-3 pt-2">
         <button type="button" id="cancel-modal" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
         <button type="submit" id="submit-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal DEEE -->
+<div id="deee-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-screen overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
+      <div>
+        <h3 class="font-semibold text-slate-800">Départ DEEE</h3>
+        <p class="text-xs text-slate-500">Scanner une étiquette ou créer une fiche minimale pour recyclage.</p>
+      </div>
+      <button id="close-deee-modal" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="deee-form" class="p-6 space-y-4">
+      <div id="deee-camera-wrap" class="hidden overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
+        <video id="deee-video" class="aspect-video w-full object-cover" autoplay muted playsinline></video>
+        <p id="deee-camera-state" class="bg-slate-950 px-4 py-2 text-xs text-slate-200">Initialisation du scanner...</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button id="deee-scan-btn" type="button" class="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 8h10M7 12h10M7 16h6"/></svg>
+          Scanner une étiquette
+        </button>
+        <button id="deee-stop-scan-btn" type="button" class="hidden rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">
+          Arrêter
+        </button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Numéro de série</label>
+          <input id="deee-serial" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+          <input id="deee-type" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="PC, écran, imprimante..." />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Marque</label>
+          <input id="deee-brand" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Modèle</label>
+          <input id="deee-model" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Note</label>
+          <textarea id="deee-description" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+        </div>
+      </div>
+      <div id="deee-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"></div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="cancel-deee-modal" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" id="deee-submit-btn" class="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 transition disabled:opacity-50">Envoyer en DEEE</button>
       </div>
     </form>
   </div>
@@ -505,6 +575,13 @@
     <div id="fab-equip-menu"
       class="flex flex-col items-end gap-2.5 transition-all duration-200 ease-out opacity-0 scale-95 pointer-events-none origin-bottom-right">
       <div class="flex items-center gap-2.5">
+        <span class="bg-slate-800 text-white text-sm font-medium px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap">Départ DEEE</span>
+        <button type="button" id="fab-equip-deee"
+          class="h-12 w-12 rounded-full bg-emerald-600 text-white shadow-md transition hover:bg-emerald-700 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-emerald-200 pointer-events-auto">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M10 3h4m-7 4h10"/></svg>
+        </button>
+      </div>
+      <div class="flex items-center gap-2.5">
         <span class="bg-slate-800 text-white text-sm font-medium px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap">Découverte agent</span>
         <button type="button" onclick="window.location.href='/agents.html'"
           class="h-12 w-12 rounded-full bg-slate-700 text-white shadow-md transition hover:bg-slate-800 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-slate-300 pointer-events-auto">
@@ -546,6 +623,7 @@
 let user;
 
 let currentPage = 1, currentSearch = '', currentStatus = '', currentType = '', currentSource = '', currentDiscovery = '';
+let equipmentView = 'inventory';
 
 // Préremplir filtres depuis URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -556,6 +634,7 @@ if (urlParams.get('search')) {
 if (urlParams.get('status')) {
   currentStatus = urlParams.get('status');
   document.getElementById('status-filter').value = currentStatus;
+  if (currentStatus === 'DEEE') equipmentView = 'deee';
 }
 if (urlParams.get('discoveryStatus')) {
   currentDiscovery = urlParams.get('discoveryStatus');
@@ -567,6 +646,7 @@ if (urlParams.get('discoverySource')) {
 }
 
 async function loadEquipment() {
+  renderEquipmentTabs();
   document.getElementById('equip-loading').classList.remove('hidden');
   document.getElementById('equip-table').classList.add('hidden');
   document.getElementById('equip-empty').classList.add('hidden');
@@ -648,11 +728,46 @@ async function loadEquipment() {
   }
 }
 
+function renderEquipmentTabs() {
+  const inventoryTab = document.getElementById('tab-inventory');
+  const deeeTab = document.getElementById('tab-deee');
+  if (!inventoryTab || !deeeTab) return;
+  inventoryTab.className = `rounded-lg px-4 py-2 text-sm font-medium transition ${
+    equipmentView === 'inventory' ? 'bg-blue-600 text-white shadow' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+  }`;
+  deeeTab.className = `rounded-lg px-4 py-2 text-sm font-medium transition ${
+    equipmentView === 'deee' ? 'bg-emerald-600 text-white shadow' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+  }`;
+}
+
+document.getElementById('tab-inventory').addEventListener('click', () => {
+  equipmentView = 'inventory';
+  if (currentStatus === 'DEEE') {
+    currentStatus = '';
+    document.getElementById('status-filter').value = '';
+  }
+  currentPage = 1;
+  loadEquipment();
+});
+
+document.getElementById('tab-deee').addEventListener('click', () => {
+  equipmentView = 'deee';
+  currentStatus = 'DEEE';
+  document.getElementById('status-filter').value = 'DEEE';
+  currentPage = 1;
+  loadEquipment();
+});
+
 function changePage(p) { currentPage = p; loadEquipment(); }
 
 let searchTimeout;
 document.getElementById('search-input').addEventListener('input', e => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { currentSearch = e.target.value; currentPage = 1; loadEquipment(); }, 400); });
-document.getElementById('status-filter').addEventListener('change', e => { currentStatus = e.target.value; currentPage = 1; loadEquipment(); });
+document.getElementById('status-filter').addEventListener('change', e => {
+  currentStatus = e.target.value;
+  equipmentView = currentStatus === 'DEEE' ? 'deee' : 'inventory';
+  currentPage = 1;
+  loadEquipment();
+});
 document.getElementById('source-filter').addEventListener('change', e => { currentSource = e.target.value; currentPage = 1; loadEquipment(); });
 document.getElementById('discovery-filter').addEventListener('change', e => { currentDiscovery = e.target.value; currentPage = 1; loadEquipment(); });
 document.getElementById('type-filter').addEventListener('input', e => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { currentType = e.target.value; currentPage = 1; loadEquipment(); }, 400); });
@@ -702,8 +817,122 @@ function toggleFabEquip() {
 document.getElementById('fab-equip-main').addEventListener('click', toggleFabEquip);
 document.getElementById('fab-equip-import').addEventListener('click', () => { toggleFabEquip(); importModal.classList.remove('hidden'); });
 document.getElementById('fab-equip-form').addEventListener('click', () => { toggleFabEquip(); openEquipCreateModal(); });
+document.getElementById('fab-equip-deee').addEventListener('click', () => { toggleFabEquip(); openDeeeModal(); });
 document.getElementById('close-modal').addEventListener('click', () => modal.classList.add('hidden'));
 document.getElementById('cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
+
+const deeeModal = document.getElementById('deee-modal');
+let deeeStream = null;
+let deeeDetector = null;
+let deeeScanFrame = null;
+let deeeScanLock = false;
+
+function openDeeeModal() {
+  document.getElementById('deee-form').reset();
+  document.getElementById('deee-error').classList.add('hidden');
+  stopDeeeScanner();
+  deeeModal.classList.remove('hidden');
+}
+
+function closeDeeeModal() {
+  stopDeeeScanner();
+  deeeModal.classList.add('hidden');
+}
+
+function showDeeeError(message) {
+  const errEl = document.getElementById('deee-error');
+  errEl.textContent = message;
+  errEl.classList.remove('hidden');
+}
+
+async function submitDeeePayload(payload) {
+  const submitBtn = document.getElementById('deee-submit-btn');
+  submitBtn.disabled = true;
+  document.getElementById('deee-error').classList.add('hidden');
+  try {
+    const result = await api.post('/equipment/deee', payload);
+    showToast(result.action === 'updated' ? 'Équipement basculé en DEEE' : 'Fiche DEEE créée');
+    closeDeeeModal();
+    equipmentView = 'deee';
+    currentStatus = 'DEEE';
+    document.getElementById('status-filter').value = 'DEEE';
+    currentPage = 1;
+    await loadEquipment();
+    if (result.equipment?.id) openEquipDetail(result.equipment.id);
+  } catch (err) {
+    showDeeeError(err.message);
+    deeeScanLock = false;
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+document.getElementById('close-deee-modal').addEventListener('click', closeDeeeModal);
+document.getElementById('cancel-deee-modal').addEventListener('click', closeDeeeModal);
+document.getElementById('deee-form').addEventListener('submit', event => {
+  event.preventDefault();
+  submitDeeePayload({
+    serialNumber: document.getElementById('deee-serial').value,
+    type: document.getElementById('deee-type').value,
+    brand: document.getElementById('deee-brand').value,
+    model: document.getElementById('deee-model').value,
+    description: document.getElementById('deee-description').value
+  });
+});
+
+async function startDeeeScanner() {
+  if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+    showDeeeError('Scanner caméra non disponible sur ce navigateur. Saisissez le numéro de série.');
+    return;
+  }
+  try {
+    deeeScanLock = false;
+    document.getElementById('deee-camera-wrap').classList.remove('hidden');
+    document.getElementById('deee-stop-scan-btn').classList.remove('hidden');
+    document.getElementById('deee-camera-state').textContent = 'Visez le QR code ou le code-barres de l’équipement.';
+    deeeDetector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'data_matrix'] });
+    deeeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+    const video = document.getElementById('deee-video');
+    video.srcObject = deeeStream;
+    await video.play();
+    detectDeeeCode();
+  } catch (err) {
+    showDeeeError(err.message || 'Impossible d’ouvrir la caméra.');
+    stopDeeeScanner();
+  }
+}
+
+async function detectDeeeCode() {
+  const video = document.getElementById('deee-video');
+  if (!deeeDetector || deeeScanLock || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    deeeScanFrame = requestAnimationFrame(detectDeeeCode);
+    return;
+  }
+  try {
+    const codes = await deeeDetector.detect(video);
+    if (codes?.length) {
+      deeeScanLock = true;
+      document.getElementById('deee-camera-state').textContent = 'Code détecté, traitement DEEE...';
+      await submitDeeePayload({ code: codes[0].rawValue });
+      return;
+    }
+  } catch {}
+  deeeScanFrame = requestAnimationFrame(detectDeeeCode);
+}
+
+function stopDeeeScanner() {
+  if (deeeScanFrame) cancelAnimationFrame(deeeScanFrame);
+  deeeScanFrame = null;
+  if (deeeStream) deeeStream.getTracks().forEach(track => track.stop());
+  deeeStream = null;
+  deeeDetector = null;
+  deeeScanLock = false;
+  document.getElementById('deee-camera-wrap').classList.add('hidden');
+  document.getElementById('deee-stop-scan-btn').classList.add('hidden');
+}
+
+document.getElementById('deee-scan-btn').addEventListener('click', startDeeeScanner);
+document.getElementById('deee-stop-scan-btn').addEventListener('click', stopDeeeScanner);
 
 function editEquip(e) {
   document.getElementById('modal-title').textContent = 'Modifier l\'équipement';
@@ -1167,8 +1396,8 @@ function warrantyBadge(warrantyEnd) {
   return `<span class="text-xs text-green-700 font-medium">${label}</span>`;
 }
 
-const STATUS_LABELS = { ACTIVE: 'Actif', INACTIVE: 'Inactif', REPAIR: 'En réparation', DECOMMISSIONED: 'Déclassé' };
-const STATUS_COLORS = { ACTIVE: 'bg-green-100 text-green-700', INACTIVE: 'bg-slate-100 text-slate-500', REPAIR: 'bg-yellow-100 text-yellow-700', DECOMMISSIONED: 'bg-red-100 text-red-600' };
+const STATUS_LABELS = { ACTIVE: 'Actif', INACTIVE: 'Inactif', REPAIR: 'En réparation', DECOMMISSIONED: 'Déclassé', DEEE: 'DEEE' };
+const STATUS_COLORS = { ACTIVE: 'bg-green-100 text-green-700', INACTIVE: 'bg-slate-100 text-slate-500', REPAIR: 'bg-yellow-100 text-yellow-700', DECOMMISSIONED: 'bg-red-100 text-red-600', DEEE: 'bg-emerald-100 text-emerald-700' };
 const INTERV_STATUS = { OPEN: 'Ouvert', IN_PROGRESS: 'En cours', RESOLVED: 'Résolu', CLOSED: 'Fermé' };
 const INTERV_STATUS_COLORS = { OPEN: 'bg-blue-100 text-blue-700', IN_PROGRESS: 'bg-orange-100 text-orange-700', RESOLVED: 'bg-green-100 text-green-700', CLOSED: 'bg-slate-100 text-slate-500' };
 const PRIORITY_COLORS = { LOW: 'text-slate-400', NORMAL: 'text-blue-500', HIGH: 'text-orange-500', CRITICAL: 'text-red-600 font-bold' };
@@ -1544,6 +1773,9 @@ requireLogin().then(async u => {
   loadEquipment();
   if (urlParams.get('action') === 'create' && user?.role === 'ADMIN') {
     setTimeout(() => openEquipCreateModal(), 50);
+  }
+  if (urlParams.get('action') === 'deee' && user?.role === 'ADMIN') {
+    setTimeout(() => openDeeeModal(), 50);
   }
 });
 if (urlParams.get('focus')) {

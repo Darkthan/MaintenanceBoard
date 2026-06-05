@@ -15,6 +15,21 @@
       "purpose": "any maskable"
     }
   ],
+  "shortcuts": [
+    {
+      "name": "Scanner un équipement",
+      "short_name": "Scanner",
+      "description": "Ouvrir une fiche équipement depuis un QR code ou un code-barres.",
+      "url": "/scan-code.html",
+      "icons": [
+        {
+          "src": "/assets/app-logo.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
   "categories": ["productivity", "utilities"],
   "lang": "fr"
 }

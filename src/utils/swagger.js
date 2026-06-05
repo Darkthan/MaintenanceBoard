@@ -62,7 +62,7 @@ const swaggerDocument = {
           brand: { type: 'string' },
           model: { type: 'string' },
           serialNumber: { type: 'string' },
-          status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED'] },
+          status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE'] },
           roomId: { type: 'string' },
           qrToken: { type: 'string' }
         }
