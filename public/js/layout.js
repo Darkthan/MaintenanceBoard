@@ -1833,10 +1833,14 @@ function renderNav(activePage) {
   const navEl = document.getElementById('main-nav');
   if (!navEl) return;
 
-  navEl.innerHTML = navItems.map(item => `
+  const isChildActive = item => item.children?.some(c => c.id === activePage);
+
+  navEl.innerHTML = navItems.map(item => {
+    const active = activePage === item.id || isChildActive(item);
+    const linkHtml = `
     <a href="${item.href}"
        class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition
-              ${activePage === item.id
+              ${active
                 ? 'bg-blue-600 text-white shadow'
                 : 'text-slate-300 hover:bg-slate-700 hover:text-white'}">
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1844,8 +1848,21 @@ function renderNav(activePage) {
       </svg>
       <span>${item.label}</span>
       ${item.id === 'messages' ? `<span data-nav-messages-badge class="ml-auto inline-flex min-w-5 justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white ${_navUnreadCount > 0 ? '' : 'hidden'}">${_navUnreadCount > 99 ? '99+' : _navUnreadCount}</span>` : ''}
-    </a>
-  `).join('');
+    </a>`;
+    if (!item.children?.length) return linkHtml;
+    const childrenHtml = item.children.map(child => `
+    <a href="${child.href}"
+       class="flex items-center gap-3 pl-11 pr-4 py-2 rounded-lg text-sm font-medium transition
+              ${activePage === child.id
+                ? 'text-blue-400'
+                : 'text-slate-400 hover:bg-slate-700 hover:text-white'}">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${child.icon}" />
+      </svg>
+      <span>${child.label}</span>
+    </a>`).join('');
+    return linkHtml + childrenHtml;
+  }).join('');
 
   // Afficher nom, rôle et avatar
   const nameEl   = document.getElementById('user-name');
@@ -1910,7 +1927,7 @@ function renderNav(activePage) {
 }
 
 function renderMobileTabbar(navItems, activePage) {
-  const coreIds = ['dashboard', 'scanner', 'equipment', 'interventions'];
+  const coreIds = ['dashboard', 'equipment', 'interventions', 'todos'];
   const coreTabs = coreIds
     .map(id => navItems.find(item => item.id === id))
     .filter(Boolean);
