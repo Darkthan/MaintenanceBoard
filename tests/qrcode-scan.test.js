@@ -47,7 +47,7 @@ describe('scan mobile equipment resolver', () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('Scanner un équipement');
-    expect(res.text).toContain('BarcodeDetector');
+    expect(res.text).toContain('Html5Qrcode');
     expect(res.text).toContain('/qrcode/scan/resolve');
   });
 

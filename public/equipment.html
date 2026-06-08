@@ -452,7 +452,7 @@
     </div>
     <form id="deee-form" class="p-6 space-y-4">
       <div id="deee-camera-wrap" class="hidden overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
-        <video id="deee-video" class="aspect-video w-full object-cover" autoplay muted playsinline></video>
+        <div id="deee-video" class="w-full"></div>
         <p id="deee-camera-state" class="bg-slate-950 px-4 py-2 text-xs text-slate-200">Initialisation du scanner...</p>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -859,7 +859,7 @@ async function submitDeeePayload(payload) {
     if (result.equipment?.id) openEquipDetail(result.equipment.id);
   } catch (err) {
     showDeeeError(err.message);
-    deeeScanLock = false;
+    if (deeeHtml5Scanner) { try { await deeeHtml5Scanner.stop(); } catch (_) {} deeeHtml5Scanner = null; }
   } finally {
     submitBtn.disabled = false;
   }
