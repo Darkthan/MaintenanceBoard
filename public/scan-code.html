@@ -17,11 +17,8 @@
     </header>
 
     <section class="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
-      <video id="preview" class="aspect-[3/4] w-full object-cover" autoplay muted playsinline></video>
-      <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div class="h-48 w-72 max-w-[78%] rounded-2xl border-2 border-emerald-400 shadow-[0_0_0_999px_rgba(2,6,23,0.48)]"></div>
-      </div>
-      <div id="camera-state" class="absolute inset-x-0 bottom-0 bg-slate-950/80 px-4 py-3 text-sm text-slate-200">
+      <div id="scan-reader" class="w-full"></div>
+      <div id="camera-state" class="bg-slate-950/80 px-4 py-3 text-sm text-slate-200">
         Initialisation de la caméra...
       </div>
     </section>
@@ -40,18 +37,16 @@
     </section>
   </main>
 
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="/js/api.js"></script>
   <script>
-    const video = document.getElementById('preview');
     const stateEl = document.getElementById('camera-state');
     const errorEl = document.getElementById('scan-error');
     const manualInput = document.getElementById('manual-code');
     const manualSubmit = document.getElementById('manual-submit');
 
-    let detector = null;
-    let stream = null;
+    let scanner = null;
     let scanLock = false;
-    let animationId = null;
 
     function showError(message) {
       errorEl.textContent = message;
@@ -70,6 +65,10 @@
       clearError();
       stateEl.textContent = 'Code détecté, ouverture de la fiche...';
 
+      if (scanner) {
+        try { await scanner.stop(); } catch (_) {}
+      }
+
       try {
         const result = await api.post('/qrcode/scan/resolve', { code: value });
         window.location.href = result.href || `/equipment.html?focus=${encodeURIComponent(result.data.id)}`;
@@ -77,50 +76,31 @@
         scanLock = false;
         stateEl.textContent = 'Aucun équipement trouvé. Vous pouvez réessayer.';
         showError(err.message || 'Code non reconnu.');
+        startScanner();
       }
     }
 
-    async function scanFrame() {
-      if (!detector || scanLock || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-        animationId = requestAnimationFrame(scanFrame);
-        return;
-      }
-
-      try {
-        const codes = await detector.detect(video);
-        if (codes && codes.length) {
-          await resolveCode(codes[0].rawValue);
-          return;
-        }
-      } catch {}
-
-      animationId = requestAnimationFrame(scanFrame);
-    }
-
-    async function startCamera() {
+    async function startScanner() {
       await requireLogin();
 
-      if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
-        stateEl.textContent = 'Scanner caméra non disponible sur ce navigateur. Saisissez le numéro de série ci-dessous.';
+      if (!window.Html5Qrcode) {
+        stateEl.textContent = 'Bibliothèque de scan non chargée. Saisissez le numéro de série ci-dessous.';
         manualInput.focus();
         return;
       }
 
       try {
-        detector = new BarcodeDetector({
-          formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'data_matrix']
-        });
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false
-        });
-        video.srcObject = stream;
-        await video.play();
+        scanner = new Html5Qrcode('scan-reader');
+        await scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1.33 },
+          (decodedText) => resolveCode(decodedText),
+          () => {}
+        );
         stateEl.textContent = 'Visez un QR code ou un code-barres de numéro de série.';
-        animationId = requestAnimationFrame(scanFrame);
       } catch (err) {
         stateEl.textContent = 'Caméra inaccessible. Saisissez le numéro de série ci-dessous.';
-        showError(err.message || 'Impossible d’ouvrir la caméra.');
+        showError(err.message || 'Impossible d\'ouvrir la caméra.');
         manualInput.focus();
       }
     }
@@ -131,11 +111,12 @@
     });
 
     window.addEventListener('pagehide', () => {
-      if (animationId) cancelAnimationFrame(animationId);
-      if (stream) stream.getTracks().forEach(track => track.stop());
+      if (scanner) {
+        try { scanner.stop(); } catch (_) {}
+      }
     });
 
-    startCamera();
+    startScanner();
   </script>
 </body>
 </html>
