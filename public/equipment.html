@@ -880,26 +880,26 @@ document.getElementById('deee-form').addEventListener('submit', event => {
 
 async function startDeeeScanner() {
   if (!window.Html5Qrcode) {
-    showDeeeError(‘Scanner caméra non disponible sur ce navigateur. Saisissez le numéro de série.’);
+    showDeeeError('Scanner caméra non disponible sur ce navigateur. Saisissez le numéro de série.');
     return;
   }
   try {
-    document.getElementById(‘deee-camera-wrap’).classList.remove(‘hidden’);
-    document.getElementById(‘deee-stop-scan-btn’).classList.remove(‘hidden’);
-    document.getElementById(‘deee-camera-state’).textContent = ‘Visez le QR code ou le code-barres de l\’équipement.’;
-    deeeHtml5Scanner = new Html5Qrcode(‘deee-video’);
+    document.getElementById('deee-camera-wrap').classList.remove('hidden');
+    document.getElementById('deee-stop-scan-btn').classList.remove('hidden');
+    document.getElementById('deee-camera-state').textContent = 'Visez le QR code ou le code-barres de l\'équipement.';
+    deeeHtml5Scanner = new Html5Qrcode('deee-video');
     await deeeHtml5Scanner.start(
-      { facingMode: ‘environment’ },
+      { facingMode: 'environment' },
       { fps: 10, qrbox: { width: 200, height: 200 }, aspectRatio: 1.5 },
       async (decodedText) => {
-        document.getElementById(‘deee-camera-state’).textContent = ‘Code détecté, traitement DEEE...’;
+        document.getElementById('deee-camera-state').textContent = 'Code détecté, traitement DEEE...';
         await stopDeeeScanner();
         await submitDeeePayload({ code: decodedText });
       },
       () => {}
     );
   } catch (err) {
-    showDeeeError(err.message || ‘Impossible d\’ouvrir la caméra.’);
+    showDeeeError(err.message || 'Impossible d\'ouvrir la caméra.');
     stopDeeeScanner();
   }
 }
@@ -910,8 +910,8 @@ async function stopDeeeScanner() {
     try { deeeHtml5Scanner.clear(); } catch (_) {}
     deeeHtml5Scanner = null;
   }
-  document.getElementById(‘deee-camera-wrap’).classList.add(‘hidden’);
-  document.getElementById(‘deee-stop-scan-btn’).classList.add(‘hidden’);
+  document.getElementById('deee-camera-wrap').classList.add('hidden');
+  document.getElementById('deee-stop-scan-btn').classList.add('hidden');
 }
 
 document.getElementById('deee-scan-btn').addEventListener('click', startDeeeScanner);
