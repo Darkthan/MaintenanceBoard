@@ -692,8 +692,7 @@ function getFormTotalSlots() {
   const totalUnits = parseInt(document.getElementById('resource-total-units').value) || 1;
 
   if (!usesBundles) {
-    // Mode sans lots : nombre de lots = ce que l'utilisateur a saisi
-    return Math.max(1, parseInt(document.getElementById('resource-total-lots').value) || 1);
+    return totalUnits;
   }
 
   const bundleSize = Math.max(1, parseInt(document.getElementById('resource-bundle-size').value) || 1);
@@ -873,15 +872,9 @@ function updateBundlesToggle() {
 
 document.getElementById('resource-uses-bundles').addEventListener('change', updateBundlesToggle);
 
-// Mettre à jour totalLots quand totalUnits change en mode "sans lots"
+// Mettre à jour la répartition quand totalUnits change
 document.getElementById('resource-total-units').addEventListener('input', () => {
-  const usesBundles = document.getElementById('resource-uses-bundles').checked;
-  if (!usesBundles) {
-    // Garder la valeur actuelle de totalLots pour que bundleSize = totalUnits / totalLots
-    updateLotBtnRow();
-  } else {
-    updateLotBtnRow();
-  }
+  updateLotBtnRow();
 });
 
 // Recalculer le bouton lot si bundleSize ou totalLots changent
@@ -906,9 +899,8 @@ async function openResourceModal(resource = null) {
   document.getElementById('resource-color').value = resource?.color || '';
   document.getElementById('resource-active').checked = resource?.isActive ?? true;
 
-  // Calculer totalLots pour mode sans lots : totalSlots = totalUnits / bundleSize
   if (resource && !resource.usesBundles) {
-    const totalSlots = Math.max(1, Math.floor(resource.totalUnits / Math.max(1, resource.bundleSize)));
+    const totalSlots = resource.totalSlots || resource.totalUnits || 1;
     document.getElementById('resource-total-lots').value = totalSlots;
   } else {
     document.getElementById('resource-total-lots').value = 1;
@@ -1774,8 +1766,7 @@ document.getElementById('resource-form').addEventListener('submit', async event 
     bundleSize = parseInt(document.getElementById('resource-bundle-size').value, 10) || 1;
     bundleSize = Math.max(1, Math.min(totalUnits, bundleSize)); // Limiter entre 1 et totalUnits
   } else {
-    const totalLots = parseInt(document.getElementById('resource-total-lots').value, 10) || 1;
-    bundleSize = Math.max(1, Math.floor(totalUnits / totalLots));
+    bundleSize = 1;
   }
 
   const payload = {

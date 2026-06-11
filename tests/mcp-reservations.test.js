@@ -749,6 +749,35 @@ describe('reservationsService', () => {
     }));
   });
 
+  it('autorise un emprunt MCP supplementaire sur une ressource sans lots partiellement reservee', async () => {
+    prisma.loanResource.findUnique.mockResolvedValue({
+      id: 'pc-pool', name: 'PC portables', isActive: true, totalUnits: 4, bundleSize: 4, usesBundles: false, equipments: []
+    });
+    prisma.loanReservation.findMany.mockResolvedValue([
+      { id: 'existing', reservedSlots: 3, status: 'APPROVED', startAt: new Date('2030-03-25T08:00:00Z'), endAt: new Date('2030-03-25T12:00:00Z') }
+    ]);
+    prisma.loanReservation.create.mockImplementation(async ({ data }) => ({
+      id: 'r-extra', ...data, resource: { id: 'pc-pool', name: 'PC portables' }, selectedEquipments: []
+    }));
+
+    await service.createReservation({
+      resourceId: 'pc-pool',
+      requesterName: 'Marie',
+      requesterEmail: 'marie@example.com',
+      startAt: '2030-03-25T09:00:00Z',
+      endAt: '2030-03-25T11:00:00Z',
+      requestedUnits: 1
+    }, { userId: 'u1' });
+
+    expect(prisma.loanReservation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        resourceId: 'pc-pool',
+        requestedUnits: 1,
+        reservedSlots: 1
+      })
+    }));
+  });
+
   it('refuse une création quand la période est complète', async () => {
     prisma.loanResource.findUnique.mockResolvedValue({
       id: 'res-1', name: 'Valise iPad', isActive: true, totalUnits: 10, bundleSize: 10, usesBundles: true, equipments: []

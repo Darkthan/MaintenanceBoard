@@ -900,8 +900,8 @@ loansRouter.post('/resources',
         // Mode avec lots : utiliser bundleSize fourni ou par défaut
         bundleSize = Math.max(1, Math.min(totalUnits, Number(req.body.bundleSize) || 1));
       } else {
-        // Mode sans lots : bundleSize = totalUnits (1 seul lot)
-        bundleSize = totalUnits;
+        // Mode sans lots : chaque unité reste réservable individuellement.
+        bundleSize = 1;
       }
 
       const equipmentList = normalizeEquipmentList(req.body.equipments || req.body.equipmentIds);
@@ -1009,8 +1009,8 @@ loansRouter.patch('/resources/:id',
           // Mode avec lots : garder la proportion existante si possible
           bundleSize = existing.bundleSize ? Math.max(1, Math.min(totalUnits, existing.bundleSize)) : 1;
         } else {
-          // Mode sans lots : bundleSize = totalUnits pour avoir 1 seul lot
-          bundleSize = totalUnits;
+          // Mode sans lots : chaque unité reste réservable individuellement.
+          bundleSize = 1;
         }
       } else {
         // Rien n'a changé sur bundleSize : garder l'existant

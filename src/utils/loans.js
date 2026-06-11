@@ -13,8 +13,8 @@ function getBundleInfo(resource) {
   const usesBundles = resource?.usesBundles !== false;
 
   if (!usesBundles) {
-    // Mode sans lots : 1 seul lot avec toutes les unités
-    return { totalUnits, bundleSize: totalUnits, totalSlots: 1 };
+    // Mode sans lots : les unités sont réservables individuellement.
+    return { totalUnits, bundleSize: 1, totalSlots: totalUnits };
   }
 
   const bundleSize = Math.min(totalUnits, toPositiveInt(resource?.bundleSize, 1));

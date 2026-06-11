@@ -309,6 +309,61 @@ describe('loan requests', () => {
     }));
   });
 
+  it('autorise un pret supplementaire sur une ressource sans lots tant que des unites restent disponibles', async () => {
+    prisma.loanResource.findUnique.mockResolvedValue({
+      id: 'resource-pc',
+      name: 'PC portables',
+      totalUnits: 4,
+      bundleSize: 4,
+      usesBundles: false,
+      isActive: true,
+      equipments: []
+    });
+    prisma.loanReservation.findMany.mockResolvedValue([
+      {
+        id: 'reservation-existing',
+        reservedSlots: 3,
+        status: 'APPROVED',
+        startAt: new Date('2026-03-25T08:00:00.000Z'),
+        endAt: new Date('2026-03-25T12:00:00.000Z')
+      }
+    ]);
+    prisma.loanReservation.create.mockImplementation(async ({ data }) => ({
+      id: 'reservation-extra',
+      status: 'APPROVED',
+      ...data,
+      resource: {
+        id: 'resource-pc',
+        name: 'PC portables',
+        totalUnits: 4,
+        bundleSize: 4,
+        usesBundles: false,
+        isActive: true,
+        equipments: []
+      },
+      selectedEquipments: []
+    }));
+
+    const res = await request(buildApp())
+      .post('/api/loans/reservations')
+      .send({
+        resourceId: 'resource-pc',
+        requesterName: 'Marie Martin',
+        startAt: '2026-03-25T09:00:00.000Z',
+        endAt: '2026-03-25T11:00:00.000Z',
+        requestedUnits: 1
+      });
+
+    expect(res.status).toBe(201);
+    expect(prisma.loanReservation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        resourceId: 'resource-pc',
+        requestedUnits: 1,
+        reservedSlots: 1
+      })
+    }));
+  });
+
   it('edite une reservation sans envoyer d email utilisateur', async () => {
     const sendMail = jest.fn().mockResolvedValue({});
     createSmtpTransporter.mockReturnValue({
