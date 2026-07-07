@@ -1,5 +1,5 @@
 [Unit]
-Description=MaintenanceBoard Inventory Agent
+Description=MaintenanceBoard HTTPS Puller
 After=network-online.target
 Wants=network-online.target
 

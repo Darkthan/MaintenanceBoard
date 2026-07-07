@@ -40,6 +40,24 @@ function sanitizeDisks(disks) {
   }));
 }
 
+function sanitizeHarvests(harvests) {
+  if (!Array.isArray(harvests)) return [];
+  return harvests.slice(0, 50).map(harvest => {
+    const status = String(harvest?.status || '').toUpperCase();
+    return {
+      name: typeof harvest?.name === 'string' ? harvest.name.slice(0, 120) : 'Récolte',
+      equipmentName: typeof harvest?.equipmentName === 'string' ? harvest.equipmentName.slice(0, 180) : undefined,
+      type: typeof harvest?.type === 'string' ? harvest.type.slice(0, 32).toUpperCase() : 'HTTPS',
+      target: typeof harvest?.target === 'string' ? harvest.target.slice(0, 512) : undefined,
+      status: ['UP', 'DOWN', 'WARN'].includes(status) ? status : 'DOWN',
+      httpStatus: Number.isFinite(Number(harvest?.httpStatus)) ? Number(harvest.httpStatus) : undefined,
+      latencyMs: Number.isFinite(Number(harvest?.latencyMs)) ? Math.round(Number(harvest.latencyMs)) : undefined,
+      checkedAt: typeof harvest?.checkedAt === 'string' ? harvest.checkedAt.slice(0, 64) : undefined,
+      message: typeof harvest?.message === 'string' ? harvest.message.slice(0, 500) : undefined
+    };
+  });
+}
+
 async function maybeCreateLowDiskIntervention(equipment, agentInfo) {
   const monitoring = readSettings().agentMonitoring || {};
   if (!monitoring.lowDiskAlertsEnabled) return;
@@ -104,11 +122,57 @@ async function maybeCreateLowDiskIntervention(equipment, agentInfo) {
   }
 }
 
+async function maybeCreateHarvestInterventions(equipment, agentInfo) {
+  const harvests = Array.isArray(agentInfo?.harvests) ? agentInfo.harvests : [];
+  const failedHarvests = harvests.filter(harvest => harvest.status === 'DOWN');
+
+  for (const harvest of failedHarvests) {
+    const name = harvest.name || harvest.target || 'Récolte HTTPS';
+    const label = harvest.equipmentName ? `${harvest.equipmentName} - ${name}` : name;
+    const title = `Supervision indisponible - ${label}`;
+    const existing = await prisma.intervention.findFirst({
+      where: {
+        equipmentId: equipment.id,
+        title,
+        status: { in: ['OPEN', 'IN_PROGRESS'] }
+      },
+      select: { id: true }
+    });
+
+    if (existing) continue;
+
+    const parts = [
+      equipment.agentHostname ? `Puller: ${equipment.agentHostname}` : null,
+      harvest.equipmentName ? `Équipement supervisé: ${harvest.equipmentName}` : null,
+      `Récolte: ${name}`,
+      harvest.type ? `Type: ${harvest.type}` : null,
+      harvest.target ? `Cible: ${harvest.target}` : null,
+      Number.isFinite(harvest.httpStatus) ? `Statut HTTP: ${harvest.httpStatus}` : null,
+      Number.isFinite(harvest.latencyMs) ? `Latence: ${harvest.latencyMs} ms` : null,
+      harvest.message ? `Erreur: ${harvest.message}` : null,
+      harvest.checkedAt ? `Vérifié le: ${harvest.checkedAt}` : null
+    ].filter(Boolean);
+
+    await prisma.intervention.create({
+      data: {
+        title,
+        description: `Alerte automatique supervision puller.\n${parts.join('\n')}`,
+        status: 'OPEN',
+        priority: 'HIGH',
+        source: 'INTERNAL',
+        techId: null,
+        roomId: equipment.roomId || null,
+        equipmentId: equipment.id
+      }
+    });
+  }
+}
+
 // ── POST /api/agents/checkin ─────────────────────────────────────────────────
 // Auth: X-Agent-Token (enrollment ou machine token)
 router.post('/checkin', agentAuth, async (req, res, next) => {
   try {
-    const { hostname, serialNumber, type, manufacturer, model, cpu, ramGb, os, osVersion, user, ips, macs, peripherals, disks } = req.body;
+    const { hostname, serialNumber, type, manufacturer, model, cpu, ramGb, os, osVersion, user, ips, macs, peripherals, disks, harvests } = req.body;
 
     // Validation hostname
     if (hostname && !/^[a-zA-Z0-9._-]{1,255}$/.test(hostname)) {
@@ -129,11 +193,12 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
       ips: capArr(ips, 50),
       macs: capArr(macs, 20),
       peripherals: capArr(peripherals, 50),
-      disks: sanitizeDisks(disks)
+      disks: sanitizeDisks(disks),
+      harvests: sanitizeHarvests(harvests)
     };
     const agentInfoStr = JSON.stringify(sanitized);
-    if (agentInfoStr.length > 10240) {
-      return res.status(400).json({ error: 'agentInfo trop volumineux (max 10 Ko)' });
+    if (agentInfoStr.length > 20480) {
+      return res.status(400).json({ error: 'agentInfo trop volumineux (max 20 Ko)' });
     }
     const agentInfo = agentInfoStr;
 
@@ -182,6 +247,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
           data: updateData
         });
         await maybeCreateLowDiskIntervention(equipment, sanitized);
+        await maybeCreateHarvestInterventions(equipment, sanitized);
         await logUserCheckin(equipment.id, sanitized.user);
         return res.json({ agentToken: machineToken, equipmentId: equipment.id, existing: true });
       }
@@ -213,6 +279,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
       });
 
       await maybeCreateLowDiskIntervention(newEquipment, sanitized);
+      await maybeCreateHarvestInterventions(newEquipment, sanitized);
       await logUserCheckin(newEquipment.id, sanitized.user);
 
       return res.status(201).json({
@@ -236,6 +303,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
         }
       });
       await maybeCreateLowDiskIntervention(updatedEquipment, sanitized);
+      await maybeCreateHarvestInterventions(updatedEquipment, sanitized);
       await logUserCheckin(updatedEquipment.id, sanitized.user);
       return res.json({ ok: true, equipmentId: req.equipmentRecord.id });
     }

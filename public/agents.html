@@ -185,7 +185,7 @@
             <button onclick="copyOneliner()" class="flex-shrink-0 px-3 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition">Copier</button>
           </div>
         </div>
-        <p id="oneliner-hint" class="text-slate-400 text-xs mt-2 hidden">Pour Linux : <code class="text-green-400">curl -s "<span class="oneliner-linux-url"></span>" | sudo bash</code></p>
+        <p id="oneliner-hint" class="text-slate-400 text-xs mt-2 hidden">Pour Linux : <code class="text-green-400">curl -s "<span class="oneliner-linux-url"></span>" | sudo bash</code> puis éditer <code class="text-green-400">/etc/maintenance-agent/puller.yml</code>.</p>
       </div>
 
     </div>
@@ -275,6 +275,17 @@ function getLowestDisk(info) {
   const disks = Array.isArray(info?.disks) ? info.disks.filter(d => typeof d?.freeGb === 'number') : [];
   if (!disks.length) return null;
   return disks.slice().sort((a, b) => a.freeGb - b.freeGb)[0];
+}
+
+function getHarvestSummary(info) {
+  const harvests = Array.isArray(info?.harvests) ? info.harvests : [];
+  if (!harvests.length) return null;
+  const down = harvests.filter(h => h.status === 'DOWN');
+  return {
+    total: harvests.length,
+    down: down.length,
+    firstDown: down[0] ? [down[0].equipmentName, down[0].name || down[0].target].filter(Boolean).join(' - ') : null
+  };
 }
 
 async function loadAgentMonitoring() {
@@ -409,6 +420,7 @@ async function loadMachines() {
       const ips = m.agentInfo?.ips;
       const ipStr = Array.isArray(ips) && ips.length > 0 ? ips[0] : (typeof ips === 'string' ? ips : '-');
       const lowestDisk = getLowestDisk(m.agentInfo);
+      const harvestSummary = getHarvestSummary(m.agentInfo);
       const machineLabel = [m.brand || m.agentInfo?.manufacturer, m.model || m.agentInfo?.model].filter(Boolean).join(' · ') || '-';
       return `
         <tr class="hover:bg-slate-50 transition ${m.agentRevoked ? 'opacity-60' : ''}">
@@ -425,6 +437,7 @@ async function loadMachines() {
           <td class="px-5 py-3.5 text-slate-500 text-xs">
             <p class="font-mono">${ipStr}</p>
             ${lowestDisk ? `<p class="mt-1 ${lowestDisk.freeGb < Number(document.getElementById('low-disk-threshold').value || 0) ? 'text-amber-600 font-medium' : 'text-slate-400'}">Disque bas: ${lowestDisk.mount || 'disque'} · ${lowestDisk.freeGb} Go libres</p>` : '<p class="mt-1 text-slate-300">Disque non remonté</p>'}
+            ${harvestSummary ? `<p class="mt-1 ${harvestSummary.down ? 'text-red-600 font-medium' : 'text-emerald-600'}">HTTPS: ${harvestSummary.down}/${harvestSummary.total} en échec${harvestSummary.firstDown ? ` · ${harvestSummary.firstDown}` : ''}</p>` : ''}
           </td>
           <td class="px-5 py-3.5 text-slate-500 text-xs">${m.lastSeenAt ? formatDate(m.lastSeenAt, true) : '-'}</td>
           <td class="px-5 py-3.5">
@@ -471,6 +484,7 @@ async function loadRecentAgents() {
     document.getElementById('recent-agents-tbody').innerHTML = data.data.map(e => {
       const info = e.agentInfo ? (typeof e.agentInfo === 'string' ? JSON.parse(e.agentInfo) : e.agentInfo) : {};
       const lowestDisk = getLowestDisk(info);
+      const harvestSummary = getHarvestSummary(info);
       return `
         <tr class="hover:bg-slate-50 transition">
           <td class="px-5 py-3.5">
@@ -486,6 +500,7 @@ async function loadRecentAgents() {
           <td class="px-5 py-3.5 text-slate-500 text-xs">
             <p>${[info.os, info.cpu ? info.cpu.split('@')[0].trim() : null].filter(Boolean).join(' · ') || '-'}</p>
             ${lowestDisk ? `<p class="mt-1 ${lowestDisk.freeGb < Number(document.getElementById('low-disk-threshold').value || 0) ? 'text-amber-600 font-medium' : 'text-slate-400'}">Disque bas: ${lowestDisk.mount || 'disque'} · ${lowestDisk.freeGb} Go libres</p>` : ''}
+            ${harvestSummary ? `<p class="mt-1 ${harvestSummary.down ? 'text-red-600 font-medium' : 'text-emerald-600'}">HTTPS: ${harvestSummary.down}/${harvestSummary.total} en échec${harvestSummary.firstDown ? ` · ${harvestSummary.firstDown}` : ''}</p>` : ''}
           </td>
           <td class="px-5 py-3.5 text-slate-500 text-xs">${e.lastSeenAt ? formatDate(e.lastSeenAt, true) : '-'}</td>
           <td class="px-5 py-3.5">

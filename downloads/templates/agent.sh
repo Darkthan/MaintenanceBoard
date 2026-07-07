@@ -1,11 +1,12 @@
 #!/bin/bash
-# MaintenanceBoard Agent Linux
-# Config : /etc/maintenance-agent/config.json
+# MaintenanceBoard HTTPS Puller Linux
+# Config : /etc/maintenance-agent/puller.yml
 
 CONFIG_DIR="/etc/maintenance-agent"
-CONFIG="$CONFIG_DIR/config.json"
+CONFIG="$CONFIG_DIR/puller.yml"
 TOKEN_FILE="$CONFIG_DIR/machine-token"
 LOG_FILE="/var/log/maintenance-agent.log"
+CONFIG_JSON=""
 
 log() {
   echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOG_FILE"
@@ -16,16 +17,138 @@ if [ ! -f "$CONFIG" ]; then
   exit 1
 fi
 
-# Vérifier que jq est disponible
 if ! command -v jq &>/dev/null; then
   log "ERREUR : jq non installé (apt install jq)"
   exit 1
 fi
 
-SERVER_URL=$(jq -r '.serverUrl' "$CONFIG" | sed 's|/$||')
-log "Agent démarré. Serveur : $SERVER_URL"
+if ! command -v python3 &>/dev/null; then
+  log "ERREUR : python3 non installé"
+  exit 1
+fi
+
+load_config() {
+  CONFIG_JSON=$(python3 - "$CONFIG" <<'PY'
+import json
+import sys
+
+try:
+    import yaml
+except Exception:
+    print("PyYAML manquant: installer python3-yaml", file=sys.stderr)
+    sys.exit(2)
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    data = yaml.safe_load(handle) or {}
+
+print(json.dumps(data))
+PY
+)
+}
+
+load_config || {
+  log "ERREUR : YAML invalide ou python3-yaml manquant"
+  exit 1
+}
+
+SERVER_URL=$(echo "$CONFIG_JSON" | jq -r '.server_url // .serverUrl // empty' | sed 's|/$||')
+if [ -z "$SERVER_URL" ]; then
+  log "ERREUR : server_url manquant dans $CONFIG"
+  exit 1
+fi
+
+log "Puller démarré. Serveur : $SERVER_URL"
+
+collect_https_harvests() {
+  local count
+  count=$(echo "$CONFIG_JSON" | jq '.harvests // [] | length')
+  if [ "$count" -eq 0 ]; then
+    echo "[]"
+    return
+  fi
+
+  local results="[]"
+  local index=0
+  while [ "$index" -lt "$count" ]; do
+    local item name equipment_name type url method timeout expected insecure start end curl_out http_code latency status message checked_at result
+    item=$(echo "$CONFIG_JSON" | jq -c ".harvests[$index]")
+    name=$(echo "$item" | jq -r '.name // "Récolte HTTPS"')
+    equipment_name=$(echo "$item" | jq -r '.equipment_name // .equipmentName // empty')
+    type=$(echo "$item" | jq -r '.type // "https"' | tr '[:lower:]' '[:upper:]')
+    url=$(echo "$item" | jq -r '.url // .target // empty')
+    method=$(echo "$item" | jq -r '.method // "GET"')
+    timeout=$(echo "$item" | jq -r '.timeout_seconds // .timeout // 10')
+    expected=$(echo "$item" | jq -r '.expected_status // 200')
+    insecure=$(echo "$item" | jq -r '.insecure_skip_verify // false')
+    checked_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+    if [ "$type" != "HTTPS" ] && [ "$type" != "HTTP" ]; then
+      message="Type de récolte non supporté par ce puller"
+      result=$(jq -n --arg name "$name" --arg equipmentName "$equipment_name" --arg type "$type" --arg target "$url" --arg checkedAt "$checked_at" --arg message "$message" \
+        '{name:$name,equipmentName:$equipmentName,type:$type,target:$target,status:"DOWN",checkedAt:$checkedAt,message:$message}')
+      results=$(echo "$results" | jq --argjson result "$result" '. + [$result]')
+      index=$((index + 1))
+      continue
+    fi
+
+    if [ -z "$url" ]; then
+      message="URL manquante"
+      result=$(jq -n --arg name "$name" --arg equipmentName "$equipment_name" --arg type "$type" --arg checkedAt "$checked_at" --arg message "$message" \
+        '{name:$name,equipmentName:$equipmentName,type:$type,status:"DOWN",checkedAt:$checkedAt,message:$message}')
+      results=$(echo "$results" | jq --argjson result "$result" '. + [$result]')
+      index=$((index + 1))
+      continue
+    fi
+
+    start=$(date +%s%3N)
+    if [ "$insecure" = "true" ]; then
+      curl_out=$(curl -k -sS -o /dev/null -w '%{http_code}' -X "$method" --max-time "$timeout" "$url" 2>&1)
+    else
+      curl_out=$(curl -sS -o /dev/null -w '%{http_code}' -X "$method" --max-time "$timeout" "$url" 2>&1)
+    fi
+    curl_status=$?
+    end=$(date +%s%3N)
+    latency=$((end - start))
+
+    if [ "$curl_status" -eq 0 ]; then
+      http_code="$curl_out"
+      if [ "$http_code" = "$expected" ]; then
+        status="UP"
+        message="OK"
+      else
+        status="DOWN"
+        message="HTTP $http_code attendu $expected"
+      fi
+    else
+      http_code=0
+      status="DOWN"
+      message=$(echo "$curl_out" | tail -1 | cut -c1-500)
+    fi
+
+    result=$(jq -n \
+      --arg name "$name" \
+      --arg equipmentName "$equipment_name" \
+      --arg type "$type" \
+      --arg target "$url" \
+      --arg status "$status" \
+      --arg checkedAt "$checked_at" \
+      --arg message "$message" \
+      --argjson httpStatus "$http_code" \
+      --argjson latencyMs "$latency" \
+      '{name:$name,equipmentName:$equipmentName,type:$type,target:$target,status:$status,httpStatus:$httpStatus,latencyMs:$latencyMs,checkedAt:$checkedAt,message:$message}')
+    results=$(echo "$results" | jq --argjson result "$result" '. + [$result]')
+    index=$((index + 1))
+  done
+
+  echo "$results"
+}
 
 collect_and_send() {
+  load_config || {
+    log "ERREUR : impossible de relire $CONFIG"
+    return
+  }
+
   HOSTNAME=$(hostname)
   SERIAL=$(dmidecode -s system-serial-number 2>/dev/null | tr -d '[:space:]' || \
            cat /sys/class/dmi/id/product_serial 2>/dev/null | tr -d '[:space:]' || \
@@ -52,7 +175,8 @@ collect_and_send() {
       })
   ' 2>/dev/null || echo "[]")
 
-  TOKEN=$([ -f "$TOKEN_FILE" ] && cat "$TOKEN_FILE" | tr -d '[:space:]' || jq -r '.enrollmentToken' "$CONFIG")
+  HARVESTS=$(collect_https_harvests)
+  TOKEN=$([ -f "$TOKEN_FILE" ] && cat "$TOKEN_FILE" | tr -d '[:space:]' || echo "$CONFIG_JSON" | jq -r '.enrollment_token // .enrollmentToken // empty')
 
   PAYLOAD=$(jq -n \
     --arg hostname "$HOSTNAME" \
@@ -66,6 +190,7 @@ collect_and_send() {
     --arg user "$CURRENT_USER" \
     --argjson ips "$IPS" \
     --argjson disks "$DISKS" \
+    --argjson harvests "$HARVESTS" \
     '{
       hostname: $hostname,
       serialNumber: $serial,
@@ -79,6 +204,7 @@ collect_and_send() {
       user: $user,
       ips: $ips,
       disks: $disks,
+      harvests: $harvests,
       macs: [],
       peripherals: []
     }')
@@ -102,11 +228,13 @@ collect_and_send() {
     log "Token machine enregistré (équipement $EQUIP_ID)"
   else
     EQUIP_ID=$(echo "$RESPONSE" | jq -r '.equipmentId // empty' 2>/dev/null)
-    log "Check-in OK (équipement $EQUIP_ID)"
+    FAILED=$(echo "$HARVESTS" | jq '[.[] | select(.status == "DOWN")] | length')
+    log "Check-in OK (équipement $EQUIP_ID, récoltes en échec: $FAILED)"
   fi
 }
 
 while true; do
   collect_and_send
-  sleep 300
+  INTERVAL=$(echo "$CONFIG_JSON" | jq -r '.interval_seconds // .interval // 300')
+  sleep "$INTERVAL"
 done

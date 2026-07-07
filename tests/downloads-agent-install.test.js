@@ -69,6 +69,21 @@ describe('public agent install downloads', () => {
     expect(res.status).toBe(403);
   });
 
+  it('génère un installateur Linux avec configuration puller YAML', async () => {
+    prisma.agentToken.findUnique.mockResolvedValue({ id: 'tok-1', token: 'abc', isActive: true, createdAt: new Date() });
+
+    const res = await request(app).get('/downloads/linux?enrollmentToken=abc');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('CONFIG_FILE="$CONFIG_DIR/puller.yml"');
+    expect(res.text).toContain('server_url:');
+    expect(res.text).toContain('ENROLLMENT_TOKEN="${ENROLLMENT_TOKEN:-abc}"');
+    expect(res.text).toContain('enrollment_token: "$ENROLLMENT_TOKEN"');
+    expect(res.text).toContain('harvests:');
+    expect(res.text).toContain('equipment_name: "Serveur ENT"');
+    expect(res.text).toContain('/downloads/agent.sh?enrollmentToken=$ENROLLMENT_TOKEN');
+  });
+
   it('refuse /downloads/agent.sh sans session ni token valide', async () => {
     prisma.agentToken.findUnique.mockResolvedValue(null);
 

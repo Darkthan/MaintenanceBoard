@@ -161,6 +161,61 @@ describe('POST /api/agents/checkin', () => {
     }));
   });
 
+  it('stocke les récoltes du puller HTTPS et crée une intervention si une cible est DOWN', async () => {
+    prisma.equipment.update.mockResolvedValue({
+      id: 'equip-1',
+      roomId: 'room-1',
+      brand: 'Dell',
+      model: 'OptiPlex 7010',
+      agentHostname: 'PULLER-01',
+      agentAlertState: null
+    });
+    prisma.intervention.findFirst.mockResolvedValue(null);
+    prisma.intervention.create.mockResolvedValue({ id: 'int-supervision-1' });
+
+    const res = await request(buildApp())
+      .post('/api/agents/checkin')
+      .set('x-test-agent-mode', 'machine')
+      .send({
+        hostname: 'PULLER-01',
+        manufacturer: 'Dell',
+        model: 'OptiPlex 7010',
+        harvests: [
+          {
+            name: 'Portail ENT',
+            equipmentName: 'Serveur ENT',
+            type: 'https',
+            target: 'https://ent.example.local/',
+            status: 'DOWN',
+            httpStatus: 503,
+            latencyMs: 1200,
+            checkedAt: '2026-07-07T10:00:00Z',
+            message: 'HTTP 503 attendu 200'
+          }
+        ]
+      });
+
+    expect(res.status).toBe(200);
+    const updateCall = prisma.equipment.update.mock.calls[0][0];
+    const storedInfo = JSON.parse(updateCall.data.agentInfo);
+    expect(storedInfo.harvests[0]).toMatchObject({
+      name: 'Portail ENT',
+      equipmentName: 'Serveur ENT',
+      type: 'HTTPS',
+      target: 'https://ent.example.local/',
+      status: 'DOWN',
+      httpStatus: 503
+    });
+    expect(prisma.intervention.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        equipmentId: 'equip-1',
+        roomId: 'room-1',
+        title: 'Supervision indisponible - Serveur ENT - Portail ENT',
+        priority: 'HIGH'
+      })
+    }));
+  });
+
   it('ne recrée pas d’intervention si l’alerte disque a déjà été acquittée', async () => {
     prisma.equipment.update.mockResolvedValue({
       id: 'equip-1',
