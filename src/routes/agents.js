@@ -12,6 +12,11 @@ const {
   clearRecoveredLowDiskSuppressions,
   serializeAgentAlertState
 } = require('../utils/agentMonitoring');
+const {
+  evaluateHarvestAlerts,
+  getSupervisionSettings,
+  notifyNewAlertsOnce
+} = require('../utils/supervision');
 
 const prisma = require('../lib/prisma');
 
@@ -47,6 +52,7 @@ function sanitizeHarvests(harvests) {
     return {
       name: typeof harvest?.name === 'string' ? harvest.name.slice(0, 120) : 'Récolte',
       equipmentName: typeof harvest?.equipmentName === 'string' ? harvest.equipmentName.slice(0, 180) : undefined,
+      equipmentType: typeof harvest?.equipmentType === 'string' ? harvest.equipmentType.slice(0, 80) : undefined,
       type: typeof harvest?.type === 'string' ? harvest.type.slice(0, 32).toUpperCase() : 'HTTPS',
       target: typeof harvest?.target === 'string' ? harvest.target.slice(0, 512) : undefined,
       status: ['UP', 'DOWN', 'WARN'].includes(status) ? status : 'DOWN',
@@ -123,13 +129,12 @@ async function maybeCreateLowDiskIntervention(equipment, agentInfo) {
 }
 
 async function maybeCreateHarvestInterventions(equipment, agentInfo) {
-  const harvests = Array.isArray(agentInfo?.harvests) ? agentInfo.harvests : [];
-  const failedHarvests = harvests.filter(harvest => harvest.status === 'DOWN');
+  const alerts = evaluateHarvestAlerts(equipment, agentInfo, getSupervisionSettings());
 
-  for (const harvest of failedHarvests) {
+  for (const alert of alerts) {
+    const harvest = alert.harvest || {};
     const name = harvest.name || harvest.target || 'Récolte HTTPS';
-    const label = harvest.equipmentName ? `${harvest.equipmentName} - ${name}` : name;
-    const title = `Supervision indisponible - ${label}`;
+    const title = alert.title;
     const existing = await prisma.intervention.findFirst({
       where: {
         equipmentId: equipment.id,
@@ -158,7 +163,7 @@ async function maybeCreateHarvestInterventions(equipment, agentInfo) {
         title,
         description: `Alerte automatique supervision puller.\n${parts.join('\n')}`,
         status: 'OPEN',
-        priority: 'HIGH',
+        priority: alert.severity || 'HIGH',
         source: 'INTERNAL',
         techId: null,
         roomId: equipment.roomId || null,
@@ -166,6 +171,8 @@ async function maybeCreateHarvestInterventions(equipment, agentInfo) {
       }
     });
   }
+
+  await notifyNewAlertsOnce(alerts).catch(() => {});
 }
 
 // ── POST /api/agents/checkin ─────────────────────────────────────────────────

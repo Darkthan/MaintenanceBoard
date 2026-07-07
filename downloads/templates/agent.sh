@@ -70,10 +70,11 @@ collect_https_harvests() {
   local results="[]"
   local index=0
   while [ "$index" -lt "$count" ]; do
-    local item name equipment_name type url method timeout expected insecure start end curl_out http_code latency status message checked_at result
+    local item name equipment_name equipment_type type url method timeout expected insecure start end curl_out http_code latency status message checked_at result
     item=$(echo "$CONFIG_JSON" | jq -c ".harvests[$index]")
     name=$(echo "$item" | jq -r '.name // "Récolte HTTPS"')
     equipment_name=$(echo "$item" | jq -r '.equipment_name // .equipmentName // empty')
+    equipment_type=$(echo "$item" | jq -r '.equipment_type // .equipmentType // empty')
     type=$(echo "$item" | jq -r '.type // "https"' | tr '[:lower:]' '[:upper:]')
     url=$(echo "$item" | jq -r '.url // .target // empty')
     method=$(echo "$item" | jq -r '.method // "GET"')
@@ -84,8 +85,8 @@ collect_https_harvests() {
 
     if [ "$type" != "HTTPS" ] && [ "$type" != "HTTP" ]; then
       message="Type de récolte non supporté par ce puller"
-      result=$(jq -n --arg name "$name" --arg equipmentName "$equipment_name" --arg type "$type" --arg target "$url" --arg checkedAt "$checked_at" --arg message "$message" \
-        '{name:$name,equipmentName:$equipmentName,type:$type,target:$target,status:"DOWN",checkedAt:$checkedAt,message:$message}')
+      result=$(jq -n --arg name "$name" --arg equipmentName "$equipment_name" --arg equipmentType "$equipment_type" --arg type "$type" --arg target "$url" --arg checkedAt "$checked_at" --arg message "$message" \
+        '{name:$name,equipmentName:$equipmentName,equipmentType:$equipmentType,type:$type,target:$target,status:"DOWN",checkedAt:$checkedAt,message:$message}')
       results=$(echo "$results" | jq --argjson result "$result" '. + [$result]')
       index=$((index + 1))
       continue
@@ -93,8 +94,8 @@ collect_https_harvests() {
 
     if [ -z "$url" ]; then
       message="URL manquante"
-      result=$(jq -n --arg name "$name" --arg equipmentName "$equipment_name" --arg type "$type" --arg checkedAt "$checked_at" --arg message "$message" \
-        '{name:$name,equipmentName:$equipmentName,type:$type,status:"DOWN",checkedAt:$checkedAt,message:$message}')
+      result=$(jq -n --arg name "$name" --arg equipmentName "$equipment_name" --arg equipmentType "$equipment_type" --arg type "$type" --arg checkedAt "$checked_at" --arg message "$message" \
+        '{name:$name,equipmentName:$equipmentName,equipmentType:$equipmentType,type:$type,status:"DOWN",checkedAt:$checkedAt,message:$message}')
       results=$(echo "$results" | jq --argjson result "$result" '. + [$result]')
       index=$((index + 1))
       continue
@@ -128,6 +129,7 @@ collect_https_harvests() {
     result=$(jq -n \
       --arg name "$name" \
       --arg equipmentName "$equipment_name" \
+      --arg equipmentType "$equipment_type" \
       --arg type "$type" \
       --arg target "$url" \
       --arg status "$status" \
@@ -135,7 +137,7 @@ collect_https_harvests() {
       --arg message "$message" \
       --argjson httpStatus "$http_code" \
       --argjson latencyMs "$latency" \
-      '{name:$name,equipmentName:$equipmentName,type:$type,target:$target,status:$status,httpStatus:$httpStatus,latencyMs:$latencyMs,checkedAt:$checkedAt,message:$message}')
+      '{name:$name,equipmentName:$equipmentName,equipmentType:$equipmentType,type:$type,target:$target,status:$status,httpStatus:$httpStatus,latencyMs:$latencyMs,checkedAt:$checkedAt,message:$message}')
     results=$(echo "$results" | jq --argjson result "$result" '. + [$result]')
     index=$((index + 1))
   done

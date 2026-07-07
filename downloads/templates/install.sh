@@ -54,6 +54,7 @@ harvests:
   # Exemple:
   # - name: "Portail ENT"
   #   equipment_name: "Serveur ENT"
+  #   equipment_type: "Serveur"
   #   type: https
   #   url: "https://ent.example.local/"
   #   method: GET

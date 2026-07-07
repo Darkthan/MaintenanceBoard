@@ -1816,6 +1816,7 @@ function renderNav(activePage) {
       { href: '/scan-code.html', label: 'Scanner', icon: 'M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 8h10M7 12h10M7 16h6', id: 'scanner' },
     ]},
     { href: '/interventions.html', label: 'Interventions', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', id: 'interventions' },
+    { href: '/supervision.html', label: 'Supervision', icon: 'M3 13h4l3-8 4 16 3-8h4', id: 'supervision' },
     { href: '/todos.html', label: 'Tâches', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', id: 'todos' },
     { href: '/projects.html', label: 'Projets', icon: 'M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2', id: 'projects' },
     { href: '/messages.html', label: 'Messagerie', icon: 'M3 8l7.89 4.945a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z', id: 'messages' },
@@ -2213,6 +2214,10 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', enhanceResponsiveLayout, { once: true });
 } else {
   enhanceResponsiveLayout();
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
 // ── Pull-to-refresh PWA ───────────────────────────────────────────────────────

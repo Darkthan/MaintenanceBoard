@@ -81,6 +81,7 @@ describe('public agent install downloads', () => {
     expect(res.text).toContain('enrollment_token: "$ENROLLMENT_TOKEN"');
     expect(res.text).toContain('harvests:');
     expect(res.text).toContain('equipment_name: "Serveur ENT"');
+    expect(res.text).toContain('equipment_type: "Serveur"');
     expect(res.text).toContain('/downloads/agent.sh?enrollmentToken=$ENROLLMENT_TOKEN');
   });
 

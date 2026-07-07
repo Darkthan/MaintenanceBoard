@@ -6,6 +6,7 @@ const STATIC_ASSETS = [
   '/rooms.html',
   '/equipment.html',
   '/interventions.html',
+  '/supervision.html',
   '/orders.html',
   '/suppliers.html',
   '/stock.html',
@@ -22,6 +23,38 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: 'MaintenanceBoard', body: event.data?.text() || 'Nouvelle notification' };
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'MaintenanceBoard', {
+      body: data.body || '',
+      icon: '/assets/app-logo.svg',
+      badge: '/assets/app-logo.svg',
+      tag: data.tag || 'maintenanceboard',
+      data: { url: data.url || '/' }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      for (const client of clients) {
+        if ('focus' in client && client.url.includes(targetUrl)) return client.focus();
+      }
+      return self.clients.openWindow(targetUrl);
+    })
   );
 });
 

@@ -77,5 +77,11 @@ module.exports = {
 
   agent: {
     enrollmentTokenMaxAge: parseInt(process.env.AGENT_ENROLLMENT_MAX_AGE) || 0, // 0 = illimité
+  },
+
+  push: {
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY,
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY,
+    vapidSubject: process.env.VAPID_SUBJECT,
   }
 };
