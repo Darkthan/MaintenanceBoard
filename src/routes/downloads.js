@@ -116,6 +116,30 @@ router.get('/linux', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /downloads/supervision-puller-docker?enrollmentToken=<token> ─────────
+// Installe un puller de supervision en Docker Compose sur une distribution Linux.
+router.get('/supervision-puller-docker', async (req, res, next) => {
+  const { enrollmentToken } = req.query;
+  if (!enrollmentToken) {
+    return res.status(400).json({ error: 'enrollmentToken requis' });
+  }
+
+  try {
+    if (!await validateEnrollmentToken(enrollmentToken)) {
+      return res.status(403).json({ error: 'Token d\'enrollment invalide ou désactivé' });
+    }
+
+    const serverUrl = config.appUrl;
+    const content = readTemplate('install-supervision-puller-docker.sh')
+      .replace(/\{\{SERVER_URL\}\}/g, serverUrl)
+      .replace(/\{\{ENROLLMENT_TOKEN\}\}/g, enrollmentToken);
+
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.set('Content-Disposition', 'attachment; filename="install-supervision-puller-docker.sh"');
+    res.send(content);
+  } catch (err) { next(err); }
+});
+
 // ── GET /downloads/install.ps1?enrollmentToken=<token> ───────────────────────
 // Script PowerShell standalone (sans choco) avec config inline
 router.get('/install.ps1', async (req, res, next) => {

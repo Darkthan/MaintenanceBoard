@@ -299,6 +299,10 @@
         class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
         Écrans
       </button>
+      <button data-tab="supervision-deploy" onclick="showTab('supervision-deploy')"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
+        Supervision
+      </button>
       <button data-tab="calendar" onclick="showTab('calendar')"
         class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
         Calendrier
@@ -712,6 +716,61 @@
           </form>
         </div>
       </div><!-- /tab-loans -->
+
+      <!-- ════════════════════════════════════ TAB : SUPERVISION -->
+      <div id="tab-supervision-deploy" class="hidden w-full max-w-3xl min-w-0 space-y-5">
+        <div class="bg-white rounded-xl border border-slate-200">
+          <div class="px-6 py-4 border-b border-slate-100">
+            <h2 class="font-semibold text-slate-800">Déployer un puller Docker</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Installe un puller de supervision Linux dans un conteneur Docker Compose avec une configuration YAML locale.</p>
+          </div>
+          <div class="px-6 py-5 space-y-5">
+            <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <label class="block">
+                <span class="block text-sm font-medium text-slate-700 mb-1">Token de déploiement</span>
+                <select id="supervision-token-select" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Chargement...</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="block text-sm font-medium text-slate-700 mb-1">Token manuel</span>
+                <input id="supervision-token-input" type="text" placeholder="Coller un enrollment token"
+                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </label>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-slate-900 p-4">
+              <div class="flex items-start gap-3">
+                <code id="supervision-docker-command" class="min-h-[4rem] flex-1 whitespace-pre-wrap break-all text-xs text-emerald-300">Sélectionnez un token pour générer la commande.</code>
+                <button type="button" onclick="copySupervisionDockerCommand()"
+                  class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 transition">
+                  Copier
+                </button>
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900">
+              <p class="font-medium">Sur le serveur Linux cible :</p>
+              <p class="mt-1">La commande crée <code class="rounded bg-blue-100 px-1 text-xs">/opt/maintenanceboard-puller</code>, construit l’image localement, lance le service Docker Compose, puis vous laisse éditer <code class="rounded bg-blue-100 px-1 text-xs">config/puller.yml</code> pour ajouter vos sondes.</p>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-3">
+              <div class="rounded-xl border border-slate-200 px-4 py-3">
+                <p class="text-xs font-semibold uppercase text-slate-400">Prérequis</p>
+                <p class="mt-1 text-sm text-slate-700">Docker Engine + Compose v2</p>
+              </div>
+              <div class="rounded-xl border border-slate-200 px-4 py-3">
+                <p class="text-xs font-semibold uppercase text-slate-400">Config</p>
+                <p class="mt-1 text-sm text-slate-700">YAML local, monté dans le conteneur</p>
+              </div>
+              <div class="rounded-xl border border-slate-200 px-4 py-3">
+                <p class="text-xs font-semibold uppercase text-slate-400">Logs</p>
+                <p class="mt-1 text-sm text-slate-700">docker compose logs -f</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /tab-supervision-deploy -->
 
       <!-- ════════════════════════════════════ TAB : SÉCURITÉ -->
       <div id="tab-security" class="hidden w-full max-w-xl min-w-0 space-y-5">
@@ -1685,7 +1744,54 @@ function showTab(name) {
     loadFail2ban();
   }
   if (name === 'screens') loadScreens();
+  if (name === 'supervision-deploy') loadSupervisionDeployment();
   if (name === 'mcp') { initMcpServerUrl(); loadMcpTokens(); }
+}
+
+let supervisionTokensLoaded = false;
+
+async function loadSupervisionDeployment() {
+  if (!supervisionTokensLoaded) {
+    const select = document.getElementById('supervision-token-select');
+    try {
+      const tokens = await api.get('/agents/tokens');
+      const activeTokens = tokens.filter(token => token.isActive);
+      select.innerHTML = '<option value="">Sélectionner un token</option>' +
+        activeTokens.map(token => `<option value="${token.token}">${token.label}</option>`).join('');
+      supervisionTokensLoaded = true;
+    } catch (err) {
+      select.innerHTML = '<option value="">Erreur chargement tokens</option>';
+      showToast(err.message, 'error');
+    }
+  }
+  updateSupervisionDockerCommand();
+}
+
+function getSupervisionDeploymentToken() {
+  return document.getElementById('supervision-token-input').value.trim()
+    || document.getElementById('supervision-token-select').value;
+}
+
+function updateSupervisionDockerCommand() {
+  const token = getSupervisionDeploymentToken();
+  const commandEl = document.getElementById('supervision-docker-command');
+  if (!token) {
+    commandEl.textContent = 'Sélectionnez un token pour générer la commande.';
+    return;
+  }
+  const url = `${window.location.origin}/downloads/supervision-puller-docker?enrollmentToken=${encodeURIComponent(token)}`;
+  commandEl.textContent = `curl -fsSL "${url}" | sudo bash`;
+}
+
+async function copySupervisionDockerCommand() {
+  const command = document.getElementById('supervision-docker-command').textContent.trim();
+  if (!command || command.startsWith('Sélectionnez')) return;
+  try {
+    await navigator.clipboard.writeText(command);
+    showToast('Commande Docker copiée');
+  } catch {
+    showToast('Copie impossible', 'error');
+  }
 }
 
 // ─── Utilisateurs ──────────────────────────────────────────────────────────
@@ -3087,9 +3193,12 @@ document.getElementById('copy-loans-calendar-feed-btn').addEventListener('click'
   }
 });
 
+document.getElementById('supervision-token-select').addEventListener('change', updateSupervisionDockerCommand);
+document.getElementById('supervision-token-input').addEventListener('input', updateSupervisionDockerCommand);
+
 requireLogin().then(() => {
   const tab = new URLSearchParams(window.location.search).get('tab');
-  const allowedTabs = new Set(['users', 'email', 'database', 'po', 'security', 'screens', 'calendar', 'mcp']);
+  const allowedTabs = new Set(['users', 'email', 'database', 'po', 'security', 'screens', 'supervision-deploy', 'calendar', 'mcp']);
   showTab(allowedTabs.has(tab) ? tab : 'users');
   loadGlobalCalendarFeed();
   loadLoansCalendarFeed();

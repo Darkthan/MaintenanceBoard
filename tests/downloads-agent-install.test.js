@@ -85,6 +85,21 @@ describe('public agent install downloads', () => {
     expect(res.text).toContain('/downloads/agent.sh?enrollmentToken=$ENROLLMENT_TOKEN');
   });
 
+  it('génère un installateur Docker Compose pour le puller de supervision', async () => {
+    prisma.agentToken.findUnique.mockResolvedValue({ id: 'tok-1', token: 'abc', isActive: true, createdAt: new Date() });
+
+    const res = await request(app).get('/downloads/supervision-puller-docker?enrollmentToken=abc');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
+    expect(res.text).toContain('INSTALL_DIR="${INSTALL_DIR:-/opt/maintenanceboard-puller}"');
+    expect(res.text).toContain('docker compose up -d --build');
+    expect(res.text).toContain('server_url: "$SERVER_URL"');
+    expect(res.text).toContain('ENROLLMENT_TOKEN="${ENROLLMENT_TOKEN:-abc}"');
+    expect(res.text).toContain('supervision-puller:');
+    expect(res.text).toContain('config/puller.yml');
+  });
+
   it('refuse /downloads/agent.sh sans session ni token valide', async () => {
     prisma.agentToken.findUnique.mockResolvedValue(null);
 
