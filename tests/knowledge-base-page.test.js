@@ -30,6 +30,9 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('editor-image-input');
     expect(res.text).toContain('editor-document-input');
     expect(res.text).toContain('article-documents');
+    expect(res.text).toContain('data-kb-code-copy');
+    expect(res.text).toContain('data-kb-code-edit');
+    expect(res.text).toContain('Copier la version modifiée');
     expect(res.text).toContain('id="ip-panel"');
     expect(res.text).toContain("ipShowPanel()");
     expect(res.text).toContain("ipOpenNetworkForm()");

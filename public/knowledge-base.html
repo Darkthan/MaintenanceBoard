@@ -22,6 +22,86 @@
       background: #fde047;
       box-shadow: 0 0 0 2px rgba(202, 138, 4, 0.3);
     }
+
+    .kb-code-card {
+      overflow: hidden;
+      border: 1px solid rgb(51 65 85);
+      border-radius: 0.9rem;
+      background: rgb(15 23 42);
+    }
+
+    .kb-code-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      border-bottom: 1px solid rgb(30 41 59);
+      padding: 0.45rem 0.55rem 0.45rem 0.8rem;
+    }
+
+    .kb-code-label {
+      min-width: 0;
+      color: rgb(148 163 184);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .kb-code-actions {
+      display: inline-flex;
+      flex-shrink: 0;
+      gap: 0.35rem;
+    }
+
+    .kb-code-btn {
+      border: 1px solid rgb(71 85 105);
+      border-radius: 0.55rem;
+      padding: 0.32rem 0.55rem;
+      background: rgb(30 41 59);
+      color: rgb(226 232 240);
+      font-size: 0.72rem;
+      font-weight: 700;
+      transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+    }
+
+    .kb-code-btn:hover {
+      border-color: rgb(96 165 250);
+      background: rgb(30 64 175);
+      color: white;
+    }
+
+    .kb-code-card pre {
+      margin: 0;
+      border-radius: 0;
+      border: 0;
+    }
+
+    .kb-code-editor {
+      border-top: 1px solid rgb(30 41 59);
+      background: rgb(2 6 23);
+      padding: 0.65rem;
+    }
+
+    .kb-code-editor textarea {
+      width: 100%;
+      min-height: 9rem;
+      resize: vertical;
+      border: 1px solid rgb(51 65 85);
+      border-radius: 0.75rem;
+      background: rgb(15 23 42);
+      color: rgb(226 232 240);
+      padding: 0.75rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      outline: none;
+    }
+
+    .kb-code-editor textarea:focus {
+      border-color: rgb(96 165 250);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+    }
   </style>
 </head>
 <body class="bg-slate-50">
@@ -998,6 +1078,100 @@ function insertTextAtCursor(input, text) {
   input.focus();
 }
 
+async function copyTextToClipboard(text) {
+  const value = String(text || '');
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', 'readonly');
+  textarea.className = 'fixed -left-[9999px] -top-[9999px] opacity-0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
+function getCodeBlockLanguage(codeEl) {
+  const className = String(codeEl.className || '');
+  const match = className.match(/language-([^\s]+)/);
+  return match ? match[1] : 'code';
+}
+
+function enhanceKnowledgeCodeBlocks(containerEl) {
+  if (!containerEl) return;
+
+  containerEl.querySelectorAll('pre > code').forEach(codeEl => {
+    if (codeEl.classList.contains('language-mermaid')) return;
+    const preEl = codeEl.closest('pre');
+    if (!preEl || preEl.closest('.kb-code-card')) return;
+
+    const codeText = codeEl.textContent || '';
+    const cardEl = document.createElement('div');
+    cardEl.className = 'kb-code-card';
+
+    const toolbarEl = document.createElement('div');
+    toolbarEl.className = 'kb-code-toolbar';
+    toolbarEl.innerHTML = `
+      <span class="kb-code-label">${escapeHtml(getCodeBlockLanguage(codeEl))}</span>
+      <span class="kb-code-actions">
+        <button type="button" class="kb-code-btn" data-kb-code-copy>Copier</button>
+        <button type="button" class="kb-code-btn" data-kb-code-edit>Modifier & copier</button>
+      </span>
+    `;
+
+    const editorEl = document.createElement('div');
+    editorEl.className = 'kb-code-editor hidden';
+    editorEl.innerHTML = `
+      <textarea spellcheck="false"></textarea>
+      <div class="mt-2 flex flex-wrap justify-end gap-2">
+        <button type="button" class="kb-code-btn" data-kb-code-cancel>Annuler</button>
+        <button type="button" class="kb-code-btn" data-kb-code-copy-edited>Copier la version modifiée</button>
+      </div>
+    `;
+
+    preEl.replaceWith(cardEl);
+    cardEl.appendChild(toolbarEl);
+    cardEl.appendChild(preEl);
+    cardEl.appendChild(editorEl);
+
+    const textareaEl = editorEl.querySelector('textarea');
+    textareaEl.value = codeText;
+
+    toolbarEl.querySelector('[data-kb-code-copy]').addEventListener('click', async () => {
+      try {
+        await copyTextToClipboard(codeText);
+        showToast('Code copié');
+      } catch {
+        showToast('Copie impossible', 'error');
+      }
+    });
+
+    toolbarEl.querySelector('[data-kb-code-edit]').addEventListener('click', () => {
+      editorEl.classList.toggle('hidden');
+      if (!editorEl.classList.contains('hidden')) {
+        textareaEl.focus();
+      }
+    });
+
+    editorEl.querySelector('[data-kb-code-cancel]').addEventListener('click', () => {
+      textareaEl.value = codeText;
+      editorEl.classList.add('hidden');
+    });
+
+    editorEl.querySelector('[data-kb-code-copy-edited]').addEventListener('click', async () => {
+      try {
+        await copyTextToClipboard(textareaEl.value);
+        showToast('Code modifié copié');
+      } catch {
+        showToast('Copie impossible', 'error');
+      }
+    });
+  });
+}
+
 function isAdmin() {
   return currentUser?.role === 'ADMIN';
 }
@@ -1019,7 +1193,10 @@ function updateEditorPreview() {
   previewContentEl.innerHTML = content
     ? renderRichText(content)
     : '<p class="text-slate-400">Le contenu Markdown s’affichera ici.</p>';
-  if (content) initMermaidInEl(previewContentEl);
+  if (content) {
+    initMermaidInEl(previewContentEl);
+    enhanceKnowledgeCodeBlocks(previewContentEl);
+  }
 }
 
 function renderArticleDocuments(article) {
@@ -1314,6 +1491,7 @@ async function selectArticle(articleId) {
       articleContentEl.className = 'space-y-3 text-sm text-slate-700';
       articleContentEl.innerHTML = renderRichText(article.content || '');
       initMermaidInEl(articleContentEl);
+      enhanceKnowledgeCodeBlocks(articleContentEl);
     }
 
     if (!isIpAddressing) {
