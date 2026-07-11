@@ -22,7 +22,7 @@
     "port": 587,
     "user": "l-ducreux",
     "from": "support@beaupeyrat.fr",
-    "testTo": "l-ducreux@beaupeyrat.com",
+    "testTo": "test@beaupeyrat.com",
     "secure": false,
     "pass": "cajdkeozhfuaidbd"
   }
