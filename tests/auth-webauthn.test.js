@@ -199,6 +199,42 @@ describe('authService WebAuthn', () => {
     }));
   });
 
+  it('crée un refresh token valable environ un an quand rester connecté est demandé', async () => {
+    prisma.passkey.findUnique.mockResolvedValue({
+      id: 'pk-1',
+      credentialId: 'AQIDBA',
+      publicKey: Buffer.from([5, 6, 7, 8]),
+      counter: BigInt(10),
+      transports: JSON.stringify(['internal']),
+      user: {
+        id: 'user-1',
+        email: 'admin@test.local',
+        name: 'Admin',
+        role: 'ADMIN',
+        isActive: true,
+      },
+    });
+    prisma.refreshToken.create.mockResolvedValue({});
+    prisma.passkey.update.mockResolvedValue({});
+    verifyAuthenticationResponse.mockResolvedValue({
+      verified: true,
+      authenticationInfo: { newCounter: 11 },
+    });
+
+    await authService.finishPasskeyLogin(
+      { id: 'AQIDBA==' },
+      'challenge-1',
+      'user-1',
+      null,
+      { rememberMe: true }
+    );
+
+    const expiresAt = prisma.refreshToken.create.mock.calls[0][0].data.expiresAt;
+    const ttlMs = expiresAt.getTime() - Date.now();
+    expect(ttlMs).toBeGreaterThan(360 * 24 * 60 * 60 * 1000);
+    expect(ttlMs).toBeLessThanOrEqual(365 * 24 * 60 * 60 * 1000);
+  });
+
   it('préfère l’origine publique du reverse proxy quand la config par défaut pointe vers localhost', async () => {
     readSettings.mockReturnValue({});
     generateAuthenticationOptions.mockResolvedValue({ challenge: 'challenge-1' });

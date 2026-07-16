@@ -38,6 +38,10 @@
             <input id="auth-requester-email" type="email" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
           </div>
           <div id="auth-feedback" class="hidden rounded-xl px-4 py-3 text-sm"></div>
+          <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+            <input id="auth-remember-me" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+            <span>Rester connecté sur cet appareil</span>
+          </label>
           <button id="send-auth-link-btn" type="button" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700">
             Envoyer le lien de connexion
           </button>
@@ -162,6 +166,21 @@ let currentAccessToken = null;
 let currentRequesterName = '';
 let resources = [];
 let authChannel = null;
+const AUTH_PENDING_KEY = 'loan-auth-pending';
+
+function getPendingAuth() {
+  try {
+    const data = JSON.parse(localStorage.getItem(AUTH_PENDING_KEY) || 'null');
+    if (!data?.token || !data?.ts) return null;
+    if (Date.now() - data.ts > 10 * 60 * 1000) {
+      localStorage.removeItem(AUTH_PENDING_KEY);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
 
 // Ouvre la page en mode "relais d'auth" : diffuse le token aux onglets en attente
 // puis affiche un message de fermeture.
@@ -183,6 +202,9 @@ function broadcastAuthAndShowRelay(token, accessToken) {
 function waitForAuthBroadcast(token) {
   if (authChannel) { try { authChannel.close(); } catch {} }
   const key = `loan-auth-${token}`;
+  try {
+    localStorage.setItem(AUTH_PENDING_KEY, JSON.stringify({ token, ts: Date.now() }));
+  } catch {}
   try {
     authChannel = new BroadcastChannel(key);
     authChannel.onmessage = (event) => {
@@ -208,6 +230,7 @@ async function loadLinkWithAccess(accessToken) {
   if (window._loanStorageHandler) {
     window.removeEventListener('storage', window._loanStorageHandler);
   }
+  try { localStorage.removeItem(AUTH_PENDING_KEY); } catch {}
   currentAccessToken = accessToken;
   // Mettre à jour l'URL sans rechargement pour que F5 reste authentifié
   const url = new URL(window.location.href);
@@ -222,6 +245,16 @@ function getToken() {
 
 function getAccessToken() {
   return new URLSearchParams(window.location.search).get('access') || '';
+}
+
+function showRelayOnlyMessage() {
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('auth-step').classList.add('hidden');
+  document.getElementById('request-form').classList.add('hidden');
+  document.getElementById('relay-banner').classList.remove('hidden');
+  setTimeout(() => {
+    try { window.close(); } catch {}
+  }, 1200);
 }
 
 async function apiFetch(pathname) {
@@ -762,9 +795,17 @@ async function loadLink() {
     }
 
     // Si la page a été ouverte via le lien email (access dans l'URL initiale),
-    // diffuser le token aux onglets qui attendaient puis montrer la bannière.
+    // diffuser le token aux onglets qui attendaient. Quand l'onglet initial est
+    // encore ouvert, celui-ci reprend la main et cet onglet reste un simple relais.
+    const pendingAuth = getPendingAuth();
+    const isRelayForInitialTab = getAccessToken() && pendingAuth?.token === currentToken;
     if (getAccessToken()) {
       broadcastAuthAndShowRelay(currentToken, data.accessToken || currentAccessToken);
+      if (isRelayForInitialTab) {
+        try { localStorage.removeItem(AUTH_PENDING_KEY); } catch {}
+        showRelayOnlyMessage();
+        return;
+      }
       document.getElementById('relay-banner').classList.remove('hidden');
     }
 
@@ -806,13 +847,15 @@ document.getElementById('lrdp-next').addEventListener('click', () => {
 document.getElementById('send-auth-link-btn').addEventListener('click', async () => {
   const requesterEmail = document.getElementById('auth-requester-email').value.trim();
   const requesterName = document.getElementById('auth-requester-name').value.trim();
+  const rememberMe = !!document.getElementById('auth-remember-me')?.checked;
   try {
     const res = await fetch(`/api/loan-request/${encodeURIComponent(currentToken)}/access-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         requesterEmail,
-        requesterName
+        requesterName,
+        rememberMe
       })
     });
 

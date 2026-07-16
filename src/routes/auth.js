@@ -120,7 +120,8 @@ router.post('/register',
 router.post('/login',
   [
     body('email').isEmail().normalizeEmail(),
-    body('password').notEmpty()
+    body('password').notEmpty(),
+    body('rememberMe').optional().isBoolean()
   ],
   async (req, res, next) => {
     try {
@@ -129,10 +130,11 @@ router.post('/login',
       if (fail2ban === false) return;
 
       const { email, password } = req.body;
-      const { user, accessToken, refreshToken } = await authService.loginWithPassword(email, password);
+      const rememberMe = req.body.rememberMe === true || req.body.rememberMe === 'true';
+      const { user, accessToken, refreshToken } = await authService.loginWithPassword(email, password, { rememberMe });
       clearFailedLoginAttempts(fail2ban?.ip);
 
-      authService.setAuthCookies(res, accessToken, refreshToken);
+      authService.setAuthCookies(res, accessToken, refreshToken, { rememberMe });
 
       // Log de connexion (non bloquant)
       prisma.loginLog.create({
@@ -163,8 +165,8 @@ router.post('/refresh', async (req, res, next) => {
       return res.status(401).json({ error: 'Refresh token manquant' });
     }
 
-    const { accessToken, refreshToken: newRefreshToken } = await authService.refreshAccessToken(refreshToken);
-    authService.setAuthCookies(res, accessToken, newRefreshToken);
+    const { accessToken, refreshToken: newRefreshToken, rememberMe } = await authService.refreshAccessToken(refreshToken);
+    authService.setAuthCookies(res, accessToken, newRefreshToken, { rememberMe });
 
     res.json({ accessToken });
   } catch (err) {
@@ -331,48 +333,56 @@ router.post('/webauthn/login/begin', async (req, res, next) => {
   }
 });
 
-router.post('/webauthn/login/finish', async (req, res, next) => {
-  try {
-    const fail2ban = enforceFail2ban(req, res);
-    if (fail2ban === false) return;
+router.post('/webauthn/login/finish',
+  [
+    body('rememberMe').optional().isBoolean()
+  ],
+  async (req, res, next) => {
+    try {
+      if (!validate(req, res)) return;
+      const fail2ban = enforceFail2ban(req, res);
+      if (fail2ban === false) return;
 
-    const challenge = req.session.webauthnChallenge;
-    const userId = req.session.webauthnUserId;
+      const challenge = req.session.webauthnChallenge;
+      const userId = req.session.webauthnUserId;
 
-    if (!challenge) {
-      return res.status(400).json({ error: 'Challenge WebAuthn manquant ou expiré' });
-    }
-
-    delete req.session.webauthnChallenge;
-    delete req.session.webauthnUserId;
-    await new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
-
-    const { user, accessToken, refreshToken } = await authService.finishPasskeyLogin(
-      req.body, challenge, userId, req
-    );
-    clearFailedLoginAttempts(fail2ban?.ip);
-
-    authService.setAuthCookies(res, accessToken, refreshToken);
-
-    // Log de connexion (non bloquant)
-    prisma.loginLog.create({
-      data: {
-        userId: user.id,
-        method: 'PASSKEY',
-        ip: (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').replace(/^::ffff:/, '') || null,
-        userAgent: req.headers['user-agent'] || null
+      if (!challenge) {
+        return res.status(400).json({ error: 'Challenge WebAuthn manquant ou expiré' });
       }
-    }).catch(() => {});
 
-    res.json({ user, accessToken });
-  } catch (err) {
-    if (err.status === 401) {
-      recordFailedLoginAttempt(extractPublicIp(req));
-      return res.status(401).json({ error: err.message });
+      delete req.session.webauthnChallenge;
+      delete req.session.webauthnUserId;
+      await new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
+
+      const { rememberMe: rememberMeRaw, ...credentialResponse } = req.body;
+      const rememberMe = rememberMeRaw === true || rememberMeRaw === 'true';
+      const { user, accessToken, refreshToken } = await authService.finishPasskeyLogin(
+        credentialResponse, challenge, userId, req, { rememberMe }
+      );
+      clearFailedLoginAttempts(fail2ban?.ip);
+
+      authService.setAuthCookies(res, accessToken, refreshToken, { rememberMe });
+
+      // Log de connexion (non bloquant)
+      prisma.loginLog.create({
+        data: {
+          userId: user.id,
+          method: 'PASSKEY',
+          ip: (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').replace(/^::ffff:/, '') || null,
+          userAgent: req.headers['user-agent'] || null
+        }
+      }).catch(() => {});
+
+      res.json({ user, accessToken });
+    } catch (err) {
+      if (err.status === 401) {
+        recordFailedLoginAttempt(extractPublicIp(req));
+        return res.status(401).json({ error: err.message });
+      }
+      next(err);
     }
-    next(err);
   }
-});
+);
 
 // ── DELETE /api/auth/passkeys/:id ─────────────────────────────────────────────
 router.delete('/passkeys/:id', requireAuth, async (req, res, next) => {

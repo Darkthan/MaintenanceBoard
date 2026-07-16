@@ -12,6 +12,10 @@ const { readSettings } = require('../utils/settings');
 
 const prisma = require('../lib/prisma');
 
+const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
+const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const REMEMBER_ME_REFRESH_TOKEN_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+
 function normalizeRpId(value) {
   return String(value || '').trim().toLowerCase().replace(/\.$/, '');
 }
@@ -142,9 +146,18 @@ function generateAccessToken(user) {
   );
 }
 
-async function generateRefreshToken(userId) {
+function getRefreshTokenTtlMs(options = {}) {
+  return options.rememberMe ? REMEMBER_ME_REFRESH_TOKEN_TTL_MS : REFRESH_TOKEN_TTL_MS;
+}
+
+function isLongLivedRefreshToken(record) {
+  if (!record?.createdAt || !record?.expiresAt) return false;
+  return new Date(record.expiresAt).getTime() - new Date(record.createdAt).getTime() > REFRESH_TOKEN_TTL_MS * 2;
+}
+
+async function generateRefreshToken(userId, options = {}) {
   const token = uuidv4();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7j
+  const expiresAt = new Date(Date.now() + getRefreshTokenTtlMs(options));
 
   await prisma.refreshToken.create({
     data: { userId, token, expiresAt }
@@ -153,21 +166,22 @@ async function generateRefreshToken(userId) {
   return token;
 }
 
-function setAuthCookies(res, accessToken, refreshToken) {
+function setAuthCookies(res, accessToken, refreshToken, options = {}) {
   const isProd = config.env === 'production';
+  const refreshMaxAge = getRefreshTokenTtlMs(options);
 
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax',
-    maxAge: 15 * 60 * 1000 // 15 min
+    maxAge: ACCESS_TOKEN_TTL_MS
   });
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7j
+    maxAge: refreshMaxAge,
     path: '/api/auth/refresh'
   });
 }
@@ -179,7 +193,7 @@ function clearAuthCookies(res) {
 
 // ── Authentification par mot de passe ────────────────────────────────────────
 
-async function loginWithPassword(email, password) {
+async function loginWithPassword(email, password, options = {}) {
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || !user.isActive || !user.passwordHash) {
@@ -192,7 +206,7 @@ async function loginWithPassword(email, password) {
   }
 
   const accessToken = generateAccessToken(user);
-  const refreshToken = await generateRefreshToken(user.id);
+  const refreshToken = await generateRefreshToken(user.id, options);
 
   return { user: sanitizeUser(user), accessToken, refreshToken };
 }
@@ -208,11 +222,12 @@ async function refreshAccessToken(refreshTokenValue) {
   }
 
   // Rotation du refresh token
+  const rememberMe = isLongLivedRefreshToken(record);
   await prisma.refreshToken.deleteMany({ where: { id: record.id } });
-  const newRefreshToken = await generateRefreshToken(record.userId);
+  const newRefreshToken = await generateRefreshToken(record.userId, { rememberMe });
   const accessToken = generateAccessToken(record.user);
 
-  return { accessToken, refreshToken: newRefreshToken };
+  return { accessToken, refreshToken: newRefreshToken, rememberMe };
 }
 
 // ── WebAuthn / Passkeys ───────────────────────────────────────────────────────
@@ -317,7 +332,7 @@ async function beginPasskeyLogin(email, req = null) {
   return { options, userId: user?.id };
 }
 
-async function finishPasskeyLogin(response, challenge, userId, req = null) {
+async function finishPasskeyLogin(response, challenge, userId, req = null, options = {}) {
   const webauthn = assertWebAuthnConfig(req);
   // Trouver la passkey par credentialId
   const credentialId = toBase64Url(response.id);
@@ -368,7 +383,7 @@ async function finishPasskeyLogin(response, challenge, userId, req = null) {
 
   const { user } = passkey;
   const accessToken = generateAccessToken(user);
-  const refreshToken = await generateRefreshToken(user.id);
+  const refreshToken = await generateRefreshToken(user.id, options);
 
   return { user: sanitizeUser(user), accessToken, refreshToken };
 }

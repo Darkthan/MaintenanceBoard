@@ -693,7 +693,8 @@ loanPublicRouter.post('/:token/access-link',
   loanAccessLinkLimiter,
   [
     body('requesterEmail').isEmail().normalizeEmail(),
-    body('requesterName').optional({ values: 'falsy' }).trim().isLength({ max: 200 })
+    body('requesterName').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
+    body('rememberMe').optional().isBoolean()
   ],
   async (req, res, next) => {
     try {
@@ -702,13 +703,17 @@ loanPublicRouter.post('/:token/access-link',
       const link = await findValidRequestLink(req.params.token);
       const requesterEmail = normalizeEmail(req.body.requesterEmail);
       const requesterName = (req.body.requesterName || '').trim() || null;
+      const rememberMe = req.body.rememberMe === true || req.body.rememberMe === 'true';
+      const accessTtlMs = rememberMe
+        ? 365 * 24 * 60 * 60 * 1000
+        : 24 * 60 * 60 * 1000;
 
       const accessLink = await prisma.loanRequestAccessLink.create({
         data: {
           requestLinkId: link.id,
           email: requesterEmail,
           requesterName,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+          expiresAt: new Date(Date.now() + accessTtlMs)
         }
       });
 
@@ -731,7 +736,7 @@ loanPublicRouter.post('/:token/access-link',
             <p style="margin:24px 0;">
               <a href="${accessUrl}" style="background:#0284c7;color:white;padding:12px 24px;text-decoration:none;border-radius:10px;font-weight:600;display:inline-block;">Ouvrir le formulaire</a>
             </p>
-            <p style="color:#475569;font-size:14px;">Ce lien est valable 24 heures et est lié à cette adresse email.</p>
+            <p style="color:#475569;font-size:14px;">Ce lien est valable ${rememberMe ? '1 an' : '24 heures'} et est lié à cette adresse email.</p>
             <p style="color:#94a3b8;font-size:12px;word-break:break-all;">Lien direct : <a href="${accessUrl}">${accessUrl}</a></p>
           </div>
         `

@@ -4,11 +4,11 @@
  * Aucune donnée sensible n'est stockée côté client.
  */
 
-async function loginWithPassword(email, password) {
+async function loginWithPassword(email, password, options = {}) {
   // Le serveur pose les cookies httpOnly — on n'a rien à stocker
   const res = await apiFetch('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, rememberMe: !!options.rememberMe })
   });
   if (res.user) {
     _currentUser = res.user;
@@ -26,7 +26,7 @@ async function logout() {
 
 // ── Passkeys ──────────────────────────────────────────────────────────────────
 
-async function startPasskeyLogin(email) {
+async function startPasskeyLogin(email, options = {}) {
   const webauthn = window.WebAuthnClient;
   if (!webauthn?.supportsWebAuthn?.()) throw new Error('WebAuthn non supporté par ce navigateur');
 
@@ -53,7 +53,7 @@ async function startPasskeyLogin(email) {
   // 3. Vérification côté serveur
   const result = await apiFetch('/auth/webauthn/login/finish', {
     method: 'POST',
-    body: JSON.stringify(assertionResponse)
+    body: JSON.stringify({ ...assertionResponse, rememberMe: !!options.rememberMe })
   });
 
   if (result.user) {
@@ -123,6 +123,7 @@ function initLoginPage() {
 
   const form = document.getElementById('login-form');
   const passkeyBtn = document.getElementById('passkey-login-btn');
+  const rememberBox = document.getElementById('remember-me');
   const errorEl = document.getElementById('login-error');
 
   const showError = (msg) => {
@@ -142,12 +143,13 @@ function initLoginPage() {
     hideError();
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
+    const rememberMe = !!rememberBox?.checked;
     const submitBtn = form.querySelector('[type=submit]');
 
     try {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Connexion...';
-      await loginWithPassword(email, password);
+      await loginWithPassword(email, password, { rememberMe });
       window.location.href = safeNextUrl();
     } catch (err) {
       showError(err.message || 'Identifiants incorrects');
@@ -160,11 +162,12 @@ function initLoginPage() {
   passkeyBtn?.addEventListener('click', async () => {
     hideError();
     const email = document.getElementById('email')?.value;
+    const rememberMe = !!rememberBox?.checked;
     passkeyBtn.disabled = true;
     passkeyBtn.textContent = 'Authentification...';
 
     try {
-      await startPasskeyLogin(email);
+      await startPasskeyLogin(email, { rememberMe });
       window.location.href = safeNextUrl();
     } catch (err) {
       showError(err.message || 'Authentification passkey échouée');

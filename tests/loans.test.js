@@ -105,6 +105,37 @@ describe('loan requests', () => {
     }));
   });
 
+  it('prolonge le lien de connexion public a un an quand rester connecte est coche', async () => {
+    prisma.loanMagicLink.findUnique.mockResolvedValue({
+      id: 'link-1',
+      token: 'magic-1',
+      isActive: true,
+      expiresAt: null,
+      resourceId: 'resource-1'
+    });
+    prisma.loanRequestAccessLink.create.mockResolvedValue({
+      id: 'access-1',
+      token: 'access-token-1',
+      email: 'jean@example.com',
+      requesterName: 'Jean Dupont',
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+    });
+
+    const res = await request(buildApp())
+      .post('/api/loan-request/magic-1/access-link')
+      .send({
+        requesterEmail: 'jean@example.com',
+        requesterName: 'Jean Dupont',
+        rememberMe: true
+      });
+
+    expect(res.status).toBe(200);
+    const expiresAt = prisma.loanRequestAccessLink.create.mock.calls[0][0].data.expiresAt;
+    const ttlMs = expiresAt.getTime() - Date.now();
+    expect(ttlMs).toBeGreaterThan(360 * 24 * 60 * 60 * 1000);
+    expect(ttlMs).toBeLessThanOrEqual(365 * 24 * 60 * 60 * 1000);
+  });
+
   it('verrouille un lot complet meme pour une demande partielle', async () => {
     prisma.loanMagicLink.findUnique.mockResolvedValue({
       id: 'link-1',
