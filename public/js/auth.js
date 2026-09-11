@@ -31,18 +31,18 @@ async function startPasskeyLogin(email, options = {}) {
   if (!webauthn?.supportsWebAuthn?.()) throw new Error('WebAuthn non supporté par ce navigateur');
 
   // 1. Obtenir les options du serveur
-  const options = await apiFetch('/auth/webauthn/login/begin', {
+  const authenticationOptions = await apiFetch('/auth/webauthn/login/begin', {
     method: 'POST',
     body: JSON.stringify({ email: email || undefined })
   });
-  if (!options?.challenge || !options?.rpId) {
+  if (!authenticationOptions?.challenge || !authenticationOptions?.rpId) {
     throw new Error('Configuration WebAuthn invalide ou incomplète');
   }
 
   // 2. Interagir avec l'authentificateur
   let assertionResponse;
   try {
-    assertionResponse = await webauthn.startAuthentication(options);
+    assertionResponse = await webauthn.startAuthentication(authenticationOptions);
   } catch (err) {
     if (err.name === 'NotAllowedError') {
       throw new Error('Authentification annulée par l\'utilisateur');
