@@ -82,10 +82,49 @@
         </button>
       </div>
 
-      <!-- Liste -->
-      <div id="todos-list" class="space-y-2">
-        <div class="text-center py-12 text-slate-400 text-sm">Chargement…</div>
-      </div>
+      <section class="bg-white rounded-2xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <div>
+            <h2 class="font-semibold text-slate-800">Mes tâches</h2>
+            <p class="text-sm text-slate-500">Consultez la liste ou les échéances dans le calendrier.</p>
+          </div>
+          <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+            <button id="todo-view-list-btn" type="button" onclick="setTodoView('list')"
+              class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition bg-white text-slate-800 shadow-sm">
+              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+              Liste
+            </button>
+            <button id="todo-view-calendar-btn" type="button" onclick="setTodoView('calendar')"
+              class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition text-slate-500 hover:text-slate-700">
+              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2v12a2 2 0 002 2z"/></svg>
+              Calendrier
+            </button>
+          </div>
+        </div>
+
+        <!-- Liste -->
+        <div id="todos-list" class="space-y-2">
+          <div class="text-center py-12 text-slate-400 text-sm">Chargement…</div>
+        </div>
+
+        <!-- Calendrier des échéances -->
+        <div id="todos-calendar-view" class="hidden">
+          <div class="flex items-center justify-between mb-4">
+            <button type="button" onclick="changeTodoCalendarMonth(-1)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-600" aria-label="Mois précédent">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <h3 id="todo-calendar-month-label" class="text-sm font-semibold text-slate-800 capitalize"></h3>
+            <button type="button" onclick="changeTodoCalendarMonth(1)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-600" aria-label="Mois suivant">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+          <div class="grid grid-cols-7 mb-1">
+            <div class="text-center text-xs font-medium text-slate-400 py-1">L</div><div class="text-center text-xs font-medium text-slate-400 py-1">M</div><div class="text-center text-xs font-medium text-slate-400 py-1">M</div><div class="text-center text-xs font-medium text-slate-400 py-1">J</div><div class="text-center text-xs font-medium text-slate-400 py-1">V</div><div class="text-center text-xs font-medium text-slate-400 py-1">S</div><div class="text-center text-xs font-medium text-slate-400 py-1">D</div>
+          </div>
+          <div id="todos-calendar-grid" class="grid grid-cols-7 gap-px bg-slate-100 rounded-xl overflow-hidden border border-slate-100"></div>
+          <div id="todos-calendar-day-detail" class="hidden mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4"></div>
+        </div>
+      </section>
     </div>
   </main>
 </div>
@@ -161,6 +200,10 @@ let allTodos = [];
 let editingTodo = null;
 let interventionSearchTimeout = null;
 let interventionCache = [];
+let todoViewMode = 'list';
+let todoCalendarMonth = new Date();
+todoCalendarMonth.setDate(1);
+todoCalendarMonth.setHours(0, 0, 0, 0);
 
 // ── Filtres ───────────────────────────────────────────────────────────────────
 
@@ -186,9 +229,78 @@ async function loadTodos() {
   try {
     allTodos = await api.get('/todos' + params);
     renderTodos(allTodos);
+    renderTodoCalendar();
   } catch (err) {
     list.innerHTML = `<div class="text-center py-12 text-red-400 text-sm">${escHtml(err.message || 'Erreur de chargement')}</div>`;
   }
+}
+
+// ── Calendrier des tâches ────────────────────────────────────────────────────
+
+function setTodoView(mode) {
+  todoViewMode = mode;
+  document.getElementById('todos-list').classList.toggle('hidden', mode !== 'list');
+  document.getElementById('todos-calendar-view').classList.toggle('hidden', mode !== 'calendar');
+  const listBtn = document.getElementById('todo-view-list-btn');
+  const calendarBtn = document.getElementById('todo-view-calendar-btn');
+  [listBtn, calendarBtn].forEach(btn => btn.classList.remove('bg-white', 'text-slate-800', 'shadow-sm'));
+  [listBtn, calendarBtn].forEach(btn => btn.classList.add('text-slate-500'));
+  const active = mode === 'list' ? listBtn : calendarBtn;
+  active.classList.add('bg-white', 'text-slate-800', 'shadow-sm');
+  active.classList.remove('text-slate-500');
+  renderTodoCalendar();
+}
+
+function getTodoDayKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getTodosForDay(dayKey) {
+  return allTodos.filter(todo => todo.dueAt && getTodoDayKey(todo.dueAt) === dayKey);
+}
+
+function changeTodoCalendarMonth(delta) {
+  todoCalendarMonth.setMonth(todoCalendarMonth.getMonth() + delta);
+  renderTodoCalendar();
+}
+
+function renderTodoCalendar() {
+  const grid = document.getElementById('todos-calendar-grid');
+  if (!grid) return;
+  const year = todoCalendarMonth.getFullYear();
+  const month = todoCalendarMonth.getMonth();
+  document.getElementById('todo-calendar-month-label').textContent =
+    todoCalendarMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+  const firstDay = new Date(year, month, 1);
+  const startOffset = (firstDay.getDay() + 6) % 7; // semaine commençant le lundi
+  const cells = Array(startOffset).fill(null);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day += 1) cells.push(new Date(year, month, day));
+  while (cells.length % 7) cells.push(null);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  grid.innerHTML = cells.map(date => {
+    if (!date) return '<div class="bg-slate-50 min-h-[96px]"></div>';
+    const key = getTodoDayKey(date);
+    const todos = getTodosForDay(key);
+    const isToday = date.getTime() === today.getTime();
+    return `<button type="button" onclick="showTodoCalendarDay('${key}')" class="bg-white min-h-[96px] p-2 text-left hover:bg-blue-50 transition group">
+      <span class="text-xs font-medium ${isToday ? 'inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white' : 'text-slate-500 group-hover:text-slate-800'}">${date.getDate()}</span>
+      <div class="mt-1 space-y-0.5">${todos.slice(0, 2).map(todo => `<div class="truncate rounded px-1 py-0.5 text-xs ${todo.done ? 'bg-slate-100 text-slate-400 line-through' : 'bg-blue-100 text-blue-700'}">${escHtml(todo.title)}</div>`).join('')}${todos.length > 2 ? `<div class="text-xs text-slate-400 pl-1">+${todos.length - 2}</div>` : ''}</div>
+    </button>`;
+  }).join('');
+  document.getElementById('todos-calendar-day-detail').classList.add('hidden');
+}
+
+function showTodoCalendarDay(dayKey) {
+  const detail = document.getElementById('todos-calendar-day-detail');
+  const todos = getTodosForDay(dayKey);
+  const label = new Date(`${dayKey}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  detail.innerHTML = todos.length ? `<h4 class="text-sm font-semibold text-slate-700 capitalize mb-2">${label}</h4><div class="space-y-2">${todos.map(todo => `<div class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2"><input type="checkbox" ${todo.done ? 'checked' : ''} onchange="toggleTodo('${escHtml(todo.id)}', this.checked)" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"><button type="button" onclick="openTodoModal(null, '${escHtml(todo.id)}')" class="flex-1 min-w-0 text-left text-sm ${todo.done ? 'line-through text-slate-400' : 'text-slate-800'} hover:text-blue-600">${escHtml(todo.title)}</button></div>`).join('')}</div>` : `<p class="text-sm text-slate-400">Aucune tâche prévue le ${label}.</p>`;
+  detail.classList.remove('hidden');
 }
 
 function renderTodos(todos) {
