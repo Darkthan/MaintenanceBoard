@@ -172,9 +172,23 @@
 
       <!-- Date limite -->
       <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Date de début</label>
+        <input id="todo-start" type="date"
+          class="border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-600" />
+      </div>
+
+      <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Date limite</label>
         <input id="todo-due" type="date"
           class="border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-600" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Tâches précédentes</label>
+        <select id="todo-predecessors" multiple size="4"
+          class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-600">
+        </select>
+        <p class="text-xs text-slate-400 mt-1">Sélectionnez les tâches à terminer avant celle-ci. Ctrl/Cmd permet plusieurs choix.</p>
       </div>
 
       <p id="todo-form-error" class="text-sm text-red-600 hidden"></p>
@@ -257,7 +271,8 @@ function getTodoDayKey(value) {
 }
 
 function getTodosForDay(dayKey) {
-  return allTodos.filter(todo => todo.dueAt && getTodoDayKey(todo.dueAt) === dayKey);
+  return allTodos.filter(todo => (todo.dueAt && getTodoDayKey(todo.dueAt) === dayKey)
+    || (todo.startAt && getTodoDayKey(todo.startAt) === dayKey));
 }
 
 function changeTodoCalendarMonth(delta) {
@@ -317,6 +332,12 @@ function renderTodos(todos) {
     const dueBadge = due
       ? `<span class="text-xs px-2 py-0.5 rounded-full font-medium ${overdue ? 'bg-red-100 text-red-600' : todo.done ? 'bg-slate-100 text-slate-400' : 'bg-amber-100 text-amber-700'}">${due.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>`
       : '';
+    const start = todo.startAt ? new Date(todo.startAt) : null;
+    const schedule = start && due
+      ? `<span class="text-xs text-slate-400">${start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} → ${due.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}</span>`
+      : start ? `<span class="text-xs text-slate-400">Début ${start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>` : '';
+    const predecessors = (todo.predecessors || []).length
+      ? `<span class="text-xs text-slate-400">Après : ${todo.predecessors.map(item => escHtml(item.title)).join(', ')}</span>` : '';
 
     const intv = todo.intervention;
     const room = intv?.room?.name ? ` · ${escHtml(intv.room.name)}` : '';
@@ -331,7 +352,7 @@ function renderTodos(todos) {
         <div class="flex items-start justify-between gap-2">
           <span class="text-sm font-medium ${todo.done ? 'line-through text-slate-400' : 'text-slate-800'} leading-snug">${escHtml(todo.title)}</span>
           <div class="flex items-center gap-2 flex-shrink-0 ml-2">
-            ${dueBadge}
+            ${schedule || dueBadge}
             <button onclick="openTodoModal(null, '${escHtml(todo.id)}')"
               class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-500 transition"
               title="Modifier">
@@ -349,6 +370,7 @@ function renderTodos(todos) {
           </div>
         </div>
         ${todo.description ? `<p class="text-xs text-slate-400 mt-0.5 leading-relaxed">${escHtml(todo.description)}</p>` : ''}
+        ${predecessors ? `<div class="flex items-center gap-2 mt-1 flex-wrap">${predecessors}</div>` : ''}
         ${intv ? `<a href="/interventions.html?focus=${encodeURIComponent(intv.id)}" class="inline-flex items-center gap-1 mt-1 text-xs ${statusColor} hover:underline truncate max-w-full">
           <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -384,12 +406,24 @@ async function deleteTodo(todoId) {
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
+function setTodoPredecessorOptions(currentId, selected) {
+  const select = document.getElementById('todo-predecessors');
+  if (!select) return;
+  const selectedIds = new Set((selected || []).map(todo => todo.id));
+  select.innerHTML = allTodos
+    .filter(todo => todo.id !== currentId)
+    .map(todo => `<option value="${escHtml(todo.id)}" ${selectedIds.has(todo.id) ? 'selected' : ''}>${escHtml(todo.title)}${todo.done ? ' (terminée)' : ''}</option>`)
+    .join('');
+}
+
 async function openTodoModal(interventionId, todoId) {
   editingTodo = null;
   document.getElementById('todo-modal-title').textContent = 'Nouvelle tâche';
   document.getElementById('todo-title').value = '';
   document.getElementById('todo-description').value = '';
+  document.getElementById('todo-start').value = '';
   document.getElementById('todo-due').value = '';
+  document.getElementById('todo-predecessors').innerHTML = '';
   document.getElementById('todo-intervention-id').value = '';
   document.getElementById('todo-intervention-search').value = '';
   document.getElementById('todo-intervention-selected').classList.add('hidden');
@@ -405,7 +439,9 @@ async function openTodoModal(interventionId, todoId) {
     document.getElementById('todo-modal-title').textContent = 'Modifier la tâche';
     document.getElementById('todo-title').value = todo.title;
     document.getElementById('todo-description').value = todo.description || '';
+    document.getElementById('todo-start').value = todo.startAt ? todo.startAt.slice(0, 10) : '';
     document.getElementById('todo-due').value = todo.dueAt ? todo.dueAt.slice(0, 10) : '';
+    setTodoPredecessorOptions(todo.id, todo.predecessors || []);
     document.getElementById('todo-intervention-id').value = todo.interventionId || '';
     if (todo.intervention) {
       document.getElementById('todo-intervention-search').value = todo.intervention.title;
@@ -417,6 +453,8 @@ async function openTodoModal(interventionId, todoId) {
     document.getElementById('todo-intervention-id').value = interventionId;
     document.getElementById('intervention-picker-group').classList.add('hidden');
   }
+
+  if (!todoId) setTodoPredecessorOptions(null, []);
 
   document.getElementById('todo-modal').classList.remove('hidden');
   setTimeout(() => document.getElementById('todo-title').focus(), 50);
@@ -435,9 +473,12 @@ async function submitTodoForm(event) {
 
   const title = document.getElementById('todo-title').value.trim();
   const description = document.getElementById('todo-description').value.trim() || null;
+  const startVal = document.getElementById('todo-start').value;
   const dueVal = document.getElementById('todo-due').value;
+  const startAt = startVal ? new Date(startVal).toISOString() : null;
   const dueAt = dueVal ? new Date(dueVal).toISOString() : null;
   const interventionId = document.getElementById('todo-intervention-id').value;
+  const predecessorIds = Array.from(document.getElementById('todo-predecessors').selectedOptions).map(option => option.value);
 
   if (!title) { errEl.textContent = 'Le titre est requis.'; errEl.classList.remove('hidden'); return; }
 
@@ -446,9 +487,9 @@ async function submitTodoForm(event) {
 
   try {
     if (editingTodo) {
-      await api.patch(`/todos/${editingTodo.id}`, { title, description, dueAt, interventionId: interventionId || null });
+      await api.patch(`/todos/${editingTodo.id}`, { title, description, startAt, dueAt, predecessorIds, interventionId: interventionId || null });
     } else {
-      await api.post(`/todos`, { title, description, dueAt, interventionId: interventionId || null });
+      await api.post(`/todos`, { title, description, startAt, dueAt, predecessorIds, interventionId: interventionId || null });
     }
     closeTodoModal();
     await loadTodos();

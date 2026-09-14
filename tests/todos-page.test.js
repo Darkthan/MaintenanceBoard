@@ -22,5 +22,7 @@ describe('page des tâches', () => {
     expect(res.text).toContain('function changeTodoCalendarMonth(delta)');
     expect(res.text).toContain('function showTodoCalendarDay(dayKey)');
     expect(res.text).toContain('getTodosForDay(dayKey)');
+    expect(res.text).toContain('id="todo-start"');
+    expect(res.text).toContain('id="todo-predecessors"');
   });
 });

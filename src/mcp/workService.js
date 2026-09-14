@@ -239,6 +239,7 @@ function mapTodo(todo) {
     description: todo.description || null,
     done: !!todo.done,
     doneAt: todo.doneAt || null,
+    startAt: todo.startAt || null,
     dueAt: todo.dueAt || null,
     interventionId: todo.interventionId || null,
     intervention: todo.intervention || null,
@@ -419,6 +420,7 @@ async function createTodo(input) {
       interventionId,
       title: cleanString(input.title, { min: 1, max: 500, label: 'Le titre' }),
       description: nullableText(input.description, 2000, 'La description'),
+      startAt: parseOptionalDate(input.startAt, 'Date de début') ?? null,
       dueAt: parseOptionalDate(input.dueAt, "Date d'échéance") ?? null
     },
     include: TODO_INCLUDE
@@ -437,6 +439,7 @@ async function updateTodo({ id, ...input }) {
   }
   if (input.title !== undefined) data.title = cleanString(input.title, { min: 1, max: 500, label: 'Le titre' });
   if (input.description !== undefined) data.description = nullableText(input.description, 2000, 'La description');
+  if (input.startAt !== undefined) data.startAt = parseOptionalDate(input.startAt, 'Date de début');
   if (input.dueAt !== undefined) data.dueAt = parseOptionalDate(input.dueAt, "Date d'échéance");
   if (input.interventionId !== undefined) data.interventionId = input.interventionId || null;
 
