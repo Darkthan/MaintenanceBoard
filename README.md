@@ -2,6 +2,13 @@
 
 Application de gestion du parc informatique scolaire/entreprise.
 
+## Supervision par pullers
+
+- [Procédure de déploiement et de configuration](docs/DEPLOIEMENT-PULLERS.md)
+- [Audit de sécurité et de fonctionnement — 20 septembre 2026](docs/AUDIT-SUPERVISION-PULLERS.md)
+
+L'audit relève des défauts de sécurité et de fiabilité non corrigés ; consulter le rapport avant un déploiement en production.
+
 ## Fonctionnalités
 
 - **Authentification** : Passkeys (WebAuthn/biométrie) + mot de passe + JWT
