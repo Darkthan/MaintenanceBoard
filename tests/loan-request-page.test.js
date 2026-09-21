@@ -51,9 +51,10 @@ describe('loan request public page', () => {
     expect(res.text).toContain('requesterName: requester.name');
     expect(res.text).toContain('email: data.requesterEmail');
     expect(res.text).toContain("history.replaceState(null, '', '/loan-auth.html')");
-    expect(res.text).toContain('/loan-request.html?token=${encodeURIComponent(token)}');
-    expect(res.text).toContain("params.get('return') === '/demande'");
-    expect(res.text).toContain("document.getElementById('request-link').href = returnTo");
+    expect(res.text).toContain('La page de demande déjà ouverte vient d’être authentifiée automatiquement.');
+    expect(res.text).toContain("document.getElementById('close-window-btn')");
+    expect(res.text).toContain('window.close()');
+    expect(res.text).not.toContain('id="request-link"');
     expect(res.text).not.toContain('id="request-form"');
   });
 });
