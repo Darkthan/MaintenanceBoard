@@ -68,7 +68,7 @@ describe('interventions page', () => {
     const res = await request(app).get('/demande');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('Signaler une intervention');
+    expect(res.text).toContain('Demander une intervention');
     expect(res.text).toContain('Réserver du matériel');
     expect(res.text).toContain('/report.html');
     expect(res.text).toContain("fetch('/api/loan-request/general-link')");
