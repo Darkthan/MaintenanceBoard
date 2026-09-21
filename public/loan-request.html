@@ -48,7 +48,7 @@
         </div>
         <div id="relay-banner" class="hidden rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 flex items-start gap-3">
           <svg class="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z"/></svg>
-          <span>Si le formulaire s'est ouvert sur un autre onglet, vous pouvez <strong>fermer celui-ci</strong>. Sinon, continuez ici.</span>
+          <span>Connexion autorisée. Vous pouvez continuer votre demande sur cette page.</span>
         </div>
         <form id="request-form" class="hidden space-y-4">
           <div class="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
@@ -167,6 +167,45 @@ let currentRequesterName = '';
 let resources = [];
 let authChannel = null;
 const AUTH_PENDING_KEY = 'loan-auth-pending';
+const ACCESS_STORAGE_PREFIX = 'loan-request-access-';
+
+function getAccessStorageKey(token) {
+  return `${ACCESS_STORAGE_PREFIX}${token}`;
+}
+
+function storeAccessToken(token, accessToken, rememberMe) {
+  if (!token || !accessToken) return;
+  const key = getAccessStorageKey(token);
+  const value = JSON.stringify({ accessToken, savedAt: Date.now() });
+  try {
+    if (rememberMe) {
+      localStorage.setItem(key, value);
+      sessionStorage.removeItem(key);
+    } else {
+      sessionStorage.setItem(key, value);
+      localStorage.removeItem(key);
+    }
+  } catch {}
+}
+
+function getStoredAccessToken(token) {
+  if (!token) return '';
+  const key = getAccessStorageKey(token);
+  for (const storage of [sessionStorage, localStorage]) {
+    try {
+      const data = JSON.parse(storage.getItem(key) || 'null');
+      if (data?.accessToken) return data.accessToken;
+    } catch {}
+  }
+  return '';
+}
+
+function clearStoredAccessToken(token) {
+  if (!token) return;
+  const key = getAccessStorageKey(token);
+  try { sessionStorage.removeItem(key); } catch {}
+  try { localStorage.removeItem(key); } catch {}
+}
 
 function getPendingAuth() {
   try {
@@ -184,26 +223,29 @@ function getPendingAuth() {
 
 // Ouvre la page en mode "relais d'auth" : diffuse le token aux onglets en attente
 // puis affiche un message de fermeture.
-function broadcastAuthAndShowRelay(token, accessToken) {
+function broadcastAuthAndShowRelay(token, accessToken, rememberMe) {
   const key = `loan-auth-${token}`;
   try {
     const ch = new BroadcastChannel(key);
-    ch.postMessage({ type: 'loan-access-granted', token, accessToken });
+    ch.postMessage({ type: 'loan-access-granted', token, accessToken, rememberMe });
     ch.close();
   } catch {}
   try {
-    localStorage.setItem(key, JSON.stringify({ accessToken, ts: Date.now() }));
+    localStorage.setItem(key, JSON.stringify({ accessToken, rememberMe, ts: Date.now() }));
     setTimeout(() => localStorage.removeItem(key), 10000);
   } catch {}
 }
 
 // Après envoi du lien, écoute sur BroadcastChannel + storage pour auto-authentifier
 // l'onglet courant quand l'utilisateur clique le lien depuis son email.
-function waitForAuthBroadcast(token) {
+function waitForAuthBroadcast(token, rememberMe) {
   if (authChannel) { try { authChannel.close(); } catch {} }
+  if (window._loanStorageHandler) {
+    window.removeEventListener('storage', window._loanStorageHandler);
+  }
   const key = `loan-auth-${token}`;
   try {
-    localStorage.setItem(AUTH_PENDING_KEY, JSON.stringify({ token, ts: Date.now() }));
+    localStorage.setItem(AUTH_PENDING_KEY, JSON.stringify({ token, rememberMe, ts: Date.now() }));
   } catch {}
   try {
     authChannel = new BroadcastChannel(key);
@@ -211,7 +253,7 @@ function waitForAuthBroadcast(token) {
       if (event.data?.type === 'loan-access-granted' && event.data.token === token) {
         authChannel.close();
         authChannel = null;
-        loadLinkWithAccess(event.data.accessToken);
+        loadLinkWithAccess(event.data.accessToken, event.data.rememberMe === true);
       }
     };
   } catch {}
@@ -219,23 +261,30 @@ function waitForAuthBroadcast(token) {
     if (e.key === key && e.newValue) {
       try {
         const data = JSON.parse(e.newValue);
-        if (data?.accessToken) loadLinkWithAccess(data.accessToken);
+        if (data?.accessToken) loadLinkWithAccess(data.accessToken, data.rememberMe === true);
       } catch {}
     }
   };
   window.addEventListener('storage', window._loanStorageHandler);
+
+  // Récupère aussi une autorisation arrivée juste avant la mise en place
+  // des écouteurs (certains clients mail ouvrent le lien très rapidement).
+  try {
+    const existing = JSON.parse(localStorage.getItem(key) || 'null');
+    if (existing?.accessToken && Date.now() - existing.ts < 10 * 60 * 1000) {
+      loadLinkWithAccess(existing.accessToken, existing.rememberMe === true);
+    }
+  } catch {}
 }
 
-async function loadLinkWithAccess(accessToken) {
+async function loadLinkWithAccess(accessToken, rememberMe) {
   if (window._loanStorageHandler) {
     window.removeEventListener('storage', window._loanStorageHandler);
+    window._loanStorageHandler = null;
   }
   try { localStorage.removeItem(AUTH_PENDING_KEY); } catch {}
   currentAccessToken = accessToken;
-  // Mettre à jour l'URL sans rechargement pour que F5 reste authentifié
-  const url = new URL(window.location.href);
-  url.searchParams.set('access', accessToken);
-  history.replaceState(null, '', url.toString());
+  storeAccessToken(currentToken, accessToken, rememberMe);
   await loadLink();
 }
 
@@ -243,8 +292,8 @@ function getToken() {
   return new URLSearchParams(window.location.search).get('token') || '';
 }
 
-function getAccessToken() {
-  return new URLSearchParams(window.location.search).get('access') || '';
+function getAccessToken(token = getToken()) {
+  return new URLSearchParams(window.location.search).get('access') || getStoredAccessToken(token);
 }
 
 function showRelayOnlyMessage() {
@@ -769,7 +818,7 @@ async function lrdpLoadSchedule(resourceId) {
 
 async function loadLink() {
   currentToken = getToken();
-  currentAccessToken = getAccessToken();
+  currentAccessToken = getAccessToken(currentToken);
   if (!currentToken) {
     document.getElementById('loading').textContent = 'Lien de demande manquant.';
     return;
@@ -790,18 +839,25 @@ async function loadLink() {
     document.getElementById('page-title').textContent = data.title || 'Demande de prêt de matériel';
     document.getElementById('loading').classList.add('hidden');
     if (!data.authenticated) {
+      if (currentAccessToken) clearStoredAccessToken(currentToken);
+      currentAccessToken = '';
       document.getElementById('auth-step').classList.remove('hidden');
       return;
     }
+    document.getElementById('auth-step').classList.add('hidden');
 
-    // Si la page a été ouverte via le lien email (access dans l'URL initiale),
-    // diffuser le token aux onglets qui attendaient. Quand l'onglet initial est
-    // encore ouvert, celui-ci reprend la main et cet onglet reste un simple relais.
-    const pendingAuth = getPendingAuth();
-    const isRelayForInitialTab = getAccessToken() && pendingAuth?.token === currentToken;
-    if (getAccessToken()) {
-      broadcastAuthAndShowRelay(currentToken, data.accessToken || currentAccessToken);
-      if (isRelayForInitialTab) {
+    // Compatibilité avec les anciens liens d'email qui ouvraient directement
+    // cette page : ils autorisent l'onglet initial puis restent un simple relais.
+    const urlAccessToken = new URLSearchParams(window.location.search).get('access') || '';
+    if (urlAccessToken) {
+      const pendingAuth = getPendingAuth();
+      const rememberMe = pendingAuth?.token === currentToken && pendingAuth.rememberMe === true;
+      storeAccessToken(currentToken, data.accessToken || currentAccessToken, rememberMe);
+      broadcastAuthAndShowRelay(currentToken, data.accessToken || currentAccessToken, rememberMe);
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('access');
+      history.replaceState(null, '', cleanUrl.toString());
+      if (pendingAuth?.token === currentToken) {
         try { localStorage.removeItem(AUTH_PENDING_KEY); } catch {}
         showRelayOnlyMessage();
         return;
@@ -862,7 +918,7 @@ document.getElementById('send-auth-link-btn').addEventListener('click', async ()
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload.error || payload.errors?.[0]?.msg || 'Erreur lors de l’envoi du lien');
     setFeedback('auth-feedback', 'success', 'Lien envoyé ! Cliquez sur le lien dans votre email — le formulaire s\'ouvrira automatiquement sur cette page.');
-    waitForAuthBroadcast(currentToken);
+    waitForAuthBroadcast(currentToken, rememberMe);
   } catch (err) {
     setFeedback('auth-feedback', 'error', err.message);
   }

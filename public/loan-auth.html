@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Autorisation de connexion – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <main class="mx-auto flex min-h-screen w-full max-w-xl items-center px-4 py-10">
+    <section class="w-full rounded-[2rem] border border-white/10 bg-white p-8 text-slate-900 shadow-2xl shadow-slate-950/20">
+      <p class="text-sm font-semibold uppercase tracking-[0.25em] text-sky-600">MaintenanceBoard</p>
+      <div id="pending" class="mt-5">
+        <h1 class="text-2xl font-semibold tracking-tight">Autorisation en cours…</h1>
+        <p class="mt-3 text-sm leading-6 text-slate-600">Nous vérifions votre lien de connexion.</p>
+      </div>
+
+      <div id="success" class="mt-5 hidden">
+        <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        </div>
+        <h1 class="mt-4 text-2xl font-semibold tracking-tight">Connexion autorisée</h1>
+        <p class="mt-3 text-sm leading-6 text-slate-600">Revenez sur la page de demande déjà ouverte : elle va se déverrouiller automatiquement.</p>
+        <a id="request-link" href="#" class="mt-6 inline-flex items-center justify-center rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700">
+          Revenir à la demande
+        </a>
+        <p class="mt-4 text-xs leading-5 text-slate-400">Vous pouvez fermer cette page après être revenu à votre demande.</p>
+      </div>
+
+      <div id="error" class="mt-5 hidden">
+        <div class="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-700">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </div>
+        <h1 class="mt-4 text-2xl font-semibold tracking-tight">Lien non valide</h1>
+        <p id="error-message" class="mt-3 text-sm leading-6 text-slate-600">Ce lien est invalide ou a expiré.</p>
+      </div>
+    </section>
+  </main>
+
+<script>
+const ACCESS_STORAGE_PREFIX = 'loan-request-access-';
+
+function storeAccessToken(token, accessToken, rememberMe) {
+  const key = `${ACCESS_STORAGE_PREFIX}${token}`;
+  const value = JSON.stringify({ accessToken, savedAt: Date.now() });
+  try {
+    if (rememberMe) {
+      localStorage.setItem(key, value);
+      sessionStorage.removeItem(key);
+    } else {
+      sessionStorage.setItem(key, value);
+      localStorage.removeItem(key);
+    }
+  } catch {}
+}
+
+function broadcastAuthorization(token, accessToken, rememberMe) {
+  const key = `loan-auth-${token}`;
+  const payload = { type: 'loan-access-granted', token, accessToken, rememberMe, ts: Date.now() };
+  try {
+    const channel = new BroadcastChannel(key);
+    channel.postMessage(payload);
+    channel.close();
+  } catch {}
+  try {
+    localStorage.setItem(key, JSON.stringify(payload));
+    setTimeout(() => localStorage.removeItem(key), 10 * 60 * 1000);
+  } catch {}
+}
+
+async function authorize() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token') || '';
+  const accessToken = params.get('access') || '';
+  const rememberMe = params.get('remember') === '1';
+
+  if (!token || !accessToken) {
+    showError('Ce lien de connexion est incomplet. Demandez un nouveau lien depuis la page de réservation.');
+    return;
+  }
+
+  try {
+    const url = new URL(`/api/loan-request/${encodeURIComponent(token)}`, window.location.origin);
+    url.searchParams.set('access', accessToken);
+    const response = await fetch(url);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.authenticated) {
+      throw new Error(data.error || 'Ce lien est invalide ou a expiré.');
+    }
+
+    storeAccessToken(token, data.accessToken || accessToken, rememberMe);
+    broadcastAuthorization(token, data.accessToken || accessToken, rememberMe);
+    document.getElementById('request-link').href = `/loan-request.html?token=${encodeURIComponent(token)}`;
+
+    // Retire le jeton de l'adresse dès qu'il a été vérifié.
+    history.replaceState(null, '', '/loan-auth.html');
+    document.getElementById('pending').classList.add('hidden');
+    document.getElementById('success').classList.remove('hidden');
+  } catch (error) {
+    history.replaceState(null, '', '/loan-auth.html');
+    showError(error.message);
+  }
+}
+
+function showError(message) {
+  document.getElementById('pending').classList.add('hidden');
+  document.getElementById('error-message').textContent = message;
+  document.getElementById('error').classList.remove('hidden');
+}
+
+authorize();
+</script>
+</body>
+</html>

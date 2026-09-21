@@ -544,10 +544,11 @@ async function sendLoanStatusEmail(reservation, newStatus) {
   }
 }
 
-function getLoanRequestUrl(requestToken, accessToken) {
-  const url = new URL('/loan-request.html', config.appUrl);
+function getLoanAuthorizationUrl(requestToken, accessToken, rememberMe) {
+  const url = new URL('/loan-auth.html', config.appUrl);
   url.searchParams.set('token', requestToken);
   url.searchParams.set('access', accessToken);
+  if (rememberMe) url.searchParams.set('remember', '1');
   return url.toString();
 }
 
@@ -742,7 +743,7 @@ loanPublicRouter.post('/:token/access-link',
         return res.status(503).json({ error: 'La configuration SMTP est requise pour envoyer un lien de connexion.' });
       }
 
-      const accessUrl = getLoanRequestUrl(link.token, accessLink.token);
+      const accessUrl = getLoanAuthorizationUrl(link.token, accessLink.token, rememberMe);
 
       await transporter.sendMail({
         from,
@@ -752,9 +753,9 @@ loanPublicRouter.post('/:token/access-link',
           <div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
             <h2 style="color:#0f172a;">Connexion à votre demande de prêt</h2>
             <p>Bonjour${requesterName ? ` ${requesterName}` : ''},</p>
-            <p>Cliquez sur le lien ci-dessous pour ouvrir le formulaire de prêt sécurisé :</p>
+            <p>Cliquez sur le bouton ci-dessous pour autoriser la connexion sur la page de demande que vous avez déjà ouverte :</p>
             <p style="margin:24px 0;">
-              <a href="${accessUrl}" style="background:#0284c7;color:white;padding:12px 24px;text-decoration:none;border-radius:10px;font-weight:600;display:inline-block;">Ouvrir le formulaire</a>
+              <a href="${accessUrl}" style="background:#0284c7;color:white;padding:12px 24px;text-decoration:none;border-radius:10px;font-weight:600;display:inline-block;">Autoriser la connexion</a>
             </p>
             <p style="color:#475569;font-size:14px;">Ce lien est valable ${rememberMe ? '1 an' : '24 heures'} et est lié à cette adresse email.</p>
             <p style="color:#94a3b8;font-size:12px;word-break:break-all;">Lien direct : <a href="${accessUrl}">${accessUrl}</a></p>

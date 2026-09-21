@@ -127,6 +127,11 @@ describe('loan requests', () => {
         email: 'jean@example.com'
       })
     }));
+    const sendMail = createSmtpTransporter.mock.results[0].value.transporter.sendMail;
+    const emailHtml = sendMail.mock.calls[0][0].html;
+    expect(emailHtml).toContain('https://maintenanceboard.test/loan-auth.html?token=magic-1&access=access-token-1');
+    expect(emailHtml).toContain('Autoriser la connexion');
+    expect(emailHtml).not.toContain('/loan-request.html?token=magic-1');
   });
 
   it('prolonge le lien de connexion public a un an quand rester connecte est coche', async () => {
@@ -158,6 +163,8 @@ describe('loan requests', () => {
     const ttlMs = expiresAt.getTime() - Date.now();
     expect(ttlMs).toBeGreaterThan(360 * 24 * 60 * 60 * 1000);
     expect(ttlMs).toBeLessThanOrEqual(365 * 24 * 60 * 60 * 1000);
+    const sendMail = createSmtpTransporter.mock.results[0].value.transporter.sendMail;
+    expect(sendMail.mock.calls[0][0].html).toContain('remember=1');
   });
 
   it('verrouille un lot complet meme pour une demande partielle', async () => {

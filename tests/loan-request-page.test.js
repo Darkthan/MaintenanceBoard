@@ -24,7 +24,7 @@ describe('loan request public page', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('Chargement du lien');
     expect(res.text).toContain('function getToken()');
-    expect(res.text).toContain('function getAccessToken()');
+    expect(res.text).toContain('function getAccessToken(token = getToken())');
     expect(res.text).toContain('function apiFetch(pathname)');
     expect(res.text).toContain('function renderResourceSummary()');
     expect(res.text).toContain("lrdpRenderCalendar();");
@@ -35,5 +35,21 @@ describe('loan request public page', () => {
     expect(res.text).toContain('Date de début');
     expect(res.text).toContain('Heure de fin');
     expect(res.text).toContain("/loan-request/resources/${encodeURIComponent(resourceId)}/schedule?");
+    expect(res.text).toContain("const ACCESS_STORAGE_PREFIX = 'loan-request-access-'");
+    expect(res.text).toContain('sessionStorage.setItem(key, value)');
+    expect(res.text).toContain('localStorage.setItem(key, value)');
+    expect(res.text).toContain('waitForAuthBroadcast(currentToken, rememberMe)');
+    expect(res.text).not.toContain("url.searchParams.set('access', accessToken);");
+  });
+
+  it("sert une page d'autorisation séparée qui déverrouille la demande initiale", async () => {
+    const res = await request(app).get('/loan-auth.html');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Connexion autorisée');
+    expect(res.text).toContain('function broadcastAuthorization(token, accessToken, rememberMe)');
+    expect(res.text).toContain("history.replaceState(null, '', '/loan-auth.html')");
+    expect(res.text).toContain('/loan-request.html?token=${encodeURIComponent(token)}');
+    expect(res.text).not.toContain('id="request-form"');
   });
 });
