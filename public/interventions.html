@@ -172,6 +172,16 @@
           <div id="detail-equipment-suggestion" class="hidden mt-1"></div>
         </div>
       </div>
+      <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-xs font-medium text-slate-500">Lien direct</span>
+          <button type="button" onclick="copyInterventionLink()" class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition" title="Copier le lien">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V5a2 2 0 012-2h7a2 2 0 012 2v7m-4 5v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-7a2 2 0 012-2h2"/></svg>
+            Copier
+          </button>
+        </div>
+        <a id="detail-intervention-link" href="#" target="_blank" rel="noopener" class="mt-1 block break-all text-xs text-slate-500 hover:text-blue-600 hover:underline"></a>
+      </div>
       <div id="detail-description-wrap" class="hidden">
         <span class="text-xs text-slate-400 block mb-1">Description</span>
         <div id="detail-description-display" onclick="openAttributeEditor('description')" class="cursor-pointer">
@@ -1271,6 +1281,35 @@ function openCreateOrderFromIntervention(interventionId) {
   window.location = `/orders.html?action=create&interventionId=${encodeURIComponent(interventionId)}`;
 }
 
+function getInterventionLink(interventionId) {
+  const url = new URL('/interventions.html', window.location.origin);
+  url.searchParams.set('focus', interventionId);
+  return url.toString();
+}
+
+async function copyInterventionLink() {
+  const link = document.getElementById('detail-intervention-link')?.href;
+  if (!link) return;
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(link);
+    } else {
+      const input = document.createElement('textarea');
+      input.value = link;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+    }
+    showToast('Lien copié');
+  } catch (err) {
+    showToast('Impossible de copier le lien', 'error');
+  }
+}
+
 function renderReporters(reporters = []) {
   const section = document.getElementById('detail-reporters-section');
   const list = document.getElementById('detail-reporters-list');
@@ -1463,6 +1502,10 @@ async function openInterventionDetail(id) {
 
     document.getElementById('detail-title').textContent = intervention.title;
     document.getElementById('detail-meta').textContent = `Intervention #${intervention.id.slice(-6).toUpperCase()}`;
+    const interventionLink = getInterventionLink(intervention.id);
+    const interventionLinkEl = document.getElementById('detail-intervention-link');
+    interventionLinkEl.href = interventionLink;
+    interventionLinkEl.textContent = interventionLink;
     document.getElementById('detail-status-display').innerHTML = statusBadge(intervention.status);
     document.getElementById('detail-priority-display').innerHTML = priorityBadge(intervention.priority);
     document.getElementById('detail-source').innerHTML = intervention.source === 'PUBLIC'
