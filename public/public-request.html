@@ -42,15 +42,20 @@
   </main>
 
   <script>
-    const loanToken = new URLSearchParams(window.location.search).get('loan');
     const loanLink = document.getElementById('public-loan-request-link');
-    if (loanToken) {
-      loanLink.href = `/loan-request.html?token=${encodeURIComponent(loanToken)}`;
-    } else {
-      loanLink.removeAttribute('href');
-      loanLink.classList.add('pointer-events-none', 'opacity-50');
-      document.getElementById('loan-link-error').classList.remove('hidden');
+    async function configureLoanLink() {
+      try {
+        const response = await fetch('/api/loan-request/general-link');
+        const data = await response.json();
+        if (!response.ok || !data.token) throw new Error();
+        loanLink.href = `/loan-request.html?token=${encodeURIComponent(data.token)}`;
+      } catch {
+        loanLink.removeAttribute('href');
+        loanLink.classList.add('pointer-events-none', 'opacity-50');
+        document.getElementById('loan-link-error').classList.remove('hidden');
+      }
     }
+    configureLoanLink();
   </script>
 </body>
 </html>

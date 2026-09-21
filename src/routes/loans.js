@@ -595,6 +595,26 @@ async function getRequestResources(link) {
   return resources.map(mapResource);
 }
 
+// GET /api/loan-request/general-link — accès du portail public de demandes
+loanPublicRouter.get('/general-link', async (_req, res, next) => {
+  try {
+    const link = await prisma.loanMagicLink.findFirst({
+      where: {
+        title: 'Lien général de demande',
+        resourceId: null,
+        isActive: true,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!link) return res.status(404).json({ error: 'Les réservations publiques ne sont pas encore activées.' });
+    res.json({ token: link.token });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function ensureValidDates(startAt, endAt) {
   const start = new Date(startAt);
   const end = new Date(endAt);
@@ -1092,8 +1112,7 @@ loansRouter.get('/general-request-link', async (req, res, next) => {
       });
     }
 
-    const url = new URL('/public-request.html', config.appUrl);
-    url.searchParams.set('loan', link.token);
+    const url = new URL('/demande', config.appUrl);
     res.json({ token: link.token, url: url.toString() });
   } catch (err) {
     next(err);

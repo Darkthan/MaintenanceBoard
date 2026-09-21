@@ -65,12 +65,12 @@ describe('interventions page', () => {
   });
 
   it('sert le portail public qui propose intervention et réservation', async () => {
-    const res = await request(app).get('/public-request.html?loan=token-general');
+    const res = await request(app).get('/demande');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('Signaler une intervention');
     expect(res.text).toContain('Réserver du matériel');
     expect(res.text).toContain('/report.html');
-    expect(res.text).toContain('/loan-request.html?token=${encodeURIComponent(loanToken)}');
+    expect(res.text).toContain("fetch('/api/loan-request/general-link')");
   });
 });

@@ -84,8 +84,17 @@ describe('loan requests', () => {
     const res = await request(buildApp()).get('/api/loans/general-request-link');
 
     expect(res.status).toBe(200);
-    expect(res.body.url).toBe('https://maintenanceboard.test/public-request.html?loan=general-loan-token');
+    expect(res.body.url).toBe('https://maintenanceboard.test/demande');
     expect(prisma.loanMagicLink.create).not.toHaveBeenCalled();
+  });
+
+  it('expose le jeton de réservation au portail public général', async () => {
+    prisma.loanMagicLink.findFirst.mockResolvedValue({ token: 'general-loan-token' });
+
+    const res = await request(buildApp()).get('/api/loan-request/general-link');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ token: 'general-loan-token' });
   });
 
   it('envoie un lien de connexion par email pour acceder au formulaire', async () => {
