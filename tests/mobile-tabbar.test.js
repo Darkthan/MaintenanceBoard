@@ -35,11 +35,21 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain('100dvh');
     expect(res.text).toContain('touch-action: manipulation');
     expect(res.text).toContain('[data-mobile-fab="true"]');
+    expect(res.text).toContain('data-pagination-fab-clearance');
+    expect(res.text).toContain("el.dataset.paginationFabClearance = 'true'");
     expect(res.text).toContain('const THRESHOLD = 140');
     expect(res.text).toContain('const MIN_PULL_DURATION_MS = 350');
     expect(res.text).toContain("label: 'Accueil'");
     expect(res.text).toContain("href: '/scan-code.html'");
     expect(res.text).toContain("label: 'Scanner'");
     expect(res.text).toContain("const coreIds = ['dashboard', 'equipment', 'interventions', 'todos']");
+  });
+
+  it.each(['/rooms.html', '/interventions.html'])('empêche le bouton flottant de bloquer la pagination sur %s', async page => {
+    const res = await request(app).get(page);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toMatch(/class="fixed right-6 bottom-6[^\"]*pointer-events-none" data-mobile-fab="true"/);
+    expect(res.text).toMatch(/class="[^\"]*pointer-events-auto[^\"]*"/);
   });
 });

@@ -41,6 +41,13 @@ function ensureResponsiveStyles() {
   const style = document.createElement('style');
   style.id = 'app-responsive-style';
   style.textContent = `
+    /* Garde la pagination hors de la zone occupée par le bouton d'action flottant. */
+    @media (min-width: 768px) {
+      body.app-mobile-refined [data-pagination-fab-clearance="true"] {
+        padding-right: 5.5rem !important;
+      }
+    }
+
     /* ── Tab bar + masquage sidebar : toutes résolutions < lg (< 1024px) ─────── */
     @media (max-width: 1023px) {
       body.app-mobile-refined {
@@ -198,6 +205,7 @@ function ensureResponsiveStyles() {
         flex-direction: column;
         align-items: stretch;
         gap: 0.75rem;
+        padding-right: 0 !important;
       }
 
       body.app-mobile-refined [data-mobile-pagination] > * {
@@ -375,8 +383,10 @@ function enhanceResponsiveLayout() {
     actionEl.dataset.mobileHeaderWrapped = 'true';
   });
 
+  const hasPageFab = !!document.querySelector('[data-mobile-fab="true"]');
   document.querySelectorAll('#pagination').forEach(el => {
     el.dataset.mobilePagination = 'true';
+    if (hasPageFab) el.dataset.paginationFabClearance = 'true';
   });
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
