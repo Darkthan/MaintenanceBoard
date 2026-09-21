@@ -716,6 +716,34 @@ loanPublicRouter.get('/account', async (req, res, next) => {
   }
 });
 
+// PATCH /api/loan-request/account — mise à jour du profil public vérifié
+loanPublicRouter.patch('/account', [
+  body('accessToken').isString().isLength({ min: 10, max: 200 }),
+  body('requesterName').trim().isLength({ min: 2, max: 200 })
+], async (req, res, next) => {
+  try {
+    if (!validate(req, res)) return;
+    const accessLink = await findValidAccountAccessLink(req.body.accessToken);
+    if (!accessLink) return res.status(401).json({ error: 'Connexion expirée. Demandez un nouveau magic link.' });
+
+    const requesterName = String(req.body.requesterName || '').trim();
+    const updated = await prisma.loanRequestAccessLink.update({
+      where: { id: accessLink.id },
+      data: { requesterName }
+    });
+
+    res.json({
+      account: {
+        email: normalizeEmail(updated.email || accessLink.email),
+        name: updated.requesterName,
+        accessExpiresAt: updated.expiresAt || accessLink.expiresAt
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function ensureValidDates(startAt, endAt) {
   const start = new Date(startAt);
   const end = new Date(endAt);

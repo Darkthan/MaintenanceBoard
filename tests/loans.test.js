@@ -40,7 +40,8 @@ jest.mock('../src/lib/prisma', () => ({
   },
   loanRequestAccessLink: {
     create: jest.fn(),
-    findUnique: jest.fn()
+    findUnique: jest.fn(),
+    update: jest.fn()
   },
   loanReservation: {
     findMany: jest.fn(),
@@ -160,6 +161,28 @@ describe('loan requests', () => {
       .query({ access: 'expired-access-token' });
 
     expect(res.status).toBe(401);
+  });
+
+  it('modifie le nom du compte public connecté', async () => {
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    prisma.loanRequestAccessLink.findUnique.mockResolvedValue({
+      id: 'access-1', token: 'account-access-token', email: 'jean@example.com', requesterName: 'Jean', expiresAt,
+      requestLink: { id: 'link-1' }
+    });
+    prisma.loanRequestAccessLink.update.mockResolvedValue({
+      id: 'access-1', email: 'jean@example.com', requesterName: 'Jean Dupont', expiresAt
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/loan-request/account')
+      .send({ accessToken: 'account-access-token', requesterName: 'Jean Dupont' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.loanRequestAccessLink.update).toHaveBeenCalledWith({
+      where: { id: 'access-1' },
+      data: { requesterName: 'Jean Dupont' }
+    });
+    expect(res.body.account).toEqual(expect.objectContaining({ name: 'Jean Dupont', email: 'jean@example.com' }));
   });
 
   it('envoie un lien de connexion par email pour acceder au formulaire', async () => {

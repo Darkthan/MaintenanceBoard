@@ -115,5 +115,9 @@ describe('interventions page', () => {
     expect(res.text).toContain('id="account-prompt"');
     expect(res.text).toContain('Se connecter à mon compte');
     expect(res.text).toContain('function showAccountPrompt()');
+    expect(res.text).toContain('id="account-menu-wrap"');
+    expect(res.text).toContain('id="account-profile-form"');
+    expect(res.text).toContain("method: 'PATCH'");
+    expect(res.text).toContain('Nom et prénom');
   });
 });
