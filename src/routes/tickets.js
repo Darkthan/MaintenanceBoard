@@ -29,7 +29,7 @@ async function resolveReporterAccess(token) {
           include: {
             room: { select: { name: true } },
             equipment: { select: { name: true } },
-            tech: { select: { email: true, name: true } }
+            tech: { select: { email: true, contactEmail: true, name: true } }
           }
         }
       }
@@ -42,7 +42,7 @@ async function resolveReporterAccess(token) {
     include: {
       room: { select: { name: true } },
       equipment: { select: { name: true } },
-      tech: { select: { email: true, name: true } }
+      tech: { select: { email: true, contactEmail: true, name: true } }
     }
   });
   if (!legacyIntervention) return null;
@@ -490,42 +490,54 @@ router.post('/:token/messages', (req, res, next) => {
     try {
       const { transporter, from } = createSmtpTransporter();
       if (transporter) {
-        let recipientEmail = null;
-        let recipientName = null;
+        let recipients = [];
 
-        if (intervention.tech?.email) {
-          recipientEmail = intervention.tech.email;
-          recipientName = intervention.tech.name;
+        if (intervention.tech) {
+          const email = intervention.tech.contactEmail || intervention.tech.email;
+          if (email) recipients.push({ email, name: intervention.tech.name });
         } else {
-          const admin = await prisma.user.findFirst({
-            where: { role: 'ADMIN' },
-            select: { email: true, name: true }
+          const admins = await prisma.user.findMany({
+            where: { role: 'ADMIN', isActive: true },
+            select: { email: true, contactEmail: true, name: true }
           });
-          if (admin) {
-            recipientEmail = admin.email;
-            recipientName = admin.name;
-          }
+          recipients = admins
+            .map(admin => ({ email: admin.contactEmail || admin.email, name: admin.name }))
+            .filter(recipient => recipient.email);
         }
 
-        if (recipientEmail) {
+        recipients = [...new Map(recipients.map(recipient => [
+          String(recipient.email).trim().toLowerCase(),
+          recipient
+        ])).values()];
+
+        if (recipients.length > 0) {
           const senderName = message.authorName || reporter?.email || intervention.reporterEmail || 'Demandeur';
-          await transporter.sendMail({
-            from,
-            to: recipientEmail,
-            subject: `[Nouveau message] ${intervention.title}`,
-            html: `
-              <div style="font-family:sans-serif;max-width:500px;margin:0 auto;">
-                <h2 style="color:#1e293b;">Nouveau message sur un ticket</h2>
-                <p><strong>${senderName}</strong> a envoyé un message :</p>
-                <blockquote style="border-left:3px solid #f97316;padding-left:12px;color:#475569;">${content.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</blockquote>
-                <p><a href="${config.appUrl}/interventions.html">Voir les interventions</a></p>
-              </div>
-            `
-          });
+          const safeSenderName = String(senderName).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const safeContent = content
+            ? content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            : `Pièce jointe : ${String(message.attachmentName || 'fichier').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}`;
+          const ticketLink = `${config.appUrl.replace(/\/$/, '')}/messages-ticket.html?id=${encodeURIComponent(intervention.id)}`;
+          const subject = `[Nouveau message] ${String(intervention.title || 'Ticket').replace(/[\r\n]+/g, ' ')}`;
+
+          await Promise.all(recipients.map(recipient => transporter.sendMail({
+              from,
+              to: recipient.email,
+              subject,
+              html: `
+                <div style="font-family:sans-serif;max-width:500px;margin:0 auto;">
+                  <h2 style="color:#1e293b;">Nouveau message sur un ticket</h2>
+                  <p>Bonjour${recipient.name ? ` ${String(recipient.name).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}` : ''},</p>
+                  <p><strong>${safeSenderName}</strong> a envoyé un message :</p>
+                  <blockquote style="border-left:3px solid #f97316;padding-left:12px;color:#475569;">${safeContent}</blockquote>
+                  <p style="margin-top:24px;"><a href="${ticketLink}" style="background:#f59e0b;color:white;padding:10px 20px;text-decoration:none;border-radius:8px;font-weight:bold;">Ouvrir la conversation</a></p>
+                  <p style="color:#64748b;font-size:12px;margin-top:16px;">Lien direct : <a href="${ticketLink}">${ticketLink}</a></p>
+                </div>
+              `
+            })));
         }
       }
     } catch (mailErr) {
-      // Fail silently
+      console.error('[tickets] notification chat:', mailErr.message);
     }
 
     return res.status(201).json(serializeReporterMessage(message, req.params.token));

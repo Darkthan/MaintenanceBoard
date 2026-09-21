@@ -1197,9 +1197,21 @@ router.post('/:id/messages', requireAuth, (req, res, next) => {
       }
     });
 
-    const reporterRecipients = [...new Map((intervention.reporters || [])
-      .filter(r => r.email)
-      .map(r => [String(r.email).toLowerCase(), { email: r.email, name: r.name, token: r.token }]))
+    const reporterCandidates = [...(intervention.reporters || [])];
+    if (intervention.reporterEmail) {
+      reporterCandidates.push({
+        email: intervention.reporterEmail,
+        name: intervention.reporterName,
+        token: intervention.reporterToken
+      });
+    }
+    const reporterRecipients = [...new Map(reporterCandidates
+      .filter(reporter => reporter.email)
+      .map(reporter => [String(reporter.email).trim().toLowerCase(), {
+        email: reporter.email,
+        name: reporter.name,
+        token: reporter.token || intervention.reporterToken
+      }]))
       .values()];
 
     // Notification email à tous les demandeurs rattachés
@@ -1208,17 +1220,26 @@ router.post('/:id/messages', requireAuth, (req, res, next) => {
         const { transporter, from } = createSmtpTransporter();
         if (transporter) {
           await Promise.all(reporterRecipients.map(recipient => {
-            const ticketLink = `${config.appUrl}/ticket-status.html?token=${recipient.token}`;
+            const ticketLink = recipient.token
+              ? `${config.appUrl.replace(/\/$/, '')}/ticket-status.html?token=${encodeURIComponent(recipient.token)}`
+              : `${config.appUrl.replace(/\/$/, '')}/my-tickets.html`;
+            const safeRecipientName = recipient.name
+              ? ' ' + String(recipient.name).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+              : '';
+            const safeAuthorName = String(req.user.name || 'Équipe technique').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeContent = content
+              ? content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+              : `Pièce jointe : ${String(message.attachmentName || 'fichier').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}`;
             return transporter.sendMail({
               from,
               to: recipient.email,
-              subject: `[Réponse] ${intervention.title} – MaintenanceBoard`,
+              subject: `[Réponse] ${String(intervention.title || 'Ticket').replace(/[\r\n]+/g, ' ')} – MaintenanceBoard`,
               html: `
                 <div style="font-family:sans-serif;max-width:500px;margin:0 auto;">
                   <h2 style="color:#1e293b;">Réponse de l'équipe technique</h2>
-                  <p>Bonjour${recipient.name ? ' ' + recipient.name : ''},</p>
-                  <p><strong>${req.user.name}</strong> a répondu à votre demande :</p>
-                  <blockquote style="border-left:3px solid #3b82f6;padding-left:12px;color:#475569;">${content.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</blockquote>
+                  <p>Bonjour${safeRecipientName},</p>
+                  <p><strong>${safeAuthorName}</strong> a répondu à votre demande :</p>
+                  <blockquote style="border-left:3px solid #3b82f6;padding-left:12px;color:#475569;">${safeContent}</blockquote>
                   <p style="margin-top:24px;">
                     <a href="${ticketLink}" style="background:#f97316;color:white;padding:10px 20px;text-decoration:none;border-radius:8px;font-weight:bold;">Voir ma demande</a>
                   </p>
@@ -1229,7 +1250,7 @@ router.post('/:id/messages', requireAuth, (req, res, next) => {
           }));
         }
       } catch (mailErr) {
-        // Fail silently
+        console.error('[interventions] notification chat:', mailErr.message);
       }
     }
 
