@@ -45,10 +45,16 @@
           <p class="text-xs text-slate-400 mt-0.5">Demandes envoyées par les utilisateurs</p>
         </div>
       </div>
-      <a href="/report.html" class="hidden sm:inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Formulaire public
-      </a>
+      <div class="flex items-center gap-2">
+        <button id="enable-ticket-notifications" type="button" class="hidden items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 transition">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0h6z"/></svg>
+          <span id="ticket-notifications-label">Activer les notifications</span>
+        </button>
+        <a href="/report.html" class="hidden sm:inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Formulaire public
+        </a>
+      </div>
     </header>
 
     <div class="flex-1 p-4 sm:p-6 space-y-5">
@@ -143,9 +149,50 @@ let currentPage = 1;
 let totalPages = 1;
 let searchTimer = null;
 let unreadOnly = false;
+let ticketNotificationConfig = null;
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const formatDate = value => value ? new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+}
+
+async function loadTicketNotificationOption() {
+  if (user?.role !== 'ADMIN' || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+  const response = await fetch('/api/tickets/notification-config');
+  if (!response.ok) return;
+  ticketNotificationConfig = await response.json();
+  if (!ticketNotificationConfig.pushConfigured) return;
+  const button = document.getElementById('enable-ticket-notifications');
+  button.classList.remove('hidden');
+  button.classList.add('inline-flex');
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  if (Notification.permission === 'granted' && subscription) {
+    document.getElementById('ticket-notifications-label').textContent = 'Notifications actives';
+  }
+}
+
+async function enableTicketNotifications() {
+  if (!ticketNotificationConfig?.pushConfigured) return;
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') return showToast('Notifications navigateur refusées', 'warning');
+  const registration = await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(ticketNotificationConfig.vapidPublicKey)
+    });
+  }
+  await api.post('/tickets/admin-push-subscriptions', { subscription });
+  document.getElementById('ticket-notifications-label').textContent = 'Notifications actives';
+  showToast('Notifications de nouvelles demandes activées');
+}
 
 function primaryReporter(ticket) {
   return ticket.reporters?.find(item => item.isPrimary) || ticket.reporters?.[0] || {
@@ -389,6 +436,7 @@ document.getElementById('search-input').addEventListener('input', () => {
 });
 document.getElementById('reset-filters').addEventListener('click', resetFilters);
 document.getElementById('refresh-btn').addEventListener('click', () => Promise.all([loadTickets(), loadSummary()]));
+document.getElementById('enable-ticket-notifications').addEventListener('click', () => enableTicketNotifications().catch(error => showToast(error.message, 'error')));
 document.querySelectorAll('[data-summary-filter]').forEach(card => card.addEventListener('click', () => {
   const filter = card.dataset.summaryFilter;
   resetFilters(false);
@@ -404,6 +452,7 @@ requireLogin().then(async loggedUser => {
   renderNav('requests');
   if (user.role !== 'ADMIN') document.getElementById('summary-unassigned-card').classList.add('hidden');
   try {
+    await loadTicketNotificationOption();
     await loadTechnicians();
     restoreFilters();
     await Promise.all([loadTickets(), loadSummary()]);

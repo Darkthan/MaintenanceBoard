@@ -124,6 +124,18 @@
           </div>
         </div>
 
+        <section class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p class="text-sm font-medium text-slate-700">Notifications de suivi</p>
+          <label class="mt-2 flex items-start gap-2 text-xs leading-5 text-slate-600">
+            <input id="notify-by-email" type="checkbox" checked class="mt-0.5 rounded border-slate-300 text-orange-500 focus:ring-orange-400" />
+            <span>Recevoir les réponses de l’équipe par email</span>
+          </label>
+          <label id="browser-notification-option" class="mt-2 flex items-start gap-2 text-xs leading-5 text-slate-600">
+            <input id="notify-by-browser" type="checkbox" disabled class="mt-0.5 rounded border-slate-300 text-orange-500 focus:ring-orange-400 disabled:opacity-50" />
+            <span><span class="font-medium">Recevoir les réponses sur ce navigateur</span><span id="browser-notification-status" class="block text-slate-400">Vérification de la disponibilité…</span></span>
+          </label>
+        </section>
+
         <!-- Photo / Fichier joint -->
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Photo ou document (optionnel)</label>
@@ -186,6 +198,58 @@
 let allRooms = [];
 let selectedRoomId = null;
 const LOAN_ACCESS_STORAGE_PREFIX = 'loan-request-access-';
+let ticketNotificationConfig = null;
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+}
+
+async function initializeBrowserNotifications() {
+  const checkbox = document.getElementById('notify-by-browser');
+  const status = document.getElementById('browser-notification-status');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    status.textContent = 'Ce navigateur ne prend pas en charge les notifications.';
+    return;
+  }
+  try {
+    const response = await fetch('/api/tickets/notification-config');
+    ticketNotificationConfig = await response.json().catch(() => ({}));
+    if (!response.ok || !ticketNotificationConfig.pushConfigured) {
+      status.textContent = 'Les notifications navigateur ne sont pas configurées.';
+      return;
+    }
+    await navigator.serviceWorker.register('/sw.js');
+    checkbox.disabled = false;
+    status.textContent = Notification.permission === 'granted'
+      ? 'Les notifications sont déjà autorisées sur cet appareil.'
+      : 'Votre navigateur demandera votre autorisation lors de l’envoi.';
+  } catch {
+    status.textContent = 'Les notifications navigateur sont momentanément indisponibles.';
+  }
+}
+
+async function getReporterPushSubscription() {
+  const checkbox = document.getElementById('notify-by-browser');
+  if (!checkbox.checked || checkbox.disabled || !ticketNotificationConfig?.vapidPublicKey) return null;
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    checkbox.checked = false;
+    document.getElementById('browser-notification-status').textContent = 'Autorisation refusée. Le suivi par email reste disponible.';
+    return null;
+  }
+  const registration = await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(ticketNotificationConfig.vapidPublicKey)
+    });
+  }
+  return subscription.toJSON ? subscription.toJSON() : subscription;
+}
 
 function getRememberedLoanAccessEntries() {
   const entries = [];
@@ -475,6 +539,7 @@ document.getElementById('report-form').addEventListener('submit', async e => {
   err.classList.add('hidden');
 
   try {
+    const pushSubscription = await getReporterPushSubscription().catch(() => null);
     const fd = new FormData();
     const freeRoom = roomSearch.value.trim();
     if (selectedRoomId) fd.append('roomId', selectedRoomId);
@@ -485,6 +550,8 @@ document.getElementById('report-form').addEventListener('submit', async e => {
     const email = document.getElementById('reporter-email').value;
     if (name) fd.append('reporterName', name);
     if (email) fd.append('reporterEmail', email);
+    fd.append('notifyByEmail', String(document.getElementById('notify-by-email').checked));
+    if (pushSubscription) fd.append('pushSubscription', JSON.stringify(pushSubscription));
     fd.append('_honeypot', document.getElementById('honeypot').value);
 
     if (repPendingFile) {
@@ -519,6 +586,7 @@ document.getElementById('report-form').addEventListener('submit', async e => {
 });
 
 prefillRememberedRequester();
+initializeBrowserNotifications();
 loadRooms();
 </script>
 <footer class="mt-6 text-center text-xs text-slate-400"><a href="/legal.html" class="underline hover:text-slate-600">Mentions légales</a></footer>

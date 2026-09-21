@@ -5,10 +5,15 @@ const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/roles');
 const { createSmtpTransporter } = require('../utils/mail');
+const { readSettings, writeSettings } = require('../utils/settings');
 const config = require('../config');
 const { listKnowledgeBaseArticles, stripMarkdown } = require('../utils/knowledgeBase');
 const { rankKnowledgeSuggestions } = require('../utils/knowledgeSuggestions');
+const { getPushConfig, isPushConfigured } = require('../utils/supervision');
+const { notifyAdminsOfNewTicket, parsePushSubscription } = require('../utils/ticketNotifications');
 const {
   ticketAttachmentUpload,
   prepareTicketAttachment
@@ -42,6 +47,70 @@ router.get('/knowledge-suggestions', (req, res) => {
     }))
   });
 });
+
+router.get('/notification-config', (_req, res) => {
+  res.json({
+    pushConfigured: isPushConfigured(),
+    vapidPublicKey: isPushConfigured() ? getPushConfig().publicKey : ''
+  });
+});
+
+router.post('/admin-push-subscriptions', requireAuth, requireAdmin, (req, res) => {
+  const subscription = parsePushSubscription(req.body?.subscription);
+  if (!subscription) return res.status(400).json({ error: 'Abonnement push invalide' });
+
+  const settings = readSettings();
+  const ticketNotifications = settings.ticketNotifications || {};
+  const subscriptions = Array.isArray(ticketNotifications.adminPushSubscriptions)
+    ? ticketNotifications.adminPushSubscriptions.map(parsePushSubscription).filter(Boolean)
+    : [];
+  const nextSubscriptions = subscriptions.filter(item => item.endpoint !== subscription.endpoint);
+  nextSubscriptions.push(subscription);
+
+  writeSettings({
+    ticketNotifications: {
+      ...ticketNotifications,
+      adminPushSubscriptions: nextSubscriptions.slice(-200)
+    }
+  });
+
+  return res.status(201).json({ message: 'Notifications de demandes activées' });
+});
+
+function escapeEmailHtml(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function notifyAdminsByEmail(intervention, reporterName, reporterEmail) {
+  if (!prisma.user?.findMany) return;
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { email: true, contactEmail: true, name: true }
+  });
+  const recipients = [...new Map(admins
+    .map(admin => [String(admin.contactEmail || admin.email || '').trim().toLowerCase(), admin])
+    .filter(([email]) => email)
+  ).values()];
+  if (!recipients.length) return;
+
+  const { transporter, from } = createSmtpTransporter();
+  if (!transporter) return;
+  const ticketLink = `${config.appUrl.replace(/\/$/, '')}/messages-ticket.html?id=${encodeURIComponent(intervention.id)}`;
+  await Promise.all(recipients.map(admin => transporter.sendMail({
+    from,
+    to: admin.contactEmail || admin.email,
+    subject: `[Nouvelle demande] ${String(intervention.title || 'Intervention').replace(/[\r\n]+/g, ' ')}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
+        <h2 style="color:#1e293b;">Nouvelle demande d’intervention</h2>
+        <p>Bonjour${admin.name ? ` ${escapeEmailHtml(admin.name)}` : ''},</p>
+        <p><strong>${escapeEmailHtml(reporterName || reporterEmail || 'Un demandeur')}</strong> vient de créer une demande :</p>
+        <p style="border-left:3px solid #f97316;padding:10px 14px;color:#475569;">${escapeEmailHtml(intervention.title)}</p>
+        <p style="margin-top:24px;"><a href="${ticketLink}" style="background:#f97316;color:white;padding:10px 20px;text-decoration:none;border-radius:8px;font-weight:bold;">Ouvrir la demande</a></p>
+        <p style="color:#64748b;font-size:12px;margin-top:16px;">Lien direct : <a href="${ticketLink}">${ticketLink}</a></p>
+      </div>`
+  })));
+}
 
 async function resolveReporterAccess(token) {
   if (prisma.interventionReporter?.findUnique) {
@@ -106,6 +175,8 @@ router.post('/', ticketAttachmentUpload, prepareTicketAttachment, async (req, re
       description,
       reporterName,
       reporterEmail,
+      notifyByEmail,
+      pushSubscription,
       _honeypot
     } = req.body;
 
@@ -166,6 +237,13 @@ router.post('/', ticketAttachmentUpload, prepareTicketAttachment, async (req, re
       : null;
 
     const reporterToken = uuidv4();
+    const wantsEmailNotifications = notifyByEmail === undefined
+      || notifyByEmail === true
+      || notifyByEmail === 'true'
+      || notifyByEmail === '1';
+    const browserSubscription = String(pushSubscription || '').length <= 20000
+      ? parsePushSubscription(pushSubscription)
+      : null;
 
     const intervention = await prisma.intervention.create({
       data: {
@@ -186,7 +264,9 @@ router.post('/', ticketAttachmentUpload, prepareTicketAttachment, async (req, re
             name: reporterName ? reporterName.trim() : null,
             email: reporterEmail ? reporterEmail.trim().toLowerCase() : null,
             token: reporterToken,
-            isPrimary: true
+            isPrimary: true,
+            notifyByEmail: wantsEmailNotifications,
+            pushSubscription: browserSubscription ? JSON.stringify(browserSubscription) : null
           }
         }
       }
@@ -207,6 +287,15 @@ router.post('/', ticketAttachmentUpload, prepareTicketAttachment, async (req, re
         }
       });
     }
+
+    const adminNotifications = [
+      notifyAdminsByEmail(intervention, reporterName, reporterEmail),
+      notifyAdminsOfNewTicket(intervention)
+    ];
+    const notificationResults = await Promise.allSettled(adminNotifications);
+    notificationResults
+      .filter(result => result.status === 'rejected')
+      .forEach(result => console.error('[tickets] notification nouvelle demande:', result.reason?.message || result.reason));
 
     return res.status(201).json({
       success: true,

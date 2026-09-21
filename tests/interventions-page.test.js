@@ -50,6 +50,8 @@ describe('interventions page', () => {
     expect(res.text).toContain('data-action="assignment"');
     expect(res.text).toContain('/messages-ticket.html?id=');
     expect(res.text).toContain('id="pagination"');
+    expect(res.text).toContain('id="enable-ticket-notifications"');
+    expect(res.text).toContain("api.post('/tickets/admin-push-subscriptions'");
   });
 
   it('préremplit le signalement avec une identité de magic link mémorisée', async () => {
@@ -64,6 +66,9 @@ describe('interventions page', () => {
     expect(res.text).toContain('/js/ticket-attachments.js');
     expect(res.text).toContain('PDF et vidéos jusqu’à 25 Mo');
     expect(res.text).toContain('TicketAttachments.prepare(repPendingFile)');
+    expect(res.text).toContain('id="notify-by-email"');
+    expect(res.text).toContain('id="notify-by-browser"');
+    expect(res.text).toContain('getReporterPushSubscription()');
     expect(res.text).toContain('id="knowledge-suggestions"');
     expect(res.text).toContain('/api/tickets/knowledge-suggestions?q=');
     expect(res.text).toContain('Afficher la procédure');

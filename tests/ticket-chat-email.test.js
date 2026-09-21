@@ -18,7 +18,8 @@ jest.mock('../src/middleware/upload', () => ({
 
 jest.mock('../src/lib/prisma', () => ({
   intervention: {
-    findUnique: jest.fn()
+    findUnique: jest.fn(),
+    create: jest.fn()
   },
   ticketMessage: {
     findFirst: jest.fn(),
@@ -34,8 +35,14 @@ jest.mock('../src/utils/mail', () => ({
   createSmtpTransporter: jest.fn()
 }));
 
+jest.mock('../src/utils/settings', () => ({
+  readSettings: jest.fn(() => ({})),
+  writeSettings: jest.fn()
+}));
+
 const prisma = require('../src/lib/prisma');
 const { createSmtpTransporter } = require('../src/utils/mail');
+const { writeSettings } = require('../src/utils/settings');
 const ticketsRouter = require('../src/routes/tickets');
 const interventionsRouter = require('../src/routes/interventions');
 
@@ -103,6 +110,64 @@ describe('notifications email du chat ticket', () => {
     expect(sendMail.mock.calls[0][0].html).toContain('/messages-ticket.html?id=ticket-1');
   });
 
+  it('prévient les administrateurs lors de la création d’une nouvelle demande', async () => {
+    prisma.intervention.create.mockImplementation(async ({ data }) => ({
+      id: 'ticket-new',
+      title: data.title,
+      reporterToken: data.reporterToken
+    }));
+    prisma.user.findMany.mockResolvedValue([
+      { name: 'Admin A', email: 'admin-a@example.test', contactEmail: null }
+    ]);
+
+    const res = await request(buildApp())
+      .post('/api/tickets')
+      .field('title', 'Projecteur en panne')
+      .field('reporterName', 'Jean Dupont')
+      .field('reporterEmail', 'jean@example.test')
+      .field('notifyByEmail', 'true')
+      .field('pushSubscription', JSON.stringify({
+        endpoint: 'https://push.example.test/requester-1',
+        keys: { p256dh: 'requester-public-key', auth: 'requester-auth-key' }
+      }));
+
+    expect(res.status).toBe(201);
+    expect(prisma.intervention.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        reporters: {
+          create: expect.objectContaining({
+            notifyByEmail: true,
+            pushSubscription: expect.stringContaining('requester-1')
+          })
+        }
+      })
+    }));
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sendMail.mock.calls[0][0]).toEqual(expect.objectContaining({
+      to: 'admin-a@example.test',
+      subject: '[Nouvelle demande] Projecteur en panne'
+    }));
+    expect(sendMail.mock.calls[0][0].html).toContain('/messages-ticket.html?id=ticket-new');
+  });
+
+  it('enregistre séparément les notifications navigateur des administrateurs', async () => {
+    const subscription = {
+      endpoint: 'https://push.example.test/admin-1',
+      keys: { p256dh: 'public-key', auth: 'auth-key' }
+    };
+
+    const res = await request(buildApp())
+      .post('/api/tickets/admin-push-subscriptions')
+      .send({ subscription });
+
+    expect(res.status).toBe(201);
+    expect(writeSettings).toHaveBeenCalledWith({
+      ticketNotifications: {
+        adminPushSubscriptions: [expect.objectContaining({ endpoint: subscription.endpoint })]
+      }
+    });
+  });
+
   it('utilise en priorité l’email de contact du technicien attribué', async () => {
     prisma.intervention.findUnique.mockResolvedValue({
       id: 'ticket-2',
@@ -151,5 +216,31 @@ describe('notifications email du chat ticket', () => {
       subject: '[Réponse] Réseau indisponible – MaintenanceBoard'
     }));
     expect(sendMail.mock.calls[0][0].html).toContain('/ticket-status.html?token=legacy-token');
+  });
+
+  it('respecte le refus des notifications email du demandeur', async () => {
+    prisma.intervention.findUnique.mockResolvedValue({
+      id: 'ticket-no-email',
+      title: 'Demande silencieuse',
+      techId: null,
+      reporterName: null,
+      reporterEmail: null,
+      reporterToken: null,
+      reporters: [{
+        id: 'reporter-1',
+        email: 'silence@example.test',
+        name: 'Camille',
+        token: 'silent-token',
+        notifyByEmail: false,
+        pushSubscription: null
+      }]
+    });
+
+    const res = await request(buildApp())
+      .post('/api/interventions/ticket-no-email/messages')
+      .field('content', 'Votre demande a été traitée.');
+
+    expect(res.status).toBe(201);
+    expect(sendMail).not.toHaveBeenCalled();
   });
 });

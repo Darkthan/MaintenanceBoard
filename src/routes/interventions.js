@@ -14,6 +14,7 @@ const {
 const prisma = require('../lib/prisma');
 const { containsFilter } = require('../lib/db-utils');
 const { createSmtpTransporter } = require('../utils/mail');
+const { parsePushSubscription, sendBrowserPush } = require('../utils/ticketNotifications');
 const config = require('../config');
 const {
   extractLowDiskMountFromTitle,
@@ -1178,18 +1179,22 @@ router.post('/:id/messages', requireAuth, ticketAttachmentUpload, prepareTicketA
     const reporterRecipients = [...new Map(reporterCandidates
       .filter(reporter => reporter.email)
       .map(reporter => [String(reporter.email).trim().toLowerCase(), {
+        id: reporter.id,
         email: reporter.email,
         name: reporter.name,
-        token: reporter.token || intervention.reporterToken
+        token: reporter.token || intervention.reporterToken,
+        notifyByEmail: reporter.notifyByEmail !== false,
+        pushSubscription: reporter.pushSubscription || null
       }]))
       .values()];
 
     // Notification email à tous les demandeurs rattachés
-    if (reporterRecipients.length > 0) {
+    const emailRecipients = reporterRecipients.filter(recipient => recipient.notifyByEmail !== false);
+    if (emailRecipients.length > 0) {
       try {
         const { transporter, from } = createSmtpTransporter();
         if (transporter) {
-          await Promise.all(reporterRecipients.map(recipient => {
+          await Promise.all(emailRecipients.map(recipient => {
             const ticketLink = recipient.token
               ? `${config.appUrl.replace(/\/$/, '')}/ticket-status.html?token=${encodeURIComponent(recipient.token)}`
               : `${config.appUrl.replace(/\/$/, '')}/my-tickets.html`;
@@ -1221,6 +1226,32 @@ router.post('/:id/messages', requireAuth, ticketAttachmentUpload, prepareTicketA
         }
       } catch (mailErr) {
         console.error('[interventions] notification chat:', mailErr.message);
+      }
+    }
+
+    const pushRecipients = [...new Map(reporterRecipients
+      .map(recipient => [parsePushSubscription(recipient.pushSubscription)?.endpoint, recipient])
+      .filter(([endpoint]) => endpoint)
+    ).values()];
+    if (pushRecipients.length > 0) {
+      const expiredReporterIds = [];
+      await Promise.all(pushRecipients.map(async recipient => {
+        const ticketLink = recipient.token
+          ? `/ticket-status.html?token=${encodeURIComponent(recipient.token)}`
+          : '/demande';
+        const result = await sendBrowserPush(recipient.pushSubscription, {
+          title: 'Réponse à votre demande',
+          body: String(content || message.attachmentName || 'L’équipe technique a répondu.').slice(0, 180),
+          url: ticketLink,
+          tag: `ticket-reply-${intervention.id}`
+        });
+        if (result.expired && recipient.id) expiredReporterIds.push(recipient.id);
+      }));
+      if (expiredReporterIds.length > 0 && prisma.interventionReporter?.updateMany) {
+        await prisma.interventionReporter.updateMany({
+          where: { id: { in: expiredReporterIds } },
+          data: { pushSubscription: null }
+        });
       }
     }
 
