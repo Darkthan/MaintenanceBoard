@@ -34,7 +34,9 @@ describe('interventions page', () => {
     expect(res.text).toContain('detail-checkup-section');
     expect(res.text).toContain('Lien public');
     expect(res.text).toContain('id="public-request-link"');
+    expect(res.text).toContain('id="public-general-request-link"');
     expect(res.text).toContain("new URL('/report.html', window.location.origin)");
+    expect(res.text).toContain("api.get('/loans/general-request-link')");
     expect(res.text).toContain('copyPublicRequestLink()');
     expect(res.text).not.toContain('detail-intervention-link');
   });
@@ -60,5 +62,15 @@ describe('interventions page', () => {
     expect(res.text).toContain('href="/tickets.html"');
     expect(res.text).toContain('href="/loans.html"');
     expect(res.text).toContain("renderNav('requests')");
+  });
+
+  it('sert le portail public qui propose intervention et réservation', async () => {
+    const res = await request(app).get('/public-request.html?loan=token-general');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Signaler une intervention');
+    expect(res.text).toContain('Réserver du matériel');
+    expect(res.text).toContain('/report.html');
+    expect(res.text).toContain('/loan-request.html?token=${encodeURIComponent(loanToken)}');
   });
 });

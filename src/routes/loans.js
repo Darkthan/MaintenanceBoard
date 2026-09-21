@@ -1077,6 +1077,29 @@ loansRouter.get('/magic-links', async (_req, res, next) => {
   }
 });
 
+// GET /api/loans/general-request-link — lien public unique combinant ticket et prêt
+loansRouter.get('/general-request-link', async (req, res, next) => {
+  try {
+    const title = 'Lien général de demande';
+    let link = await prisma.loanMagicLink.findFirst({
+      where: { title, resourceId: null, isActive: true },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!link || (link.expiresAt && link.expiresAt < new Date())) {
+      link = await prisma.loanMagicLink.create({
+        data: { title, resourceId: null, createdById: req.user.id }
+      });
+    }
+
+    const url = new URL('/public-request.html', config.appUrl);
+    url.searchParams.set('loan', link.token);
+    res.json({ token: link.token, url: url.toString() });
+  } catch (err) {
+    next(err);
+  }
+});
+
 loansRouter.post('/magic-links',
   [
     body('title').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),

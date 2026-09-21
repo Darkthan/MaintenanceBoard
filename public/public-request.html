@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Faire une demande – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+  <main class="mx-auto flex min-h-screen w-full max-w-4xl items-center p-4 sm:p-8">
+    <section class="w-full">
+      <div class="mx-auto mb-8 max-w-2xl text-center">
+        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <h1 class="mt-4 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Faire une demande</h1>
+        <p class="mt-2 text-sm leading-6 text-slate-500">Choisissez le type de demande que vous souhaitez envoyer.</p>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2 md:gap-6">
+        <a href="/report.html" class="group rounded-3xl border border-orange-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-orange-300 hover:shadow-xl hover:shadow-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 sm:p-8">
+          <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a3 3 0 006 0M9 12h6m-6 4h4"/></svg>
+          </span>
+          <h2 class="mt-6 text-xl font-semibold text-slate-900">Signaler une intervention</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-500">Déclarez un incident, un dysfonctionnement ou un besoin d’assistance.</p>
+          <span class="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-orange-600">Faire un signalement <span aria-hidden="true">→</span></span>
+        </a>
+
+        <a id="public-loan-request-link" href="#" class="group rounded-3xl border border-blue-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 sm:p-8">
+          <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V5a4 4 0 118 0v2m-8 0h8m-8 0a2 2 0 00-2 2v8a3 3 0 003 3h6a3 3 0 003-3V9a2 2 0 00-2-2"/></svg>
+          </span>
+          <h2 class="mt-6 text-xl font-semibold text-slate-900">Réserver du matériel</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-500">Consultez le matériel disponible puis choisissez la période souhaitée.</p>
+          <span class="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-blue-600">Faire une réservation <span aria-hidden="true">→</span></span>
+        </a>
+      </div>
+
+      <p id="loan-link-error" class="hidden mx-auto mt-5 max-w-2xl text-center text-sm text-red-600">Le lien de réservation est incomplet. Demandez le lien général à l’administrateur.</p>
+    </section>
+  </main>
+
+  <script>
+    const loanToken = new URLSearchParams(window.location.search).get('loan');
+    const loanLink = document.getElementById('public-loan-request-link');
+    if (loanToken) {
+      loanLink.href = `/loan-request.html?token=${encodeURIComponent(loanToken)}`;
+    } else {
+      loanLink.removeAttribute('href');
+      loanLink.classList.add('pointer-events-none', 'opacity-50');
+      document.getElementById('loan-link-error').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

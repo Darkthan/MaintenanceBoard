@@ -33,6 +33,7 @@ jest.mock('../src/lib/prisma', () => ({
   },
   loanMagicLink: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn()
@@ -71,6 +72,20 @@ function buildApp() {
 describe('loan requests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('retourne un lien général pour les demandes publiques', async () => {
+    prisma.loanMagicLink.findFirst.mockResolvedValue({
+      id: 'general-link',
+      token: 'general-loan-token',
+      expiresAt: null
+    });
+
+    const res = await request(buildApp()).get('/api/loans/general-request-link');
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).toBe('https://maintenanceboard.test/public-request.html?loan=general-loan-token');
+    expect(prisma.loanMagicLink.create).not.toHaveBeenCalled();
   });
 
   it('envoie un lien de connexion par email pour acceder au formulaire', async () => {

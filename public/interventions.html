@@ -120,7 +120,15 @@
       </button>
     </div>
     <div class="space-y-3 px-5 py-4">
-      <a id="public-request-link" href="#" target="_blank" rel="noopener" class="block break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 hover:border-blue-200 hover:text-blue-700 hover:underline"></a>
+      <div>
+        <p class="mb-1 text-xs font-medium text-slate-500">Intervention uniquement</p>
+        <a id="public-request-link" href="#" target="_blank" rel="noopener" class="block break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 hover:border-blue-200 hover:text-blue-700 hover:underline"></a>
+      </div>
+      <div>
+        <p class="mb-1 text-xs font-medium text-slate-500">Demande générale</p>
+        <a id="public-general-request-link" href="#" target="_blank" rel="noopener" class="block break-all rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 hover:border-blue-300 hover:underline">Chargement du lien…</a>
+        <p class="mt-1 text-xs leading-5 text-slate-500">Ce lien permet de choisir entre une demande d’intervention et une réservation de matériel.</p>
+      </div>
       <div class="flex justify-end gap-2">
         <button type="button" onclick="closePublicRequestLinkModal()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">Fermer</button>
         <button type="button" onclick="copyPublicRequestLink()" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 transition">
@@ -1299,12 +1307,23 @@ function openCreateOrderFromIntervention(interventionId) {
   window.location = `/orders.html?action=create&interventionId=${encodeURIComponent(interventionId)}`;
 }
 
-function openPublicRequestLinkModal() {
+async function openPublicRequestLinkModal() {
   const link = new URL('/report.html', window.location.origin).toString();
   const linkEl = document.getElementById('public-request-link');
+  const generalLinkEl = document.getElementById('public-general-request-link');
   linkEl.href = link;
   linkEl.textContent = link;
   document.getElementById('public-request-link-modal').classList.remove('hidden');
+
+  generalLinkEl.removeAttribute('href');
+  generalLinkEl.textContent = 'Chargement du lien…';
+  try {
+    const data = await api.get('/loans/general-request-link');
+    generalLinkEl.href = data.url;
+    generalLinkEl.textContent = data.url;
+  } catch (err) {
+    generalLinkEl.textContent = 'Lien général indisponible';
+  }
 }
 
 function closePublicRequestLinkModal() {
@@ -1312,7 +1331,8 @@ function closePublicRequestLinkModal() {
 }
 
 async function copyPublicRequestLink() {
-  const link = document.getElementById('public-request-link')?.href;
+  const link = document.getElementById('public-general-request-link')?.href
+    || document.getElementById('public-request-link')?.href;
   if (!link) return;
 
   try {
@@ -1328,7 +1348,7 @@ async function copyPublicRequestLink() {
       document.execCommand('copy');
       input.remove();
     }
-    showToast('Lien public copié');
+    showToast('Lien général copié');
   } catch (err) {
     showToast('Impossible de copier le lien public', 'error');
   }
