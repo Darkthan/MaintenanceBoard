@@ -1,7 +1,7 @@
 jest.mock('../src/lib/prisma', () => ({
   intervention: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   equipment: { updateMany: jest.fn() },
-  todo: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+  todo: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
   project: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   kanbanColumn: { findFirst: jest.fn(), create: jest.fn() },
   kanbanCard: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -111,6 +111,14 @@ describe('MCP work service', () => {
       })
     }));
     expect(out.interventionId).toBe('int-1');
+  });
+
+  it('supprime une tâche existante', async () => {
+    prisma.todo.findUnique.mockResolvedValue({ id: 'todo-1' });
+    prisma.todo.delete.mockResolvedValue({ id: 'todo-1' });
+
+    await expect(work.deleteTodo({ id: 'todo-1' })).resolves.toEqual({ id: 'todo-1', deleted: true });
+    expect(prisma.todo.delete).toHaveBeenCalledWith({ where: { id: 'todo-1' } });
   });
 
   it('crée une carte dans une colonne de projet', async () => {

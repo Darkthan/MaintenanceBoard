@@ -31,6 +31,9 @@ const INTERVENTION_INCLUDE = {
 const TODO_INCLUDE = {
   intervention: {
     select: { id: true, title: true, status: true, priority: true }
+  },
+  predecessorLinks: {
+    select: { predecessor: { select: { id: true, title: true, done: true, startAt: true, dueAt: true } } }
   }
 };
 
@@ -243,6 +246,7 @@ function mapTodo(todo) {
     dueAt: todo.dueAt || null,
     interventionId: todo.interventionId || null,
     intervention: todo.intervention || null,
+    predecessors: (todo.predecessorLinks || []).map(link => link.predecessor),
     createdAt: todo.createdAt
   };
 }
@@ -415,13 +419,18 @@ async function createTodo(input) {
     if (!intervention) notFound('Intervention introuvable');
   }
 
+  const predecessorIds = [...new Set((input.predecessorIds || []).filter(id => typeof id === 'string' && id.trim()))];
+  if (predecessorIds.length) {
+    if (predecessorIds.length !== (await prisma.todo.findMany({ where: { id: { in: predecessorIds } }, select: { id: true } })).length) notFound('Une tâche précédente est introuvable');
+  }
   const todo = await prisma.todo.create({
     data: {
       interventionId,
       title: cleanString(input.title, { min: 1, max: 500, label: 'Le titre' }),
       description: nullableText(input.description, 2000, 'La description'),
       startAt: parseOptionalDate(input.startAt, 'Date de début') ?? null,
-      dueAt: parseOptionalDate(input.dueAt, "Date d'échéance") ?? null
+      dueAt: parseOptionalDate(input.dueAt, "Date d'échéance") ?? null,
+      ...(predecessorIds.length ? { predecessorLinks: { create: predecessorIds.map(predecessorId => ({ predecessor: { connect: { id: predecessorId } } })) } } : {})
     },
     include: TODO_INCLUDE
   });
@@ -442,9 +451,26 @@ async function updateTodo({ id, ...input }) {
   if (input.startAt !== undefined) data.startAt = parseOptionalDate(input.startAt, 'Date de début');
   if (input.dueAt !== undefined) data.dueAt = parseOptionalDate(input.dueAt, "Date d'échéance");
   if (input.interventionId !== undefined) data.interventionId = input.interventionId || null;
+  if (input.predecessorIds !== undefined) {
+    const predecessorIds = [...new Set((input.predecessorIds || []).filter(value => typeof value === 'string' && value.trim()))];
+    if (predecessorIds.includes(id)) badRequest('Une tâche ne peut pas être son propre précédent');
+    const found = await prisma.todo.findMany({ where: { id: { in: predecessorIds } }, select: { id: true } });
+    if (found.length !== predecessorIds.length) notFound('Une tâche précédente est introuvable');
+    data.predecessorLinks = {
+      deleteMany: {},
+      create: predecessorIds.map(predecessorId => ({ predecessor: { connect: { id: predecessorId } } }))
+    };
+  }
 
   const todo = await prisma.todo.update({ where: { id }, data, include: TODO_INCLUDE });
   return mapTodo(todo);
+}
+
+async function deleteTodo({ id }) {
+  const existing = await prisma.todo.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) notFound('Tâche introuvable');
+  await prisma.todo.delete({ where: { id } });
+  return { id, deleted: true };
 }
 
 async function listProjects({ limit = 50 } = {}) {
@@ -946,6 +972,7 @@ module.exports = {
   listTodos,
   createTodo,
   updateTodo,
+  deleteTodo,
   listProjects,
   getProject,
   createProject,

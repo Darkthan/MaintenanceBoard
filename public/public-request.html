@@ -43,8 +43,8 @@
       <a href="/report.html" class="group rounded-3xl border border-orange-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-400">
         <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-100 text-orange-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 12h6m-6 4h4"/></svg></span>
         <h2 class="mt-4 text-lg font-semibold">Demander une intervention</h2>
-        <p class="mt-1 text-sm leading-6 text-slate-500">Déclarez immédiatement un incident, sans avoir à vous connecter.</p>
-        <span class="mt-4 inline-flex text-sm font-semibold text-orange-600">Continuer sans connexion →</span>
+        <p id="intervention-action-description" class="mt-1 text-sm leading-6 text-slate-500">Déclarez immédiatement un incident, sans avoir à vous connecter.</p>
+        <span id="intervention-action-label" class="mt-4 inline-flex text-sm font-semibold text-orange-600">Continuer sans connexion →</span>
       </a>
       <a id="public-loan-request-link" href="#" class="group rounded-3xl border border-blue-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
         <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100 text-blue-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V5a4 4 0 118 0v2m-8 0h8m-8 0a2 2 0 00-2 2v8a3 3 0 003 3h6a3 3 0 003-3V9a2 2 0 00-2-2"/></svg></span>
@@ -109,6 +109,7 @@
     </section>
 
     <p id="global-error" class="mx-auto mt-5 hidden max-w-xl rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-700"></p>
+    <p class="mt-8 text-center text-xs text-slate-400"><a href="/legal.html" class="underline hover:text-slate-600">Mentions légales</a></p>
   </main>
 
 <script>
@@ -171,6 +172,8 @@ function clearAccountAccess() {
   currentAccessToken = '';
   currentAccount = null;
   currentAccessPersistent = false;
+  document.getElementById('intervention-action-description').textContent = 'Déclarez immédiatement un incident, sans avoir à vous connecter.';
+  document.getElementById('intervention-action-label').textContent = 'Continuer sans connexion →';
 }
 
 function hideAccountMenu() {
@@ -251,6 +254,8 @@ async function openAccount(accessToken, persistent = false) {
   currentAccessPersistent = persistent;
   storeAccountAccess(accessToken, persistent, data.account);
   renderAccountMenu(data.account);
+  document.getElementById('intervention-action-description').textContent = 'Vos données personnelles sont préremplies pour faciliter le signalement.';
+  document.getElementById('intervention-action-label').textContent = 'Signaler un problème →';
   document.getElementById('public-loan-request-link').href = `/loan-request.html?token=${encodeURIComponent(generalRequestToken)}`;
   document.getElementById('loan-action-label').textContent = 'Faire une réservation →';
   renderInterventions(data.interventions || []);

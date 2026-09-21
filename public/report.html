@@ -159,6 +159,11 @@
 
         <div id="submit-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
 
+        <label class="flex items-start gap-2 text-xs leading-5 text-slate-500">
+          <input id="legal-consent" type="checkbox" required class="mt-1 rounded border-slate-300 text-orange-500 focus:ring-orange-400" />
+          <span>J’ai pris connaissance des <a href="/legal.html" target="_blank" rel="noopener" class="font-medium text-orange-600 underline">mentions légales</a> et j’accepte le traitement des données nécessaires au suivi de ce ticket.</span>
+        </label>
+
         <button type="submit" id="submit-btn"
           class="w-full bg-orange-500 text-white font-semibold py-3 rounded-xl hover:bg-orange-600 transition
                  focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2
@@ -516,5 +521,6 @@ document.getElementById('report-form').addEventListener('submit', async e => {
 prefillRememberedRequester();
 loadRooms();
 </script>
+<footer class="mt-6 text-center text-xs text-slate-400"><a href="/legal.html" class="underline hover:text-slate-600">Mentions légales</a></footer>
 </body>
 </html>

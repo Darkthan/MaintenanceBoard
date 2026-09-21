@@ -389,7 +389,9 @@ function buildMcpServer(ctx) {
     inputSchema: {
       title: z.string().min(1).max(500),
       description: z.string().max(2000).optional(),
+      startAt: z.string().optional(),
       dueAt: z.string().optional(),
+      predecessorIds: z.array(z.string()).max(50).optional(),
       interventionId: z.string().optional()
     }
   }, tool(ctx, MCP_SCOPES.TODOS_WRITE, (a) => work.createTodo(a)));
@@ -400,11 +402,25 @@ function buildMcpServer(ctx) {
       id: z.string(),
       title: z.string().min(1).max(500).optional(),
       description: z.string().max(2000).optional(),
+      startAt: z.string().optional(),
       dueAt: z.string().optional(),
+      predecessorIds: z.array(z.string()).max(50).optional(),
       interventionId: z.string().optional(),
       done: z.boolean().optional()
     }
   }, tool(ctx, MCP_SCOPES.TODOS_WRITE, (a) => work.updateTodo(a)));
+
+  server.registerTool('delete_todo', {
+    title: 'Supprimer une tâche',
+    description: 'Supprime définitivement une tâche et ses liens de dépendance.',
+    inputSchema: { id: z.string() },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  }, tool(ctx, MCP_SCOPES.TODOS_WRITE, (a) => work.deleteTodo(a)));
 
   server.registerTool('list_projects', {
     description: 'Liste les projets Kanban avec leur créateur et le nombre de colonnes.',
