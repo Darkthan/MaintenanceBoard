@@ -1,4 +1,6 @@
 const request = require('supertest');
+const fs = require('fs');
+const path = require('path');
 
 // Mock du client Prisma partagé (tickets.js utilise ../lib/prisma)
 jest.mock('../src/lib/prisma', () => ({
@@ -66,6 +68,52 @@ const mockIntervention = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+});
+
+describe('GET /api/tickets/knowledge-suggestions', () => {
+  const knowledgeBaseFile = path.join(process.cwd(), 'tests', '.tmp', 'ticket-knowledge-suggestions.json');
+
+  afterEach(() => {
+    fs.rmSync(knowledgeBaseFile, { force: true });
+    delete process.env.KNOWLEDGE_BASE_FILE;
+  });
+
+  it('retourne uniquement les procedures rendues publiques pour les signalements', async () => {
+    fs.mkdirSync(path.dirname(knowledgeBaseFile), { recursive: true });
+    fs.writeFileSync(knowledgeBaseFile, JSON.stringify({
+      articles: [
+        {
+          id: 'display-help',
+          type: 'article',
+          showInReports: true,
+          title: 'Dupliquer l’écran avec Windows + P',
+          summary: 'Afficher la même image sur le projecteur et l’écran',
+          tags: ['projecteur', 'duplication'],
+          content: 'Appuyez sur Windows + P puis sélectionnez Dupliquer.'
+        },
+        {
+          id: 'private-help',
+          type: 'article',
+          showInReports: false,
+          title: 'Configuration interne du projecteur',
+          tags: ['projecteur'],
+          content: 'Secret interne'
+        }
+      ]
+    }));
+    process.env.KNOWLEDGE_BASE_FILE = knowledgeBaseFile;
+
+    const res = await request(app)
+      .get('/api/tickets/knowledge-suggestions')
+      .query({ q: "Le projecteur n'affiche pas la même chose que l'écran" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0]).toEqual(expect.objectContaining({
+      id: 'display-help',
+      content: expect.stringContaining('Windows + P')
+    }));
+  });
 });
 
 // ── POST /api/tickets ───────────────────────────────────────────────────────

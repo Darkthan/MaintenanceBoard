@@ -29,6 +29,9 @@ describe('knowledge base page', () => {
     expect(res.text).toContain('Nouvel article');
     expect(res.text).toContain('editor-image-input');
     expect(res.text).toContain('editor-document-input');
+    expect(res.text).toContain('id="editor-show-in-reports"');
+    expect(res.text).toContain('Proposer cette procédure lors d’un signalement');
+    expect(res.text).toContain('showInReports: editorShowInReportsEl.checked');
     expect(res.text).toContain('article-documents');
     expect(res.text).toContain('data-kb-code-copy');
     expect(res.text).toContain('data-kb-code-edit');

@@ -111,6 +111,7 @@ function serializeKnowledgeArticle(article, { full = false } = {}) {
     summary: article.summary || '',
     category: article.category || '',
     tags: Array.isArray(article.tags) ? article.tags : [],
+    showInReports: article.showInReports === true,
     excerpt: plainContent.slice(0, 180),
     createdAt: article.createdAt,
     updatedAt: article.updatedAt,

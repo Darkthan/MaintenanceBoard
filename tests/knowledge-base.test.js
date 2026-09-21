@@ -63,14 +63,16 @@ describe('knowledge base routes', () => {
         category: 'Support',
         tags: 'imprimante, reseau',
         summary: 'Relancer une imprimante bloquee',
-        content: '# Etapes\n\n1. Redemarrer\n2. Tester'
+        content: '# Etapes\n\n1. Redemarrer\n2. Tester',
+        showInReports: true
       });
 
     expect(createRes.status).toBe(201);
     expect(createRes.body.article).toEqual(expect.objectContaining({
       title: 'Procedure imprimante',
       category: 'Support',
-      tags: ['imprimante', 'reseau']
+      tags: ['imprimante', 'reseau'],
+      showInReports: true
     }));
 
     const listRes = await request(buildApp()).get('/api/knowledge-base');
@@ -88,6 +90,7 @@ describe('knowledge base routes', () => {
     const readRes = await request(buildApp()).get(`/api/knowledge-base/${createRes.body.article.id}`);
     expect(readRes.status).toBe(200);
     expect(readRes.body.content).toContain('# Etapes');
+    expect(readRes.body.showInReports).toBe(true);
   });
 
   it('stocke le texte de topologie d un plan reseau', async () => {

@@ -7,6 +7,8 @@ const router = express.Router();
 const prisma = require('../lib/prisma');
 const { createSmtpTransporter } = require('../utils/mail');
 const config = require('../config');
+const { listKnowledgeBaseArticles, stripMarkdown } = require('../utils/knowledgeBase');
+const { rankKnowledgeSuggestions } = require('../utils/knowledgeSuggestions');
 const {
   ticketAttachmentUpload,
   prepareTicketAttachment
@@ -22,6 +24,24 @@ const magicLinkEmailLimiter = process.env.NODE_ENV !== 'test'
       skip: req => !req.body?.email
     })
   : (req, res, next) => next();
+
+// GET /api/tickets/knowledge-suggestions — Aide publique pendant la saisie d'un problème
+router.get('/knowledge-suggestions', (req, res) => {
+  const query = String(req.query.q || '').trim().slice(0, 200);
+  const results = rankKnowledgeSuggestions(listKnowledgeBaseArticles(), query, 3);
+
+  res.json({
+    items: results.map(({ article }) => ({
+      id: article.id,
+      title: article.title,
+      summary: article.summary || '',
+      category: article.category || '',
+      tags: Array.isArray(article.tags) ? article.tags : [],
+      excerpt: stripMarkdown(article.content).slice(0, 240),
+      content: article.content || ''
+    }))
+  });
+});
 
 async function resolveReporterAccess(token) {
   if (prisma.interventionReporter?.findUnique) {

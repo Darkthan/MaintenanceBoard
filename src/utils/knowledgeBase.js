@@ -27,6 +27,7 @@ function readKnowledgeBaseStore() {
       articles: Array.isArray(parsed?.articles)
         ? parsed.articles.map(article => ({
           ...article,
+          showInReports: article?.showInReports === true,
           attachments: normalizeAttachments(article?.attachments)
         }))
         : []
@@ -112,6 +113,7 @@ const IP_ADDRESSING_ARTICLE = Object.freeze({
   category: 'Réseau',
   tags: ['adressage', 'ip', 'réseau', 'vlan', 'dhcp'],
   content: '',
+  showInReports: false,
   attachments: [],
   createdAt: '2026-06-01T00:00:00.000Z',
   updatedAt: '2026-06-01T00:00:00.000Z',
@@ -163,6 +165,7 @@ function validateKnowledgeBasePayload(payload, { partial = false } = {}) {
   const type = payload.type === undefined ? undefined : (VALID_ARTICLE_TYPES.includes(String(payload.type)) ? String(payload.type) : 'article');
   const diagramXml = payload.diagramXml === undefined ? undefined : String(payload.diagramXml || '');
   const diagramSvg = payload.diagramSvg === undefined ? undefined : String(payload.diagramSvg || '');
+  const showInReports = payload.showInReports === undefined ? undefined : payload.showInReports === true;
 
   if (!partial || payload.title !== undefined) {
     if (!title) {
@@ -182,7 +185,8 @@ function validateKnowledgeBasePayload(payload, { partial = false } = {}) {
     ...(tags !== undefined ? { tags } : {}),
     ...(type !== undefined ? { type } : {}),
     ...(diagramXml !== undefined ? { diagramXml } : {}),
-    ...(diagramSvg !== undefined ? { diagramSvg } : {})
+    ...(diagramSvg !== undefined ? { diagramSvg } : {}),
+    ...(showInReports !== undefined ? { showInReports } : {})
   };
 }
 
@@ -199,6 +203,7 @@ function createKnowledgeBaseArticle(payload, user) {
     category: data.category || '',
     tags: data.tags || [],
     content: data.content || '',
+    showInReports: data.showInReports === true,
     topologyText: data.topologyText || '',
     topologyLayout: data.topologyLayout || '',
     diagramXml: data.diagramXml || '',
@@ -224,6 +229,7 @@ function updateKnowledgeBaseArticle(article, payload, user) {
     ...(patch.category !== undefined ? { category: patch.category } : {}),
     ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
     ...(patch.content !== undefined ? { content: patch.content } : {}),
+    ...(patch.showInReports !== undefined ? { showInReports: patch.showInReports } : {}),
     ...(patch.topologyText !== undefined ? { topologyText: patch.topologyText } : {}),
     ...(patch.topologyLayout !== undefined ? { topologyLayout: patch.topologyLayout } : {}),
     ...(patch.diagramXml !== undefined ? { diagramXml: patch.diagramXml } : {}),

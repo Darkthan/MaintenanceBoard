@@ -641,6 +641,15 @@
               class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-y"></textarea>
           </label>
 
+          <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+            <input id="editor-show-in-reports" type="checkbox"
+              class="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+            <span>
+              <span class="block text-sm font-medium text-slate-800">Proposer cette procédure lors d’un signalement</span>
+              <span class="mt-1 block text-xs leading-5 text-slate-500">Le titre, le résumé et le contenu pourront être affichés aux demandeurs sur la page publique.</span>
+            </span>
+          </label>
+
           <label class="block text-sm">
             <span class="mb-1.5 block font-medium text-slate-700">Contenu Markdown</span>
             <textarea id="editor-article-content" rows="18" placeholder="# Procédure&#10;&#10;- Étape 1&#10;- Étape 2"
@@ -849,6 +858,7 @@ const editorCategoryInputEl = document.getElementById('editor-article-category')
 const editorTagsInputEl = document.getElementById('editor-article-tags');
 const editorSummaryInputEl = document.getElementById('editor-article-summary');
 const editorContentInputEl = document.getElementById('editor-article-content');
+const editorShowInReportsEl = document.getElementById('editor-show-in-reports');
 const editorAttachmentsListEl = document.getElementById('editor-attachments-list');
 const editorImageInputEl = document.getElementById('editor-image-input');
 const editorDocumentInputEl = document.getElementById('editor-document-input');
@@ -1347,6 +1357,7 @@ function openEditor(article) {
   editorTagsInputEl.value = Array.isArray(article?.tags) ? article.tags.join(', ') : '';
   editorSummaryInputEl.value = article?.summary || '';
   editorContentInputEl.value = article?.content || '';
+  editorShowInReportsEl.checked = article?.showInReports === true;
   renderEditorAttachments(article?.attachments || []);
   updateEditorPreview();
   editorModalEl.classList.remove('hidden');
@@ -1428,7 +1439,10 @@ function renderArticleList() {
       <p class="text-xs font-semibold uppercase tracking-wide ${labelColor}">${categoryLabel}</p>
       <h3 class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(article.title)}</h3>
       <p class="mt-2 text-sm leading-6 text-slate-500 line-clamp-3">${escapeHtml(article.summary || article.excerpt || 'Aucun résumé.')}</p>
-      <p class="mt-3 text-[11px] text-slate-400">${escapeHtml(new Date(article.updatedAt).toLocaleDateString('fr-FR'))}</p>
+      <div class="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+        <span>${escapeHtml(new Date(article.updatedAt).toLocaleDateString('fr-FR'))}</span>
+        ${article.showInReports ? '<span class="rounded-full bg-blue-100 px-2 py-0.5 font-medium text-blue-700">Aide au signalement</span>' : ''}
+      </div>
     </button>`;
   }).join('');
 
@@ -1471,7 +1485,9 @@ async function selectArticle(articleId) {
     articleSummaryEl.textContent = article.summary || '';
     articleTagsEl.innerHTML = (article.tags || []).map(tag => `
       <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">${escapeHtml(tag)}</span>
-    `).join('');
+    `).join('') + (article.showInReports
+      ? '<span class="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">Aide au signalement</span>'
+      : '');
     articleMetaEl.textContent = [
       article.updatedByName ? `Mis à jour par ${article.updatedByName}` : null,
       article.updatedAt ? `le ${formatDateTime(article.updatedAt)}` : null
@@ -1683,7 +1699,8 @@ editorFormEl.addEventListener('submit', async event => {
     category: editorCategoryInputEl.value.trim(),
     tags: editorTagsInputEl.value.trim(),
     summary: editorSummaryInputEl.value.trim(),
-    content: editorContentInputEl.value
+    content: editorContentInputEl.value,
+    showInReports: editorShowInReportsEl.checked
   };
 
   editorFeedbackEl.textContent = 'Enregistrement...';
