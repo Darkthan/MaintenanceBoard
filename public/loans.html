@@ -2369,7 +2369,7 @@ async function initLoansPage({ forceReload = false } = {}) {
 
     const user = await requireLogin();
     currentUser = user;
-    renderNav('loans');
+    renderNav('requests');
 
     if (forceReload) {
       reservationUpdatesInFlight.clear();

@@ -401,7 +401,7 @@ document.querySelectorAll('[data-summary-filter]').forEach(card => card.addEvent
 
 requireLogin().then(async loggedUser => {
   user = loggedUser;
-  renderNav('tickets');
+  renderNav('requests');
   if (user.role !== 'ADMIN') document.getElementById('summary-unassigned-card').classList.add('hidden');
   try {
     await loadTechnicians();

@@ -162,14 +162,14 @@ const ACTIONS = [
   },
   {
     id: 'action:tickets',
-    title: 'Gestion des tickets',
-    subtitle: 'Traiter les demandes des utilisateurs',
-    href: '/tickets.html',
-    keywords: ['ticket', 'tickets', 'support', 'demande', 'incident', 'utilisateur', 'assistance'],
+    title: 'Gestion des demandes',
+    subtitle: 'Choisir entre interventions et réservations de matériel',
+    href: '/requests.html',
+    keywords: ['ticket', 'tickets', 'support', 'demande', 'demandes', 'incident', 'intervention', 'reservation', 'materiel', 'utilisateur', 'assistance'],
     roles: ['ADMIN', 'TECH'],
     preview: {
-      title: 'File des tickets',
-      description: 'Ouvre la file de traitement des tickets publics.'
+      title: 'Demandes',
+      description: 'Ouvre le choix entre demandes d’intervention et réservations de matériel.'
     }
   },
   {

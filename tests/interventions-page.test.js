@@ -44,4 +44,16 @@ describe('interventions page', () => {
     expect(res.text).toContain('/messages-ticket.html?id=');
     expect(res.text).toContain('id="pagination"');
   });
+
+  it('sert un menu avant les demandes d’intervention et les réservations', async () => {
+    const res = await request(app).get('/requests.html');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Gestion des demandes');
+    expect(res.text).toContain('Demandes d’intervention');
+    expect(res.text).toContain('Réservations de matériel');
+    expect(res.text).toContain('href="/tickets.html"');
+    expect(res.text).toContain('href="/loans.html"');
+    expect(res.text).toContain("renderNav('requests')");
+  });
 });

@@ -42,6 +42,8 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain("label: 'Accueil'");
     expect(res.text).toContain("href: '/scan-code.html'");
     expect(res.text).toContain("label: 'Scanner'");
+    expect(res.text).toContain("href: '/requests.html'");
+    expect(res.text).toContain("label: 'Demandes'");
     expect(res.text).toContain("const coreIds = ['dashboard', 'equipment', 'interventions', 'todos']");
   });
 
