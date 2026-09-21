@@ -112,5 +112,8 @@ describe('interventions page', () => {
     expect(res.text).toContain('L’intervention est accessible sans connexion');
     expect(res.text).toContain('Continuer sans connexion');
     expect(res.text).toContain('if (currentAccessToken) return;');
+    expect(res.text).toContain('id="account-prompt"');
+    expect(res.text).toContain('Se connecter à mon compte');
+    expect(res.text).toContain('function showAccountPrompt()');
   });
 });

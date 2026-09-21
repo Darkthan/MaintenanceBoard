@@ -36,6 +36,14 @@
       <p class="text-sm text-slate-500">Chargement de votre espace…</p>
     </div>
 
+    <section id="account-prompt" class="mx-auto hidden max-w-2xl flex-col rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 class="font-semibold text-slate-900">Vous avez déjà fait une demande ?</h2>
+        <p class="mt-1 text-sm leading-6 text-slate-500">Connectez-vous pour retrouver et gérer facilement vos réservations et vos interventions.</p>
+      </div>
+      <button id="open-login-btn" type="button" class="mt-3 inline-flex flex-shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 sm:ml-5 sm:mt-0">Se connecter à mon compte</button>
+    </section>
+
     <section id="login-state" class="mx-auto hidden max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
       <h2 class="text-xl font-semibold text-slate-900">Connexion par email</h2>
       <p class="mt-2 text-sm leading-6 text-slate-500">Connectez-vous pour réserver du matériel ou consulter vos demandes précédentes. Vous recevrez un magic link, sans mot de passe.</p>
@@ -54,6 +62,7 @@
         </label>
         <div id="login-feedback" class="hidden rounded-xl px-4 py-3 text-sm"></div>
         <button id="login-submit" type="submit" class="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50">Recevoir mon lien de connexion</button>
+        <button id="close-login-btn" type="button" class="w-full rounded-xl px-4 py-2 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700">Retour</button>
       </form>
     </section>
 
@@ -153,7 +162,17 @@ function clearAccountAccess() {
 function showLogin() {
   document.getElementById('loading-state').classList.add('hidden');
   document.getElementById('account-state').classList.add('hidden');
+  document.getElementById('account-prompt').classList.add('hidden');
+  document.getElementById('account-prompt').classList.remove('flex');
   document.getElementById('login-state').classList.remove('hidden');
+}
+
+function showAccountPrompt() {
+  document.getElementById('loading-state').classList.add('hidden');
+  document.getElementById('account-state').classList.add('hidden');
+  document.getElementById('login-state').classList.add('hidden');
+  document.getElementById('account-prompt').classList.remove('hidden');
+  document.getElementById('account-prompt').classList.add('flex');
 }
 
 function renderInterventions(items) {
@@ -205,6 +224,8 @@ async function openAccount(accessToken, persistent = false) {
   renderReservations(data.reservations || []);
   document.getElementById('loading-state').classList.add('hidden');
   document.getElementById('login-state').classList.add('hidden');
+  document.getElementById('account-prompt').classList.add('hidden');
+  document.getElementById('account-prompt').classList.remove('flex');
   document.getElementById('account-state').classList.remove('hidden');
 }
 
@@ -239,7 +260,7 @@ async function initialize() {
         return;
       } catch {}
     }
-    showLogin();
+    showAccountPrompt();
   } catch (error) {
     document.getElementById('loading-state').classList.add('hidden');
     const target = document.getElementById('global-error');
@@ -278,8 +299,15 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   clearAccountAccess();
   document.getElementById('public-loan-request-link').setAttribute('href', '#');
   document.getElementById('loan-action-label').textContent = 'Se connecter pour réserver →';
-  showLogin();
+  showAccountPrompt();
 });
+
+document.getElementById('open-login-btn').addEventListener('click', () => {
+  showLogin();
+  document.getElementById('account-email').focus();
+});
+
+document.getElementById('close-login-btn').addEventListener('click', showAccountPrompt);
 
 document.getElementById('public-loan-request-link').addEventListener('click', event => {
   if (currentAccessToken) return;
