@@ -110,6 +110,7 @@ router.post('/', (req, res, next) => {
     const {
       roomToken,
       equipmentToken,
+      suggestedRoom,
       title,
       description,
       reporterName,
@@ -167,9 +168,11 @@ router.post('/', (req, res, next) => {
       const room = await prisma.room.findUnique({ where: { id: req.body.roomId } });
       if (!room) return res.status(404).json({ error: 'Salle introuvable.' });
       roomId = room.id;
-    } else {
-      return res.status(400).json({ error: 'Une salle doit être renseignée.' });
     }
+
+    const freeRoom = !roomId && typeof suggestedRoom === 'string'
+      ? suggestedRoom.trim().slice(0, 200) || null
+      : null;
 
     const reporterToken = uuidv4();
 
@@ -183,6 +186,7 @@ router.post('/', (req, res, next) => {
         techId: null,
         roomId,
         equipmentId,
+        suggestedRoom: freeRoom,
         reporterName: reporterName ? reporterName.trim() : null,
         reporterEmail: reporterEmail ? reporterEmail.trim() : null,
         reporterToken,
@@ -543,7 +547,9 @@ router.get('/:token', async (req, res, next) => {
       priority: intervention.priority,
       title: intervention.title,
       createdAt: intervention.createdAt,
-      room: intervention.room ? { name: intervention.room.name } : null,
+      room: intervention.room
+        ? { name: intervention.room.name }
+        : (intervention.suggestedRoom ? { name: intervention.suggestedRoom } : null),
       equipment: intervention.equipment ? { name: intervention.equipment.name } : null
     });
   } catch (err) { next(err); }

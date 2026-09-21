@@ -137,6 +137,45 @@ describe('POST /api/tickets — roomToken invalide', () => {
   });
 });
 
+describe('POST /api/tickets — salle facultative ou libre', () => {
+  it('crée un ticket sans salle', async () => {
+    prisma.intervention.create.mockResolvedValue({ ...mockIntervention, room: null });
+
+    const res = await request(app)
+      .post('/api/tickets')
+      .send({ title: 'Problème sans emplacement', _honeypot: '' });
+
+    expect(res.status).toBe(201);
+    expect(prisma.intervention.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ roomId: null, suggestedRoom: null })
+      })
+    );
+  });
+
+  it('conserve une salle saisie librement', async () => {
+    prisma.intervention.create.mockResolvedValue({ ...mockIntervention, room: null });
+
+    const res = await request(app)
+      .post('/api/tickets')
+      .send({
+        title: 'Problème dans un nouvel espace',
+        suggestedRoom: '  Bureau accueil temporaire  ',
+        _honeypot: ''
+      });
+
+    expect(res.status).toBe(201);
+    expect(prisma.intervention.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          roomId: null,
+          suggestedRoom: 'Bureau accueil temporaire'
+        })
+      })
+    );
+  });
+});
+
 describe('POST /api/tickets — titre manquant', () => {
   it('retourne 400 si title est absent', async () => {
     const res = await request(app)
@@ -256,6 +295,32 @@ describe('GET /api/tickets/:token — statut limité', () => {
     expect(res.status).toBe(200);
     expect(res.body.room).toEqual({ name: 'Salle 101' });
     expect(res.body.equipment).toBeNull();
+  });
+
+  it('retourne la salle saisie librement quand elle est disponible', async () => {
+    prisma.intervention.findUnique.mockResolvedValue({
+      ...mockIntervention,
+      room: null,
+      suggestedRoom: 'Bureau accueil temporaire',
+      equipment: null
+    });
+
+    const res = await request(app)
+      .get('/api/tickets/tracker-uuid-1234');
+
+    expect(res.status).toBe(200);
+    expect(res.body.room).toEqual({ name: 'Bureau accueil temporaire' });
+  });
+});
+
+describe('GET /report.html — choix de salle', () => {
+  it('présente la salle comme facultative et envoie une saisie libre', async () => {
+    const res = await request(app).get('/report.html');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Salle <span class="font-normal text-slate-400">(optionnel)</span>');
+    expect(res.text).toContain("fd.append('suggestedRoom', freeRoom)");
+    expect(res.text).not.toMatch(/id="room-search"[^>]*\srequired(?:\s|>)/);
   });
 });
 
