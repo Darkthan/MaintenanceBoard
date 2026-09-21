@@ -166,14 +166,15 @@
 
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-2">
-              <input id="attachment-input" type="file" class="hidden" />
+              <input id="attachment-input" type="file" class="hidden"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,video/mp4,video/webm,video/quicktime" />
               <button id="pick-attachment-btn" type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                 </svg>
                 Joindre
               </button>
-              <p class="text-xs text-slate-400 hidden sm:block">Images, PDF, Office, texte. 20 Mo max.</p>
+              <p class="text-xs text-slate-400 hidden sm:block">Photos compressées. PDF/vidéos : 25 Mo avant, 5 Mo après.</p>
             </div>
             <button id="send-message-btn" type="submit" class="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-600 transition">
               Répondre
@@ -188,6 +189,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/ticket-attachments.js"></script>
 <script>
 const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
@@ -342,7 +344,7 @@ function setAttachment(file) {
     attachmentInputEl.value = '';
     return;
   }
-  attachmentPreviewNameEl.textContent = `${selectedAttachment.name} · ${formatFileSize(selectedAttachment.size)}`;
+  attachmentPreviewNameEl.textContent = TicketAttachments.selectionMessage(selectedAttachment);
   attachmentPreviewEl.classList.remove('hidden');
   attachmentPreviewEl.classList.add('flex');
 }
@@ -369,7 +371,10 @@ async function handleMessageSubmit(event) {
   try {
     const formData = new FormData();
     formData.append('content', content);
-    if (selectedAttachment) formData.append('attachment', selectedAttachment);
+    if (selectedAttachment) {
+      const fileToSend = await TicketAttachments.prepare(selectedAttachment);
+      formData.append('attachment', fileToSend, fileToSend.name);
+    }
 
     await api.upload(`/interventions/${interventionId}/messages`, formData);
     messageInputEl.value = '';

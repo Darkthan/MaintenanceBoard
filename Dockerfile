@@ -7,7 +7,9 @@ RUN apk add --no-cache \
     python3 \
     make \
     g++ \
-    libc6-compat
+    libc6-compat \
+    ffmpeg \
+    ghostscript
 
 # Copier les fichiers de dépendances
 COPY package*.json .npmrc ./

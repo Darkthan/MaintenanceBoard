@@ -2,12 +2,15 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { createSmtpTransporter } = require('../utils/mail');
 const config = require('../config');
+const {
+  ticketAttachmentUpload,
+  prepareTicketAttachment
+} = require('../middleware/ticketAttachment');
 
 // Rate limit magic-link par email (5/h par adresse) — en plus du rate limit IP dans app.js
 const magicLinkEmailLimiter = process.env.NODE_ENV !== 'test'
@@ -57,33 +60,6 @@ async function resolveReporterAccess(token) {
   };
 }
 
-const ALLOWED_CHAT_MIMES = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-];
-
-const chatStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(process.cwd(), 'uploads', 'ticket-messages');
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '';
-    cb(null, `${uuidv4()}${ext}`);
-  }
-});
-
-const uploadChatFile = multer({
-  storage: chatStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    ALLOWED_CHAT_MIMES.includes(file.mimetype) ? cb(null, true) : cb(new Error('Type de fichier non autorisé.'));
-  }
-}).single('attachment');
-
 function toReporterAttachmentUrl(token, rawPath) {
   if (!rawPath) return null;
   const filename = path.basename(String(rawPath));
@@ -100,12 +76,7 @@ function serializeReporterMessage(message, token) {
 }
 
 // POST /api/tickets — Soumission publique de ticket
-router.post('/', (req, res, next) => {
-  uploadChatFile(req, res, err => {
-    if (err) return res.status(400).json({ error: err.message });
-    next();
-  });
-}, async (req, res, next) => {
+router.post('/', ticketAttachmentUpload, prepareTicketAttachment, async (req, res, next) => {
   try {
     const {
       roomToken,
@@ -427,12 +398,7 @@ router.get('/:token/attachments/:filename', async (req, res, next) => {
 });
 
 // POST /api/tickets/:token/messages — Envoyer un message (reporter public)
-router.post('/:token/messages', (req, res, next) => {
-  uploadChatFile(req, res, err => {
-    if (err) return res.status(400).json({ error: err.message });
-    next();
-  });
-}, async (req, res, next) => {
+router.post('/:token/messages', ticketAttachmentUpload, prepareTicketAttachment, async (req, res, next) => {
   try {
     const content = (req.body.content || '').trim();
     const hasFile = !!req.file;

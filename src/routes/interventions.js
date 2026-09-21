@@ -2,39 +2,14 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
-const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
 const { uploadPhoto } = require('../middleware/upload');
-
-const ALLOWED_CHAT_MIMES = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-];
-
-const chatStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(process.cwd(), 'uploads', 'ticket-messages');
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '';
-    cb(null, `${uuidv4()}${ext}`);
-  }
-});
-
-const uploadChatFile = multer({
-  storage: chatStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    ALLOWED_CHAT_MIMES.includes(file.mimetype) ? cb(null, true) : cb(new Error('Type de fichier non autorisé.'));
-  }
-}).single('attachment');
+const {
+  ticketAttachmentUpload,
+  prepareTicketAttachment
+} = require('../middleware/ticketAttachment');
 
 const prisma = require('../lib/prisma');
 const { containsFilter } = require('../lib/db-utils');
@@ -1152,12 +1127,7 @@ router.get('/:id/attachments/:filename', requireAuth, async (req, res, next) => 
 });
 
 // POST /api/interventions/:id/messages — Envoyer un message tech
-router.post('/:id/messages', requireAuth, (req, res, next) => {
-  uploadChatFile(req, res, err => {
-    if (err) return res.status(400).json({ error: err.message });
-    next();
-  });
-}, async (req, res, next) => {
+router.post('/:id/messages', requireAuth, ticketAttachmentUpload, prepareTicketAttachment, async (req, res, next) => {
   try {
     const content = (req.body.content || '').trim();
     const hasFile = !!req.file;

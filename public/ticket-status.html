@@ -124,7 +124,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
               </svg>
               <input type="file" id="file-input" class="hidden"
-                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,video/mp4,video/webm,video/quicktime"
                 onchange="onFileSelected(this)" />
             </label>
             <!-- Bouton envoyer -->
@@ -136,6 +136,7 @@
             </button>
           </div>
         </div>
+        <p class="text-[11px] text-slate-400">Photos compressées automatiquement. PDF et vidéos : 25 Mo avant compression, 5 Mo après.</p>
         <p id="send-error" class="hidden text-xs text-red-500"></p>
       </div>
     </div>
@@ -167,6 +168,7 @@
   </div>
 </div>
 
+<script src="/js/ticket-attachments.js"></script>
 <script>
 function esc(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -189,32 +191,12 @@ let lastMessageCount = 0;
 let pollInterval = null;
 let pendingFile = null; // File object à joindre
 
-// ── Compression image ────────────────────────────────────────────────────────
-function compressImage(file, maxWidth = 1200, quality = 0.82) {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const ratio = Math.min(1, maxWidth / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width  = Math.round(img.width  * ratio);
-        canvas.height = Math.round(img.height * ratio);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 // ── Sélection fichier ─────────────────────────────────────────────────────────
 function onFileSelected(input) {
   const file = input.files[0];
   if (!file) return;
   pendingFile = file;
-  document.getElementById('file-preview-name').textContent = file.name;
+  document.getElementById('file-preview-name').textContent = TicketAttachments.selectionMessage(file);
   document.getElementById('file-preview').classList.remove('hidden');
 }
 
@@ -337,14 +319,11 @@ async function sendMessage() {
   try {
     let fileToSend = pendingFile;
 
-    // Compression si image
-    if (fileToSend && IMAGE_MIMES.includes(fileToSend.type)) {
-      fileToSend = await compressImage(fileToSend);
-    }
+    if (fileToSend) fileToSend = await TicketAttachments.prepare(fileToSend);
 
     const fd = new FormData();
     if (content) fd.append('content', content);
-    if (fileToSend) fd.append('attachment', fileToSend, pendingFile.name);
+    if (fileToSend) fd.append('attachment', fileToSend, fileToSend.name);
 
     const res = await fetch(`/api/tickets/${ticketToken}/messages`, {
       method: 'POST',

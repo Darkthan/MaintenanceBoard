@@ -61,6 +61,23 @@ describe('interventions page', () => {
     expect(res.text).toContain("document.getElementById('reporter-name')");
     expect(res.text).toContain("document.getElementById('reporter-email')");
     expect(res.text).toContain('prefillRememberedRequester();');
+    expect(res.text).toContain('/js/ticket-attachments.js');
+    expect(res.text).toContain('PDF et vidéos jusqu’à 25 Mo');
+    expect(res.text).toContain('TicketAttachments.prepare(repPendingFile)');
+  });
+
+  it('propose la compression des pièces jointes dans les conversations de demande', async () => {
+    const [reporterRes, supportRes] = await Promise.all([
+      request(app).get('/ticket-status.html'),
+      request(app).get('/messages-ticket.html')
+    ]);
+
+    expect(reporterRes.status).toBe(200);
+    expect(supportRes.status).toBe(200);
+    expect(reporterRes.text).toContain('video/mp4');
+    expect(reporterRes.text).toContain('TicketAttachments.prepare(fileToSend)');
+    expect(supportRes.text).toContain('video/mp4');
+    expect(supportRes.text).toContain('TicketAttachments.prepare(selectedAttachment)');
   });
 
   it('sert un menu avant les demandes d’intervention et les réservations', async () => {
