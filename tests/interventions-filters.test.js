@@ -25,6 +25,9 @@ jest.mock('../src/lib/prisma', () => ({
     findUnique: jest.fn(),
     update: jest.fn()
   },
+  user: {
+    findFirst: jest.fn()
+  },
   interventionCheckupItem: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
@@ -79,5 +82,73 @@ describe('GET /api/interventions filters', () => {
         ])
       }
     });
+  });
+
+  it('filtre les tickets publics non attribués', async () => {
+    const res = await request(buildApp())
+      .get('/api/interventions')
+      .query({ source: 'PUBLIC', unassigned: 'true' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.intervention.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        AND: expect.arrayContaining([
+          { source: 'PUBLIC' },
+          { techId: null }
+        ])
+      }
+    }));
+  });
+
+  it('filtre les tickets ayant un message demandeur non lu', async () => {
+    const res = await request(buildApp())
+      .get('/api/interventions')
+      .query({ source: 'PUBLIC', needsReply: 'true' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.intervention.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        AND: expect.arrayContaining([
+          { messages: { some: { authorType: 'REPORTER', readAt: null } } }
+        ])
+      }
+    }));
+  });
+
+  it('retourne les compteurs de la file de tickets', async () => {
+    prisma.intervention.count
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1);
+
+    const res = await request(buildApp()).get('/api/interventions/tickets/summary');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ open: 4, inProgress: 3, unread: 2, unassigned: 1 });
+    expect(prisma.intervention.count).toHaveBeenCalledTimes(4);
+  });
+
+  it('permet à un administrateur d’attribuer un ticket', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'tech-1' });
+    prisma.intervention.update.mockResolvedValue({
+      id: 'ticket-1',
+      title: 'Écran noir',
+      source: 'PUBLIC',
+      techId: 'tech-1',
+      photos: '[]',
+      checkupTemplate: '[]',
+      checkupItems: []
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/interventions/ticket-1/assignment')
+      .send({ techId: 'tech-1' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.intervention.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'ticket-1' },
+      data: { techId: 'tech-1' }
+    }));
   });
 });

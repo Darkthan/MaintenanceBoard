@@ -161,6 +161,18 @@ const ACTIONS = [
     }
   },
   {
+    id: 'action:tickets',
+    title: 'Gestion des tickets',
+    subtitle: 'Traiter les demandes des utilisateurs',
+    href: '/tickets.html',
+    keywords: ['ticket', 'tickets', 'support', 'demande', 'incident', 'utilisateur', 'assistance'],
+    roles: ['ADMIN', 'TECH'],
+    preview: {
+      title: 'File des tickets',
+      description: 'Ouvre la file de traitement des tickets publics.'
+    }
+  },
+  {
     id: 'action:new-intervention',
     title: 'Nouvelle intervention',
     subtitle: 'Creer et assigner une intervention',

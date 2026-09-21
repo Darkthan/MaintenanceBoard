@@ -33,4 +33,15 @@ describe('interventions page', () => {
     expect(res.text).toContain('checkup-form');
     expect(res.text).toContain('detail-checkup-section');
   });
+
+  it('sert une interface dédiée à la gestion des tickets publics', async () => {
+    const res = await request(app).get('/tickets.html');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Gestion des tickets');
+    expect(res.text).toContain('/interventions/tickets/summary');
+    expect(res.text).toContain('data-action="assignment"');
+    expect(res.text).toContain('/messages-ticket.html?id=');
+    expect(res.text).toContain('id="pagination"');
+  });
 });

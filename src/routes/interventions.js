@@ -261,7 +261,18 @@ const interventionListInclude = {
   messages: {
     orderBy: { createdAt: 'desc' },
     take: 1,
-    select: { authorType: true }
+    select: {
+      authorType: true,
+      content: true,
+      attachmentName: true,
+      readAt: true,
+      createdAt: true
+    }
+  },
+  _count: {
+    select: {
+      messages: { where: { authorType: 'REPORTER', readAt: null } }
+    }
   },
   checkupItems: {
     select: { id: true, status: true, checklistState: true }
@@ -328,7 +339,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, parseInt(req.query.limit) || 20);
     const skip = (page - 1) * limit;
-    const { status, priority, roomId, equipmentId, techId, dateFrom, dateTo, search, source } = req.query;
+    const { status, priority, roomId, equipmentId, techId, dateFrom, dateTo, search, source, unassigned, needsReply } = req.query;
 
     const clauses = [{ mergedIntoId: null }];
     // Par défaut on exclut les archivées, sauf si archived=true est explicitement demandé
@@ -345,6 +356,10 @@ router.get('/', requireAuth, async (req, res, next) => {
     if (priority && VALID_PRIORITIES.includes(priority)) clauses.push({ priority });
     if (roomId) clauses.push({ roomId });
     if (equipmentId) clauses.push({ equipmentId });
+    if (unassigned === 'true') clauses.push({ techId: null });
+    if (needsReply === 'true') {
+      clauses.push({ messages: { some: { authorType: 'REPORTER', readAt: null } } });
+    }
     clauses.push(...buildInterventionAccessClauses(req.user, techId));
 
     if (dateFrom || dateTo) {
@@ -382,6 +397,69 @@ router.get('/', requireAuth, async (req, res, next) => {
     });
   } catch (err) { next(err); }
 });
+
+// GET /api/interventions/tickets/summary - Compteurs de la file de tickets publics
+router.get('/tickets/summary', requireAuth, async (req, res, next) => {
+  try {
+    const accessClauses = buildInterventionAccessClauses(req.user);
+    const baseClauses = [
+      { source: 'PUBLIC' },
+      { mergedIntoId: null },
+      { archivedAt: null },
+      ...accessClauses
+    ];
+    const withExtra = extra => ({ AND: [...baseClauses, extra] });
+
+    const [open, inProgress, unread, unassigned] = await Promise.all([
+      prisma.intervention.count({ where: withExtra({ status: 'OPEN' }) }),
+      prisma.intervention.count({ where: withExtra({ status: 'IN_PROGRESS' }) }),
+      prisma.intervention.count({
+        where: withExtra({ messages: { some: { authorType: 'REPORTER', readAt: null } } })
+      }),
+      req.user.role === 'ADMIN'
+        ? prisma.intervention.count({ where: withExtra({ techId: null }) })
+        : Promise.resolve(0)
+    ]);
+
+    res.json({ open, inProgress, unread, unassigned });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/interventions/:id/assignment - Affecter un ticket/intervention (admin)
+router.patch('/:id/assignment',
+  requireAuth,
+  requireAdmin,
+  [body('techId').optional({ nullable: true }).isString()],
+  async (req, res, next) => {
+    try {
+      if (!validate(req, res)) return;
+
+      const techId = req.body.techId ? String(req.body.techId).trim() : null;
+      if (techId) {
+        const technician = await prisma.user.findFirst({
+          where: { id: techId, isActive: true, role: { in: ['ADMIN', 'TECH'] } },
+          select: { id: true }
+        });
+        if (!technician) {
+          return res.status(400).json({ error: 'Technicien invalide ou inactif' });
+        }
+      }
+
+      const intervention = await prisma.intervention.update({
+        where: { id: req.params.id },
+        data: { techId },
+        include: interventionDetailInclude
+      });
+
+      res.json(serializeIntervention(intervention));
+    } catch (err) {
+      if (err.code === 'P2025') return res.status(404).json({ error: 'Intervention introuvable' });
+      next(err);
+    }
+  }
+);
 
 // GET /api/interventions/room/:roomId - Historique d'une salle
 router.get('/room/:roomId', requireAuth, async (req, res, next) => {
