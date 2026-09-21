@@ -32,9 +32,11 @@ describe('interventions page', () => {
     expect(res.text).toContain('add-checkup-btn');
     expect(res.text).toContain('checkup-form');
     expect(res.text).toContain('detail-checkup-section');
-    expect(res.text).toContain('id="detail-intervention-link"');
-    expect(res.text).toContain('function getInterventionLink(interventionId)');
-    expect(res.text).toContain('copyInterventionLink()');
+    expect(res.text).toContain('Lien public');
+    expect(res.text).toContain('id="public-request-link"');
+    expect(res.text).toContain("new URL('/report.html', window.location.origin)");
+    expect(res.text).toContain('copyPublicRequestLink()');
+    expect(res.text).not.toContain('detail-intervention-link');
   });
 
   it('sert une interface dédiée à la gestion des tickets publics', async () => {

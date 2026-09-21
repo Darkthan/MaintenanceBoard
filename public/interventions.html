@@ -29,7 +29,7 @@
   </aside>
 
   <main class="flex-1 lg:ml-64 flex flex-col">
-    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between gap-3 sticky top-0 z-20">
       <div class="flex items-center gap-3">
         <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -38,6 +38,10 @@
         </button>
         <h1 class="text-xl font-semibold text-slate-800">Interventions</h1>
       </div>
+      <button type="button" onclick="openPublicRequestLinkModal()" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-700 transition" title="Obtenir le lien public de demande">
+        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Lien public
+      </button>
     </header>
 
     <div class="flex-1 p-6 space-y-4">
@@ -102,6 +106,30 @@
       <div id="pagination" class="flex items-center justify-between text-sm text-slate-500"></div>
     </div>
   </main>
+</div>
+
+<div id="public-request-link-modal" class="hidden fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" onclick="closePublicRequestLinkModal()">
+  <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+      <div>
+        <h2 class="font-semibold text-slate-800">Lien public de demande</h2>
+        <p class="mt-1 text-xs leading-5 text-slate-500">Partagez ce lien avec les utilisateurs pour leur permettre de signaler une demande d’intervention.</p>
+      </div>
+      <button type="button" onclick="closePublicRequestLinkModal()" class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Fermer">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="space-y-3 px-5 py-4">
+      <a id="public-request-link" href="#" target="_blank" rel="noopener" class="block break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 hover:border-blue-200 hover:text-blue-700 hover:underline"></a>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="closePublicRequestLinkModal()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">Fermer</button>
+        <button type="button" onclick="copyPublicRequestLink()" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V5a2 2 0 012-2h7a2 2 0 012 2v7m-4 5v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-7a2 2 0 012-2h2"/></svg>
+          Copier le lien
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <aside id="detail-panel"
@@ -171,16 +199,6 @@
           <span id="detail-equipment" class="font-medium text-slate-700"></span>
           <div id="detail-equipment-suggestion" class="hidden mt-1"></div>
         </div>
-      </div>
-      <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-        <div class="flex items-center justify-between gap-3">
-          <span class="text-xs font-medium text-slate-500">Lien direct</span>
-          <button type="button" onclick="copyInterventionLink()" class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition" title="Copier le lien">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V5a2 2 0 012-2h7a2 2 0 012 2v7m-4 5v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-7a2 2 0 012-2h2"/></svg>
-            Copier
-          </button>
-        </div>
-        <a id="detail-intervention-link" href="#" target="_blank" rel="noopener" class="mt-1 block break-all text-xs text-slate-500 hover:text-blue-600 hover:underline"></a>
       </div>
       <div id="detail-description-wrap" class="hidden">
         <span class="text-xs text-slate-400 block mb-1">Description</span>
@@ -1281,14 +1299,20 @@ function openCreateOrderFromIntervention(interventionId) {
   window.location = `/orders.html?action=create&interventionId=${encodeURIComponent(interventionId)}`;
 }
 
-function getInterventionLink(interventionId) {
-  const url = new URL('/interventions.html', window.location.origin);
-  url.searchParams.set('focus', interventionId);
-  return url.toString();
+function openPublicRequestLinkModal() {
+  const link = new URL('/report.html', window.location.origin).toString();
+  const linkEl = document.getElementById('public-request-link');
+  linkEl.href = link;
+  linkEl.textContent = link;
+  document.getElementById('public-request-link-modal').classList.remove('hidden');
 }
 
-async function copyInterventionLink() {
-  const link = document.getElementById('detail-intervention-link')?.href;
+function closePublicRequestLinkModal() {
+  document.getElementById('public-request-link-modal').classList.add('hidden');
+}
+
+async function copyPublicRequestLink() {
+  const link = document.getElementById('public-request-link')?.href;
   if (!link) return;
 
   try {
@@ -1304,9 +1328,9 @@ async function copyInterventionLink() {
       document.execCommand('copy');
       input.remove();
     }
-    showToast('Lien copié');
+    showToast('Lien public copié');
   } catch (err) {
-    showToast('Impossible de copier le lien', 'error');
+    showToast('Impossible de copier le lien public', 'error');
   }
 }
 
@@ -1502,10 +1526,6 @@ async function openInterventionDetail(id) {
 
     document.getElementById('detail-title').textContent = intervention.title;
     document.getElementById('detail-meta').textContent = `Intervention #${intervention.id.slice(-6).toUpperCase()}`;
-    const interventionLink = getInterventionLink(intervention.id);
-    const interventionLinkEl = document.getElementById('detail-intervention-link');
-    interventionLinkEl.href = interventionLink;
-    interventionLinkEl.textContent = interventionLink;
     document.getElementById('detail-status-display').innerHTML = statusBadge(intervention.status);
     document.getElementById('detail-priority-display').innerHTML = priorityBadge(intervention.priority);
     document.getElementById('detail-source').innerHTML = intervention.source === 'PUBLIC'
