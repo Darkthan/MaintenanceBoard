@@ -184,17 +184,19 @@ const LOAN_ACCESS_STORAGE_PREFIX = 'loan-request-access-';
 
 function getRememberedLoanAccessEntries() {
   const entries = [];
-  try {
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const key = localStorage.key(index);
-      if (!key?.startsWith(LOAN_ACCESS_STORAGE_PREFIX)) continue;
-      const token = key.slice(LOAN_ACCESS_STORAGE_PREFIX.length);
-      const data = JSON.parse(localStorage.getItem(key) || 'null');
-      if (token && data?.accessToken) {
-        entries.push({ key, token, accessToken: data.accessToken, savedAt: data.savedAt || 0 });
+  for (const storage of [sessionStorage, localStorage]) {
+    try {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (!key?.startsWith(LOAN_ACCESS_STORAGE_PREFIX)) continue;
+        const token = key.slice(LOAN_ACCESS_STORAGE_PREFIX.length);
+        const data = JSON.parse(storage.getItem(key) || 'null');
+        if (token && data?.accessToken && !entries.some(entry => entry.accessToken === data.accessToken)) {
+          entries.push({ key, storage, token, accessToken: data.accessToken, savedAt: data.savedAt || 0 });
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
   return entries.sort((a, b) => b.savedAt - a.savedAt);
 }
 
@@ -221,7 +223,7 @@ async function prefillRememberedRequester() {
         return;
       }
       if (response.status === 404 || (response.ok && !data.authenticated)) {
-        localStorage.removeItem(entry.key);
+        entry.storage.removeItem(entry.key);
       }
     } catch {
       // Une indisponibilité réseau ne doit ni bloquer le formulaire ni effacer la connexion.

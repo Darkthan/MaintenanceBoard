@@ -103,5 +103,11 @@ describe('interventions page', () => {
     expect(res.text).toContain('Réserver du matériel');
     expect(res.text).toContain('/report.html');
     expect(res.text).toContain("fetch('/api/loan-request/general-link')");
+    expect(res.text).toContain('id="account-login-form"');
+    expect(res.text).toContain('/api/loan-request/account?access=');
+    expect(res.text).toContain("returnTo: '/demande'");
+    expect(res.text).toContain('Mes interventions');
+    expect(res.text).toContain('Mes réservations');
+    expect(res.text).toContain('id="logout-btn"');
   });
 });

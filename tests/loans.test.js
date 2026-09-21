@@ -49,6 +49,12 @@ jest.mock('../src/lib/prisma', () => ({
     update: jest.fn(),
     delete: jest.fn()
   },
+  interventionReporter: {
+    findMany: jest.fn()
+  },
+  intervention: {
+    findMany: jest.fn()
+  },
   signatureRequest: {
     create: jest.fn(),
     update: jest.fn()
@@ -95,6 +101,65 @@ describe('loan requests', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ token: 'general-loan-token' });
+  });
+
+  it('regroupe les réservations et interventions du compte connecté', async () => {
+    prisma.loanRequestAccessLink.findUnique.mockResolvedValue({
+      token: 'account-access-token',
+      email: 'jean@example.com',
+      requesterName: 'Jean Dupont',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      requestLink: { id: 'link-1', token: 'loan-token' }
+    });
+    prisma.loanReservation.findMany.mockResolvedValue([{
+      id: 'reservation-1',
+      status: 'APPROVED',
+      requesterName: 'Jean Dupont',
+      startAt: new Date('2026-10-01T08:00:00.000Z'),
+      endAt: new Date('2026-10-01T16:00:00.000Z'),
+      requestedUnits: 1,
+      createdAt: new Date('2026-09-20T08:00:00.000Z'),
+      resource: { name: 'Vidéoprojecteur', location: 'Accueil' }
+    }]);
+    prisma.interventionReporter.findMany.mockResolvedValue([{
+      token: 'reporter-token',
+      intervention: {
+        id: 'intervention-1',
+        title: 'Écran noir',
+        status: 'OPEN',
+        source: 'PUBLIC',
+        mergedIntoId: null,
+        createdAt: new Date('2026-09-21T08:00:00.000Z'),
+        updatedAt: new Date('2026-09-21T09:00:00.000Z'),
+        room: { name: 'Salle 12' },
+        equipment: null
+      }
+    }]);
+    prisma.intervention.findMany.mockResolvedValue([]);
+
+    const res = await request(buildApp())
+      .get('/api/loan-request/account')
+      .query({ access: 'account-access-token' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.account).toEqual(expect.objectContaining({ email: 'jean@example.com', name: 'Jean Dupont' }));
+    expect(res.body.reservations[0]).toEqual(expect.objectContaining({ id: 'reservation-1', status: 'APPROVED' }));
+    expect(res.body.interventions[0]).toEqual(expect.objectContaining({ id: 'intervention-1', reporterToken: 'reporter-token' }));
+  });
+
+  it('refuse le compte lorsque le lien de connexion a expiré', async () => {
+    prisma.loanRequestAccessLink.findUnique.mockResolvedValue({
+      token: 'expired-access-token',
+      email: 'jean@example.com',
+      expiresAt: new Date(Date.now() - 1000),
+      requestLink: { id: 'link-1' }
+    });
+
+    const res = await request(buildApp())
+      .get('/api/loan-request/account')
+      .query({ access: 'expired-access-token' });
+
+    expect(res.status).toBe(401);
   });
 
   it('envoie un lien de connexion par email pour acceder au formulaire', async () => {
@@ -165,6 +230,24 @@ describe('loan requests', () => {
     expect(ttlMs).toBeLessThanOrEqual(365 * 24 * 60 * 60 * 1000);
     const sendMail = createSmtpTransporter.mock.results[0].value.transporter.sendMail;
     expect(sendMail.mock.calls[0][0].html).toContain('remember=1');
+  });
+
+  it('fait revenir le magic link vers le compte général', async () => {
+    prisma.loanMagicLink.findUnique.mockResolvedValue({
+      id: 'link-1', token: 'magic-1', title: 'Lien général de demande', isActive: true, expiresAt: null, resourceId: null
+    });
+    prisma.loanRequestAccessLink.create.mockResolvedValue({
+      id: 'access-1', token: 'access-token-1', email: 'jean@example.com', requesterName: 'Jean', expiresAt: new Date(Date.now() + 86400000)
+    });
+
+    const res = await request(buildApp())
+      .post('/api/loan-request/magic-1/access-link')
+      .send({ requesterEmail: 'jean@example.com', requesterName: 'Jean', returnTo: '/demande' });
+
+    expect(res.status).toBe(200);
+    const sendMail = createSmtpTransporter.mock.results[0].value.transporter.sendMail;
+    expect(sendMail.mock.calls[0][0].html).toContain('return=%2Fdemande');
+    expect(sendMail.mock.calls[0][0].subject).toContain('espace de demandes');
   });
 
   it('verrouille un lot complet meme pour une demande partielle', async () => {

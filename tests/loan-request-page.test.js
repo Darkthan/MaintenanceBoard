@@ -52,6 +52,8 @@ describe('loan request public page', () => {
     expect(res.text).toContain('email: data.requesterEmail');
     expect(res.text).toContain("history.replaceState(null, '', '/loan-auth.html')");
     expect(res.text).toContain('/loan-request.html?token=${encodeURIComponent(token)}');
+    expect(res.text).toContain("params.get('return') === '/demande'");
+    expect(res.text).toContain("document.getElementById('request-link').href = returnTo");
     expect(res.text).not.toContain('id="request-form"');
   });
 });

@@ -544,11 +544,17 @@ async function sendLoanStatusEmail(reservation, newStatus) {
   }
 }
 
-function getLoanAuthorizationUrl(requestToken, accessToken, rememberMe) {
+function normalizePublicAccountReturnTo(value, requestToken) {
+  if (value === '/demande') return '/demande';
+  return `/loan-request.html?token=${encodeURIComponent(requestToken)}`;
+}
+
+function getLoanAuthorizationUrl(requestToken, accessToken, rememberMe, returnTo) {
   const url = new URL('/loan-auth.html', config.appUrl);
   url.searchParams.set('token', requestToken);
   url.searchParams.set('access', accessToken);
   if (rememberMe) url.searchParams.set('remember', '1');
+  if (returnTo === '/demande') url.searchParams.set('return', '/demande');
   return url.toString();
 }
 
@@ -565,7 +571,7 @@ async function findValidRequestLink(token) {
   return link;
 }
 
-async function findValidAccessLink(requestToken, accessToken) {
+async function findValidAccessLink(_requestToken, accessToken) {
   if (!accessToken) return null;
 
   const accessLink = await prisma.loanRequestAccessLink.findUnique({
@@ -579,9 +585,18 @@ async function findValidAccessLink(requestToken, accessToken) {
 
   if (!accessLink) return null;
   if (accessLink.expiresAt < new Date()) return null;
-  if (!accessLink.requestLink || accessLink.requestLink.token !== requestToken) return null;
-  if (!accessLink.requestLink.isActive || (accessLink.requestLink.expiresAt && accessLink.requestLink.expiresAt < new Date())) return null;
+  if (!accessLink.requestLink) return null;
 
+  return accessLink;
+}
+
+async function findValidAccountAccessLink(accessToken) {
+  if (!accessToken) return null;
+  const accessLink = await prisma.loanRequestAccessLink.findUnique({
+    where: { token: accessToken },
+    include: { requestLink: true }
+  });
+  if (!accessLink || accessLink.expiresAt < new Date() || !accessLink.requestLink) return null;
   return accessLink;
 }
 
@@ -611,6 +626,91 @@ loanPublicRouter.get('/general-link', async (_req, res, next) => {
 
     if (!link) return res.status(404).json({ error: 'Les réservations publiques ne sont pas encore activées.' });
     res.json({ token: link.token });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/loan-request/account — compte public commun aux réservations et interventions
+loanPublicRouter.get('/account', async (req, res, next) => {
+  try {
+    const accessLink = await findValidAccountAccessLink(String(req.query.access || ''));
+    if (!accessLink) return res.status(401).json({ error: 'Connexion expirée. Demandez un nouveau magic link.' });
+
+    const email = normalizeEmail(accessLink.email);
+    const [reservations, reporterLinks, legacyTickets] = await Promise.all([
+      prisma.loanReservation.findMany({
+        where: { requesterEmail: email },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          status: true,
+          requesterName: true,
+          startAt: true,
+          endAt: true,
+          requestedUnits: true,
+          createdAt: true,
+          resource: { select: { name: true, location: true } }
+        }
+      }),
+      prisma.interventionReporter?.findMany
+        ? prisma.interventionReporter.findMany({
+            where: { email },
+            orderBy: { createdAt: 'desc' },
+            include: {
+              intervention: {
+                include: {
+                  room: { select: { name: true } },
+                  equipment: { select: { name: true } }
+                }
+              }
+            }
+          })
+        : [],
+      prisma.intervention.findMany({
+        where: { reporterEmail: email, source: 'PUBLIC', mergedIntoId: null },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          room: { select: { name: true } },
+          equipment: { select: { name: true } }
+        }
+      })
+    ]);
+
+    const interventions = new Map();
+    for (const reporter of reporterLinks) {
+      const intervention = reporter.intervention;
+      if (!intervention || intervention.mergedIntoId) continue;
+      interventions.set(intervention.id, { ...intervention, reporterToken: reporter.token });
+    }
+    for (const intervention of legacyTickets) {
+      if (!interventions.has(intervention.id)) interventions.set(intervention.id, intervention);
+    }
+
+    res.json({
+      account: {
+        email,
+        name: accessLink.requesterName
+          || reservations[0]?.requesterName
+          || reporterLinks.find(reporter => reporter.name)?.name
+          || legacyTickets.find(ticket => ticket.reporterName)?.reporterName
+          || '',
+        accessExpiresAt: accessLink.expiresAt
+      },
+      reservations,
+      interventions: [...interventions.values()]
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(intervention => ({
+          id: intervention.id,
+          title: intervention.title,
+          status: intervention.status,
+          createdAt: intervention.createdAt,
+          updatedAt: intervention.updatedAt,
+          room: intervention.room || null,
+          equipment: intervention.equipment || null,
+          reporterToken: intervention.reporterToken
+        }))
+    });
   } catch (err) {
     next(err);
   }
@@ -715,7 +815,8 @@ loanPublicRouter.post('/:token/access-link',
   [
     body('requesterEmail').isEmail().normalizeEmail(),
     body('requesterName').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
-    body('rememberMe').optional().isBoolean()
+    body('rememberMe').optional().isBoolean(),
+    body('returnTo').optional().isString().isLength({ max: 100 })
   ],
   async (req, res, next) => {
     try {
@@ -725,6 +826,7 @@ loanPublicRouter.post('/:token/access-link',
       const requesterEmail = normalizeEmail(req.body.requesterEmail);
       const requesterName = (req.body.requesterName || '').trim() || null;
       const rememberMe = req.body.rememberMe === true || req.body.rememberMe === 'true';
+      const returnTo = normalizePublicAccountReturnTo(req.body.returnTo, link.token);
       const accessTtlMs = rememberMe
         ? 365 * 24 * 60 * 60 * 1000
         : 24 * 60 * 60 * 1000;
@@ -743,17 +845,20 @@ loanPublicRouter.post('/:token/access-link',
         return res.status(503).json({ error: 'La configuration SMTP est requise pour envoyer un lien de connexion.' });
       }
 
-      const accessUrl = getLoanAuthorizationUrl(link.token, accessLink.token, rememberMe);
+      const accessUrl = getLoanAuthorizationUrl(link.token, accessLink.token, rememberMe, returnTo);
+      const isAccountAccess = returnTo === '/demande';
 
       await transporter.sendMail({
         from,
         to: requesterEmail,
-        subject: `Accès à votre demande de prêt${link.title ? ` – ${link.title}` : ''}`,
+        subject: isAccountAccess
+          ? 'Connexion à votre espace de demandes – MaintenanceBoard'
+          : `Accès à votre demande de prêt${link.title ? ` – ${link.title}` : ''}`,
         html: `
           <div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
-            <h2 style="color:#0f172a;">Connexion à votre demande de prêt</h2>
+            <h2 style="color:#0f172a;">${isAccountAccess ? 'Connexion à votre espace de demandes' : 'Connexion à votre demande de prêt'}</h2>
             <p>Bonjour${requesterName ? ` ${requesterName}` : ''},</p>
-            <p>Cliquez sur le bouton ci-dessous pour autoriser la connexion sur la page de demande que vous avez déjà ouverte :</p>
+            <p>Cliquez sur le bouton ci-dessous pour autoriser la connexion sur la page que vous avez déjà ouverte :</p>
             <p style="margin:24px 0;">
               <a href="${accessUrl}" style="background:#0284c7;color:white;padding:12px 24px;text-decoration:none;border-radius:10px;font-weight:600;display:inline-block;">Autoriser la connexion</a>
             </p>

@@ -3,59 +3,280 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>Faire une demande – MaintenanceBoard</title>
+  <title>Mes demandes – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-900">
-  <main class="mx-auto flex min-h-screen w-full max-w-4xl items-center p-4 sm:p-8">
-    <section class="w-full">
-      <div class="mx-auto mb-8 max-w-2xl text-center">
-        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
-          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-        </div>
-        <h1 class="mt-4 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Faire une demande</h1>
-        <p class="mt-2 text-sm leading-6 text-slate-500">Choisissez le type de demande que vous souhaitez envoyer.</p>
+  <main class="mx-auto min-h-screen w-full max-w-5xl p-4 sm:p-8">
+    <header class="mx-auto mb-6 max-w-3xl text-center">
+      <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a3 3 0 006 0M9 5a3 3 0 00-6 0"/></svg>
       </div>
+      <h1 class="mt-4 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Mes demandes</h1>
+      <p class="mt-2 text-sm leading-6 text-slate-500">Retrouvez vos réservations de matériel et vos demandes d’intervention au même endroit.</p>
+    </header>
 
-      <div class="grid gap-4 md:grid-cols-2 md:gap-6">
-        <a href="/report.html" class="group rounded-3xl border border-orange-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-orange-300 hover:shadow-xl hover:shadow-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 sm:p-8">
-          <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a3 3 0 006 0M9 12h6m-6 4h4"/></svg>
-          </span>
-          <h2 class="mt-6 text-xl font-semibold text-slate-900">Demander une intervention</h2>
-          <p class="mt-2 text-sm leading-6 text-slate-500">Déclarez un incident, un dysfonctionnement ou un besoin d’assistance.</p>
-          <span class="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-orange-600">Faire un signalement <span aria-hidden="true">→</span></span>
-        </a>
+    <div id="loading-state" class="py-12 text-center">
+      <div class="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+      <p class="text-sm text-slate-500">Chargement de votre espace…</p>
+    </div>
 
-        <a id="public-loan-request-link" href="#" class="group rounded-3xl border border-blue-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 sm:p-8">
-          <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V5a4 4 0 118 0v2m-8 0h8m-8 0a2 2 0 00-2 2v8a3 3 0 003 3h6a3 3 0 003-3V9a2 2 0 00-2-2"/></svg>
-          </span>
-          <h2 class="mt-6 text-xl font-semibold text-slate-900">Réserver du matériel</h2>
-          <p class="mt-2 text-sm leading-6 text-slate-500">Consultez le matériel disponible puis choisissez la période souhaitée.</p>
-          <span class="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-blue-600">Faire une réservation <span aria-hidden="true">→</span></span>
-        </a>
-      </div>
-
-      <p id="loan-link-error" class="hidden mx-auto mt-5 max-w-2xl text-center text-sm text-red-600">Le lien de réservation est incomplet. Demandez le lien général à l’administrateur.</p>
+    <section id="login-state" class="mx-auto hidden max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <h2 class="text-xl font-semibold text-slate-900">Connexion par email</h2>
+      <p class="mt-2 text-sm leading-6 text-slate-500">Saisissez votre email. Vous recevrez un magic link pour ouvrir votre espace, sans mot de passe.</p>
+      <form id="account-login-form" class="mt-6 space-y-4">
+        <label class="block text-sm">
+          <span class="mb-1.5 block font-medium text-slate-700">Nom</span>
+          <input id="account-name" type="text" maxlength="200" autocomplete="name" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200" placeholder="Votre nom (optionnel)" />
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1.5 block font-medium text-slate-700">Email *</span>
+          <input id="account-email" type="email" required maxlength="200" autocomplete="email" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200" placeholder="vous@exemple.fr" />
+        </label>
+        <label class="flex items-start gap-3 text-sm text-slate-600">
+          <input id="account-remember" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+          <span>Rester connecté sur cet appareil</span>
+        </label>
+        <div id="login-feedback" class="hidden rounded-xl px-4 py-3 text-sm"></div>
+        <button id="login-submit" type="submit" class="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50">Recevoir mon lien de connexion</button>
+      </form>
     </section>
+
+    <section id="account-state" class="hidden space-y-6">
+      <div class="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A9 9 0 1118.88 17.8M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <div class="min-w-0">
+            <p id="account-display-name" class="font-semibold text-slate-900"></p>
+            <p id="account-display-email" class="truncate text-sm text-slate-500"></p>
+          </div>
+        </div>
+        <button id="logout-btn" type="button" class="self-start rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 sm:self-auto">Se déconnecter</button>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <a href="/report.html" class="group rounded-3xl border border-orange-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-400">
+          <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-100 text-orange-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 12h6m-6 4h4"/></svg></span>
+          <h2 class="mt-4 text-lg font-semibold">Demander une intervention</h2>
+          <p class="mt-1 text-sm leading-6 text-slate-500">Déclarez un incident ou un besoin d’assistance.</p>
+        </a>
+        <a id="public-loan-request-link" href="#" class="group rounded-3xl border border-blue-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100 text-blue-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V5a4 4 0 118 0v2m-8 0h8m-8 0a2 2 0 00-2 2v8a3 3 0 003 3h6a3 3 0 003-3V9a2 2 0 00-2-2"/></svg></span>
+          <h2 class="mt-4 text-lg font-semibold">Réserver du matériel</h2>
+          <p class="mt-1 text-sm leading-6 text-slate-500">Consultez le matériel et choisissez une période.</p>
+        </a>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-2">
+        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="font-semibold text-slate-900">Mes interventions</h2>
+            <span id="interventions-count" class="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700"></span>
+          </div>
+          <div id="interventions-list" class="mt-4 space-y-3"></div>
+        </section>
+        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="font-semibold text-slate-900">Mes réservations</h2>
+            <span id="reservations-count" class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700"></span>
+          </div>
+          <div id="reservations-list" class="mt-4 space-y-3"></div>
+        </section>
+      </div>
+    </section>
+
+    <p id="global-error" class="mx-auto mt-5 hidden max-w-xl rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-700"></p>
   </main>
 
-  <script>
-    const loanLink = document.getElementById('public-loan-request-link');
-    async function configureLoanLink() {
-      try {
-        const response = await fetch('/api/loan-request/general-link');
-        const data = await response.json();
-        if (!response.ok || !data.token) throw new Error();
-        loanLink.href = `/loan-request.html?token=${encodeURIComponent(data.token)}`;
-      } catch {
-        loanLink.removeAttribute('href');
-        loanLink.classList.add('pointer-events-none', 'opacity-50');
-        document.getElementById('loan-link-error').classList.remove('hidden');
+<script>
+const ACCESS_STORAGE_PREFIX = 'loan-request-access-';
+const AUTH_PENDING_KEY = 'loan-auth-pending';
+let generalRequestToken = '';
+let currentAccessToken = '';
+let authChannel = null;
+
+const STATUS_LABELS = { OPEN:'Ouverte', IN_PROGRESS:'En cours', RESOLVED:'Résolue', CLOSED:'Fermée', PENDING:'En attente', APPROVED:'Acceptée', REJECTED:'Refusée', CANCELLED:'Annulée', RETURNED:'Terminée' };
+const STATUS_CLASSES = { OPEN:'bg-blue-100 text-blue-700', IN_PROGRESS:'bg-orange-100 text-orange-700', RESOLVED:'bg-green-100 text-green-700', CLOSED:'bg-slate-100 text-slate-600', PENDING:'bg-amber-100 text-amber-700', APPROVED:'bg-green-100 text-green-700', REJECTED:'bg-red-100 text-red-700', CANCELLED:'bg-slate-100 text-slate-600', RETURNED:'bg-blue-100 text-blue-700' };
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function formatDate(value, withTime = false) {
+  if (!value) return '';
+  return new Date(value).toLocaleString('fr-FR', withTime ? { dateStyle: 'short', timeStyle: 'short' } : { dateStyle: 'short' });
+}
+
+function getStoredAccessEntries() {
+  const entries = [];
+  for (const storage of [sessionStorage, localStorage]) {
+    try {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (!key?.startsWith(ACCESS_STORAGE_PREFIX)) continue;
+        const data = JSON.parse(storage.getItem(key) || 'null');
+        if (data?.accessToken && !entries.some(item => item.accessToken === data.accessToken)) entries.push({ ...data, key, persistent: storage === localStorage });
       }
+    } catch {}
+  }
+  return entries.sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0));
+}
+
+function storeAccountAccess(accessToken, persistent, account = {}) {
+  if (!generalRequestToken || !accessToken) return;
+  const key = `${ACCESS_STORAGE_PREFIX}${generalRequestToken}`;
+  const value = JSON.stringify({ accessToken, requesterName: account.name || '', requesterEmail: account.email || '', savedAt: Date.now() });
+  try {
+    (persistent ? localStorage : sessionStorage).setItem(key, value);
+    (persistent ? sessionStorage : localStorage).removeItem(key);
+  } catch {}
+}
+
+function clearAccountAccess() {
+  for (const storage of [sessionStorage, localStorage]) {
+    try {
+      const keys = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key?.startsWith(ACCESS_STORAGE_PREFIX)) keys.push(key);
+      }
+      keys.forEach(key => storage.removeItem(key));
+    } catch {}
+  }
+  currentAccessToken = '';
+}
+
+function showLogin() {
+  document.getElementById('loading-state').classList.add('hidden');
+  document.getElementById('account-state').classList.add('hidden');
+  document.getElementById('login-state').classList.remove('hidden');
+}
+
+function renderInterventions(items) {
+  const list = document.getElementById('interventions-list');
+  document.getElementById('interventions-count').textContent = items.length;
+  if (!items.length) {
+    list.innerHTML = '<p class="rounded-2xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">Aucune demande d’intervention.</p>';
+    return;
+  }
+  list.innerHTML = items.map(item => {
+    const label = STATUS_LABELS[item.status] || item.status;
+    const statusClass = STATUS_CLASSES[item.status] || 'bg-slate-100 text-slate-600';
+    const location = item.room?.name || item.equipment?.name || '';
+    const content = `<div class="flex items-start justify-between gap-3"><p class="font-medium text-slate-800">${escapeHtml(item.title)}</p><span class="flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusClass}">${escapeHtml(label)}</span></div><p class="mt-2 text-xs text-slate-400">${formatDate(item.createdAt)}${location ? ` · ${escapeHtml(location)}` : ''}</p>`;
+    return item.reporterToken ? `<a href="/ticket-status.html?token=${encodeURIComponent(item.reporterToken)}" class="block rounded-2xl border border-slate-200 p-3 transition hover:border-orange-200 hover:bg-orange-50/40">${content}</a>` : `<div class="rounded-2xl border border-slate-200 p-3">${content}</div>`;
+  }).join('');
+}
+
+function renderReservations(items) {
+  const list = document.getElementById('reservations-list');
+  document.getElementById('reservations-count').textContent = items.length;
+  if (!items.length) {
+    list.innerHTML = '<p class="rounded-2xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">Aucune réservation de matériel.</p>';
+    return;
+  }
+  list.innerHTML = items.map(item => {
+    const label = STATUS_LABELS[item.status] || item.status;
+    const statusClass = STATUS_CLASSES[item.status] || 'bg-slate-100 text-slate-600';
+    return `<article class="rounded-2xl border border-slate-200 p-3"><div class="flex items-start justify-between gap-3"><p class="font-medium text-slate-800">${escapeHtml(item.resource?.name || 'Matériel')}</p><span class="flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusClass}">${escapeHtml(label)}</span></div><p class="mt-2 text-xs leading-5 text-slate-500">Du ${formatDate(item.startAt, true)}<br>au ${formatDate(item.endAt, true)} · ${Number(item.requestedUnits || 1)} unité(s)</p></article>`;
+  }).join('');
+}
+
+async function fetchAccount(accessToken) {
+  const response = await fetch(`/api/loan-request/account?access=${encodeURIComponent(accessToken)}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Connexion expirée');
+  return data;
+}
+
+async function openAccount(accessToken, persistent = false) {
+  const data = await fetchAccount(accessToken);
+  currentAccessToken = accessToken;
+  storeAccountAccess(accessToken, persistent, data.account);
+  document.getElementById('account-display-name').textContent = data.account.name || 'Mon compte';
+  document.getElementById('account-display-email').textContent = data.account.email;
+  document.getElementById('public-loan-request-link').href = `/loan-request.html?token=${encodeURIComponent(generalRequestToken)}`;
+  renderInterventions(data.interventions || []);
+  renderReservations(data.reservations || []);
+  document.getElementById('loading-state').classList.add('hidden');
+  document.getElementById('login-state').classList.add('hidden');
+  document.getElementById('account-state').classList.remove('hidden');
+}
+
+function waitForAuthorization(rememberMe) {
+  const key = `loan-auth-${generalRequestToken}`;
+  try { localStorage.setItem(AUTH_PENDING_KEY, JSON.stringify({ token: generalRequestToken, rememberMe, returnTo: '/demande', ts: Date.now() })); } catch {}
+  if (authChannel) try { authChannel.close(); } catch {}
+  try {
+    authChannel = new BroadcastChannel(key);
+    authChannel.onmessage = event => {
+      if (event.data?.accessToken) openAccount(event.data.accessToken, event.data.rememberMe === true).catch(() => {});
+    };
+  } catch {}
+  window.addEventListener('storage', event => {
+    if (event.key !== key || !event.newValue) return;
+    try {
+      const data = JSON.parse(event.newValue);
+      if (data?.accessToken) openAccount(data.accessToken, data.rememberMe === true).catch(() => {});
+    } catch {}
+  });
+}
+
+async function initialize() {
+  try {
+    const response = await fetch('/api/loan-request/general-link');
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.token) throw new Error(data.error || 'Les demandes publiques ne sont pas disponibles.');
+    generalRequestToken = data.token;
+    for (const entry of getStoredAccessEntries()) {
+      try {
+        await openAccount(entry.accessToken, entry.persistent);
+        return;
+      } catch {}
     }
-    configureLoanLink();
-  </script>
+    showLogin();
+  } catch (error) {
+    document.getElementById('loading-state').classList.add('hidden');
+    const target = document.getElementById('global-error');
+    target.textContent = error.message;
+    target.classList.remove('hidden');
+  }
+}
+
+document.getElementById('account-login-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = document.getElementById('login-submit');
+  const feedback = document.getElementById('login-feedback');
+  const rememberMe = document.getElementById('account-remember').checked;
+  button.disabled = true;
+  feedback.classList.add('hidden');
+  try {
+    const response = await fetch(`/api/loan-request/${encodeURIComponent(generalRequestToken)}/access-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requesterName: document.getElementById('account-name').value.trim(), requesterEmail: document.getElementById('account-email').value.trim(), rememberMe, returnTo: '/demande' })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || data.errors?.[0]?.msg || 'Impossible d’envoyer le lien.');
+    feedback.textContent = 'Lien envoyé. Ouvrez votre email et cliquez dessus pour vous connecter.';
+    feedback.className = 'rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700';
+    waitForAuthorization(rememberMe);
+  } catch (error) {
+    feedback.textContent = error.message;
+    feedback.className = 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700';
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+  clearAccountAccess();
+  showLogin();
+});
+
+initialize();
+</script>
 </body>
 </html>

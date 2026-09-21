@@ -78,6 +78,7 @@ async function authorize() {
   const token = params.get('token') || '';
   const accessToken = params.get('access') || '';
   const rememberMe = params.get('remember') === '1';
+  const returnTo = params.get('return') === '/demande' ? '/demande' : `/loan-request.html?token=${encodeURIComponent(token)}`;
 
   if (!token || !accessToken) {
     showError('Ce lien de connexion est incomplet. Demandez un nouveau lien depuis la page de réservation.');
@@ -98,7 +99,7 @@ async function authorize() {
       email: data.requesterEmail
     });
     broadcastAuthorization(token, data.accessToken || accessToken, rememberMe);
-    document.getElementById('request-link').href = `/loan-request.html?token=${encodeURIComponent(token)}`;
+    document.getElementById('request-link').href = returnTo;
 
     // Retire le jeton de l'adresse dès qu'il a été vérifié.
     history.replaceState(null, '', '/loan-auth.html');
