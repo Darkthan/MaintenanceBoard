@@ -166,6 +166,54 @@
 // ── Données ───────────────────────────────────────────────────────────────────
 let allRooms = [];
 let selectedRoomId = null;
+const LOAN_ACCESS_STORAGE_PREFIX = 'loan-request-access-';
+
+function getRememberedLoanAccessEntries() {
+  const entries = [];
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(LOAN_ACCESS_STORAGE_PREFIX)) continue;
+      const token = key.slice(LOAN_ACCESS_STORAGE_PREFIX.length);
+      const data = JSON.parse(localStorage.getItem(key) || 'null');
+      if (token && data?.accessToken) {
+        entries.push({ key, token, accessToken: data.accessToken, savedAt: data.savedAt || 0 });
+      }
+    }
+  } catch {}
+  return entries.sort((a, b) => b.savedAt - a.savedAt);
+}
+
+function fillRememberedRequester(data) {
+  const nameInput = document.getElementById('reporter-name');
+  const emailInput = document.getElementById('reporter-email');
+  if (nameInput && !nameInput.value && data.requesterName) {
+    nameInput.value = String(data.requesterName).slice(0, 100);
+  }
+  if (emailInput && !emailInput.value && data.requesterEmail) {
+    emailInput.value = String(data.requesterEmail).slice(0, 200);
+  }
+}
+
+async function prefillRememberedRequester() {
+  for (const entry of getRememberedLoanAccessEntries()) {
+    try {
+      const url = new URL(`/api/loan-request/${encodeURIComponent(entry.token)}`, window.location.origin);
+      url.searchParams.set('access', entry.accessToken);
+      const response = await fetch(url);
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.authenticated && data.requesterEmail) {
+        fillRememberedRequester(data);
+        return;
+      }
+      if (response.status === 404 || (response.ok && !data.authenticated)) {
+        localStorage.removeItem(entry.key);
+      }
+    } catch {
+      // Une indisponibilité réseau ne doit ni bloquer le formulaire ni effacer la connexion.
+    }
+  }
+}
 
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -386,6 +434,7 @@ document.getElementById('report-form').addEventListener('submit', async e => {
   }
 });
 
+prefillRememberedRequester();
 loadRooms();
 </script>
 </body>

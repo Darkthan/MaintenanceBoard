@@ -48,6 +48,8 @@ describe('loan request public page', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('Connexion autorisée');
     expect(res.text).toContain('function broadcastAuthorization(token, accessToken, rememberMe)');
+    expect(res.text).toContain('requesterName: requester.name');
+    expect(res.text).toContain('email: data.requesterEmail');
     expect(res.text).toContain("history.replaceState(null, '', '/loan-auth.html')");
     expect(res.text).toContain('/loan-request.html?token=${encodeURIComponent(token)}');
     expect(res.text).not.toContain('id="request-form"');

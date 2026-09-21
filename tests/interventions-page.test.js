@@ -52,6 +52,17 @@ describe('interventions page', () => {
     expect(res.text).toContain('id="pagination"');
   });
 
+  it('préremplit le signalement avec une identité de magic link mémorisée', async () => {
+    const res = await request(app).get('/report.html');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("const LOAN_ACCESS_STORAGE_PREFIX = 'loan-request-access-'");
+    expect(res.text).toContain('async function prefillRememberedRequester()');
+    expect(res.text).toContain("document.getElementById('reporter-name')");
+    expect(res.text).toContain("document.getElementById('reporter-email')");
+    expect(res.text).toContain('prefillRememberedRequester();');
+  });
+
   it('sert un menu avant les demandes d’intervention et les réservations', async () => {
     const res = await request(app).get('/requests.html');
 

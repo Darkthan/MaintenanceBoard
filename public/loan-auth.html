@@ -40,9 +40,14 @@
 <script>
 const ACCESS_STORAGE_PREFIX = 'loan-request-access-';
 
-function storeAccessToken(token, accessToken, rememberMe) {
+function storeAccessToken(token, accessToken, rememberMe, requester = {}) {
   const key = `${ACCESS_STORAGE_PREFIX}${token}`;
-  const value = JSON.stringify({ accessToken, savedAt: Date.now() });
+  const value = JSON.stringify({
+    accessToken,
+    requesterName: requester.name || '',
+    requesterEmail: requester.email || '',
+    savedAt: Date.now()
+  });
   try {
     if (rememberMe) {
       localStorage.setItem(key, value);
@@ -88,7 +93,10 @@ async function authorize() {
       throw new Error(data.error || 'Ce lien est invalide ou a expiré.');
     }
 
-    storeAccessToken(token, data.accessToken || accessToken, rememberMe);
+    storeAccessToken(token, data.accessToken || accessToken, rememberMe, {
+      name: data.requesterName,
+      email: data.requesterEmail
+    });
     broadcastAuthorization(token, data.accessToken || accessToken, rememberMe);
     document.getElementById('request-link').href = `/loan-request.html?token=${encodeURIComponent(token)}`;
 
