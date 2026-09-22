@@ -6,16 +6,16 @@
   <title>Demande de prêt – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-100">
+<body class="min-h-screen bg-slate-100 text-slate-800">
   <main class="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-10">
     <div class="grid w-full gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-      <section class="rounded-[2rem] border border-white/10 bg-white/5 p-8 backdrop-blur">
-        <p class="text-sm font-semibold uppercase tracking-[0.3em] text-sky-300">MaintenanceBoard</p>
-        <h1 id="page-title" class="mt-4 text-3xl font-semibold tracking-tight">Demande de prêt de matériel</h1>
-        <p class="mt-4 text-sm leading-7 text-slate-300">Choisis la ressource, la période et les besoins préparatoires. Pour les lots, même une demande partielle verrouille un lot complet.</p>
-        <div class="mt-8 rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-          <h2 class="text-sm font-semibold text-white">Règles de réservation</h2>
-          <ul class="mt-3 space-y-2 text-sm text-slate-300">
+      <section class="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+        <p class="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">MaintenanceBoard</p>
+        <h1 id="page-title" class="mt-4 text-3xl font-semibold tracking-tight text-slate-900">Demande de prêt de matériel</h1>
+        <p class="mt-4 text-sm leading-7 text-slate-500">Choisis la ressource, la période et les besoins préparatoires. Pour les lots, même une demande partielle verrouille un lot complet.</p>
+        <div class="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <h2 class="text-sm font-semibold text-slate-800">Règles de réservation</h2>
+          <ul class="mt-3 space-y-2 text-sm text-slate-600">
             <li>Les dates de début et fin doivent encadrer toute la période de prêt.</li>
             <li>Pour les valises ou lots, la disponibilité est calculée par lot complet.</li>
             <li>Les besoins complémentaires servent à préparer le matériel avant remise.</li>
@@ -23,10 +23,10 @@
         </div>
       </section>
 
-      <section class="rounded-[2rem] border border-slate-200 bg-white p-8 text-slate-900 shadow-2xl shadow-slate-950/20">
+      <section class="rounded-[2rem] border border-slate-200 bg-white p-8 text-slate-900 shadow-sm">
         <div id="loading" class="text-sm text-slate-500">Chargement du lien...</div>
         <div id="auth-step" class="hidden space-y-4">
-          <div class="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <div class="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
             Le formulaire est protégé par un lien de connexion envoyé par email.
           </div>
           <div>
@@ -39,19 +39,19 @@
           </div>
           <div id="auth-feedback" class="hidden rounded-xl px-4 py-3 text-sm"></div>
           <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
-            <input id="auth-remember-me" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+            <input id="auth-remember-me" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
             <span>Rester connecté sur cet appareil</span>
           </label>
-          <button id="send-auth-link-btn" type="button" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700">
+          <button id="send-auth-link-btn" type="button" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
             Envoyer le lien de connexion
           </button>
         </div>
-        <div id="relay-banner" class="hidden rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 flex items-start gap-3">
-          <svg class="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z"/></svg>
+        <div id="relay-banner" class="hidden rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex items-start gap-3">
+          <svg class="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z"/></svg>
           <span>Connexion autorisée. Vous pouvez continuer votre demande sur cette page.</span>
         </div>
         <form id="request-form" class="hidden space-y-4">
-          <div class="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <div class="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
             Connecté en tant que <strong id="authenticated-email"></strong>
           </div>
           <div>
@@ -137,7 +137,7 @@
                 </div>
               </div>
             </div>
-            <div id="lrdp-selection-display" class="hidden rounded-xl bg-sky-50 border border-sky-200 px-3 py-2 text-sm text-sky-900 text-center font-medium"></div>
+            <div id="lrdp-selection-display" class="hidden rounded-xl bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-900 text-center font-medium"></div>
           </div>
           <div>
             <label class="mb-1 block text-sm font-medium text-slate-700">Quantité souhaitée</label>
@@ -153,10 +153,10 @@
           </div>
           <div id="feedback" class="hidden rounded-xl px-4 py-3 text-sm"></div>
           <label class="flex items-start gap-2 text-xs leading-5 text-slate-500">
-            <input id="legal-consent" type="checkbox" required class="mt-1 rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
-            <span>J’ai pris connaissance des <a href="/legal.html" target="_blank" rel="noopener" class="font-medium text-sky-700 underline">mentions légales</a> et j’accepte le traitement des données nécessaires à cette réservation.</span>
+            <input id="legal-consent" type="checkbox" required class="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+            <span>J’ai pris connaissance des <a href="/legal.html" target="_blank" rel="noopener" class="font-medium text-blue-700 underline">mentions légales</a> et j’accepte le traitement des données nécessaires à cette réservation.</span>
           </label>
-          <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700">
+          <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
             Envoyer la demande
           </button>
         </form>
