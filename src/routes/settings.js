@@ -35,6 +35,12 @@ const LOAN_SETTINGS_DEFAULTS = {
   defaultRequesterEmail: FALLBACK_REQUESTER_EMAIL
 };
 
+const PUSH_SETTINGS_DEFAULTS = {
+  vapidPublicKey: '',
+  vapidPrivateKey: '',
+  vapidSubject: ''
+};
+
 function getDisplayScreens() {
   return normalizeDisplayScreens(readSettings().displayScreens);
 }
@@ -266,6 +272,45 @@ router.post('/smtp/test', requireAuth, requireAdmin, async (req, res, next) => {
     });
     res.json({ message: `Email de test envoyé à ${to}` });
   } catch (err) { next(err); }
+});
+
+// ── Notifications push ─────────────────────────────────────────────────────
+
+router.get('/push', requireAuth, requireAdmin, (_req, res) => {
+  const saved = readSettings().push || {};
+  const publicKey = saved.vapidPublicKey || config.push.vapidPublicKey || '';
+  const privateKey = saved.vapidPrivateKey || config.push.vapidPrivateKey || '';
+  const subject = saved.vapidSubject || config.push.vapidSubject || `mailto:admin@${new URL(config.appUrl).hostname}`;
+  res.json({
+    vapidPublicKey: publicKey,
+    vapidSubject: subject,
+    hasPrivateKey: !!privateKey,
+    source: saved.vapidPublicKey || saved.vapidPrivateKey || saved.vapidSubject ? 'settings' : 'environment',
+    configured: !!(publicKey && privateKey)
+  });
+});
+
+router.patch('/push', requireAuth, requireAdmin, (req, res) => {
+  const current = readSettings().push || {};
+  const next = { ...PUSH_SETTINGS_DEFAULTS, ...current };
+
+  if (req.body.vapidPublicKey !== undefined) {
+    next.vapidPublicKey = String(req.body.vapidPublicKey || '').trim();
+  }
+  if (req.body.vapidPrivateKey !== undefined) {
+    const privateKey = String(req.body.vapidPrivateKey || '').trim();
+    if (privateKey && !privateKey.startsWith('•')) next.vapidPrivateKey = privateKey;
+  }
+  if (req.body.vapidSubject !== undefined) {
+    next.vapidSubject = String(req.body.vapidSubject || '').trim();
+  }
+
+  if (next.vapidPublicKey.length > 500 || next.vapidPrivateKey.length > 500 || next.vapidSubject.length > 300) {
+    return res.status(400).json({ error: 'Paramètre VAPID trop long.' });
+  }
+
+  writeSettings({ push: next });
+  res.json({ message: 'Paramètres de notifications enregistrés', configured: !!(next.vapidPublicKey && next.vapidPrivateKey) });
 });
 
 // ── Monitoring agents ────────────────────────────────────────────────────────

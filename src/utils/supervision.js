@@ -187,10 +187,11 @@ function buildSupervisionSnapshot(equipmentList, settings = getSupervisionSettin
 }
 
 function getPushConfig() {
+  const saved = readSettings().push || {};
   return {
-    publicKey: config.push.vapidPublicKey || '',
-    privateKey: config.push.vapidPrivateKey || '',
-    subject: config.push.vapidSubject || `mailto:admin@${new URL(config.appUrl).hostname}`
+    publicKey: saved.vapidPublicKey || config.push.vapidPublicKey || '',
+    privateKey: saved.vapidPrivateKey || config.push.vapidPrivateKey || '',
+    subject: saved.vapidSubject || config.push.vapidSubject || `mailto:admin@${new URL(config.appUrl).hostname}`
   };
 }
 
