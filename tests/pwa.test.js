@@ -19,6 +19,22 @@ describe('PWA assets', () => {
     const res = await request(app).get('/manifest.json');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/json/);
+    expect(res.body.display).toBe('standalone');
+    expect(res.body.icons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ src: '/assets/app-icon-192.png', sizes: '192x192' }),
+      expect.objectContaining({ src: '/assets/app-icon-512.png', sizes: '512x512' })
+    ]));
+  });
+
+  it('sert les icônes PNG utilisées par les applications Apple et Android', async () => {
+    const [icon192, icon512] = await Promise.all([
+      request(app).get('/assets/app-icon-192.png'),
+      request(app).get('/assets/app-icon-512.png')
+    ]);
+    expect(icon192.status).toBe(200);
+    expect(icon192.headers['content-type']).toMatch(/image\/png/);
+    expect(icon512.status).toBe(200);
+    expect(icon512.headers['content-type']).toMatch(/image\/png/);
   });
 
   it('GET /sw.js → 200 + JS', async () => {

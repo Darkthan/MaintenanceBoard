@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Signaler un problème – MaintenanceBoard</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#f97316" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="MaintBoard" />
+  <link rel="apple-touch-icon" href="/assets/app-icon-192.png" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-slate-100">
@@ -132,7 +139,7 @@
           </label>
           <label id="browser-notification-option" class="mt-2 flex items-start gap-2 text-xs leading-5 text-slate-600">
             <input id="notify-by-browser" type="checkbox" disabled class="mt-0.5 rounded border-slate-300 text-orange-500 focus:ring-orange-400 disabled:opacity-50" />
-            <span><span class="font-medium">Recevoir les réponses sur ce navigateur</span><span id="browser-notification-status" class="block text-slate-400">Vérification de la disponibilité…</span></span>
+            <span><span class="font-medium">Recevoir les réponses sur ce navigateur</span><span id="browser-notification-status" class="block text-slate-400" aria-live="polite">Compatible avec Chrome, Firefox, Edge et Android. Vérification de la disponibilité…</span></span>
           </label>
         </section>
 
@@ -207,11 +214,38 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
 }
 
+function isAppleMobile() {
+  const userAgent = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/.test(userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function isInstalledWebApp() {
+  return window.matchMedia?.('(display-mode: standalone)').matches === true
+    || window.navigator.standalone === true;
+}
+
+function getBrowserPushSupport() {
+  if (!window.isSecureContext) {
+    return { available: false, message: 'Les notifications nécessitent une connexion sécurisée (HTTPS).' };
+  }
+  if (isAppleMobile() && !isInstalledWebApp()) {
+    return { available: false, message: 'Sur iPhone ou iPad, ajoutez d’abord MaintenanceBoard à l’écran d’accueil, puis ouvrez l’application installée (iOS/iPadOS 16.4 ou version ultérieure).' };
+  }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    return { available: false, message: isAppleMobile()
+      ? 'Les notifications requièrent iOS ou iPadOS 16.4 ou version ultérieure dans l’application installée.'
+      : 'Ce navigateur ne prend pas en charge les notifications.' };
+  }
+  return { available: true };
+}
+
 async function initializeBrowserNotifications() {
   const checkbox = document.getElementById('notify-by-browser');
   const status = document.getElementById('browser-notification-status');
-  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-    status.textContent = 'Ce navigateur ne prend pas en charge les notifications.';
+  const support = getBrowserPushSupport();
+  if (!support.available) {
+    status.textContent = support.message;
     return;
   }
   try {

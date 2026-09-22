@@ -52,6 +52,8 @@ describe('interventions page', () => {
     expect(res.text).toContain('id="pagination"');
     expect(res.text).toContain('id="enable-ticket-notifications"');
     expect(res.text).toContain("api.post('/tickets/admin-push-subscriptions'");
+    expect(res.text).toContain('getBrowserPushSupport()');
+    expect(res.text).toContain('apple-mobile-web-app-capable');
   });
 
   it('préremplit le signalement avec une identité de magic link mémorisée', async () => {
@@ -69,6 +71,8 @@ describe('interventions page', () => {
     expect(res.text).toContain('id="notify-by-email"');
     expect(res.text).toContain('id="notify-by-browser"');
     expect(res.text).toContain('getReporterPushSubscription()');
+    expect(res.text).toContain('getBrowserPushSupport()');
+    expect(res.text).toContain('app-icon-192.png');
     expect(res.text).toContain('id="knowledge-suggestions"');
     expect(res.text).toContain('/api/tickets/knowledge-suggestions?q=');
     expect(res.text).toContain('Afficher la procédure');
