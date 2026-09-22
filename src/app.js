@@ -174,7 +174,7 @@ app.delete('/mcp', mcpAuth, handleMcpRequest); // fermeture de session
 // ── Tickets publics (sans auth, rate limit IP strict) ─────────────────────────
 const ticketLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 3,
+  max: 10,
   message: { error: 'Trop de tickets soumis, réessayez dans une heure.' }
 });
 // Magic link : limité par IP (10/h) ET par email (5/h) pour bloquer l'énumération
