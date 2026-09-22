@@ -77,6 +77,26 @@ router.post('/admin-push-subscriptions', requireAuth, requireAdmin, (req, res) =
   return res.status(201).json({ message: 'Notifications de demandes activées' });
 });
 
+router.delete('/admin-push-subscriptions', requireAuth, requireAdmin, (req, res) => {
+  const subscription = parsePushSubscription(req.body?.subscription);
+  if (!subscription) return res.status(400).json({ error: 'Abonnement push invalide' });
+
+  const settings = readSettings();
+  const ticketNotifications = settings.ticketNotifications || {};
+  const subscriptions = Array.isArray(ticketNotifications.adminPushSubscriptions)
+    ? ticketNotifications.adminPushSubscriptions.map(parsePushSubscription).filter(Boolean)
+    : [];
+
+  writeSettings({
+    ticketNotifications: {
+      ...ticketNotifications,
+      adminPushSubscriptions: subscriptions.filter(item => item.endpoint !== subscription.endpoint)
+    }
+  });
+
+  return res.json({ message: 'Notifications de demandes désactivées' });
+});
+
 function escapeEmailHtml(value) {
   return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

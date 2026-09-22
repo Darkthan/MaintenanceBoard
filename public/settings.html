@@ -279,6 +279,10 @@
         class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
         Emails
       </button>
+      <button data-tab="notifications" onclick="showTab('notifications')"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
+        Notifications
+      </button>
       <button data-tab="database" onclick="showTab('database')"
         class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
         Base de données
@@ -452,6 +456,34 @@
           <p class="text-amber-800">
             Les variables <code class="bg-amber-100 px-1 rounded text-xs">SMTP_*</code> du fichier <code class="bg-amber-100 px-1 rounded text-xs">.env</code> sont utilisées comme valeurs par défaut si aucune configuration n'est définie ici.
           </p>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════ TAB : NOTIFICATIONS -->
+      <div id="tab-notifications" class="hidden w-full max-w-xl min-w-0 space-y-5">
+        <div class="bg-white rounded-xl border border-slate-200">
+          <div class="px-6 py-4 border-b border-slate-100">
+            <h2 class="font-semibold text-slate-800">Notifications navigateur des tickets</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Recevez une notification lorsqu’une nouvelle demande d’intervention est créée.</p>
+          </div>
+          <div class="p-6 space-y-4">
+            <div class="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              <svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0h6z"/></svg>
+              <p>Cette autorisation est liée au navigateur et à l’appareil utilisés. Chaque administrateur doit l’activer sur ses appareils.</p>
+            </div>
+            <p id="ticket-notifications-settings-status" class="text-sm text-slate-500" aria-live="polite">Vérification de la disponibilité…</p>
+            <div class="flex flex-wrap gap-3">
+              <button id="enable-ticket-notifications-settings" type="button" class="hidden inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition">
+                Activer les notifications
+              </button>
+              <button id="disable-ticket-notifications-settings" type="button" class="hidden inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
+                Désactiver sur cet appareil
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs leading-5 text-slate-500">
+          Les notifications nécessitent HTTPS, un navigateur compatible et une configuration VAPID côté serveur. Les notifications email des tickets restent gérées depuis l’onglet <button type="button" onclick="showTab('email')" class="font-medium text-blue-600 underline">Emails</button>.
         </div>
       </div>
 
@@ -1694,7 +1726,7 @@ const SCREEN_WIDGET_DEFAULT_LAYOUTS = [
 // ─── Onglets principaux ────────────────────────────────────────────────────
 function showTab(name) {
   // Masquer tous les onglets de contenu
-  ['users', 'email', 'database', 'po', 'loans', 'security', 'screens', 'calendar', 'mcp'].forEach(t => {
+  ['users', 'email', 'notifications', 'database', 'po', 'loans', 'security', 'screens', 'calendar', 'mcp'].forEach(t => {
     document.getElementById('tab-' + t).classList.add('hidden');
   });
   document.getElementById('tab-' + name).classList.remove('hidden');
@@ -1736,6 +1768,7 @@ function showTab(name) {
   // Chargement lazy
   if (name === 'users' && !users.length) loadUsers();
   if (name === 'email') loadSMTP();
+  if (name === 'notifications') loadTicketNotificationsSettings();
   if (name === 'database') loadDbStats();
   if (name === 'po') loadPOTemplate();
   if (name === 'loans') loadLoanSettings();
@@ -2099,6 +2132,102 @@ async function saveSMTP(e) {
     (res.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200');
   fb.classList.remove('hidden');
 }
+
+let ticketNotificationSettings = null;
+
+function settingsBrowserPushSupport() {
+  if (!window.isSecureContext) return { available: false, message: 'Les notifications navigateur nécessitent HTTPS.' };
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    return { available: false, message: 'Ce navigateur ne prend pas en charge les notifications push.' };
+  }
+  return { available: true };
+}
+
+function settingsPushKeyToUint8Array(value) {
+  const padding = '='.repeat((4 - value.length % 4) % 4);
+  const raw = window.atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(char => char.charCodeAt(0)));
+}
+
+async function loadTicketNotificationsSettings() {
+  const status = document.getElementById('ticket-notifications-settings-status');
+  const enableButton = document.getElementById('enable-ticket-notifications-settings');
+  const disableButton = document.getElementById('disable-ticket-notifications-settings');
+  const support = settingsBrowserPushSupport();
+  enableButton.classList.add('hidden');
+  disableButton.classList.add('hidden');
+
+  if (!support.available) {
+    status.textContent = support.message;
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/tickets/notification-config', { credentials: 'include' });
+    ticketNotificationSettings = await response.json();
+    if (!response.ok || !ticketNotificationSettings.pushConfigured) {
+      status.textContent = 'Les notifications navigateur ne sont pas configurées côté serveur (clés VAPID manquantes).';
+      return;
+    }
+
+    await navigator.serviceWorker.ready;
+    const subscription = await (await navigator.serviceWorker.ready).pushManager.getSubscription();
+    const active = Notification.permission === 'granted' && !!subscription;
+    status.textContent = active
+      ? 'Les notifications de nouvelles demandes sont actives sur cet appareil.'
+      : 'Les notifications de nouvelles demandes ne sont pas encore activées sur cet appareil.';
+    enableButton.classList.toggle('hidden', active);
+    disableButton.classList.toggle('hidden', !active);
+  } catch {
+    status.textContent = 'Impossible de vérifier l’état des notifications navigateur.';
+  }
+}
+
+async function enableTicketNotificationsSettings() {
+  if (!ticketNotificationSettings?.pushConfigured) return;
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    showToast('Notifications navigateur refusées', 'warning');
+    return;
+  }
+  const registration = await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: settingsPushKeyToUint8Array(ticketNotificationSettings.vapidPublicKey)
+    });
+  }
+  await api.post('/tickets/admin-push-subscriptions', { subscription });
+  showToast('Notifications de nouvelles demandes activées', 'success');
+  await loadTicketNotificationsSettings();
+}
+
+async function disableTicketNotificationsSettings() {
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  if (!subscription) return loadTicketNotificationsSettings();
+  const response = await fetch('/api/tickets/admin-push-subscriptions', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ subscription })
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Impossible de désactiver les notifications.');
+  }
+  await subscription.unsubscribe();
+  showToast('Notifications navigateur désactivées', 'success');
+  await loadTicketNotificationsSettings();
+}
+
+document.getElementById('enable-ticket-notifications-settings')?.addEventListener('click', () => {
+  enableTicketNotificationsSettings().catch(error => showToast(error.message, 'error'));
+});
+document.getElementById('disable-ticket-notifications-settings')?.addEventListener('click', () => {
+  disableTicketNotificationsSettings().catch(error => showToast(error.message, 'error'));
+});
 
 async function testSMTP() {
   const fb = document.getElementById('smtp-feedback');
@@ -3198,7 +3327,7 @@ document.getElementById('supervision-token-input').addEventListener('input', upd
 
 requireLogin().then(() => {
   const tab = new URLSearchParams(window.location.search).get('tab');
-  const allowedTabs = new Set(['users', 'email', 'database', 'po', 'security', 'screens', 'supervision-deploy', 'calendar', 'mcp']);
+  const allowedTabs = new Set(['users', 'email', 'notifications', 'database', 'po', 'security', 'screens', 'supervision-deploy', 'calendar', 'mcp']);
   showTab(allowedTabs.has(tab) ? tab : 'users');
   loadGlobalCalendarFeed();
   loadLoansCalendarFeed();
