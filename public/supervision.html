@@ -21,6 +21,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/push-notifications.js"></script>
 <script>
 document.getElementById('layout-root').innerHTML = getLayoutTemplate('Supervision', 'supervision') + `
   <div class="space-y-6">
@@ -293,10 +294,7 @@ async function enablePush() {
     return;
   }
   const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(snapshot.settings.vapidPublicKey)
-  });
+  const subscription = await BrowserPush.ensureSubscription(registration, snapshot.settings.vapidPublicKey);
   await api.post('/supervision/push-subscriptions', { subscription });
   showToast('Notifications supervision activées');
   renderPushStatus();

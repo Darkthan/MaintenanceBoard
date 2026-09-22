@@ -200,6 +200,7 @@
 </div>
 
 <script src="/js/ticket-attachments.js"></script>
+<script src="/js/push-notifications.js"></script>
 <script>
 // ── Données ───────────────────────────────────────────────────────────────────
 let allRooms = [];
@@ -275,13 +276,7 @@ async function getReporterPushSubscription() {
     return null;
   }
   const registration = await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
-  if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(ticketNotificationConfig.vapidPublicKey)
-    });
-  }
+  const subscription = await BrowserPush.ensureSubscription(registration, ticketNotificationConfig.vapidPublicKey);
   return subscription.toJSON ? subscription.toJSON() : subscription;
 }
 

@@ -1720,6 +1720,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/push-notifications.js"></script>
 <script>
 let ME;
 requireLogin().then(u => { ME = u; renderNav('settings'); });
@@ -2244,9 +2245,16 @@ async function loadTicketNotificationsSettings() {
       return;
     }
 
-    await navigator.serviceWorker.ready;
-    const subscription = await (await navigator.serviceWorker.ready).pushManager.getSubscription();
-    const active = Notification.permission === 'granted' && !!subscription;
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    let active = false;
+    if (Notification.permission === 'granted') {
+      try {
+        subscription = await BrowserPush.ensureSubscription(registration, ticketNotificationSettings.vapidPublicKey);
+        await api.post('/tickets/admin-push-subscriptions', { subscription });
+        active = true;
+      } catch {}
+    }
     status.textContent = active
       ? 'Les notifications de nouvelles demandes sont actives sur cet appareil.'
       : 'Les notifications de nouvelles demandes ne sont pas encore activées sur cet appareil.';
@@ -2265,13 +2273,7 @@ async function enableTicketNotificationsSettings() {
     return;
   }
   const registration = await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
-  if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: settingsPushKeyToUint8Array(ticketNotificationSettings.vapidPublicKey)
-    });
-  }
+  const subscription = await BrowserPush.ensureSubscription(registration, ticketNotificationSettings.vapidPublicKey);
   await api.post('/tickets/admin-push-subscriptions', { subscription });
   showToast('Notifications de nouvelles demandes activées', 'success');
   await loadTicketNotificationsSettings();

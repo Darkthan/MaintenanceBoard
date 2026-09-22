@@ -137,6 +137,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/push-notifications.js"></script>
 <script>
 const STATUS_LABELS = { OPEN: 'Ouvert', IN_PROGRESS: 'En cours', RESOLVED: 'Résolu', CLOSED: 'Fermé' };
 const STATUS_CLASSES = {
@@ -212,9 +213,17 @@ async function loadTicketNotificationOption() {
   button.classList.remove('hidden');
   button.classList.add('inline-flex');
   const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.getSubscription();
-  if (Notification.permission === 'granted' && subscription) {
-    document.getElementById('ticket-notifications-label').textContent = 'Notifications actives';
+  let subscription = await registration.pushManager.getSubscription();
+  if (Notification.permission === 'granted') {
+    try {
+      subscription = await BrowserPush.ensureSubscription(registration, ticketNotificationConfig.vapidPublicKey);
+      await api.post('/tickets/admin-push-subscriptions', { subscription });
+      document.getElementById('ticket-notifications-label').textContent = 'Notifications actives';
+      return;
+    } catch {}
+  }
+  if (subscription) {
+    document.getElementById('ticket-notifications-label').textContent = 'Réactiver les notifications';
   }
 }
 
@@ -223,13 +232,7 @@ async function enableTicketNotifications() {
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return showToast('Notifications navigateur refusées', 'warning');
   const registration = await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
-  if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(ticketNotificationConfig.vapidPublicKey)
-    });
-  }
+  const subscription = await BrowserPush.ensureSubscription(registration, ticketNotificationConfig.vapidPublicKey);
   await api.post('/tickets/admin-push-subscriptions', { subscription });
   document.getElementById('ticket-notifications-label').textContent = 'Notifications actives';
   showToast('Notifications de nouvelles demandes activées');
