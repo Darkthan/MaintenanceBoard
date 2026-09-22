@@ -476,17 +476,26 @@
                 <h3 class="text-sm font-semibold text-slate-800">Variables VAPID</h3>
                 <p class="mt-1 text-xs leading-5 text-slate-500">Ces valeurs correspondent à <code>VAPID_PUBLIC_KEY</code>, <code>VAPID_PRIVATE_KEY</code> et <code>VAPID_SUBJECT</code>. Les réglages enregistrés ici prennent le relais des variables d’environnement.</p>
               </div>
+              <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-600">
+                <p class="font-semibold text-slate-700">Générer une paire de clés</p>
+                <p class="mt-1">Depuis le dossier du projet, exécutez :</p>
+                <code class="mt-1 block overflow-x-auto rounded bg-slate-800 px-2 py-1.5 font-mono text-slate-100">npx web-push generate-vapid-keys</code>
+                <p class="mt-1">Copiez ensuite <strong>Public Key</strong> dans la clé publique et <strong>Private Key</strong> dans la clé privée.</p>
+              </div>
               <label class="block text-sm">
-                <span class="mb-1.5 block font-medium text-slate-700">Clé publique</span>
+                <span class="block font-medium text-slate-700">Clé publique</span>
+                <span class="mt-1 block text-xs text-slate-400">Valeur <code>VAPID_PUBLIC_KEY</code> générée par la commande ci-dessus.</span>
                 <input id="ticket-vapid-public-key" type="text" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="B..." />
               </label>
               <label class="block text-sm">
-                <span class="mb-1.5 block font-medium text-slate-700">Clé privée</span>
+                <span class="block font-medium text-slate-700">Clé privée</span>
+                <span class="mt-1 block text-xs text-slate-400">Valeur <code>VAPID_PRIVATE_KEY</code>. Ne la partagez jamais.</span>
                 <input id="ticket-vapid-private-key" type="password" autocomplete="new-password" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="••••••••" />
                 <span class="mt-1 block text-xs text-slate-400">Laissez le champ inchangé pour conserver la clé actuelle.</span>
               </label>
               <label class="block text-sm">
-                <span class="mb-1.5 block font-medium text-slate-700">Sujet VAPID</span>
+                <span class="block font-medium text-slate-700">Sujet VAPID</span>
+                <span class="mt-1 block text-xs text-slate-400">Une adresse de contact, par exemple <code>mailto:admin@votre-domaine.fr</code>.</span>
                 <input id="ticket-vapid-subject" type="text" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="mailto:admin@exemple.fr" />
               </label>
               <div id="ticket-push-settings-feedback" class="hidden rounded-lg px-4 py-3 text-sm"></div>
