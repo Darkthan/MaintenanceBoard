@@ -361,6 +361,48 @@ describe('GET /api/tickets/:token — statut limité', () => {
   });
 });
 
+describe('POST /api/tickets/staff — demande depuis l’interface connectée', () => {
+  const jwt = require('jsonwebtoken');
+  const config = require('../src/config');
+
+  it('refuse une demande sans authentification', async () => {
+    const res = await request(app)
+      .post('/api/tickets/staff')
+      .send({ title: 'Problème signalé par un technicien', _honeypot: '' });
+
+    expect(res.status).toBe(401);
+    expect(prisma.intervention.create).not.toHaveBeenCalled();
+  });
+
+  it('crée la demande pour l’email saisi, même différent de celui de l’utilisateur connecté', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'u-admin', email: 'admin@example.fr', name: 'Admin', role: 'ADMIN', isActive: true });
+    prisma.intervention.create.mockResolvedValue({ ...mockIntervention, room: null });
+    const token = jwt.sign({ userId: 'u-admin' }, config.jwt.secret, { expiresIn: '15m' });
+
+    const res = await request(app)
+      .post('/api/tickets/staff')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Vidéoprojecteur en panne', reporterEmail: 'collegue@example.fr', _honeypot: '' });
+
+    expect(res.status).toBe(201);
+    expect(prisma.intervention.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ reporterEmail: 'collegue@example.fr' })
+      })
+    );
+  });
+});
+
+describe('GET /report.html — mode connecté', () => {
+  it('préremplit l’utilisateur connecté et utilise la route sans limite', async () => {
+    const res = await request(app).get('/report.html');
+
+    expect(res.text).toContain('id="staff-banner"');
+    expect(res.text).toContain("fetch('/api/auth/me'");
+    expect(res.text).toContain("staffUser ? '/api/tickets/staff' : '/api/tickets'");
+  });
+});
+
 describe('GET /report.html — choix de salle', () => {
   it('présente la salle comme facultative et envoie une saisie libre', async () => {
     const res = await request(app).get('/report.html');

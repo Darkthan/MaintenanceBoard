@@ -49,6 +49,11 @@
       <h1 class="font-semibold text-slate-800 mb-1">Signaler un problème</h1>
       <p class="text-xs text-slate-400 mb-5">Décrivez votre problème, nous nous en occuperons rapidement.</p>
 
+      <div id="staff-banner" class="hidden mb-5 flex items-start justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+        <p>Connecté en tant que <strong id="staff-name"></strong>. L’email est prérempli avec le vôtre : modifiez-le pour créer la demande au nom d’un autre utilisateur.</p>
+        <a href="/interventions.html" class="flex-shrink-0 font-semibold underline hover:text-blue-900">Retour</a>
+      </div>
+
       <!-- Succès -->
       <div id="form-success" class="hidden bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
         <p class="font-semibold mb-1">Ticket soumis avec succès !</p>
@@ -207,6 +212,7 @@ let allRooms = [];
 let selectedRoomId = null;
 const LOAN_ACCESS_STORAGE_PREFIX = 'loan-request-access-';
 let ticketNotificationConfig = null;
+let staffUser = null;
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -307,6 +313,34 @@ function fillRememberedRequester(data) {
   if (emailInput && !emailInput.value && data.requesterEmail) {
     emailInput.value = String(data.requesterEmail).slice(0, 200);
   }
+}
+
+async function fetchStaffUser() {
+  const loadProfile = () => fetch('/api/auth/me', { credentials: 'same-origin' });
+  let response = await loadProfile();
+  if (response.status === 401) {
+    const refreshed = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' });
+    if (!refreshed.ok) return null;
+    response = await loadProfile();
+  }
+  return response.ok ? response.json() : null;
+}
+
+async function prefillStaffRequester() {
+  try {
+    staffUser = await fetchStaffUser();
+  } catch {
+    staffUser = null;
+  }
+  if (!staffUser) return;
+  document.getElementById('staff-name').textContent = staffUser.name || staffUser.email;
+  document.getElementById('staff-banner').classList.remove('hidden');
+  fillRememberedRequester({ requesterName: staffUser.name, requesterEmail: staffUser.contactEmail || staffUser.email });
+}
+
+async function prefillRequester() {
+  await prefillStaffRequester();
+  if (!staffUser) await prefillRememberedRequester();
 }
 
 async function prefillRememberedRequester() {
@@ -589,7 +623,12 @@ document.getElementById('report-form').addEventListener('submit', async e => {
       fd.append('attachment', fileToSend, fileToSend.name);
     }
 
-    const r = await fetch('/api/tickets', { method: 'POST', body: fd });
+    const submitTicket = () => fetch(staffUser ? '/api/tickets/staff' : '/api/tickets', { method: 'POST', body: fd, credentials: 'same-origin' });
+    let r = await submitTicket();
+    if (staffUser && r.status === 401) {
+      const refreshed = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' });
+      if (refreshed.ok) r = await submitTicket();
+    }
     const data = await r.json();
 
     if (!r.ok) {
@@ -614,7 +653,7 @@ document.getElementById('report-form').addEventListener('submit', async e => {
   }
 });
 
-prefillRememberedRequester();
+prefillRequester();
 initializeBrowserNotifications();
 loadRooms();
 </script>

@@ -185,7 +185,8 @@ function serializeReporterMessage(message, token) {
 }
 
 // POST /api/tickets — Soumission publique de ticket
-router.post('/', ticketAttachmentUpload, prepareTicketAttachment, async (req, res, next) => {
+// POST /api/tickets/staff — Même formulaire pour un utilisateur connecté, sans limite de création
+async function createTicket(req, res, next) {
   try {
     const {
       roomToken,
@@ -217,8 +218,8 @@ router.post('/', ticketAttachmentUpload, prepareTicketAttachment, async (req, re
         return res.status(400).json({ error: 'Format d\'email invalide.' });
       }
 
-      // Cooldown 10 min par email (skippé en mode test)
-      if (process.env.NODE_ENV !== 'test') {
+      // Cooldown 10 min par email (skippé en mode test et pour les utilisateurs connectés)
+      if (process.env.NODE_ENV !== 'test' && !req.user) {
         const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
         const recentTicket = await prisma.intervention.findFirst({
           where: {
@@ -326,7 +327,10 @@ router.post('/', ticketAttachmentUpload, prepareTicketAttachment, async (req, re
     if (req.file) fs.unlinkSync(req.file.path);
     next(err);
   }
-});
+}
+
+router.post('/', ticketAttachmentUpload, prepareTicketAttachment, createTicket);
+router.post('/staff', requireAuth, ticketAttachmentUpload, prepareTicketAttachment, createTicket);
 
 // GET /api/tickets/rooms — Liste publique des salles (pour formulaire générique)
 router.get('/rooms', async (req, res, next) => {
