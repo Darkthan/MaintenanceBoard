@@ -16,40 +16,86 @@
       </div>
       <a href="/request.html" class="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Retour</a>
     </header>
-    <div class="space-y-5">
-      <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <h2 class="text-lg font-semibold text-slate-900">Éditeur de l’application</h2>
-        <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-[12rem_1fr]">
-          <dt class="font-medium text-slate-500">Organisme</dt><dd>OGEC Beaupeyrat</dd>
-          <dt class="font-medium text-slate-500">Adresse</dt><dd>9 ter rue Petiniaud-Beaupeyrat</dd>
-          <dt class="font-medium text-slate-500">Contact</dt><dd>À compléter par l’administrateur de l’établissement</dd>
-          <dt class="font-medium text-slate-500">SIRET</dt><dd>À compléter par l’administrateur de l’établissement</dd>
-        </dl>
-        <p class="mt-4 text-xs leading-5 text-slate-500">Les coordonnées manquantes doivent être renseignées avant la mise en production publique.</p>
-      </section>
-      <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <h2 class="text-lg font-semibold text-slate-900">Données traitées</h2>
-        <p class="mt-3 text-sm leading-6 text-slate-600">Pour traiter un ticket ou une réservation, l’application peut enregistrer votre nom, votre adresse email, vos coordonnées, le détail de votre demande, les dates de réservation et les pièces jointes transmises.</p>
-        <p class="mt-3 text-sm leading-6 text-slate-600">Ces données sont utilisées uniquement pour traiter la demande, vous répondre, assurer le suivi du dossier et organiser la mise à disposition du matériel. Elles ne sont pas cédées à des fins commerciales.</p>
-      </section>
-      <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <h2 class="text-lg font-semibold text-slate-900">Publication et hébergement</h2>
-        <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-[12rem_1fr]">
-          <dt class="font-medium text-slate-500">Directeur de publication</dt><dd>À compléter par l’établissement</dd>
-          <dt class="font-medium text-slate-500">Hébergeur</dt><dd>À compléter par l’administrateur technique</dd>
-        </dl>
-      </section>
-      <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <h2 class="text-lg font-semibold text-slate-900">Durée de conservation et droits</h2>
-        <p class="mt-3 text-sm leading-6 text-slate-600">Les données sont conservées pendant la durée nécessaire au traitement et à l’archivage des tickets et réservations, conformément aux obligations applicables de l’établissement. Vous pouvez demander l’accès, la rectification, l’effacement ou la limitation du traitement auprès de l’organisme éditeur.</p>
-        <p class="mt-3 text-sm leading-6 text-slate-600">Pour exercer vos droits, utilisez le contact de l’établissement indiqué ci-dessus. Vous pouvez également adresser une réclamation à la CNIL.</p>
-      </section>
-      <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <h2 class="text-lg font-semibold text-slate-900">Tickets et réservations</h2>
-        <p class="mt-3 text-sm leading-6 text-slate-600">La transmission d’un ticket ou d’une demande de réservation vaut acceptation du traitement des informations nécessaires à cette demande. Les liens de suivi et de connexion reçus par email sont personnels : ne les partagez pas.</p>
-      </section>
-      <p class="text-center text-xs text-slate-400">Dernière mise à jour : 21 septembre 2026</p>
+    <div class="mb-5 flex items-center justify-between gap-3">
+      <p id="legal-status" class="text-sm text-slate-500" role="status">Chargement des mentions légales…</p>
+      <button id="legal-edit-toggle" type="button" class="hidden shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Modifier en Markdown</button>
     </div>
+    <section id="legal-editor" class="mb-5 hidden rounded-2xl border border-blue-200 bg-white p-5 shadow-sm sm:p-6">
+      <label for="legal-markdown" class="block text-sm font-semibold text-slate-800">Contenu Markdown</label>
+      <p class="mt-1 text-xs text-slate-500">Utilisez des titres avec #, du **gras**, des listes et des liens Markdown.</p>
+      <textarea id="legal-markdown" rows="18" class="mt-3 w-full rounded-xl border border-slate-300 p-3 font-mono text-sm leading-6 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" spellcheck="false"></textarea>
+      <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Aperçu</h2>
+        <div id="legal-preview" class="space-y-2 text-sm leading-6"></div>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <button id="legal-save" type="button" class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Enregistrer</button>
+        <button id="legal-cancel" type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Annuler</button>
+        <span id="legal-editor-status" class="text-sm text-slate-500" role="status"></span>
+      </div>
+    </section>
+    <article id="legal-content" class="space-y-5" aria-live="polite"></article>
   </main>
+  <script src="/js/vendor/markdown-it.min.js"></script>
+  <script src="/js/rich-text.js"></script>
+  <script src="/js/api.js"></script>
+  <script>
+    let savedLegalContent = '';
+    const markdownInput = document.getElementById('legal-markdown');
+    const editor = document.getElementById('legal-editor');
+
+    function renderLegalContent(content) {
+      document.getElementById('legal-content').innerHTML = window.renderRichText(content);
+    }
+
+    function updateLegalPreview() {
+      document.getElementById('legal-preview').innerHTML = window.renderRichText(markdownInput.value);
+    }
+
+    markdownInput.addEventListener('input', updateLegalPreview);
+    document.getElementById('legal-edit-toggle').addEventListener('click', () => {
+      editor.classList.toggle('hidden');
+      if (!editor.classList.contains('hidden')) {
+        markdownInput.value = savedLegalContent;
+        updateLegalPreview();
+        markdownInput.focus();
+      }
+    });
+    document.getElementById('legal-cancel').addEventListener('click', () => {
+      markdownInput.value = savedLegalContent;
+      updateLegalPreview();
+      editor.classList.add('hidden');
+      document.getElementById('legal-editor-status').textContent = '';
+    });
+    document.getElementById('legal-save').addEventListener('click', async () => {
+      const status = document.getElementById('legal-editor-status');
+      status.textContent = 'Enregistrement…';
+      try {
+        const result = await api.patch('/settings/legal-content', { content: markdownInput.value });
+        savedLegalContent = result.content;
+        renderLegalContent(savedLegalContent);
+        document.getElementById('legal-status').textContent = 'Mentions légales';
+        status.textContent = 'Modifications enregistrées.';
+        editor.classList.add('hidden');
+      } catch (error) {
+        status.textContent = error.message || 'Impossible d’enregistrer les modifications.';
+      }
+    });
+
+    (async () => {
+      try {
+        const result = await api.get('/legal');
+        savedLegalContent = result.content;
+        renderLegalContent(savedLegalContent);
+        document.getElementById('legal-status').textContent = 'Mentions légales';
+        try {
+          const user = await api.get('/auth/me');
+          if (user.role === 'ADMIN') document.getElementById('legal-edit-toggle').classList.remove('hidden');
+        } catch {}
+      } catch {
+        document.getElementById('legal-status').textContent = 'Impossible de charger les mentions légales.';
+      }
+    })();
+  </script>
 </body>
 </html>

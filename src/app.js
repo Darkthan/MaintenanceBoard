@@ -230,6 +230,12 @@ app.get('/api/version', (req, res) => {
   res.json({ version: _buildId });
 });
 
+app.get('/api/legal', (_req, res) => {
+  const { readSettings } = require('./utils/settings');
+  const { getLegalContent } = require('./utils/legalContent');
+  res.json({ content: getLegalContent(readSettings()) });
+});
+
 // ── Routes sans extension ─────────────────────────────────────────────────────
 app.get('/scan',   (req, res) => res.sendFile(path.join(__dirname, '../public/scan.html')));
 app.get('/report', (req, res) => res.sendFile(path.join(__dirname, '../public/report.html')));

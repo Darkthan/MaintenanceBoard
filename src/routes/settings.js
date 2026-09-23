@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
 const config = require('../config');
 const { readSettings, writeSettings } = require('../utils/settings');
+const { getLegalContent } = require('../utils/legalContent');
 const { buildSmtpTransportOptions } = require('../utils/mail');
 const { FALLBACK_REQUESTER_EMAIL, getLoanEmailSettings, isValidEmail, normalizeEmail } = require('../utils/loanReservationEmail');
 const {
@@ -72,6 +73,19 @@ router.patch('/public-tickets', requireAuth, requireAdmin, (req, res) => {
   }
   writeSettings({ publicTickets: { ...readSettings().publicTickets, requestsPerHour: value } });
   res.json({ requestsPerHour: value });
+});
+
+router.get('/legal-content', requireAuth, requireAdmin, (_req, res) => {
+  res.json({ content: getLegalContent(readSettings()) });
+});
+
+router.patch('/legal-content', requireAuth, requireAdmin, (req, res) => {
+  const content = req.body?.content;
+  if (typeof content !== 'string' || !content.trim() || content.length > 50000) {
+    return res.status(400).json({ error: 'Le contenu doit contenir entre 1 et 50 000 caractères.' });
+  }
+  writeSettings({ legalContent: content });
+  res.json({ content });
 });
 
 const AGENT_MONITORING_DEFAULTS = {
