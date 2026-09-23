@@ -27,6 +27,7 @@ const {
 const prisma = require('../lib/prisma');
 const { getRequestsPerHour } = require('../middleware/ticketRateLimit');
 const publicMcp = require('../utils/publicMcp');
+const { buildPublicMcpInviteEmail } = require('../utils/publicMcpInviteEmail');
 const { createSmtpTransporter } = require('../utils/mail');
 
 router.get('/public-mcp', requireAuth, requireAdmin, async (_req, res, next) => {
@@ -56,8 +57,8 @@ router.post('/public-mcp/invite', requireAuth, requireAdmin, async (req, res, ne
     const { transporter, from } = createSmtpTransporter();
     if (!transporter) return res.status(503).json({ error: 'Configurez l’envoi d’emails avant de transmettre les instructions.' });
     const url = `${config.appUrl.replace(/\/$/, '')}/mcp-public`;
-    const message = `Bonjour,\n\nVotre adresse ${email} est autorisée à demander des réservations de tablettes et des interventions avec une IA.\n\nAdresse du serveur MCP public : ${url}\n\nClaude : avec un compte Pro ou Max, ouvrez Personnaliser > Connecteurs > + > Ajouter un connecteur personnalisé, puis indiquez cette adresse. Avec un espace Team ou Enterprise, le propriétaire de l’espace doit d’abord ajouter le connecteur dans les paramètres de l’organisation ; vous pourrez ensuite choisir Connecter.\n\nChatGPT : un administrateur de votre espace Business, Enterprise ou Edu doit créer une application MCP personnalisée dans Paramètres de l’espace > Apps > Créer, indiquer cette adresse, puis la publier pour les membres. Ouvrez ensuite l’application publiée et connectez votre compte. Les actions de création nécessitent un espace ChatGPT où les applications MCP avec écriture sont disponibles.\n\nLors de la connexion, saisissez ${email} sur la page MaintenanceBoard. Vous recevrez un magic link : ouvrez-le pour confirmer votre adresse. Aucun mot de passe ni token MCP administrateur n’est nécessaire.\n\nAide Claude : https://support.claude.com/fr/articles/11175166-commencer-avec-les-connecteurs-personnalises-utilisant-mcp-distant\nAide ChatGPT : https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt\n`;
-    await transporter.sendMail({ from, to: email, subject: 'Connecter votre assistant IA à MaintenanceBoard', text: message });
+    const message = buildPublicMcpInviteEmail(email, url);
+    await transporter.sendMail({ from, to: email, subject: 'Connecter votre assistant IA à MaintenanceBoard', ...message });
     res.json({ sent: true });
   } catch (err) { next(err); }
 });
