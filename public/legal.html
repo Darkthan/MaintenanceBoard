@@ -98,6 +98,7 @@
         const user = await getOptionalLegalUser();
         if (user) document.getElementById('legal-back-link').href = '/request.html';
         if (user?.role === 'ADMIN') {
+          document.getElementById('legal-back-link').href = '/settings.html?tab=legal';
           editToggle.hidden = false;
           editToggle.classList.remove('hidden');
           editToggle.classList.add('inline-flex');

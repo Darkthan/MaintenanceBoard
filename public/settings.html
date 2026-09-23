@@ -299,6 +299,10 @@
         class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
         Sécurité
       </button>
+      <button data-tab="legal" onclick="showTab('legal')"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
+        Mentions légales
+      </button>
       <button data-tab="screens" onclick="showTab('screens')"
         class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap transition">
         Écrans
@@ -968,6 +972,18 @@
         </div>
 
       </div><!-- /tab-security -->
+
+      <!-- ════════════════════════════════════ TAB : MENTIONS LÉGALES -->
+      <div id="tab-legal" class="hidden w-full max-w-xl min-w-0 space-y-5">
+        <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 class="text-lg font-semibold text-slate-900">Mentions légales</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-600">Consultez la page publique et modifiez son contenu en Markdown depuis le bouton de modification.</p>
+          <a href="/legal.html" class="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+            Ouvrir les mentions légales
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+          </a>
+        </section>
+      </div><!-- /tab-legal -->
 
       <!-- ════════════════════════════════════ TAB : ÉCRANS -->
       <div id="tab-screens" class="hidden w-full max-w-6xl min-w-0 space-y-5">
@@ -1773,7 +1789,7 @@ const SCREEN_WIDGET_DEFAULT_LAYOUTS = [
 // ─── Onglets principaux ────────────────────────────────────────────────────
 function showTab(name) {
   // Masquer tous les onglets de contenu
-  ['users', 'email', 'notifications', 'database', 'po', 'loans', 'security', 'screens', 'calendar', 'mcp'].forEach(t => {
+  ['users', 'email', 'notifications', 'database', 'po', 'loans', 'security', 'legal', 'screens', 'supervision-deploy', 'calendar', 'mcp'].forEach(t => {
     document.getElementById('tab-' + t).classList.add('hidden');
   });
   document.getElementById('tab-' + name).classList.remove('hidden');
@@ -3511,7 +3527,7 @@ document.getElementById('supervision-token-input').addEventListener('input', upd
 
 requireLogin().then(() => {
   const tab = new URLSearchParams(window.location.search).get('tab');
-  const allowedTabs = new Set(['users', 'email', 'notifications', 'database', 'po', 'security', 'screens', 'supervision-deploy', 'calendar', 'mcp']);
+  const allowedTabs = new Set(['users', 'email', 'notifications', 'database', 'po', 'loans', 'security', 'legal', 'screens', 'supervision-deploy', 'calendar', 'mcp']);
   showTab(allowedTabs.has(tab) ? tab : 'users');
   loadGlobalCalendarFeed();
   loadLoansCalendarFeed();
