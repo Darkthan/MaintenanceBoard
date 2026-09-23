@@ -14,11 +14,14 @@
         <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-900">Mentions légales</h1>
         <p class="mt-2 text-sm text-slate-500">Informations applicables aux demandes d’intervention et aux réservations de matériel.</p>
       </div>
-      <a href="/request.html" class="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Retour</a>
+      <a id="legal-back-link" href="/demande" class="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Retour</a>
     </header>
     <div class="mb-5 flex items-center justify-between gap-3">
       <p id="legal-status" class="text-sm text-slate-500" role="status">Chargement des mentions légales…</p>
-      <button id="legal-edit-toggle" type="button" class="hidden shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Modifier en Markdown</button>
+      <button id="legal-edit-toggle" type="button" hidden aria-expanded="false" aria-controls="legal-editor" class="hidden shrink-0 items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487a2.25 2.25 0 0 1 3.182 3.182L9.25 18.463 4 20l1.537-5.25L16.862 4.487Z"/></svg>
+        Modifier les mentions
+      </button>
     </div>
     <section id="legal-editor" class="mb-5 hidden rounded-2xl border border-blue-200 bg-white p-5 shadow-sm sm:p-6">
       <label for="legal-markdown" class="block text-sm font-semibold text-slate-800">Contenu Markdown</label>
@@ -43,6 +46,7 @@
     let savedLegalContent = '';
     const markdownInput = document.getElementById('legal-markdown');
     const editor = document.getElementById('legal-editor');
+    const editToggle = document.getElementById('legal-edit-toggle');
 
     function renderLegalContent(content) {
       document.getElementById('legal-content').innerHTML = window.renderRichText(content);
@@ -53,8 +57,9 @@
     }
 
     markdownInput.addEventListener('input', updateLegalPreview);
-    document.getElementById('legal-edit-toggle').addEventListener('click', () => {
+    editToggle.addEventListener('click', () => {
       editor.classList.toggle('hidden');
+      editToggle.setAttribute('aria-expanded', String(!editor.classList.contains('hidden')));
       if (!editor.classList.contains('hidden')) {
         markdownInput.value = savedLegalContent;
         updateLegalPreview();
@@ -65,6 +70,7 @@
       markdownInput.value = savedLegalContent;
       updateLegalPreview();
       editor.classList.add('hidden');
+      editToggle.setAttribute('aria-expanded', 'false');
       document.getElementById('legal-editor-status').textContent = '';
     });
     document.getElementById('legal-save').addEventListener('click', async () => {
@@ -77,6 +83,7 @@
         document.getElementById('legal-status').textContent = 'Mentions légales';
         status.textContent = 'Modifications enregistrées.';
         editor.classList.add('hidden');
+        editToggle.setAttribute('aria-expanded', 'false');
       } catch (error) {
         status.textContent = error.message || 'Impossible d’enregistrer les modifications.';
       }
@@ -88,14 +95,31 @@
         savedLegalContent = result.content;
         renderLegalContent(savedLegalContent);
         document.getElementById('legal-status').textContent = 'Mentions légales';
-        try {
-          const user = await api.get('/auth/me');
-          if (user.role === 'ADMIN') document.getElementById('legal-edit-toggle').classList.remove('hidden');
-        } catch {}
+        const user = await getOptionalLegalUser();
+        if (user) document.getElementById('legal-back-link').href = '/request.html';
+        if (user?.role === 'ADMIN') {
+          editToggle.hidden = false;
+          editToggle.classList.remove('hidden');
+          editToggle.classList.add('inline-flex');
+        }
       } catch {
         document.getElementById('legal-status').textContent = 'Impossible de charger les mentions légales.';
       }
     })();
+
+    async function getOptionalLegalUser() {
+      try {
+        let response = await fetch('/api/auth/me', { credentials: 'include' });
+        if (response.status === 401) {
+          const refresh = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+          if (!refresh.ok) return null;
+          response = await fetch('/api/auth/me', { credentials: 'include' });
+        }
+        return response.ok ? await response.json() : null;
+      } catch {
+        return null;
+      }
+    }
   </script>
 </body>
 </html>
