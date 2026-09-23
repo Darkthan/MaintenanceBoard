@@ -52,6 +52,13 @@ app.use('/mcp', cors({
   exposedHeaders: ['Mcp-Session-Id'],
   credentials: false
 }));
+app.use('/mcp-public', cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Mcp-Session-Id'],
+  exposedHeaders: ['Mcp-Session-Id'],
+  credentials: false
+}));
 
 // ── Rate limiting ──────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
@@ -157,6 +164,24 @@ app.use('/api/mcp-tokens', require('./routes/mcpTokens'));
 // ── OAuth2 (discovery + token + authorize) ────────────────────────────────────
 app.use('/.well-known', require('./routes/wellKnown'));
 app.use('/oauth', require('./routes/oauth').router);
+app.use('/oauth-public', require('./routes/publicMcp'));
+
+const jwt = require('jsonwebtoken');
+const { tokenIsCurrent: isPublicMcpTokenCurrent } = require('./utils/publicMcp');
+const { handlePublicMcp } = require('./mcp/publicServer');
+function publicMcpAuth(req, res, next) {
+  const value = String(req.headers.authorization || '');
+  if (!value.startsWith('Bearer ')) {
+    res.set('WWW-Authenticate', `Bearer resource_metadata="${config.appUrl.replace(/\/$/, '')}/.well-known/oauth-protected-resource/mcp-public"`);
+    return res.status(401).json({ error: 'Authentification requise' });
+  }
+  try {
+    const identity = jwt.verify(value.slice(7), config.jwt.secret);
+    if (identity.type !== 'public_mcp_access' || !isPublicMcpTokenCurrent(identity.email, identity.issuedAt)) throw new Error('unauthorized');
+    req.publicMcpIdentity = { email: identity.email };
+    return next();
+  } catch { return res.status(401).json({ error: 'Connexion expirée ou adresse non autorisée' }); }
+}
 
 // ── Serveur MCP (Model Context Protocol) ───────────────────────────────────────
 // Transport Streamable HTTP, authentifié par token MCP dédié (Bearer).
@@ -167,16 +192,15 @@ const mcpLimiter = rateLimit({
   max: 240,
   message: { jsonrpc: '2.0', error: { code: -32000, message: 'Trop de requêtes MCP, réessayez dans 15 minutes.' }, id: null }
 });
+app.post('/mcp-public', mcpLimiter, publicMcpAuth, handlePublicMcp);
+app.get('/mcp-public', publicMcpAuth, handlePublicMcp);
+app.delete('/mcp-public', publicMcpAuth, handlePublicMcp);
 app.post('/mcp', mcpLimiter, mcpAuth, handleMcpRequest);
 app.get('/mcp', mcpAuth, handleMcpRequest);    // canal SSE (notifications serveur → client)
 app.delete('/mcp', mcpAuth, handleMcpRequest); // fermeture de session
 
 // ── Tickets publics (sans auth, rate limit IP strict) ─────────────────────────
-const ticketLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
-  message: { error: 'Trop de tickets soumis, réessayez dans une heure.' }
-});
+const { createTicketRateLimiter } = require('./middleware/ticketRateLimit');
 // Magic link : limité par IP (10/h) ET par email (5/h) pour bloquer l'énumération
 const magicLinkLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -185,14 +209,7 @@ const magicLinkLimiter = rateLimit({
 });
 if (process.env.NODE_ENV !== 'test') {
   app.use('/api/tickets/magic-link', magicLinkLimiter);
-  // Le ticketLimiter s'applique à la création de tickets (POST /) et aux messages
-  // mais pas à magic-link ni à la lecture de statut (GET)
-  app.use('/api/tickets', (req, res, next) => {
-    if (req.method === 'POST' && (req.path === '/' || /^\/[^/]+\/messages$/.test(req.path))) {
-      return ticketLimiter(req, res, next);
-    }
-    next();
-  });
+  app.use('/api/tickets', createTicketRateLimiter());
 }
 app.use('/api/tickets', require('./routes/tickets'));
 

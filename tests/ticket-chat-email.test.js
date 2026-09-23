@@ -1,6 +1,12 @@
 const express = require('express');
 const request = require('supertest');
 
+jest.mock('../src/utils/ticketNotifications', () => ({
+  ...jest.requireActual('../src/utils/ticketNotifications'),
+  sendBrowserPush: jest.fn().mockResolvedValue({ sent: true, expired: false })
+}));
+const { sendBrowserPush } = require('../src/utils/ticketNotifications');
+
 jest.mock('../src/middleware/auth', () => ({
   requireAuth: (req, _res, next) => {
     req.user = { id: 'admin-1', role: 'ADMIN', name: 'Alice Support', email: 'alice@example.test', isActive: true };
@@ -224,7 +230,7 @@ describe('notifications email du chat ticket', () => {
       title: 'Demande silencieuse',
       techId: null,
       reporterName: null,
-      reporterEmail: null,
+      reporterEmail: 'SILENCE@example.test',
       reporterToken: null,
       reporters: [{
         id: 'reporter-1',
@@ -242,5 +248,28 @@ describe('notifications email du chat ticket', () => {
 
     expect(res.status).toBe(201);
     expect(sendMail).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifications navigateur des réponses', () => {
+  it.each(['jean@example.test', null])('préserve l’abonnement avec email %s malgré les données historiques', async email => {
+    jest.clearAllMocks();
+    createSmtpTransporter.mockReturnValue({ transporter: null });
+    const subscription = JSON.stringify({
+      endpoint: 'https://push.example.test/reporter',
+      keys: { p256dh: 'public-key', auth: 'auth-key' }
+    });
+    prisma.intervention.findUnique.mockResolvedValue({
+      id: 'ticket-push', title: 'Réseau', reporterEmail: email,
+      reporterToken: 'legacy-token',
+      reporters: [{ id: 'reporter-1', email, token: 'current-token', notifyByEmail: false, pushSubscription: subscription }]
+    });
+    prisma.ticketMessage.create.mockResolvedValue({ id: 'message-push', content: 'Réparé' });
+    const res = await request(buildApp()).post('/api/interventions/ticket-push/messages').field('content', 'Réparé');
+    expect(res.status).toBe(201);
+    expect(sendBrowserPush).toHaveBeenCalledTimes(1);
+    expect(sendBrowserPush).toHaveBeenCalledWith(subscription, expect.objectContaining({
+      url: '/ticket-status.html?token=current-token', body: 'Réparé'
+    }));
   });
 });

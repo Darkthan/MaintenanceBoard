@@ -602,7 +602,9 @@ document.getElementById('report-form').addEventListener('submit', async e => {
   err.classList.add('hidden');
 
   try {
-    const pushSubscription = await getReporterPushSubscription().catch(() => null);
+    const pushSubscription = await getReporterPushSubscription().catch(() => {
+      throw new Error('Impossible d’activer les notifications navigateur. Réessayez ou décochez cette option pour envoyer votre demande.');
+    });
     const fd = new FormData();
     const freeRoom = roomSearch.value.trim();
     if (selectedRoomId) fd.append('roomId', selectedRoomId);
@@ -645,7 +647,7 @@ document.getElementById('report-form').addEventListener('submit', async e => {
       document.getElementById('ticket-link').textContent = url;
     }
   } catch (ex) {
-    err.textContent = 'Erreur réseau : ' + ex.message;
+    err.textContent = ex.message || 'Erreur lors de la soumission.';
     err.classList.remove('hidden');
   } finally {
     btn.disabled = false;

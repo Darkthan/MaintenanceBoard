@@ -1169,7 +1169,8 @@ router.post('/:id/messages', requireAuth, ticketAttachmentUpload, prepareTicketA
     });
 
     const reporterCandidates = [...(intervention.reporters || [])];
-    if (intervention.reporterEmail) {
+    if (intervention.reporterEmail && !reporterCandidates.some(reporter =>
+      reporter.email?.trim().toLowerCase() === intervention.reporterEmail.trim().toLowerCase())) {
       reporterCandidates.push({
         email: intervention.reporterEmail,
         name: intervention.reporterName,
@@ -1229,7 +1230,7 @@ router.post('/:id/messages', requireAuth, ticketAttachmentUpload, prepareTicketA
       }
     }
 
-    const pushRecipients = [...new Map(reporterRecipients
+    const pushRecipients = [...new Map(reporterCandidates
       .map(recipient => [parsePushSubscription(recipient.pushSubscription)?.endpoint, recipient])
       .filter(([endpoint]) => endpoint)
     ).values()];

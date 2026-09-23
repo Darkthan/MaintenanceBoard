@@ -836,6 +836,15 @@
 
       <!-- ════════════════════════════════════ TAB : SÉCURITÉ -->
       <div id="tab-security" class="hidden w-full max-w-xl min-w-0 space-y-5">
+        <form onsubmit="savePublicTicketSettings(event)" class="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+          <h3 class="font-semibold text-slate-800">Demandes publiques</h3>
+          <label class="block text-sm text-slate-700" for="ticket-requests-per-hour">Nombre maximal de demandes par heure et par adresse IP</label>
+          <input id="ticket-requests-per-hour" type="number" min="1" max="10000" step="1" required disabled
+            class="w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+          <p class="text-xs text-slate-500">De 1 à 10 000, avec 10 par défaut. Les personnes utilisant la même connexion partagent cette limite. Les messages de suivi ont une limite séparée. Toute modification s’applique immédiatement.</p>
+          <p id="ticket-limit-feedback" class="text-sm text-slate-600" role="status"></p>
+          <button id="ticket-limit-save" type="submit" disabled class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Enregistrer</button>
+        </form>
 
         <div class="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
           <div>
@@ -1300,6 +1309,13 @@
           </table>
           <div id="mcp-empty" class="hidden p-10 text-center text-sm text-slate-400">Aucun token MCP. Créez-en un pour commencer.</div>
         </div>
+        <section class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
+          <div><h3 class="font-semibold text-slate-800">MCP public : demandes par IA</h3><p class="text-sm text-slate-500 mt-1">Accès distinct du MCP administrateur. Une adresse autorisée confirme chaque connexion par magic link.</p></div>
+          <label class="block text-sm text-slate-600">Adresse du serveur public<input id="public-mcp-url" readonly class="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 font-mono text-xs"></label>
+          <form class="flex gap-2" onsubmit="addPublicMcpEmail(event)"><input id="public-mcp-new-email" type="email" required placeholder="adresse@exemple.fr" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2"><button class="rounded-lg bg-sky-600 px-4 py-2 text-white">Autoriser</button></form>
+          <p id="public-mcp-feedback" role="status" class="text-sm text-slate-600"></p>
+          <div id="public-mcp-emails" class="divide-y divide-slate-100"></div>
+        </section>
       </div><!-- /tab-mcp -->
 
     </div><!-- /contenu -->
@@ -1804,12 +1820,44 @@ function showTab(name) {
   if (name === 'po') loadPOTemplate();
   if (name === 'loans') loadLoanSettings();
   if (name === 'security') {
+    loadPublicTicketSettings();
     loadWebAuthn();
     loadFail2ban();
   }
   if (name === 'screens') loadScreens();
   if (name === 'supervision-deploy') loadSupervisionDeployment();
-  if (name === 'mcp') { initMcpServerUrl(); loadMcpTokens(); }
+  if (name === 'mcp') { initMcpServerUrl(); loadMcpTokens(); loadPublicMcpEmails(); }
+}
+
+async function loadPublicTicketSettings() {
+  const input = document.getElementById('ticket-requests-per-hour');
+  const feedback = document.getElementById('ticket-limit-feedback');
+  try {
+    const settings = await api.get('/settings/public-tickets');
+    input.value = settings.requestsPerHour;
+    input.disabled = false;
+    document.getElementById('ticket-limit-save').disabled = false;
+    feedback.textContent = '';
+  } catch (error) {
+    feedback.textContent = error.message || 'Impossible de charger la limite.';
+  }
+}
+
+async function savePublicTicketSettings(event) {
+  event.preventDefault();
+  const button = document.getElementById('ticket-limit-save');
+  const feedback = document.getElementById('ticket-limit-feedback');
+  button.disabled = true;
+  try {
+    await api.patch('/settings/public-tickets', {
+      requestsPerHour: Number(document.getElementById('ticket-requests-per-hour').value)
+    });
+    feedback.textContent = 'Limite enregistrée et appliquée.';
+  } catch (error) {
+    feedback.textContent = error.message || 'Impossible d’enregistrer la limite.';
+  } finally {
+    button.disabled = false;
+  }
 }
 
 let supervisionTokensLoaded = false;
@@ -3397,6 +3445,66 @@ document.getElementById('copy-loans-calendar-feed-btn').addEventListener('click'
     showToast('Copie impossible', 'error');
   }
 });
+
+async function loadPublicMcpEmails() {
+  const feedback = document.getElementById('public-mcp-feedback');
+  const list = document.getElementById('public-mcp-emails');
+  document.getElementById('public-mcp-url').value = location.origin + '/mcp-public';
+  try {
+    const response = await fetch('/api/settings/public-mcp', { credentials: 'include' });
+    if (!response.ok) throw new Error('Impossible de charger les adresses.');
+    const data = await response.json();
+    list.replaceChildren();
+    for (const item of data.emails) {
+      const row = document.createElement('div');
+      row.className = 'flex flex-wrap items-center gap-2 py-3 text-sm';
+      const label = document.createElement('span');
+      label.className = 'flex-1 min-w-0 break-all';
+      label.textContent = item.email + (item.verified ? ' · magic link utilisé' : item.requested ? ' · lien demandé' : ' · ajout manuel');
+      const toggle = document.createElement('button');
+      toggle.className = 'rounded-lg border border-slate-300 px-3 py-1';
+      toggle.textContent = item.allowed ? 'Révoquer' : 'Autoriser';
+      toggle.onclick = () => setPublicMcpAllowed(item.email, !item.allowed);
+      row.append(label, toggle);
+      if (item.allowed) {
+        const invite = document.createElement('button');
+        invite.className = 'rounded-lg bg-sky-50 text-sky-700 px-3 py-1';
+        invite.textContent = 'Envoyer les instructions';
+        invite.onclick = () => sendPublicMcpInvite(item.email);
+        row.append(invite);
+      }
+      list.append(row);
+    }
+    if (!data.emails.length) list.textContent = 'Aucune adresse connue.';
+    feedback.textContent = '';
+  } catch (error) { feedback.textContent = error.message; }
+}
+
+async function setPublicMcpAllowed(email, allowed) {
+  const feedback = document.getElementById('public-mcp-feedback');
+  try {
+    const response = await fetch('/api/settings/public-mcp/emails', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email, allowed }) });
+    if (!response.ok) throw new Error((await response.json()).error || 'Modification impossible.');
+    await loadPublicMcpEmails();
+    feedback.textContent = allowed ? 'Adresse autorisée.' : 'Accès révoqué.';
+  } catch (error) { feedback.textContent = error.message; }
+}
+
+function addPublicMcpEmail(event) {
+  event.preventDefault();
+  const input = document.getElementById('public-mcp-new-email');
+  setPublicMcpAllowed(input.value, true);
+  input.value = '';
+}
+
+async function sendPublicMcpInvite(email) {
+  const feedback = document.getElementById('public-mcp-feedback');
+  try {
+    const response = await fetch('/api/settings/public-mcp/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email }) });
+    if (!response.ok) throw new Error((await response.json()).error || 'Envoi impossible.');
+    feedback.textContent = 'Instructions envoyées à ' + email + '.';
+  } catch (error) { feedback.textContent = error.message; }
+}
 
 document.getElementById('supervision-token-select').addEventListener('change', updateSupervisionDockerCommand);
 document.getElementById('supervision-token-input').addEventListener('input', updateSupervisionDockerCommand);

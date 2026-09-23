@@ -6,6 +6,16 @@ const { ALL_MCP_SCOPES } = require('../utils/mcpTokens');
 const base = () => config.appUrl.replace(/\/$/, '');
 const OAUTH_SCOPES = [...ALL_MCP_SCOPES, 'offline_access'];
 
+router.get(['/oauth-authorization-server/public', '/oauth-authorization-server/oauth-public'], (_req, res) => {
+  const b = base();
+  res.json({ issuer: `${b}/oauth-public`, authorization_endpoint: `${b}/oauth-public/authorize`, token_endpoint: `${b}/oauth-public/token`, registration_endpoint: `${b}/oauth-public/register`, response_types_supported: ['code'], grant_types_supported: ['authorization_code', 'refresh_token'], code_challenge_methods_supported: ['S256'], token_endpoint_auth_methods_supported: ['none'], scopes_supported: ['public_requests:write', 'offline_access'] });
+});
+
+router.get('/oauth-protected-resource/mcp-public', (_req, res) => {
+  const b = base();
+  res.json({ resource: `${b}/mcp-public`, authorization_servers: [`${b}/oauth-public`], bearer_methods_supported: ['header'], scopes_supported: ['public_requests:write'] });
+});
+
 /**
  * RFC 8414 — OAuth 2.0 Authorization Server Metadata.
  * Découverte automatique par les clients OAuth2 (ChatGPT, Claude, etc.).

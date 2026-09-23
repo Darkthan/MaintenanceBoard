@@ -821,6 +821,7 @@ loanPublicRouter.get('/:token', async (req, res, next) => {
   try {
     const link = await findValidRequestLink(req.params.token);
     const accessLink = await findValidAccessLink(req.params.token, req.query.access);
+    if (accessLink) require('../utils/publicMcp').markVerified(accessLink.email);
 
     res.json({
       token: link.token,
