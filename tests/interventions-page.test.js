@@ -92,16 +92,23 @@ describe('interventions page', () => {
     expect(supportRes.text).toContain('TicketAttachments.prepare(selectedAttachment)');
   });
 
-  it('sert un menu avant les demandes d’intervention et les réservations', async () => {
-    const res = await request(app).get('/requests.html');
+  it('sert le menu de gestion des demandes sur /request.html', async () => {
+    const res = await request(app).get('/request.html');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('Gestion des demandes');
     expect(res.text).toContain('Demandes d’intervention');
     expect(res.text).toContain('Réservations de matériel');
-    expect(res.text).toContain('href="/tickets.html"');
+    expect(res.text).toContain('href="/report.html"');
     expect(res.text).toContain('href="/loans.html"');
     expect(res.text).toContain("renderNav('requests')");
+  });
+
+  it('redirige l’ancienne adresse du menu de demandes', async () => {
+    const res = await request(app).get('/requests.html');
+
+    expect(res.status).toBe(301);
+    expect(res.headers.location).toBe('/request.html');
   });
 
   it('sert le portail public qui propose intervention et réservation', async () => {

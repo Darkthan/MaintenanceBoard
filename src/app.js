@@ -233,6 +233,7 @@ app.get('/api/version', (req, res) => {
 // ── Routes sans extension ─────────────────────────────────────────────────────
 app.get('/scan',   (req, res) => res.sendFile(path.join(__dirname, '../public/scan.html')));
 app.get('/report', (req, res) => res.sendFile(path.join(__dirname, '../public/report.html')));
+app.get('/requests.html', (req, res) => res.redirect(301, '/request.html'));
 app.get('/loan-request', (req, res) => res.sendFile(path.join(__dirname, '../public/loan-request.html')));
 app.get('/demande', (req, res) => res.sendFile(path.join(__dirname, '../public/public-request.html')));
 app.get('/screen/:token', (req, res) => res.sendFile(path.join(__dirname, '../public/display.html')));
