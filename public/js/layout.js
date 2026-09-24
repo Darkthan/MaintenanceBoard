@@ -62,6 +62,10 @@ function ensureResponsiveStyles() {
         padding-bottom: calc(var(--mobile-content-clearance) + 0.5rem);
       }
 
+      body.app-mobile-refined.app-has-pagination-fab main > .flex-1 {
+        padding-bottom: calc(var(--mobile-content-clearance) + 4rem);
+      }
+
       body.app-mobile-refined #sidebar {
         display: none !important;
       }
@@ -72,15 +76,12 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined #mobile-tabbar-shell {
         display: block !important;
-        position: fixed !important;
-        inset: 0 !important;
-        z-index: 35;
+        position: static !important;
         pointer-events: none;
-        /* Pas de position:fixed ni contain:layout — sur iOS Safari, contain:layout
-           crée un containing block pour les enfants position:fixed, les positionnant
-           par rapport au shell (height:0) au lieu du viewport → tab bar hors écran */
+        /* Les éléments fixes se calent directement sur le viewport, y compris sur iOS. */
       }
 
+      body.app-mobile-refined #mobile-tabbar-overlay,
       #mobile-tabbar-bar,
       #mobile-tabbar-sheet {
         pointer-events: auto;
@@ -89,7 +90,7 @@ function ensureResponsiveStyles() {
       }
 
       body.app-mobile-refined #mobile-tabbar-bar {
-        position: absolute !important;
+        position: fixed !important;
         inset: auto 0 0 0 !important;
         z-index: 40;
         touch-action: manipulation;
@@ -109,7 +110,7 @@ function ensureResponsiveStyles() {
       }
 
       body.app-mobile-refined #mobile-tabbar-sheet {
-        position: absolute !important;
+        position: fixed !important;
         inset: auto 0 0 0 !important;
         max-height: min(82dvh, 34rem);
         overflow-y: auto;
@@ -384,6 +385,7 @@ function enhanceResponsiveLayout() {
   });
 
   const hasPageFab = !!document.querySelector('[data-mobile-fab="true"]');
+  document.body.classList.toggle('app-has-pagination-fab', hasPageFab && !!document.getElementById('pagination'));
   document.querySelectorAll('#pagination').forEach(el => {
     el.dataset.mobilePagination = 'true';
     if (hasPageFab) el.dataset.paginationFabClearance = 'true';
