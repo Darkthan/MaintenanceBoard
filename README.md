@@ -128,6 +128,18 @@ SWITCH-B1,Réseau,Cisco,Catalyst 2960,SN789012,,ACTIVE
 4. Formulaire pré-rempli avec le contexte (salle/équipement)
 5. Soumission de l'intervention + photo optionnelle
 
+## Agent Windows en MSI
+
+Depuis la page **Agents**, le bouton `.msi` d'un jeton actif télécharge un installateur personnalisé pour ce jeton et l'URL du serveur. Sur le poste cible, lancez le MSI avec les droits administrateur. Il installe l'agent dans `C:\ProgramData\MaintenanceBoardAgent` et crée une tâche planifiée exécutée sous `SYSTEM` au démarrage. La désinstallation retire la tâche et les jetons locaux.
+
+Le MSI de base est dans `downloads/templates/maintenance-agent.msi`. Après une modification de l'agent Windows ou de l'installateur, reconstruisez-le sur Windows avec WiX Toolset 5 :
+
+```powershell
+pwsh -File installer/build-msi.ps1
+```
+
+Le serveur personnalise une copie temporaire de ce MSI pour chaque téléchargement ; sous Linux, cette opération utilise `msitools`, installé par le `Dockerfile`.
+
 ## Architecture
 
 ```

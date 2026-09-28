@@ -33,3 +33,9 @@ jobs:
           DATABASE_URL: file:./prisma/test.db
           JWT_SECRET: ci-test-secret-key
           SESSION_SECRET: ci-session-secret
+
+      - name: Verify Windows MSI payload and personalization
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y msitools
+          sh installer/test-msi-linux.sh

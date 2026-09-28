@@ -8,6 +8,7 @@ RUN apk add --no-cache \
     make \
     g++ \
     libc6-compat \
+    msitools \
     ffmpeg \
     ghostscript
 

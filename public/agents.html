@@ -365,6 +365,9 @@ async function loadTokens() {
           <td class="px-5 py-3.5">
             ${t.isActive ? `
             <div class="flex gap-1">
+              <a href="/downloads/agent.msi?enrollmentToken=${t.token}" class="px-2 py-1 bg-violet-50 text-violet-700 rounded text-xs hover:bg-violet-100 transition" title="Installateur Windows personnalisé (.msi)">
+                &#x1FA9F; .msi
+              </a>
               <a href="/downloads/windows?enrollmentToken=${t.token}" class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 transition" title="Package Chocolatey (.nupkg)">
                 &#x1F4E6; .nupkg
               </a>

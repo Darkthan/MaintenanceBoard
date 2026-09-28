@@ -7,6 +7,7 @@ const XLSX = require('xlsx');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
 const { isEnrollmentTokenUsable } = require('../utils/agentTokens');
+const { buildAgentMsi } = require('../utils/buildAgentMsi');
 
 const TEMPLATES_DIR = path.join(__dirname, '../../downloads/templates');
 const VERSION = '1.0.0';
@@ -89,6 +90,23 @@ router.get('/windows', async (req, res, next) => {
     const buffer = await buildNupkg(nuspecContent, agentPs1, chocoInstall, configJson);
     res.set('Content-Type', 'application/octet-stream');
     res.set('Content-Disposition', `attachment; filename="${PACKAGE_ID}.${VERSION}.nupkg"`);
+    res.send(buffer);
+  } catch (err) { next(err); }
+});
+
+// ── GET /downloads/agent.msi?enrollmentToken=<token> ────────────────────────
+// Part du MSI compilé, puis injecte l'URL et le jeton validé.
+router.get('/agent.msi', async (req, res, next) => {
+  const { enrollmentToken } = req.query;
+  if (!enrollmentToken) return res.status(400).json({ error: 'enrollmentToken requis' });
+  try {
+    if (!await validateEnrollmentToken(enrollmentToken)) {
+      return res.status(403).json({ error: "Token d'enrollment invalide ou désactivé" });
+    }
+    const buffer = await buildAgentMsi(config.appUrl, enrollmentToken);
+    res.set('Content-Type', 'application/x-msi');
+    res.set('Cache-Control', 'private, no-store');
+    res.set('Content-Disposition', 'attachment; filename="maintenance-agent.msi"');
     res.send(buffer);
   } catch (err) { next(err); }
 });

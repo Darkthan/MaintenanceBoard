@@ -20,6 +20,8 @@ jest.mock('../src/lib/prisma', () => ({
   user: { findUnique: jest.fn() }
 }));
 
+jest.mock('../src/utils/buildAgentMsi', () => ({ buildAgentMsi: jest.fn() }));
+
 jest.mock('@prisma/client', () => {
   const mockPrisma = {
     supplier: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
@@ -30,6 +32,7 @@ jest.mock('@prisma/client', () => {
 
 const app = require('../src/app');
 const prisma = require('../src/lib/prisma');
+const { buildAgentMsi } = require('../src/utils/buildAgentMsi');
 
 describe('public agent install downloads', () => {
   beforeEach(() => {
@@ -59,6 +62,26 @@ describe('public agent install downloads', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/text\/plain/);
+  });
+
+  it('génère un MSI personnalisé pour un jeton valide', async () => {
+    prisma.agentToken.findUnique.mockResolvedValue({ id: 'tok-1', token: 'abc', isActive: true, createdAt: new Date() });
+    buildAgentMsi.mockResolvedValue(Buffer.from('msi-test'));
+
+    const res = await request(app).get('/downloads/agent.msi?enrollmentToken=abc');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/application\/x-msi/);
+    expect(res.headers['cache-control']).toContain('no-store');
+    expect(buildAgentMsi).toHaveBeenCalledWith(expect.any(String), 'abc');
+    expect(res.headers['content-length']).toBe('8');
+  });
+
+  it('refuse le MSI quand le jeton est invalide', async () => {
+    prisma.agentToken.findUnique.mockResolvedValue(null);
+    const res = await request(app).get('/downloads/agent.msi?enrollmentToken=invalid');
+    expect(res.status).toBe(403);
+    expect(buildAgentMsi).not.toHaveBeenCalled();
   });
 
   it('refuse /downloads/linux avec token invalide', async () => {
