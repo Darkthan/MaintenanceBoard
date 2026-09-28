@@ -216,6 +216,7 @@ model Equipment {
   loanReservationSelections LoanReservationEquipment[]
   checkupItems    InterventionCheckupItem[]
   ipAddresses     IpAddress[]
+  networkInterfaces EquipmentNetworkInterface[]
 
   @@map("equipment")
 }
@@ -881,10 +882,27 @@ model IpAddress {
   network       IpNetwork  @relation(fields: [networkId], references: [id], onDelete: Cascade)
   equipment     Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
   migrations    IpMigration[]
+  networkInterface EquipmentNetworkInterface?
 
   @@unique([networkId, ip])
   @@index([networkId])
   @@map("ip_addresses")
+}
+
+model EquipmentNetworkInterface {
+  id          String   @id @default(uuid())
+  equipmentId String
+  name        String
+  macAddress  String?
+  ipAddressId String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  ipAddress   IpAddress? @relation(fields: [ipAddressId], references: [id], onDelete: SetNull)
+
+  @@index([equipmentId])
+  @@map("equipment_network_interfaces")
 }
 
 model IpMigration {

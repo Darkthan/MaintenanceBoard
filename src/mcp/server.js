@@ -7,6 +7,7 @@ const { MCP_SCOPES, hasScope } = require('../utils/mcpTokens');
 const reservations = require('./reservationsService');
 const work = require('./workService');
 
+const equipment = require('./equipmentService');
 const SERVER_INFO = { name: 'maintenanceboard', version: '1.1.0' };
 
 const READ_ONLY_TOOL = {
@@ -60,6 +61,56 @@ function buildMcpServer(ctx) {
   const userId = ctx.createdBy?.id || null;
   const bookingsReadScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_READ, MCP_SCOPES.RESERVATIONS_READ];
   const bookingsWriteScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_WRITE, MCP_SCOPES.RESERVATIONS_WRITE];
+
+  server.registerTool('list_equipment', {
+    description: 'Recherche les équipements et leurs interfaces réseau, avec pagination.',
+    inputSchema: {
+      search: z.string().optional(), type: z.string().optional(), roomId: z.string().optional(),
+      status: z.enum(['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE']).optional(),
+      ip: z.string().optional(), mac: z.string().optional(),
+      limit: z.number().int().min(1).max(100).optional(), cursor: z.string().optional()
+    }, annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_READ, equipment.listEquipment));
+
+  server.registerTool('get_equipment', {
+    description: 'Consulte la fiche équipement, les interfaces MAC et les adresses IPAM.',
+    inputSchema: { id: z.string().min(1) }, annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_READ, equipment.getEquipment));
+
+  server.registerTool('update_equipment', {
+    description: 'Modifie partiellement la fiche équipement.',
+    inputSchema: {
+      id: z.string().min(1), name: z.string().min(1).max(200).optional(), type: z.string().min(1).max(100).optional(),
+      brand: z.string().max(200).nullable().optional(), model: z.string().max(200).nullable().optional(),
+      serialNumber: z.string().max(200).nullable().optional(),
+      status: z.enum(['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE']).optional(),
+      description: z.string().nullable().optional(), roomId: z.string().nullable().optional(),
+      agentHostname: z.string().max(255).nullable().optional(),
+      purchaseDate: z.string().nullable().optional(), warrantyEnd: z.string().nullable().optional()
+    }, annotations: { ...ADDITIVE_WRITE_TOOL, idempotentHint: true }
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_WRITE, equipment.updateEquipment));
+
+  server.registerTool('list_equipment_network_interfaces', {
+    description: 'Liste les interfaces MAC et les adresses IPAM liées à un équipement.',
+    inputSchema: { equipmentId: z.string().min(1) }, annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_READ, equipment.listEquipmentNetworkInterfaces));
+
+  server.registerTool('update_equipment_network_interface', {
+    description: 'Crée ou modifie une interface. ipAddressId lie une entrée IPAM existante ; null détache l’interface.',
+    inputSchema: {
+      equipmentId: z.string().min(1), interfaceId: z.string().optional(),
+      name: z.string().min(1).max(100).optional(), macAddress: z.string().nullable().optional(),
+      ipAddressId: z.string().nullable().optional()
+    }, annotations: { ...ADDITIVE_WRITE_TOOL, idempotentHint: true }
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_WRITE, a => {
+    if (a.ipAddressId !== undefined && !hasScope(ctx.scopes, MCP_SCOPES.IP_ADDRESSING_WRITE)) {
+      const error = new Error('Scope requis : ip_addressing:write pour modifier le lien IPAM.');
+      error.status = 403;
+      throw error;
+    }
+    return equipment.updateEquipmentNetworkInterface(a);
+  }));
+
 
   // Parametres de date/heure partages par tous les outils de reservation.
   // Mode structure (recommande) : date + startTime + endTime [+ endDate + timezone]
