@@ -58,6 +58,11 @@ jest.mock('../src/lib/prisma', () => ({
   },
   room: {
     findMany: jest.fn()
+  },
+  equipmentNetworkInterface: {
+    findMany: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn()
   }
 }));
 
@@ -108,6 +113,28 @@ describe('POST /api/agents/checkin', () => {
         lowDiskThresholdGb: 20
       }
     });
+  });
+
+  it('enregistre les MAC dans les interfaces visibles sur la fiche équipement', async () => {
+    prisma.equipment.update.mockResolvedValue({ id: 'equip-1', roomId: null, agentAlertState: null });
+    prisma.equipmentNetworkInterface.findMany.mockResolvedValue([]);
+    prisma.equipmentNetworkInterface.create.mockResolvedValue({
+      id: 'interface-1', equipmentId: 'equip-1', name: 'Ethernet', macAddress: 'AA:BB:CC:DD:EE:FF'
+    });
+
+    const res = await request(buildApp())
+      .post('/api/agents/checkin')
+      .set('x-test-agent-mode', 'machine')
+      .send({ hostname: 'PC-101', networkInterfaces: [
+        { name: 'Ethernet', macAddress: 'aa-bb-cc-dd-ee-ff' }
+      ] });
+
+    expect(res.status).toBe(200);
+    expect(prisma.equipmentNetworkInterface.create).toHaveBeenCalledWith({ data: {
+      equipmentId: 'equip-1', name: 'Ethernet', macAddress: 'AA:BB:CC:DD:EE:FF'
+    } });
+    expect(JSON.parse(prisma.equipment.update.mock.calls[0][0].data.agentInfo).macs)
+      .toEqual(['AA:BB:CC:DD:EE:FF']);
   });
 
   it('met à jour fabricant/modèle et crée une intervention si un disque est sous le seuil', async () => {

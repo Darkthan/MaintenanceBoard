@@ -86,9 +86,10 @@ function Send-CheckIn {
     $ips  = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                Where-Object { $_.IPAddress -ne "127.0.0.1" } |
                Select-Object -ExpandProperty IPAddress)
-    $macs = @(Get-NetAdapter -ErrorAction SilentlyContinue |
-               Where-Object { $_.Status -eq "Up" } |
-               Select-Object -ExpandProperty MacAddress)
+    $networkInterfaces = @(Get-NetAdapter -ErrorAction SilentlyContinue |
+      Where-Object { $_.MacAddress -and $_.MacAddress -match '^[0-9A-Fa-f]{2}([-:][0-9A-Fa-f]{2}){5}$' } |
+      ForEach-Object { @{ name = $_.Name; macAddress = $_.MacAddress } })
+    $macs = @($networkInterfaces | ForEach-Object { $_.macAddress })
     $disks = @(
       Get-WmiObject Win32_LogicalDisk -ErrorAction SilentlyContinue |
       Where-Object { $_.DriveType -eq 3 } |
@@ -119,6 +120,7 @@ function Send-CheckIn {
       user         = $usr
       ips          = $ips
       macs         = $macs
+      networkInterfaces = $networkInterfaces
       disks        = $disks
       peripherals  = @(Get-Peripherals)
     } | ConvertTo-Json -Depth 5

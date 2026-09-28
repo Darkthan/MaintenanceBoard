@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
 const { agentAuth } = require('../middleware/agentAuth');
 const discoveryService = require('../services/discoveryService');
+const { sanitizeAgentNetworkInterfaces, syncAgentNetworkInterfaces } = require('../services/agentNetworkInterfaces');
 const { readSettings } = require('../utils/settings');
 const {
   LOW_DISK_TITLE_PREFIX,
@@ -179,7 +180,7 @@ async function maybeCreateHarvestInterventions(equipment, agentInfo) {
 // Auth: X-Agent-Token (enrollment ou machine token)
 router.post('/checkin', agentAuth, async (req, res, next) => {
   try {
-    const { hostname, serialNumber, type, manufacturer, model, cpu, ramGb, os, osVersion, user, ips, macs, peripherals, disks, harvests } = req.body;
+    const { hostname, serialNumber, type, manufacturer, model, cpu, ramGb, os, osVersion, user, ips, macs, networkInterfaces, peripherals, disks, harvests } = req.body;
 
     // Validation hostname
     if (hostname && !/^[a-zA-Z0-9._-]{1,255}$/.test(hostname)) {
@@ -189,6 +190,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
     // Sanitisation agentInfo — limites de taille pour éviter le stockage abusif
     const cap = (v, max) => (typeof v === 'string' ? v.slice(0, max) : v);
     const capArr = (v, max) => (Array.isArray(v) ? v.slice(0, max).map(s => typeof s === 'string' ? s.slice(0, 256) : s) : v);
+    const agentInterfaces = sanitizeAgentNetworkInterfaces(networkInterfaces, macs);
     const sanitized = {
       manufacturer: cap(manufacturer, 256),
       model: cap(model, 256),
@@ -198,7 +200,8 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
       osVersion: cap(osVersion, 256),
       user: cap(user, 256),
       ips: capArr(ips, 50),
-      macs: capArr(macs, 20),
+      macs: agentInterfaces.map(item => item.macAddress),
+      networkInterfaces: agentInterfaces,
       peripherals: capArr(peripherals, 50),
       disks: sanitizeDisks(disks),
       harvests: sanitizeHarvests(harvests)
@@ -253,6 +256,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
           where: { id: equipment.id },
           data: updateData
         });
+        await syncAgentNetworkInterfaces(equipment.id, agentInterfaces);
         await maybeCreateLowDiskIntervention(equipment, sanitized);
         await maybeCreateHarvestInterventions(equipment, sanitized);
         await logUserCheckin(equipment.id, sanitized.user);
@@ -285,6 +289,8 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
         }
       });
 
+      await syncAgentNetworkInterfaces(newEquipment.id, agentInterfaces);
+
       await maybeCreateLowDiskIntervention(newEquipment, sanitized);
       await maybeCreateHarvestInterventions(newEquipment, sanitized);
       await logUserCheckin(newEquipment.id, sanitized.user);
@@ -309,6 +315,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
           lastSeenAt: new Date()
         }
       });
+      await syncAgentNetworkInterfaces(updatedEquipment.id, agentInterfaces);
       await maybeCreateLowDiskIntervention(updatedEquipment, sanitized);
       await maybeCreateHarvestInterventions(updatedEquipment, sanitized);
       await logUserCheckin(updatedEquipment.id, sanitized.user);

@@ -164,6 +164,25 @@ collect_and_send() {
   CURRENT_USER=$(who 2>/dev/null | awk '{print $1}' | head -1 || echo "")
 
   IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' | head -10 | jq -R . | jq -sc . 2>/dev/null || echo "[]")
+  NETWORK_INTERFACES=$(python3 - <<'PY'
+import json
+from pathlib import Path
+
+interfaces = []
+for item in Path('/sys/class/net').iterdir():
+    if item.name == 'lo':
+        continue
+    try:
+        mac = (item / 'address').read_text().strip()
+    except OSError:
+        continue
+    parts = mac.split(':')
+    if len(parts) == 6 and all(len(part) == 2 and all(c in '0123456789abcdefABCDEF' for c in part) for part in parts) and mac != '00:00:00:00:00:00':
+        interfaces.append({'name': item.name, 'macAddress': mac})
+print(json.dumps(interfaces))
+PY
+  )
+  MACS=$(echo "$NETWORK_INTERFACES" | jq '[.[].macAddress]')
   DISKS=$(df -Pk -x tmpfs -x devtmpfs 2>/dev/null | awk 'NR>1 {print}' | jq -R -s '
     split("\n")
     | map(select(length > 0))
@@ -191,6 +210,8 @@ collect_and_send() {
     --arg osVer "$OS_VER" \
     --arg user "$CURRENT_USER" \
     --argjson ips "$IPS" \
+    --argjson macs "$MACS" \
+    --argjson networkInterfaces "$NETWORK_INTERFACES" \
     --argjson disks "$DISKS" \
     --argjson harvests "$HARVESTS" \
     '{
@@ -205,9 +226,10 @@ collect_and_send() {
       osVersion: $osVer,
       user: $user,
       ips: $ips,
+      macs: $macs,
+      networkInterfaces: $networkInterfaces,
       disks: $disks,
       harvests: $harvests,
-      macs: [],
       peripherals: []
     }')
 
