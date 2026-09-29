@@ -18,6 +18,25 @@ test('lit le préambule, les champs cités et préserve un compteur réel à zé
   expect(parsed.jobs[0]).toMatchObject({ jobKind: 'Copy', jobName: 'Document, version finale', ownerName: 'Alice', status: 'Suspend', outputVolume: 3, printCount: 0 });
 });
 
+test('accepte aussi les journaux CA du modèle ComColor FW', async () => {
+  const csv = sample().replace('"EA","01.00"', '"CA","01.00"')
+    .replace('ComColor FT5430', 'ComColor FW5230');
+  const parsed = await parsePrinterLog(Buffer.from(csv));
+  expect(parsed.printer.model).toBe('ComColor FW5230');
+  expect(parsed.jobs).toHaveLength(1);
+});
+
+test('préserve les guillemets non échappés de certains anciens noms de document', async () => {
+  const parsed = await parsePrinterLog(Buffer.from(sample('Bonjour "ma belle"')));
+  expect(parsed.jobs[0].jobName).toBe('Bonjour "ma belle"');
+  expect(parsed.jobs[0].printCount).toBe(0);
+});
+
+test('conserve aussi les guillemets CSV correctement échappés', async () => {
+  const parsed = await parsePrinterLog(Buffer.from(sample('Bonjour ""ma belle""')));
+  expect(parsed.jobs[0].jobName).toBe('Bonjour "ma belle"');
+});
+
 test('rejette un doublon dans le même fichier', async () => {
   const line = sample().split('\r\n').at(-1);
   await expect(parsePrinterLog(Buffer.from(sample() + '\r\n' + line))).rejects.toThrow('opération en double');

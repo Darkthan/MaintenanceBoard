@@ -29,6 +29,43 @@ function optionalNumber(value, line, label) {
 
 function optional(value) { return value || null; }
 
+// Certains anciens exports RISO contiennent des guillemets non échappés dans
+// les noms de documents. Les rendre conformes au CSV sans modifier les valeurs.
+function normalizeQuotes(content) {
+  let output = '';
+  let quoted = false;
+  let fieldStart = true;
+  for (let i = 0; i < content.length;) {
+    const char = content[i];
+    if (char === '"' && (quoted || fieldStart)) {
+      if (!quoted) {
+        quoted = true;
+        fieldStart = false;
+        output += char;
+        i++;
+        continue;
+      }
+      let end = i;
+      while (content[end] === '"') end++;
+      const count = end - i;
+      const boundary = end === content.length || [',', '\r', '\n'].includes(content[end]);
+      if (boundary) {
+        output += '"'.repeat(count % 2 === 0 ? count + 1 : count);
+        quoted = false;
+      } else {
+        output += '"'.repeat(count % 2 === 0 ? count : count + 1);
+      }
+      i = end;
+      continue;
+    }
+    output += char;
+    if (!quoted && [',', '\r', '\n'].includes(char)) fieldStart = true;
+    else fieldStart = false;
+    i++;
+  }
+  return output;
+}
+
 async function parsePrinterLog(buffer) {
   if (!Buffer.isBuffer(buffer)) throw invalid('Fichier CSV manquant');
   let content;
@@ -38,7 +75,7 @@ async function parsePrinterLog(buffer) {
   try {
     rows = await new Promise((resolve, reject) => {
       const result = [];
-      Readable.from([content.replace(/^\uFEFF/, '')]).pipe(csv({ headers: false, skipEmptyLines: true }))
+      Readable.from([normalizeQuotes(content.replace(/^\uFEFF/, ''))]).pipe(csv({ headers: false, skipEmptyLines: true }))
         .on('data', row => result.push(Object.values(row).map(value => String(value ?? '').trim())))
         .on('end', () => resolve(result))
         .on('error', reject);
@@ -47,7 +84,7 @@ async function parsePrinterLog(buffer) {
     throw invalid('CSV illisible');
   }
 
-  if (rows.length < 6 || rows[0][0] !== 'Discrimination code' || rows[1][0] !== 'EA' ||
+  if (rows.length < 6 || rows[0][0] !== 'Discrimination code' || !['EA', 'CA'].includes(rows[1][0]) ||
       rows[2][0] !== 'MODEL' || rows[3][0] === '' || rows[4][0] !== 'Job kind') {
     throw invalid('Format de journal RISO non reconnu');
   }
