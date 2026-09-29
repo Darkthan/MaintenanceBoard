@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Impressions – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+<div id="layout-root"></div>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impressions', 'printer-logs') + `
+  <div class="space-y-5">
+    <section id="import-section" class="hidden rounded-xl border border-slate-200 bg-white p-5">
+      <h2 class="font-semibold text-slate-800">Importer un journal RISO</h2>
+      <p class="mt-1 text-sm text-slate-500">Déposez le CSV exporté par l’imprimante. Un nouveau dépôt du même fichier met à jour les opérations existantes.</p>
+      <form id="import-form" class="mt-4 flex flex-wrap items-center gap-3">
+        <div id="drop-zone" class="w-full max-w-lg rounded-lg border-2 border-dashed border-slate-300 p-4 text-sm text-slate-600">
+          <p>Glissez le fichier CSV ici ou choisissez-le ci-dessous.</p>
+          <input id="csv-file" type="file" accept=".csv,text/csv" required class="mt-2 block w-full text-sm" />
+        </div>
+        <button id="import-button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Importer le CSV</button>
+      </form>
+      <p id="import-result" role="status" class="mt-3 text-sm text-slate-600"></p>
+    </section>
+
+    <section class="rounded-xl border border-slate-200 bg-white p-5">
+      <h2 class="font-semibold text-slate-800">Analyser les impressions</h2>
+      <p class="mt-1 text-sm text-slate-500">Le compteur « Exemplaires imprimés » reprend Print count du journal. Les opérations suspendues restent incluses si elles ont produit des exemplaires.</p>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+        <label class="text-xs font-medium text-slate-600">Imprimante<select id="printer-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Toutes</option></select></label>
+        <label class="text-xs font-medium text-slate-600">Utilisateur<select id="owner-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option></select></label>
+        <label class="text-xs font-medium text-slate-600">Type<select id="kind-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option><option value="Copy">Copie</option><option value="Print">Impression</option><option value="Scan">Scan</option></select></label>
+        <label class="text-xs font-medium text-slate-600">Couleur<select id="color-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Toutes</option></select></label>
+        <label class="text-xs font-medium text-slate-600">Recto verso<select id="duplex-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option></select></label>
+        <label class="text-xs font-medium text-slate-600">Statut<select id="status-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option><option value="Done">Terminé</option><option value="Suspend">Suspendu</option><option value="Error">Erreur</option></select></label>
+        <label class="text-xs font-medium text-slate-600">Du<input id="from-filter" type="date" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm" /></label>
+        <label class="text-xs font-medium text-slate-600">Au<input id="to-filter" type="date" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm" /></label>
+      </div>
+    </section>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 bg-white p-5"><p class="text-sm text-slate-500">Opérations</p><p id="jobs-total" class="mt-1 text-3xl font-bold text-slate-900">0</p></div>
+      <div class="rounded-xl border border-blue-200 bg-blue-50 p-5"><p class="text-sm text-blue-700">Exemplaires imprimés</p><p id="copies-total" class="mt-1 text-3xl font-bold text-blue-900">0</p></div>
+    </div>
+
+    <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold text-slate-800">Par utilisateur et type</h2></div>
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-slate-600"><tr><th class="p-3">Utilisateur</th><th class="p-3">Imprimante</th><th class="p-3">Type</th><th class="p-3">Couleur</th><th class="p-3">Recto verso</th><th class="p-3">Papier</th><th class="p-3">Statut</th><th class="p-3 text-right">Opérations</th><th class="p-3 text-right">Exemplaires</th></tr></thead><tbody id="summary-body" class="divide-y divide-slate-100"></tbody></table></div>
+      <p id="summary-empty" class="hidden p-5 text-sm text-slate-500">Aucune opération pour ces filtres.</p>
+    </section>
+
+    <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><h2 class="font-semibold text-slate-800">Journal des opérations</h2><div class="flex items-center gap-3 text-sm"><button id="previous-page" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40">Précédent</button><span id="page-label"></span><button id="next-page" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40">Suivant</button></div></div>
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-slate-600"><tr><th class="p-3">Date</th><th class="p-3">Utilisateur</th><th class="p-3">Imprimante</th><th class="p-3">Type</th><th class="p-3">Couleur</th><th class="p-3">Recto verso</th><th class="p-3">Papier</th><th class="p-3">Statut</th><th class="p-3 text-right">Exemplaires</th></tr></thead><tbody id="jobs-body" class="divide-y divide-slate-100"></tbody></table></div>
+    </section>
+  </div>`;
+
+const $ = id => document.getElementById(id);
+const number = value => Number(value || 0).toLocaleString('fr-FR');
+const kindLabel = { Copy: 'Copie', Print: 'Impression', Scan: 'Scan' };
+const statusLabel = { Done: 'Terminé', Suspend: 'Suspendu', Error: 'Erreur' };
+let page = 1;
+
+function addRow(body, values, numericColumns = 1) {
+  const tr = document.createElement('tr');
+  values.forEach((value, index) => {
+    const td = document.createElement('td');
+    td.className = 'p-3 text-slate-700' + (index >= values.length - numericColumns ? ' text-right' : '');
+    td.textContent = value ?? '—';
+    tr.appendChild(td);
+  });
+  body.appendChild(tr);
+}
+
+function query() {
+  const params = new URLSearchParams();
+  for (const [id, key] of [['printer-filter', 'printerId'], ['owner-filter', 'ownerName'], ['kind-filter', 'jobKind'], ['color-filter', 'color'], ['duplex-filter', 'duplex'], ['status-filter', 'status'], ['from-filter', 'from'], ['to-filter', 'to']]) {
+    if ($(id).value) params.set(key, $(id).value);
+  }
+  return params;
+}
+
+async function load() {
+  try {
+    const params = query();
+    const jobParams = new URLSearchParams(params);
+    jobParams.set('page', String(page));
+    const [summary, jobs] = await Promise.all([
+      api.get('/printer-logs/summary?' + params),
+      api.get('/printer-logs/jobs?' + jobParams)
+    ]);
+    $('jobs-total').textContent = number(summary.totals.jobs);
+    $('copies-total').textContent = number(summary.totals.printCount);
+    $('summary-body').replaceChildren();
+    summary.rows.sort((a, b) => b.printCount - a.printCount || a.ownerName.localeCompare(b.ownerName, 'fr'));
+    for (const row of summary.rows) addRow($('summary-body'), [row.ownerName, row.printerName, kindLabel[row.jobKind] || row.jobKind, row.color || '—', row.duplex || '—', row.paperSize || '—', statusLabel[row.status] || row.status, number(row.jobs), number(row.printCount)], 2);
+    $('summary-empty').classList.toggle('hidden', summary.rows.length > 0);
+    $('jobs-body').replaceChildren();
+    for (const row of jobs.rows) addRow($('jobs-body'), [row.startedAt.slice(0, 16).replace('T', ' '), row.ownerName || 'Utilisateur inconnu', row.printer.name, kindLabel[row.jobKind] || row.jobKind, row.color || '—', row.duplex || '—', row.paperSize || '—', statusLabel[row.status] || row.status, number(row.printCount)]);
+    $('page-label').textContent = `${jobs.total ? (page - 1) * jobs.pageSize + 1 : 0}–${Math.min(page * jobs.pageSize, jobs.total)} sur ${number(jobs.total)}`;
+    $('previous-page').disabled = page <= 1;
+    $('next-page').disabled = page * jobs.pageSize >= jobs.total;
+  } catch (error) { showToast(error.message, 'error'); }
+}
+
+async function loadFilters() {
+  const data = await api.get('/printer-logs/filters');
+  const printerValue = $('printer-filter').value;
+  const ownerValue = $('owner-filter').value;
+  const colorValue = $('color-filter').value;
+  const duplexValue = $('duplex-filter').value;
+  $('printer-filter').replaceChildren(new Option('Toutes', ''));
+  $('owner-filter').replaceChildren(new Option('Tous', ''));
+  $('color-filter').replaceChildren(new Option('Toutes', ''));
+  $('duplex-filter').replaceChildren(new Option('Tous', ''));
+  for (const item of data.printers) $('printer-filter').add(new Option(`${item.name} (${item.serial})`, item.id));
+  for (const name of data.owners) $('owner-filter').add(new Option(name, name));
+  for (const color of data.colors) $('color-filter').add(new Option(color, color));
+  for (const duplex of data.duplexes) $('duplex-filter').add(new Option(duplex, duplex));
+  $('printer-filter').value = printerValue;
+  $('owner-filter').value = ownerValue;
+  $('color-filter').value = colorValue;
+  $('duplex-filter').value = duplexValue;
+}
+
+for (const id of ['printer-filter', 'owner-filter', 'kind-filter', 'color-filter', 'duplex-filter', 'status-filter', 'from-filter', 'to-filter']) {
+  $(id).addEventListener('change', () => { page = 1; load(); });
+}
+for (const eventName of ['dragenter', 'dragover']) {
+  $('drop-zone').addEventListener(eventName, event => { event.preventDefault(); $('drop-zone').classList.add('border-blue-500', 'bg-blue-50'); });
+}
+for (const eventName of ['dragleave', 'drop']) {
+  $('drop-zone').addEventListener(eventName, event => { event.preventDefault(); $('drop-zone').classList.remove('border-blue-500', 'bg-blue-50'); });
+}
+$('drop-zone').addEventListener('drop', event => {
+  if (event.dataTransfer?.files?.length) $('csv-file').files = event.dataTransfer.files;
+});
+$('previous-page').addEventListener('click', () => { if (page > 1) { page--; load(); } });
+$('next-page').addEventListener('click', () => { page++; load(); });
+$('import-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const file = $('csv-file').files[0];
+  if (!file) return;
+  const data = new FormData();
+  data.append('file', file);
+  $('import-button').disabled = true;
+  $('import-result').textContent = 'Import en cours…';
+  try {
+    const result = await api.upload('/printer-logs/import', data);
+    $('import-result').textContent = `${result.printer.name} : ${number(result.imported)} nouvelles opérations, ${number(result.updated)} mises à jour, ${number(result.unchanged)} déjà présentes.`;
+    page = 1;
+    await loadFilters();
+    await load();
+  } catch (error) { $('import-result').textContent = error.message; }
+  finally { $('import-button').disabled = false; }
+});
+
+requireLogin().then(async user => {
+  renderNav('printer-logs');
+  $('import-section').classList.toggle('hidden', user.role !== 'ADMIN');
+  await loadFilters();
+  await load();
+}).catch(error => showToast(error.message, 'error'));
+</script>
+</body>
+</html>

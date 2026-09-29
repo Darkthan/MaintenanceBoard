@@ -133,6 +133,7 @@ app.use('/api/display', require('./routes/display'));
 app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/equipment', require('./routes/equipment'));
+app.use('/api/printer-logs', require('./routes/printerLogs'));
 app.use('/api/interventions', require('./routes/interventions'));
 app.use('/api/todos', require('./routes/todos'));
 app.use('/api/projects', require('./routes/projects'));

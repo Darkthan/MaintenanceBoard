@@ -10,6 +10,46 @@ datasource db {
   provider = "postgresql"
 }
 
+model Printer {
+  id        String       @id @default(uuid())
+  serial    String       @unique
+  name      String
+  model     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  jobs      PrinterJob[]
+
+  @@map("printers")
+}
+
+model PrinterJob {
+  id            String   @id @default(uuid())
+  printerId     String
+  jobId         String
+  jobKind       String
+  jobName       String?
+  ownerName     String?
+  startedAt     DateTime
+  endedAt       DateTime?
+  status        String
+  statusCode    String?
+  color         String?
+  duplex        String?
+  paperSize     String?
+  originalPages Int?
+  printPages    Int?
+  outputVolume  Int?
+  printCount    Int?
+  createdAt     DateTime @default(now())
+  printer       Printer  @relation(fields: [printerId], references: [id], onDelete: Cascade)
+
+  @@unique([printerId, jobId, startedAt])
+  @@index([startedAt])
+  @@index([ownerName])
+  @@index([printerId, startedAt])
+  @@map("printer_jobs")
+}
+
 enum Role {
   ADMIN
   TECH
