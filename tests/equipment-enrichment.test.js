@@ -123,6 +123,10 @@ describe('GET /api/equipment/:id (enriched)', () => {
   it('retourne 200 avec supplier et attachments', async () => {
     prisma.equipment.findUnique.mockResolvedValue({
       ...mockEquip,
+      networkInterfaces: [
+        { name: 'Ethernet', macAddress: 'AA:BB:CC:DD:EE:FF' },
+        { name: 'Wi-Fi', macAddress: '11:22:33:44:55:66' }
+      ],
       loanResources: [
         {
           lotNumber: 2,
@@ -134,6 +138,15 @@ describe('GET /api/equipment/:id (enriched)', () => {
     expect(res.status).toBe(200);
     expect(res.body.supplier).toBeDefined();
     expect(res.body.supplier.name).toBe('Dell France');
+    expect(prisma.equipment.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        networkInterfaces: expect.objectContaining({ select: { name: true, macAddress: true } })
+      })
+    }));
+    expect(res.body.networkInterfaces).toEqual([
+      { name: 'Ethernet', macAddress: 'AA:BB:CC:DD:EE:FF' },
+      { name: 'Wi-Fi', macAddress: '11:22:33:44:55:66' }
+    ]);
     expect(res.body.loanResources).toEqual([
       { id: 'loan-1', name: 'Valise PC', isActive: true, lotNumber: 2 }
     ]);

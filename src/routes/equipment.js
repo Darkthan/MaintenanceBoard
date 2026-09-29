@@ -249,6 +249,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
         include: {
           room: { select: { id: true, name: true, number: true, building: true } },
           supplierRef: { select: { id: true, name: true } },
+          networkInterfaces: { select: { name: true, macAddress: true }, orderBy: { name: 'asc' } },
           interventions: {
             orderBy: { createdAt: 'desc' },
             include: { tech: { select: { id: true, name: true } } }

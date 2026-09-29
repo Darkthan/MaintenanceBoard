@@ -1397,6 +1397,34 @@ function detailRichField(label, value) {
   return `<div class="sm:col-span-2"><dt class="text-slate-400 text-xs">${label}</dt><dd class="text-slate-800 mt-0.5">${html}</dd></div>`;
 }
 
+function parseEquipmentAgentInfo(value) {
+  if (!value) return {};
+  try {
+    const info = typeof value === 'string' ? JSON.parse(value) : value;
+    return info && typeof info === 'object' ? info : {};
+  } catch { return {}; }
+}
+
+function detailMacField(equipment, agentInfo) {
+  const interfaces = [
+    ...(Array.isArray(equipment.networkInterfaces) ? equipment.networkInterfaces : []),
+    ...(Array.isArray(agentInfo.networkInterfaces) ? agentInfo.networkInterfaces : []),
+    ...(Array.isArray(agentInfo.macs) ? agentInfo.macs.map(macAddress => ({ macAddress })) : [])
+  ];
+  const seen = new Set();
+  const addresses = interfaces.flatMap(item => {
+    const hex = String(item?.macAddress || '').replace(/[^0-9a-f]/gi, '').toUpperCase();
+    if (hex.length !== 12 || seen.has(hex)) return [];
+    seen.add(hex);
+    return [{ name: item.name, mac: hex.match(/.{2}/g).join(':') }];
+  });
+  if (!addresses.length && !/\b(pc|ordinateur)\b/i.test(equipment.type || '')) return '';
+  const value = addresses.length
+    ? addresses.map(({ name, mac }) => `<div>${name ? `<span class="text-slate-500">${escapeHtml(String(name))} : </span>` : ''}<span class="font-mono">${mac}</span></div>`).join('')
+    : '<span class="text-slate-400 font-normal">Non renseignée</span>';
+  return `<div class="sm:col-span-2"><dt class="text-slate-400 text-xs">Adresses MAC</dt><dd class="text-slate-800 font-medium mt-0.5 space-y-1">${value}</dd></div>`;
+}
+
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : null; }
 
 function timeAgoDetail(d) {
@@ -1427,6 +1455,7 @@ async function openEquipDetail(equipId) {
   try {
     const e = await api.get(`/equipment/${equipId}`);
     detailCurrentEquip = e;
+    const agentInfo = parseEquipmentAgentInfo(e.agentInfo);
 
     // Header
     document.getElementById('detail-name').textContent = e.name;
@@ -1455,6 +1484,7 @@ async function openEquipDetail(equipId) {
       detailField('Fin de garantie', warrantyDate ? `<span class="${warrantyExpired ? 'text-red-600' : warrantyDaysLeft <= 30 ? 'text-orange-600' : 'text-slate-800'}">${warrantyDate}${warrantyExpired ? ' <span class="text-xs">(expirée)</span>' : warrantyDaysLeft <= 30 ? ' <span class="text-xs">(expire bientôt)</span>' : ''}</span>` : null),
       detailField('Prix d\'achat', e.purchasePrice !== null && e.purchasePrice !== undefined ? `${e.purchasePrice.toFixed(2)} €` : null),
       detailField('Fournisseur', e.supplier ? e.supplier.name : null),
+      detailMacField(e, agentInfo),
       detailRichField('Description', e.description),
     ].filter(Boolean).join('');
 
@@ -1472,7 +1502,7 @@ async function openEquipDetail(equipId) {
     // Section agent
     const agentSection = document.getElementById('detail-agent-section');
     if (e.discoverySource === 'AGENT' && e.agentHostname) {
-      const info = e.agentInfo ? (typeof e.agentInfo === 'string' ? JSON.parse(e.agentInfo) : e.agentInfo) : {};
+      const info = agentInfo;
       const ips = Array.isArray(info.ips) ? info.ips.join(', ') : null;
       document.getElementById('detail-agent-fields').innerHTML = [
         detailField('Hostname', `<span class="font-mono">${e.agentHostname}</span>`),
