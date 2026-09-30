@@ -39,7 +39,7 @@ function filters(query) {
     where.jobKind = query.jobKind;
   }
   if (query.status) where.status = String(query.status);
-  if (query.color) where.color = String(query.color);
+  if (query.color) where.color = query.color === 'Black' ? { in: ['Black', 'Grayscale'] } : String(query.color);
   if (query.duplex) where.duplex = String(query.duplex);
   const from = dateBound(query.from);
   const to = dateBound(query.to, true);
@@ -59,7 +59,7 @@ function groupFields(value) {
 async function summary(where, by) {
   const [groups, printers] = await Promise.all([
     prisma.printerJob.groupBy({
-      by, where,
+      by: [...new Set([...by, 'duplex'])], where,
       _count: { _all: true },
       _sum: { printCount: true }
     }),
@@ -68,23 +68,37 @@ async function summary(where, by) {
       : Promise.resolve([])
   ]);
   const printerById = Object.fromEntries(printers.map(item => [item.id, item]));
-  const rows = groups.map(group => ({
-    ...Object.fromEntries(by.map(field => [field, group[field]])),
-    ...(by.includes('printerId') ? {
-      printerName: printerById[group.printerId]?.name || 'Imprimante inconnue',
-      printerSerial: printerById[group.printerId]?.serial || ''
-    } : {}),
-    jobs: group._count._all,
-    printCount: group._sum.printCount || 0
-  }));
-  rows.sort((a, b) => b.printCount - a.printCount ||
+  const combined = new Map();
+  for (const group of groups) {
+    const dimensions = Object.fromEntries(by.map(field => [field, field === 'color' ? countedColor(group.color) : group[field]]));
+    const key = JSON.stringify(by.map(field => dimensions[field]));
+    if (!combined.has(key)) combined.set(key, {
+      ...dimensions,
+      ...(by.includes('printerId') ? {
+        printerName: printerById[group.printerId]?.name || 'Imprimante inconnue',
+        printerSerial: printerById[group.printerId]?.serial || ''
+      } : {}),
+      jobs: 0, printCount: 0, simplexEquivalent: 0
+    });
+    const row = combined.get(key);
+    const count = group._sum.printCount || 0;
+    row.jobs += group._count._all;
+    row.printCount += count;
+    row.simplexEquivalent += simplexEquivalent(count, group.duplex);
+  }
+  const rows = [...combined.values()];
+  rows.sort((a, b) => b.simplexEquivalent - a.simplexEquivalent ||
     JSON.stringify(by.map(field => a[field])).localeCompare(JSON.stringify(by.map(field => b[field])), 'fr'));
   const totals = rows.reduce((total, row) => ({
     jobs: total.jobs + row.jobs,
-    printCount: total.printCount + row.printCount
-  }), { jobs: 0, printCount: 0 });
+    printCount: total.printCount + row.printCount,
+    simplexEquivalent: total.simplexEquivalent + row.simplexEquivalent
+  }), { jobs: 0, printCount: 0, simplexEquivalent: 0 });
   return { groupBy: by, totals, rows };
 }
+
+function countedColor(color) { return color === 'Grayscale' ? 'Black' : color; }
+function simplexEquivalent(count, duplex) { return count * (duplex === 'Duplex' ? 2 : 1); }
 
 function csvCell(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
@@ -167,7 +181,7 @@ router.get('/filters', async (_req, res, next) => {
       prisma.printerJob.groupBy({ by: ['color'], where: { color: { not: null } }, orderBy: { color: 'asc' } }),
       prisma.printerJob.groupBy({ by: ['duplex'], where: { duplex: { not: null } }, orderBy: { duplex: 'asc' } })
     ]);
-    res.json({ printers, owners: owners.map(row => row.ownerName).filter(Boolean), colors: colors.map(row => row.color).filter(Boolean), duplexes: duplexes.map(row => row.duplex).filter(Boolean) });
+    res.json({ printers, owners: owners.map(row => row.ownerName).filter(Boolean), colors: [...new Set(colors.map(row => countedColor(row.color)).filter(Boolean))].sort(), duplexes: duplexes.map(row => row.duplex).filter(Boolean) });
   } catch (error) { next(error); }
 });
 
@@ -177,9 +191,9 @@ router.get('/summary/export', async (req, res, next) => {
     const by = groupFields(req.query.groupBy);
     const report = await summary(where, by);
     startCsv(res, 'synthese-impressions.csv');
-    res.write(csvLine([...by.map(field => GROUP_FIELDS[field]), 'Opérations', 'Exemplaires imprimés']));
+    res.write(csvLine([...by.map(field => GROUP_FIELDS[field]), 'Opérations', 'Exemplaires imprimés', 'Équivalents simplex']));
     for (const row of report.rows) {
-      res.write(csvLine([...by.map(field => csvGroupValue(row, field)), row.jobs, row.printCount]));
+      res.write(csvLine([...by.map(field => csvGroupValue(row, field)), row.jobs, row.printCount, row.simplexEquivalent]));
     }
     res.end();
   } catch (error) { next(error); }
@@ -196,7 +210,7 @@ router.get('/copies/export', async (req, res, next) => {
     const where = filters(req.query);
     where.jobKind = 'Copy';
     startCsv(res, 'copies-riso.csv');
-    res.write(csvLine(['Date', 'Utilisateur', 'Imprimante', 'N° de série', 'ID opération', 'Nom du document', 'Statut', 'Couleur', 'Recto verso', 'Papier', 'Pages originales', 'Pages imprimées', 'Volume de sortie', 'Exemplaires imprimés']));
+    res.write(csvLine(['Date', 'Utilisateur', 'Imprimante', 'N° de série', 'ID opération', 'Nom du document', 'Statut', 'Couleur source', 'Couleur comptabilisée', 'Recto verso', 'Papier', 'Pages originales', 'Pages imprimées', 'Volume de sortie', 'Exemplaires imprimés', 'Équivalents simplex']));
     let cursor;
     for (;;) {
       const jobs = await prisma.printerJob.findMany({
@@ -211,8 +225,8 @@ router.get('/copies/export', async (req, res, next) => {
         const line = csvLine([
           job.startedAt.toISOString().slice(0, 19).replace('T', ' '), job.ownerName,
           job.printer.name, job.printer.serial, job.jobId, job.jobName, job.status,
-          job.color, job.duplex, job.paperSize, job.originalPages, job.printPages,
-          job.outputVolume, job.printCount
+          job.color, countedColor(job.color), job.duplex, job.paperSize, job.originalPages, job.printPages,
+          job.outputVolume, job.printCount, simplexEquivalent(job.printCount, job.duplex)
         ]);
         if (!res.write(line) && !res.destroyed) await waitForDrainOrClose(res);
         if (res.destroyed) return;
@@ -233,7 +247,9 @@ router.get('/jobs', async (req, res, next) => {
       prisma.printerJob.count({ where }),
       prisma.printerJob.findMany({ where, include: { printer: { select: { name: true, serial: true } } }, orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize })
     ]);
-    res.json({ total, page, pageSize, rows });
+    res.json({ total, page, pageSize, rows: rows.map(row => ({
+      ...row, countedColor: countedColor(row.color), simplexEquivalent: simplexEquivalent(row.printCount, row.duplex)
+    })) });
   } catch (error) { next(error); }
 });
 

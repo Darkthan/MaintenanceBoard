@@ -29,7 +29,7 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
 
     <section class="rounded-xl border border-slate-200 bg-white p-5">
       <h2 class="font-semibold text-slate-800">Analyser les impressions</h2>
-      <p class="mt-1 text-sm text-slate-500">Le compteur « Exemplaires imprimés » reprend Print count du journal. Les opérations suspendues restent incluses si elles ont produit des exemplaires.</p>
+      <p class="mt-1 text-sm text-slate-500">« Exemplaires imprimés » reprend Print count du journal. En équivalents simplex, chaque exemplaire Duplex compte pour deux ; Grayscale est regroupé avec Black. Les opérations suspendues restent incluses si elles ont produit des exemplaires.</p>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <label class="text-xs font-medium text-slate-600">Imprimante<select id="printer-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Toutes</option></select></label>
         <label class="text-xs font-medium text-slate-600">Utilisateur<select id="owner-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option></select></label>
@@ -42,9 +42,10 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
       </div>
     </section>
 
-    <div class="grid gap-4 sm:grid-cols-2">
+    <div class="grid gap-4 sm:grid-cols-3">
       <div class="rounded-xl border border-slate-200 bg-white p-5"><p class="text-sm text-slate-500">Opérations</p><p id="jobs-total" class="mt-1 text-3xl font-bold text-slate-900">0</p></div>
       <div class="rounded-xl border border-blue-200 bg-blue-50 p-5"><p class="text-sm text-blue-700">Exemplaires imprimés</p><p id="copies-total" class="mt-1 text-3xl font-bold text-blue-900">0</p></div>
+      <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-5"><p class="text-sm text-indigo-700">Équivalents simplex</p><p id="simplex-total" class="mt-1 text-3xl font-bold text-indigo-900">0</p></div>
     </div>
 
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -69,7 +70,7 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
 
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><h2 class="font-semibold text-slate-800">Journal des opérations</h2><div class="flex items-center gap-3 text-sm"><button id="previous-page" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40">Précédent</button><span id="page-label"></span><button id="next-page" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40">Suivant</button></div></div>
-      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-slate-600"><tr><th class="p-3">Date</th><th class="p-3">Utilisateur</th><th class="p-3">Imprimante</th><th class="p-3">Type</th><th class="p-3">Couleur</th><th class="p-3">Recto verso</th><th class="p-3">Papier</th><th class="p-3">Statut</th><th class="p-3 text-right">Exemplaires</th></tr></thead><tbody id="jobs-body" class="divide-y divide-slate-100"></tbody></table></div>
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-slate-600"><tr><th class="p-3">Date</th><th class="p-3">Utilisateur</th><th class="p-3">Imprimante</th><th class="p-3">Type</th><th class="p-3">Couleur source</th><th class="p-3">Couleur comptée</th><th class="p-3">Recto verso</th><th class="p-3">Papier</th><th class="p-3">Statut</th><th class="p-3 text-right">Exemplaires</th><th class="p-3 text-right">Équiv. simplex</th></tr></thead><tbody id="jobs-body" class="divide-y divide-slate-100"></tbody></table></div>
     </section>
   </div>`;
 
@@ -104,17 +105,17 @@ function groupValue(row, field) {
 
 function renderSummary(summary) {
   const header = document.createElement('tr');
-  for (const label of [...summary.groupBy.map(field => groupOptions.find(option => option[0] === field)[1]), 'Opérations', 'Exemplaires']) {
+  for (const label of [...summary.groupBy.map(field => groupOptions.find(option => option[0] === field)[1]), 'Opérations', 'Exemplaires', 'Équiv. simplex']) {
     const th = document.createElement('th');
-    th.className = 'p-3' + (['Opérations', 'Exemplaires'].includes(label) ? ' text-right' : '');
+    th.className = 'p-3' + (['Opérations', 'Exemplaires', 'Équiv. simplex'].includes(label) ? ' text-right' : '');
     th.textContent = label;
     header.appendChild(th);
   }
   $('summary-head').replaceChildren(header);
   $('summary-body').replaceChildren();
-  summary.rows.sort((a, b) => b.printCount - a.printCount);
+  summary.rows.sort((a, b) => b.simplexEquivalent - a.simplexEquivalent);
   for (const row of summary.rows) {
-    addRow($('summary-body'), [...summary.groupBy.map(field => groupValue(row, field)), number(row.jobs), number(row.printCount)], 2);
+    addRow($('summary-body'), [...summary.groupBy.map(field => groupValue(row, field)), number(row.jobs), number(row.printCount), number(row.simplexEquivalent)], 3);
   }
   $('summary-empty').classList.toggle('hidden', summary.rows.length > 0);
 }
@@ -151,10 +152,11 @@ async function load() {
     ]);
     $('jobs-total').textContent = number(summary.totals.jobs);
     $('copies-total').textContent = number(summary.totals.printCount);
+    $('simplex-total').textContent = number(summary.totals.simplexEquivalent);
     renderSummary(summary);
     $('export-copies').disabled = !['', 'Copy'].includes($('kind-filter').value);
     $('jobs-body').replaceChildren();
-    for (const row of jobs.rows) addRow($('jobs-body'), [row.startedAt.slice(0, 16).replace('T', ' '), row.ownerName || 'Utilisateur inconnu', row.printer.name, kindLabel[row.jobKind] || row.jobKind, row.color || '—', row.duplex || '—', row.paperSize || '—', statusLabel[row.status] || row.status, number(row.printCount)]);
+    for (const row of jobs.rows) addRow($('jobs-body'), [row.startedAt.slice(0, 16).replace('T', ' '), row.ownerName || 'Utilisateur inconnu', row.printer.name, kindLabel[row.jobKind] || row.jobKind, row.color || '—', row.countedColor || '—', row.duplex || '—', row.paperSize || '—', statusLabel[row.status] || row.status, number(row.printCount), number(row.simplexEquivalent)], 2);
     $('page-label').textContent = `${jobs.total ? (page - 1) * jobs.pageSize + 1 : 0}–${Math.min(page * jobs.pageSize, jobs.total)} sur ${number(jobs.total)}`;
     $('previous-page').disabled = page <= 1;
     $('next-page').disabled = page * jobs.pageSize >= jobs.total;
