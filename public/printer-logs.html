@@ -51,16 +51,17 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div class="border-b border-slate-200 px-5 py-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 class="font-semibold text-slate-800">Regroupement des opérations</h2><p class="mt-1 text-xs text-slate-500">Choisissez jusqu’à trois critères. La vue démarre sur les copies par utilisateur, couleur et imprimante.</p></div>
+          <div><h2 class="font-semibold text-slate-800">Regroupement des opérations</h2><p class="mt-1 text-xs text-slate-500">La vue démarre par utilisateur. Ajoutez ensuite les critères utiles, dans l’ordre souhaité.</p></div>
           <div class="flex flex-wrap gap-2">
             <button id="export-summary" type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Exporter le regroupement CSV</button>
             <button id="export-copies" type="button" class="rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800 hover:bg-blue-100 disabled:opacity-40">Exporter les copies CSV</button>
           </div>
         </div>
-        <div class="mt-4 grid gap-3 sm:grid-cols-3">
-          <label class="text-xs font-medium text-slate-600">1er critère<select id="group-first" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"></select></label>
-          <label class="text-xs font-medium text-slate-600">2e critère<select id="group-second" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"></select></label>
-          <label class="text-xs font-medium text-slate-600">3e critère<select id="group-third" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"></select></label>
+        <div id="group-controls" class="mt-4 flex flex-wrap gap-3"></div>
+        <button id="add-group" type="button" class="mt-3 rounded-lg border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50">+ Ajouter un critère</button>
+        <div class="mt-4 border-t border-slate-100 pt-3">
+          <p class="text-xs font-medium text-slate-600">Colonnes de la synthèse</p>
+          <div id="summary-columns" class="mt-2 flex flex-wrap gap-x-5 gap-y-2"></div>
         </div>
         <p class="mt-2 text-xs text-slate-500">L’export des copies contient chaque opération « Copie » correspondant aux filtres, même si le tableau regroupe aussi les impressions.</p>
       </div>
@@ -69,8 +70,8 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
     </section>
 
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><h2 class="font-semibold text-slate-800">Journal des opérations</h2><div class="flex items-center gap-3 text-sm"><button id="previous-page" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40">Précédent</button><span id="page-label"></span><button id="next-page" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40">Suivant</button></div></div>
-      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-slate-600"><tr><th class="p-3">Date</th><th class="p-3">Utilisateur</th><th class="p-3">Imprimante</th><th class="p-3">Type</th><th class="p-3">Couleur source</th><th class="p-3">Couleur comptée</th><th class="p-3">Recto verso</th><th class="p-3">Papier</th><th class="p-3">Statut</th><th class="p-3 text-right">Exemplaires</th><th class="p-3 text-right">Équiv. simplex</th></tr></thead><tbody id="jobs-body" class="divide-y divide-slate-100"></tbody></table></div>
+      <div class="border-b border-slate-200 px-5 py-4"><div class="flex flex-wrap items-center justify-between gap-3"><h2 class="font-semibold text-slate-800">Journal des opérations</h2><div class="flex items-center gap-3 text-sm"><button id="previous-page" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40">Précédent</button><span id="page-label"></span><button id="next-page" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40">Suivant</button></div></div><details class="mt-3 text-sm"><summary class="cursor-pointer font-medium text-blue-700">Choisir les colonnes du journal</summary><div id="job-columns" class="mt-3 flex flex-wrap gap-x-5 gap-y-2"></div></details></div>
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead id="jobs-head" class="bg-slate-50 text-slate-600"></thead><tbody id="jobs-body" class="divide-y divide-slate-100"></tbody></table></div>
     </section>
   </div>`;
 
@@ -82,18 +83,126 @@ const groupOptions = [
   ['ownerName', 'Utilisateur'], ['jobKind', 'Type'], ['printerId', 'Imprimante'],
   ['color', 'Couleur'], ['duplex', 'Recto verso'], ['paperSize', 'Papier'], ['status', 'Statut']
 ];
+const summaryColumnOptions = [
+  ['jobs', 'Opérations'], ['printCount', 'Exemplaires'], ['simplexEquivalent', 'Équiv. simplex']
+];
+const jobColumnOptions = [
+  ['date', 'Date', row => row.startedAt.slice(0, 16).replace('T', ' ')],
+  ['owner', 'Utilisateur', row => row.ownerName || 'Utilisateur inconnu'],
+  ['printer', 'Imprimante', row => row.printer.name],
+  ['kind', 'Type', row => kindLabel[row.jobKind] || row.jobKind],
+  ['sourceColor', 'Couleur source', row => row.color || '—'],
+  ['countedColor', 'Couleur comptée', row => row.countedColor || '—'],
+  ['duplex', 'Recto verso', row => row.duplex || '—'],
+  ['paper', 'Papier', row => row.paperSize || '—'],
+  ['status', 'Statut', row => statusLabel[row.status] || row.status],
+  ['printCount', 'Exemplaires', row => number(row.printCount)],
+  ['simplexEquivalent', 'Équiv. simplex', row => number(row.simplexEquivalent)]
+];
 let page = 1;
-
-for (const id of ['group-first', 'group-second', 'group-third']) {
-  if (id !== 'group-first') $(id).add(new Option('Aucun', ''));
-  for (const [value, label] of groupOptions) $(id).add(new Option(label, value));
-}
-$('group-first').value = 'ownerName';
-$('group-second').value = 'color';
-$('group-third').value = 'printerId';
+let groups = ['ownerName'];
+let currentJobs = [];
 
 function selectedGroups() {
-  return [...new Set(['group-first', 'group-second', 'group-third'].map(id => $(id).value).filter(Boolean))];
+  return groups;
+}
+
+function selectedSummaryColumns() {
+  return [...$('summary-columns').querySelectorAll('input:checked')].map(input => input.value);
+}
+
+function renderGroupControls() {
+  $('group-controls').replaceChildren();
+  groups.forEach((field, index) => {
+    const row = document.createElement('div');
+    row.className = 'flex items-end gap-2';
+    const label = document.createElement('label');
+    label.className = 'text-xs font-medium text-slate-600';
+    label.textContent = `Critère ${index + 1}`;
+    const select = document.createElement('select');
+    select.className = 'mt-1 block min-w-40 rounded-lg border border-slate-300 p-2 text-sm';
+    for (const [value, name] of groupOptions) {
+      if (value === field || !groups.includes(value)) select.add(new Option(name, value));
+    }
+    select.value = field;
+    select.addEventListener('change', () => { groups[index] = select.value; renderGroupControls(); load(); });
+    label.appendChild(select);
+    row.appendChild(label);
+    if (groups.length > 1) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50';
+      remove.textContent = 'Retirer';
+      remove.setAttribute('aria-label', `Retirer le critère ${index + 1}`);
+      remove.addEventListener('click', () => { groups.splice(index, 1); renderGroupControls(); load(); });
+      row.appendChild(remove);
+    }
+    $('group-controls').appendChild(row);
+  });
+  $('add-group').disabled = groups.length === groupOptions.length;
+  $('add-group').classList.toggle('opacity-40', $('add-group').disabled);
+}
+
+$('add-group').addEventListener('click', () => {
+  const next = groupOptions.find(([field]) => !groups.includes(field));
+  if (!next) return;
+  groups.push(next[0]);
+  renderGroupControls();
+  load();
+});
+renderGroupControls();
+
+for (const [field, label] of summaryColumnOptions) {
+  const wrapper = document.createElement('label');
+  wrapper.className = 'flex items-center gap-2 text-sm text-slate-700';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.value = field;
+  input.checked = true;
+  input.className = 'rounded border-slate-300';
+  input.addEventListener('change', () => {
+    if (!selectedSummaryColumns().length) { input.checked = true; return; }
+    if (currentSummary) renderSummary(currentSummary);
+  });
+  wrapper.append(input, label);
+  $('summary-columns').appendChild(wrapper);
+}
+let currentSummary;
+
+for (const [field, label] of jobColumnOptions) {
+  const wrapper = document.createElement('label');
+  wrapper.className = 'flex items-center gap-2 text-sm text-slate-700';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.value = field;
+  input.checked = true;
+  input.className = 'rounded border-slate-300';
+  input.addEventListener('change', () => {
+    if (!$('job-columns').querySelector('input:checked')) { input.checked = true; return; }
+    renderJobs();
+  });
+  wrapper.append(input, label);
+  $('job-columns').appendChild(wrapper);
+}
+
+function renderJobs() {
+  const selected = new Set([...$('job-columns').querySelectorAll('input:checked')].map(input => input.value));
+  const columns = jobColumnOptions.filter(([field]) => selected.has(field));
+  const header = document.createElement('tr');
+  for (const [field, label] of columns) {
+    const th = document.createElement('th');
+    th.className = 'p-3' + (['printCount', 'simplexEquivalent'].includes(field) ? ' text-right' : '');
+    th.textContent = label;
+    header.appendChild(th);
+  }
+  $('jobs-head').replaceChildren(header);
+  $('jobs-body').replaceChildren();
+  for (const row of currentJobs) addRow($('jobs-body'), columns.map(([, , value]) => value(row)), 0);
+  for (const row of $('jobs-body').rows) {
+    columns.forEach(([field], index) => {
+      if (['printCount', 'simplexEquivalent'].includes(field)) row.cells[index].classList.add('text-right');
+    });
+  }
 }
 
 function groupValue(row, field) {
@@ -104,10 +213,12 @@ function groupValue(row, field) {
 }
 
 function renderSummary(summary) {
+  currentSummary = summary;
+  const columns = selectedSummaryColumns();
   const header = document.createElement('tr');
-  for (const label of [...summary.groupBy.map(field => groupOptions.find(option => option[0] === field)[1]), 'Opérations', 'Exemplaires', 'Équiv. simplex']) {
+  for (const label of [...summary.groupBy.map(field => groupOptions.find(option => option[0] === field)[1]), ...columns.map(field => summaryColumnOptions.find(option => option[0] === field)[1])]) {
     const th = document.createElement('th');
-    th.className = 'p-3' + (['Opérations', 'Exemplaires', 'Équiv. simplex'].includes(label) ? ' text-right' : '');
+    th.className = 'p-3' + (summaryColumnOptions.some(option => option[1] === label) ? ' text-right' : '');
     th.textContent = label;
     header.appendChild(th);
   }
@@ -115,7 +226,7 @@ function renderSummary(summary) {
   $('summary-body').replaceChildren();
   summary.rows.sort((a, b) => b.simplexEquivalent - a.simplexEquivalent);
   for (const row of summary.rows) {
-    addRow($('summary-body'), [...summary.groupBy.map(field => groupValue(row, field)), number(row.jobs), number(row.printCount), number(row.simplexEquivalent)], 3);
+    addRow($('summary-body'), [...summary.groupBy.map(field => groupValue(row, field)), ...columns.map(field => number(row[field]))], columns.length);
   }
   $('summary-empty').classList.toggle('hidden', summary.rows.length > 0);
 }
@@ -155,8 +266,8 @@ async function load() {
     $('simplex-total').textContent = number(summary.totals.simplexEquivalent);
     renderSummary(summary);
     $('export-copies').disabled = !['', 'Copy'].includes($('kind-filter').value);
-    $('jobs-body').replaceChildren();
-    for (const row of jobs.rows) addRow($('jobs-body'), [row.startedAt.slice(0, 16).replace('T', ' '), row.ownerName || 'Utilisateur inconnu', row.printer.name, kindLabel[row.jobKind] || row.jobKind, row.color || '—', row.countedColor || '—', row.duplex || '—', row.paperSize || '—', statusLabel[row.status] || row.status, number(row.printCount), number(row.simplexEquivalent)], 2);
+    currentJobs = jobs.rows;
+    renderJobs();
     $('page-label').textContent = `${jobs.total ? (page - 1) * jobs.pageSize + 1 : 0}–${Math.min(page * jobs.pageSize, jobs.total)} sur ${number(jobs.total)}`;
     $('previous-page').disabled = page <= 1;
     $('next-page').disabled = page * jobs.pageSize >= jobs.total;
@@ -186,8 +297,6 @@ async function loadFilters() {
 for (const id of ['printer-filter', 'owner-filter', 'kind-filter', 'color-filter', 'duplex-filter', 'status-filter', 'from-filter', 'to-filter']) {
   $(id).addEventListener('change', () => { page = 1; load(); });
 }
-for (const id of ['group-first', 'group-second', 'group-third']) $(id).addEventListener('change', load);
-
 async function downloadCsv(path, filename) {
   const blob = await api.get(path);
   const url = URL.createObjectURL(blob);
@@ -203,6 +312,7 @@ async function downloadCsv(path, filename) {
 $('export-summary').addEventListener('click', () => {
   const params = query();
   params.set('groupBy', selectedGroups().join(','));
+  params.set('columns', selectedSummaryColumns().join(','));
   downloadCsv('/printer-logs/summary/export?' + params, 'synthese-impressions.csv')
     .catch(error => showToast(error.message, 'error'));
 });

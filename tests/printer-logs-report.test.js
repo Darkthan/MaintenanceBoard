@@ -49,6 +49,22 @@ test('exporte le même regroupement en CSV', async () => {
   expect(response.text).toContain(';12;12\r\n');
 });
 
+test('accepte plus de trois critères et exporte uniquement les colonnes sélectionnées', async () => {
+  const response = await request(app).get('/api/printer-logs/summary/export?groupBy=ownerName,color,printerId,duplex&columns=simplexEquivalent');
+  expect(response.status).toBe(200);
+  expect(prisma.printerJob.groupBy).toHaveBeenCalledWith(expect.objectContaining({
+    by: ['ownerName', 'color', 'printerId', 'duplex']
+  }));
+  expect(response.text).toContain('"Utilisateur";"Couleur";"Imprimante";"Recto verso";"Équivalents simplex"');
+  expect(response.text).not.toContain('"Exemplaires imprimés"');
+  expect(response.text).toContain('"Duplex";6\r\n');
+});
+
+test('refuse les colonnes de synthèse inconnues', async () => {
+  const response = await request(app).get('/api/printer-logs/summary/export?columns=ownerName');
+  expect(response.status).toBe(400);
+});
+
 test('compte Duplex deux fois et regroupe Grayscale avec Black', async () => {
   prisma.printerJob.groupBy.mockResolvedValueOnce([
     { ownerName: 'Alice', color: 'Black', duplex: 'Simplex', _count: { _all: 1 }, _sum: { printCount: 2 } },

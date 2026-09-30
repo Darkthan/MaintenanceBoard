@@ -16,6 +16,11 @@ const GROUP_FIELDS = {
   paperSize: 'Papier',
   status: 'Statut'
 };
+const SUMMARY_COLUMNS = {
+  jobs: 'Opérations',
+  printCount: 'Exemplaires imprimés',
+  simplexEquivalent: 'Équivalents simplex'
+};
 
 router.use(requireAuth, requireTechOrAdmin);
 
@@ -49,11 +54,21 @@ function filters(query) {
 
 function groupFields(value) {
   const fields = String(value || 'ownerName,jobKind,printerId').split(',').map(field => field.trim());
-  if (fields.length < 1 || fields.length > 3 || new Set(fields).size !== fields.length ||
+  if (fields.length < 1 || fields.length > Object.keys(GROUP_FIELDS).length || new Set(fields).size !== fields.length ||
       fields.some(field => !Object.hasOwn(GROUP_FIELDS, field))) {
     throw Object.assign(new Error('Regroupement invalide'), { status: 400 });
   }
   return fields;
+}
+
+function summaryColumns(value) {
+  if (value === undefined) return Object.keys(SUMMARY_COLUMNS);
+  const columns = String(value).split(',').map(column => column.trim());
+  if (!columns.length || new Set(columns).size !== columns.length ||
+      columns.some(column => !Object.hasOwn(SUMMARY_COLUMNS, column))) {
+    throw Object.assign(new Error('Colonnes de synthèse invalides'), { status: 400 });
+  }
+  return columns;
 }
 
 async function summary(where, by) {
@@ -189,11 +204,12 @@ router.get('/summary/export', async (req, res, next) => {
   try {
     const where = filters(req.query);
     const by = groupFields(req.query.groupBy);
+    const columns = summaryColumns(req.query.columns);
     const report = await summary(where, by);
     startCsv(res, 'synthese-impressions.csv');
-    res.write(csvLine([...by.map(field => GROUP_FIELDS[field]), 'Opérations', 'Exemplaires imprimés', 'Équivalents simplex']));
+    res.write(csvLine([...by.map(field => GROUP_FIELDS[field]), ...columns.map(column => SUMMARY_COLUMNS[column])]));
     for (const row of report.rows) {
-      res.write(csvLine([...by.map(field => csvGroupValue(row, field)), row.jobs, row.printCount, row.simplexEquivalent]));
+      res.write(csvLine([...by.map(field => csvGroupValue(row, field)), ...columns.map(column => row[column])]));
     }
     res.end();
   } catch (error) { next(error); }
