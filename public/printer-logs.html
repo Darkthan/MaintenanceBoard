@@ -16,15 +16,16 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
   <div class="space-y-5">
     <section id="import-section" class="hidden rounded-xl border border-slate-200 bg-white p-5">
       <h2 class="font-semibold text-slate-800">Importer un journal RISO</h2>
-      <p class="mt-1 text-sm text-slate-500">Déposez le CSV exporté par l’imprimante. Un nouveau dépôt du même fichier met à jour les opérations existantes.</p>
+      <p class="mt-1 text-sm text-slate-500">Déposez un ou plusieurs CSV exportés par les imprimantes. Chaque fichier est traité ; un nouveau dépôt met à jour les opérations existantes.</p>
       <form id="import-form" class="mt-4 flex flex-wrap items-center gap-3">
         <div id="drop-zone" class="w-full max-w-lg rounded-lg border-2 border-dashed border-slate-300 p-4 text-sm text-slate-600">
           <p>Glissez le fichier CSV ici ou choisissez-le ci-dessous.</p>
-          <input id="csv-file" type="file" accept=".csv,text/csv" required class="mt-2 block w-full text-sm" />
+          <input id="csv-file" type="file" accept=".csv,text/csv" multiple required class="mt-2 block w-full text-sm" />
         </div>
         <button id="import-button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Importer le CSV</button>
       </form>
       <p id="import-result" role="status" class="mt-3 text-sm text-slate-600"></p>
+      <ul id="import-details" class="mt-2 max-h-64 overflow-y-auto space-y-1 text-sm text-slate-600"></ul>
     </section>
 
     <section class="rounded-xl border border-slate-200 bg-white p-5">
@@ -333,26 +334,42 @@ for (const eventName of ['dragleave', 'drop']) {
   $('drop-zone').addEventListener(eventName, event => { event.preventDefault(); $('drop-zone').classList.remove('border-blue-500', 'bg-blue-50'); });
 }
 $('drop-zone').addEventListener('drop', event => {
-  if (event.dataTransfer?.files?.length) $('csv-file').files = event.dataTransfer.files;
+  if (!$('import-button').disabled && event.dataTransfer?.files?.length) $('csv-file').files = event.dataTransfer.files;
 });
 $('previous-page').addEventListener('click', () => { if (page > 1) { page--; load(); } });
 $('next-page').addEventListener('click', () => { page++; load(); });
 $('import-form').addEventListener('submit', async event => {
   event.preventDefault();
-  const file = $('csv-file').files[0];
-  if (!file) return;
-  const data = new FormData();
-  data.append('file', file);
+  if ($('import-button').disabled) return;
+  const files = [...$('csv-file').files];
+  if (!files.length) return;
   $('import-button').disabled = true;
-  $('import-result').textContent = 'Import en cours…';
+  $('csv-file').disabled = true;
+  $('import-details').replaceChildren();
+  const totals = { success: 0, imported: 0, updated: 0, unchanged: 0 };
   try {
-    const result = await api.upload('/printer-logs/import', data);
-    $('import-result').textContent = `${result.printer.name} : ${number(result.imported)} nouvelles opérations, ${number(result.updated)} mises à jour, ${number(result.unchanged)} déjà présentes.`;
+    for (const [index, file] of files.entries()) {
+      $('import-result').textContent = `Fichier ${index + 1}/${files.length} : ${file.name}…`;
+      const item = document.createElement('li');
+      try {
+        const data = new FormData();
+        data.append('file', file);
+        const result = await api.upload('/printer-logs/import', data);
+        totals.success++;
+        for (const key of ['imported', 'updated', 'unchanged']) totals[key] += result[key];
+        item.textContent = `${file.name} — ${result.printer.name} : ${number(result.imported)} nouvelles opérations, ${number(result.updated)} mises à jour, ${number(result.unchanged)} déjà présentes.`;
+      } catch (error) {
+        item.className = 'text-red-700';
+        item.textContent = `${file.name} — Échec : ${error.message}`;
+      }
+      $('import-details').appendChild(item);
+    }
+    $('import-result').textContent = `${totals.success}/${files.length} fichiers traités, ${files.length - totals.success} en échec. ${number(totals.imported)} nouvelles opérations, ${number(totals.updated)} mises à jour, ${number(totals.unchanged)} déjà présentes.`;
     page = 1;
     await loadFilters();
     await load();
-  } catch (error) { $('import-result').textContent = error.message; }
-  finally { $('import-button').disabled = false; }
+  } catch (error) { showToast(error.message, 'error'); }
+  finally { $('import-button').disabled = false; $('csv-file').disabled = false; }
 });
 
 requireLogin().then(async user => {
