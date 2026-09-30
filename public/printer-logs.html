@@ -29,7 +29,7 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
 
     <section class="rounded-xl border border-slate-200 bg-white p-5">
       <h2 class="font-semibold text-slate-800">Analyser les impressions</h2>
-      <p class="mt-1 text-sm text-slate-500">« Exemplaires imprimés » reprend Print count du journal. En équivalents simplex, chaque exemplaire Duplex compte pour deux ; Grayscale est regroupé avec Black. Les opérations suspendues restent incluses si elles ont produit des exemplaires.</p>
+      <p class="mt-1 text-sm text-slate-500">Les faces imprimées reprennent « Print count » du journal RISO : le recto verso y compte déjà deux faces. Grayscale est compté en noir et blanc. Les opérations suspendues restent incluses si elles ont imprimé des faces ; le mode Auto reste séparé.</p>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <label class="text-xs font-medium text-slate-600">Imprimante<select id="printer-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Toutes</option></select></label>
         <label class="text-xs font-medium text-slate-600">Utilisateur<select id="owner-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option></select></label>
@@ -42,10 +42,12 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
       </div>
     </section>
 
-    <div class="grid gap-4 sm:grid-cols-3">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
       <div class="rounded-xl border border-slate-200 bg-white p-5"><p class="text-sm text-slate-500">Opérations</p><p id="jobs-total" class="mt-1 text-3xl font-bold text-slate-900">0</p></div>
-      <div class="rounded-xl border border-blue-200 bg-blue-50 p-5"><p class="text-sm text-blue-700">Exemplaires imprimés</p><p id="copies-total" class="mt-1 text-3xl font-bold text-blue-900">0</p></div>
-      <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-5"><p class="text-sm text-indigo-700">Équivalents simplex</p><p id="simplex-total" class="mt-1 text-3xl font-bold text-indigo-900">0</p></div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5"><p class="text-sm text-slate-500">Noir et blanc</p><p id="black-total" class="mt-1 text-3xl font-bold text-slate-900">0</p></div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5"><p class="text-sm text-slate-500">Couleur</p><p id="color-total" class="mt-1 text-3xl font-bold text-slate-900">0</p></div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5"><p class="text-sm text-slate-500">Auto / autre</p><p id="other-total" class="mt-1 text-3xl font-bold text-slate-900">0</p></div>
+      <div class="rounded-xl border border-blue-200 bg-blue-50 p-5"><p class="text-sm text-blue-700">Total des faces imprimées</p><p id="copies-total" class="mt-1 text-3xl font-bold text-blue-900">0</p></div>
     </div>
 
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -81,10 +83,11 @@ const kindLabel = { Copy: 'Copie', Print: 'Impression', Scan: 'Scan' };
 const statusLabel = { Done: 'Terminé', Suspend: 'Suspendu', Error: 'Erreur' };
 const groupOptions = [
   ['ownerName', 'Utilisateur'], ['jobKind', 'Type'], ['printerId', 'Imprimante'],
-  ['color', 'Couleur'], ['duplex', 'Recto verso'], ['paperSize', 'Papier'], ['status', 'Statut']
+  ['color', 'Mode couleur'], ['duplex', 'Recto verso'], ['paperSize', 'Papier'], ['status', 'Statut']
 ];
 const summaryColumnOptions = [
-  ['jobs', 'Opérations'], ['printCount', 'Exemplaires'], ['simplexEquivalent', 'Équiv. simplex']
+  ['jobs', 'Opérations'], ['blackCount', 'Noir et blanc'], ['colorCount', 'Couleur'],
+  ['otherCount', 'Auto / autre'], ['printCount', 'Total faces']
 ];
 const jobColumnOptions = [
   ['date', 'Date', row => row.startedAt.slice(0, 16).replace('T', ' ')],
@@ -96,8 +99,7 @@ const jobColumnOptions = [
   ['duplex', 'Recto verso', row => row.duplex || '—'],
   ['paper', 'Papier', row => row.paperSize || '—'],
   ['status', 'Statut', row => statusLabel[row.status] || row.status],
-  ['printCount', 'Exemplaires', row => number(row.printCount)],
-  ['simplexEquivalent', 'Équiv. simplex', row => number(row.simplexEquivalent)]
+  ['printCount', 'Faces imprimées', row => number(row.printCount)]
 ];
 let page = 1;
 let groups = ['ownerName'];
@@ -191,7 +193,7 @@ function renderJobs() {
   const header = document.createElement('tr');
   for (const [field, label] of columns) {
     const th = document.createElement('th');
-    th.className = 'p-3' + (['printCount', 'simplexEquivalent'].includes(field) ? ' text-right' : '');
+    th.className = 'p-3' + (field === 'printCount' ? ' text-right' : '');
     th.textContent = label;
     header.appendChild(th);
   }
@@ -200,7 +202,7 @@ function renderJobs() {
   for (const row of currentJobs) addRow($('jobs-body'), columns.map(([, , value]) => value(row)), 0);
   for (const row of $('jobs-body').rows) {
     columns.forEach(([field], index) => {
-      if (['printCount', 'simplexEquivalent'].includes(field)) row.cells[index].classList.add('text-right');
+      if (field === 'printCount') row.cells[index].classList.add('text-right');
     });
   }
 }
@@ -224,7 +226,7 @@ function renderSummary(summary) {
   }
   $('summary-head').replaceChildren(header);
   $('summary-body').replaceChildren();
-  summary.rows.sort((a, b) => b.simplexEquivalent - a.simplexEquivalent);
+  summary.rows.sort((a, b) => b.printCount - a.printCount);
   for (const row of summary.rows) {
     addRow($('summary-body'), [...summary.groupBy.map(field => groupValue(row, field)), ...columns.map(field => number(row[field]))], columns.length);
   }
@@ -262,8 +264,10 @@ async function load() {
       api.get('/printer-logs/jobs?' + jobParams)
     ]);
     $('jobs-total').textContent = number(summary.totals.jobs);
+    $('black-total').textContent = number(summary.totals.blackCount);
+    $('color-total').textContent = number(summary.totals.colorCount);
+    $('other-total').textContent = number(summary.totals.otherCount);
     $('copies-total').textContent = number(summary.totals.printCount);
-    $('simplex-total').textContent = number(summary.totals.simplexEquivalent);
     renderSummary(summary);
     $('export-copies').disabled = !['', 'Copy'].includes($('kind-filter').value);
     currentJobs = jobs.rows;

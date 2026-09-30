@@ -32,10 +32,10 @@ test('regroupe les copies selon les dimensions choisies et conserve les totaux',
   const response = await request(app).get('/api/printer-logs/summary?jobKind=Copy&groupBy=ownerName,color,printerId');
   expect(response.status).toBe(200);
   expect(response.body.groupBy).toEqual(['ownerName', 'color', 'printerId']);
-  expect(response.body.totals).toEqual({ jobs: 3, printCount: 15, simplexEquivalent: 18 });
+  expect(response.body.totals).toEqual({ jobs: 3, blackCount: 12, colorCount: 3, otherCount: 0, printCount: 15 });
   expect(response.body.rows[0].printerName).toBe('RISO A');
   expect(prisma.printerJob.groupBy).toHaveBeenCalledWith(expect.objectContaining({
-    by: ['ownerName', 'color', 'printerId', 'duplex'], where: { jobKind: 'Copy' }
+    by: ['ownerName', 'color', 'printerId'], where: { jobKind: 'Copy' }
   }));
 });
 
@@ -45,19 +45,19 @@ test('exporte le même regroupement en CSV', async () => {
   expect(response.headers['content-type']).toContain('text/csv');
   expect(response.text).toContain('"Utilisateur";');
   expect(response.text).toContain('RISO A (123)');
-  expect(response.text).toContain('"Équivalents simplex"');
-  expect(response.text).toContain(';12;12\r\n');
+  expect(response.text).toContain('"Noir et blanc";"Couleur";"Auto / autre";"Faces imprimées"');
+  expect(response.text).toContain(';2;12;0;0;12\r\n');
 });
 
 test('accepte plus de trois critères et exporte uniquement les colonnes sélectionnées', async () => {
-  const response = await request(app).get('/api/printer-logs/summary/export?groupBy=ownerName,color,printerId,duplex&columns=simplexEquivalent');
+  const response = await request(app).get('/api/printer-logs/summary/export?groupBy=ownerName,color,printerId,duplex&columns=blackCount,colorCount');
   expect(response.status).toBe(200);
   expect(prisma.printerJob.groupBy).toHaveBeenCalledWith(expect.objectContaining({
     by: ['ownerName', 'color', 'printerId', 'duplex']
   }));
-  expect(response.text).toContain('"Utilisateur";"Couleur";"Imprimante";"Recto verso";"Équivalents simplex"');
-  expect(response.text).not.toContain('"Exemplaires imprimés"');
-  expect(response.text).toContain('"Duplex";6\r\n');
+  expect(response.text).toContain('"Utilisateur";"Mode couleur";"Imprimante";"Recto verso";"Noir et blanc";"Couleur"');
+  expect(response.text).not.toContain('"Faces imprimées"');
+  expect(response.text).toContain('"Duplex";0;3\r\n');
 });
 
 test('refuse les colonnes de synthèse inconnues', async () => {
@@ -65,18 +65,30 @@ test('refuse les colonnes de synthèse inconnues', async () => {
   expect(response.status).toBe(400);
 });
 
-test('compte Duplex deux fois et regroupe Grayscale avec Black', async () => {
+test('compte chaque face Duplex une seule fois et regroupe Grayscale avec Black', async () => {
   prisma.printerJob.groupBy.mockResolvedValueOnce([
     { ownerName: 'Alice', color: 'Black', duplex: 'Simplex', _count: { _all: 1 }, _sum: { printCount: 2 } },
     { ownerName: 'Alice', color: 'Grayscale', duplex: 'Duplex', _count: { _all: 1 }, _sum: { printCount: 3 } }
   ]);
   const response = await request(app).get('/api/printer-logs/summary?color=Black&groupBy=ownerName,color');
   expect(response.status).toBe(200);
-  expect(response.body.rows).toEqual([{ ownerName: 'Alice', color: 'Black', jobs: 2, printCount: 5, simplexEquivalent: 8 }]);
-  expect(response.body.totals).toEqual({ jobs: 2, printCount: 5, simplexEquivalent: 8 });
+  expect(response.body.rows).toEqual([{ ownerName: 'Alice', color: 'Black', jobs: 2, blackCount: 5, colorCount: 0, otherCount: 0, printCount: 5 }]);
+  expect(response.body.totals).toEqual({ jobs: 2, blackCount: 5, colorCount: 0, otherCount: 0, printCount: 5 });
   expect(prisma.printerJob.groupBy).toHaveBeenCalledWith(expect.objectContaining({
-    by: ['ownerName', 'color', 'duplex'], where: { color: { in: ['Black', 'Grayscale'] } }
+    by: ['ownerName', 'color'], where: { color: { in: ['Black', 'Grayscale'] } }
   }));
+});
+
+test('sépare les faces noir et blanc, couleur et Auto par utilisateur', async () => {
+  prisma.printerJob.groupBy.mockResolvedValueOnce([
+    { ownerName: 'Alice', color: 'Black', _count: { _all: 1 }, _sum: { printCount: 10 } },
+    { ownerName: 'Alice', color: 'Full color', _count: { _all: 1 }, _sum: { printCount: 4 } },
+    { ownerName: 'Alice', color: 'Auto', _count: { _all: 1 }, _sum: { printCount: 2 } }
+  ]);
+  const response = await request(app).get('/api/printer-logs/summary?groupBy=ownerName');
+  expect(response.status).toBe(200);
+  expect(response.body.rows).toEqual([{ ownerName: 'Alice', jobs: 3, blackCount: 10, colorCount: 4, otherCount: 2, printCount: 16 }]);
+  expect(prisma.printerJob.groupBy).toHaveBeenCalledWith(expect.objectContaining({ by: ['ownerName', 'color'] }));
 });
 
 test('propose une seule couleur Black pour Black et Grayscale', async () => {
@@ -103,13 +115,13 @@ test('exporte les lignes Copie filtrées et neutralise les formules CSV', async 
   expect(response.text).toContain("'=1+1");
   expect(response.text).toContain("'=HYPERLINK");
   expect(response.text).toContain('"Grayscale";"Black";"Duplex"');
-  expect(response.text).toContain(';2;4\r\n');
+  expect(response.text).toContain(';2\r\n');
   expect(prisma.printerJob.findMany).toHaveBeenCalledWith(expect.objectContaining({
     where: { printerId: 'printer-1', jobKind: 'Copy' }
   }));
 });
 
-test('expose les compteurs calculés dans le journal sans modifier la source', async () => {
+test('expose la couleur comptabilisée et le compteur source dans le journal', async () => {
   prisma.printerJob.count.mockResolvedValueOnce(1);
   prisma.printerJob.findMany.mockResolvedValueOnce([{
     id: 'row-1', color: 'Grayscale', duplex: 'Duplex', printCount: 3,
@@ -117,7 +129,7 @@ test('expose les compteurs calculés dans le journal sans modifier la source', a
   }]);
   const response = await request(app).get('/api/printer-logs/jobs?color=Black');
   expect(response.status).toBe(200);
-  expect(response.body.rows[0]).toMatchObject({ color: 'Grayscale', countedColor: 'Black', printCount: 3, simplexEquivalent: 6 });
+  expect(response.body.rows[0]).toMatchObject({ color: 'Grayscale', countedColor: 'Black', printCount: 3 });
   expect(prisma.printerJob.findMany).toHaveBeenCalledWith(expect.objectContaining({
     where: { color: { in: ['Black', 'Grayscale'] } }
   }));
