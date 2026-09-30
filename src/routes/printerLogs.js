@@ -7,6 +7,15 @@ const { parsePrinterLog } = require('../services/printerLogService');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const GROUP_FIELDS = {
+  ownerName: 'Utilisateur',
+  jobKind: 'Type',
+  printerId: 'Imprimante',
+  color: 'Couleur',
+  duplex: 'Recto verso',
+  paperSize: 'Papier',
+  status: 'Statut'
+};
 
 router.use(requireAuth, requireTechOrAdmin);
 
@@ -36,6 +45,81 @@ function filters(query) {
   const to = dateBound(query.to, true);
   if (from || to) where.startedAt = { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) };
   return where;
+}
+
+function groupFields(value) {
+  const fields = String(value || 'ownerName,jobKind,printerId').split(',').map(field => field.trim());
+  if (fields.length < 1 || fields.length > 3 || new Set(fields).size !== fields.length ||
+      fields.some(field => !Object.hasOwn(GROUP_FIELDS, field))) {
+    throw Object.assign(new Error('Regroupement invalide'), { status: 400 });
+  }
+  return fields;
+}
+
+async function summary(where, by) {
+  const [groups, printers] = await Promise.all([
+    prisma.printerJob.groupBy({
+      by, where,
+      _count: { _all: true },
+      _sum: { printCount: true }
+    }),
+    by.includes('printerId')
+      ? prisma.printer.findMany({ select: { id: true, name: true, serial: true } })
+      : Promise.resolve([])
+  ]);
+  const printerById = Object.fromEntries(printers.map(item => [item.id, item]));
+  const rows = groups.map(group => ({
+    ...Object.fromEntries(by.map(field => [field, group[field]])),
+    ...(by.includes('printerId') ? {
+      printerName: printerById[group.printerId]?.name || 'Imprimante inconnue',
+      printerSerial: printerById[group.printerId]?.serial || ''
+    } : {}),
+    jobs: group._count._all,
+    printCount: group._sum.printCount || 0
+  }));
+  rows.sort((a, b) => b.printCount - a.printCount ||
+    JSON.stringify(by.map(field => a[field])).localeCompare(JSON.stringify(by.map(field => b[field])), 'fr'));
+  const totals = rows.reduce((total, row) => ({
+    jobs: total.jobs + row.jobs,
+    printCount: total.printCount + row.printCount
+  }), { jobs: 0, printCount: 0 });
+  return { groupBy: by, totals, rows };
+}
+
+function csvCell(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  const text = String(value ?? '');
+  // Empêcher qu'un nom d'utilisateur ou de document devienne une formule Excel.
+  const safe = /^[\s]*[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function csvLine(values) { return values.map(csvCell).join(';') + '\r\n'; }
+
+function csvGroupValue(row, field) {
+  if (field === 'printerId') return `${row.printerName} (${row.printerSerial})`;
+  if (field === 'ownerName') return row.ownerName || 'Utilisateur inconnu';
+  if (field === 'jobKind') return { Copy: 'Copie', Print: 'Impression', Scan: 'Scan' }[row.jobKind] || row.jobKind;
+  if (field === 'status') return { Done: 'Terminé', Suspend: 'Suspendu', Error: 'Erreur' }[row.status] || row.status;
+  return row[field] || '—';
+}
+
+function startCsv(res, filename) {
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.write('\uFEFF');
+}
+
+function waitForDrainOrClose(res) {
+  return new Promise(resolve => {
+    const finish = () => {
+      res.off('drain', finish);
+      res.off('close', finish);
+      resolve();
+    };
+    res.once('drain', finish);
+    res.once('close', finish);
+  });
 }
 
 router.post('/import', requireAdmin, upload.single('file'), async (req, res, next) => {
@@ -87,33 +171,57 @@ router.get('/filters', async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/summary', async (req, res, next) => {
+router.get('/summary/export', async (req, res, next) => {
   try {
     const where = filters(req.query);
-    const [groups, printers] = await Promise.all([
-      prisma.printerJob.groupBy({
-        by: ['printerId', 'ownerName', 'jobKind', 'color', 'duplex', 'paperSize', 'status'],
-        where,
-        _count: { _all: true },
-        _sum: { printCount: true, outputVolume: true }
-      }),
-      prisma.printer.findMany({ select: { id: true, name: true, serial: true } })
-    ]);
-    const printerById = Object.fromEntries(printers.map(item => [item.id, item]));
-    const rows = groups.map(group => ({
-      printerId: group.printerId,
-      printerName: printerById[group.printerId]?.name || 'Imprimante inconnue',
-      printerSerial: printerById[group.printerId]?.serial || '',
-      ownerName: group.ownerName || 'Utilisateur inconnu',
-      jobKind: group.jobKind, color: group.color, duplex: group.duplex, paperSize: group.paperSize, status: group.status,
-      jobs: group._count._all, printCount: group._sum.printCount || 0,
-      outputVolume: group._sum.outputVolume || 0
-    }));
-    res.json({
-      totals: rows.reduce((total, row) => ({ jobs: total.jobs + row.jobs, printCount: total.printCount + row.printCount }), { jobs: 0, printCount: 0 }),
-      rows
-    });
+    const by = groupFields(req.query.groupBy);
+    const report = await summary(where, by);
+    startCsv(res, 'synthese-impressions.csv');
+    res.write(csvLine([...by.map(field => GROUP_FIELDS[field]), 'Opérations', 'Exemplaires imprimés']));
+    for (const row of report.rows) {
+      res.write(csvLine([...by.map(field => csvGroupValue(row, field)), row.jobs, row.printCount]));
+    }
+    res.end();
   } catch (error) { next(error); }
+});
+
+router.get('/summary', async (req, res, next) => {
+  try {
+    res.json(await summary(filters(req.query), groupFields(req.query.groupBy)));
+  } catch (error) { next(error); }
+});
+
+router.get('/copies/export', async (req, res, next) => {
+  try {
+    const where = filters(req.query);
+    where.jobKind = 'Copy';
+    startCsv(res, 'copies-riso.csv');
+    res.write(csvLine(['Date', 'Utilisateur', 'Imprimante', 'N° de série', 'ID opération', 'Nom du document', 'Statut', 'Couleur', 'Recto verso', 'Papier', 'Pages originales', 'Pages imprimées', 'Volume de sortie', 'Exemplaires imprimés']));
+    let cursor;
+    for (;;) {
+      const jobs = await prisma.printerJob.findMany({
+        where,
+        include: { printer: { select: { name: true, serial: true } } },
+        orderBy: { id: 'asc' },
+        take: 500,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+      });
+      if (!jobs.length) break;
+      for (const job of jobs) {
+        const line = csvLine([
+          job.startedAt.toISOString().slice(0, 19).replace('T', ' '), job.ownerName,
+          job.printer.name, job.printer.serial, job.jobId, job.jobName, job.status,
+          job.color, job.duplex, job.paperSize, job.originalPages, job.printPages,
+          job.outputVolume, job.printCount
+        ]);
+        if (!res.write(line) && !res.destroyed) await waitForDrainOrClose(res);
+        if (res.destroyed) return;
+      }
+      cursor = jobs.at(-1).id;
+      if (jobs.length < 500) break;
+    }
+    res.end();
+  } catch (error) { if (res.headersSent) res.destroy(error); else next(error); }
 });
 
 router.get('/jobs', async (req, res, next) => {
