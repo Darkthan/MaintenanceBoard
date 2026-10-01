@@ -84,11 +84,29 @@ router.patch('/:id',
   }
 );
 
-// DELETE /api/users/:id - Désactiver (admin) - on ne supprime pas vraiment
+// Sans permanent=true, conserver la désactivation pour les anciens clients.
 router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
+    const permanent = req.query.permanent === 'true';
     if (req.params.id === req.user.id) {
-      return res.status(400).json({ error: 'Vous ne pouvez pas vous désactiver vous-même' });
+      return res.status(400).json({ error: permanent ? 'Vous ne pouvez pas supprimer votre propre compte' : 'Vous ne pouvez pas vous désactiver vous-même' });
+    }
+    if (permanent) {
+      await prisma.$transaction(async tx => {
+        const user = await tx.user.findUnique({
+          where: { id: req.params.id },
+          select: { id: true, _count: { select: {
+            interventions: true, orders: true, orderAttachments: true, signatureRequests: true,
+            stockMovements: true, createdLoanLinks: true, sentInternalMessages: true, projects: true
+          } } }
+        });
+        if (!user) throw Object.assign(new Error('Utilisateur introuvable'), { status: 404 });
+        if (Object.values(user._count).some(count => count > 0)) {
+          throw Object.assign(new Error('Ce compte possède un historique lié (interventions, commandes, messages ou autres activités). Désactivez-le pour conserver cet historique.'), { status: 409 });
+        }
+        await tx.user.delete({ where: { id: user.id } });
+      }, { isolationLevel: 'Serializable' });
+      return res.json({ message: 'Compte supprimé définitivement' });
     }
     await prisma.user.update({
       where: { id: req.params.id },
@@ -97,6 +115,9 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {
     res.json({ message: 'Utilisateur désactivé' });
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Utilisateur introuvable' });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    if (err.code === 'P2003') return res.status(409).json({ error: 'Ce compte est encore lié à des données. Désactivez-le ou retirez ses associations avant de le supprimer.' });
+    if (err.code === 'P2034') return res.status(409).json({ error: 'Le compte a été modifié pendant la suppression. Réessayez.' });
     next(err);
   }
 });

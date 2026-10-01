@@ -1411,6 +1411,7 @@
         <p id="e-self-warn" class="hidden mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
           Vous ne pouvez pas modifier votre propre statut.
         </p>
+        <button id="btn-delete-user" type="button" onclick="deleteUser()" class="mt-4 px-4 py-2 text-sm font-medium rounded-lg border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-40">Supprimer le compte</button>
       </div>
     </div>
 
@@ -2025,6 +2026,7 @@ function openPanel(uid) {
   const btnToggle = document.getElementById('btn-toggle');
   document.getElementById('e-self-warn').classList.toggle('hidden', !isSelf);
   btnToggle.disabled = isSelf;
+  document.getElementById('btn-delete-user').disabled = isSelf;
 
   if (currentUser.isActive) {
     document.getElementById('e-status-text').textContent = 'Le compte est actif.';
@@ -2098,6 +2100,24 @@ async function toggleActive() {
   closePanel();
   users = [];
   loadUsers();
+}
+
+async function deleteUser() {
+  if (!currentUser || currentUser.id === ME.id) return;
+  if (!confirm(`Supprimer définitivement le compte de ${currentUser.name} ? Ses données de connexion seront supprimées. Cette action est irréversible. Un compte ayant un historique d'activité doit être désactivé.`)) return;
+  const button = document.getElementById('btn-delete-user');
+  button.disabled = true;
+  try {
+    const res = await fetch(`/api/users/${currentUser.id}?permanent=true`, { method: 'DELETE', credentials: 'include' });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Suppression impossible');
+    showToast('Compte supprimé');
+    closePanel();
+    currentUser = null;
+    users = [];
+    await loadUsers();
+  } catch (error) { showToast(error.message, 'error'); }
+  finally { button.disabled = false; }
 }
 
 async function savePwd(e) {

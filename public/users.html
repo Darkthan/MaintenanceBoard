@@ -223,6 +223,7 @@
             <button id="btn-reset-pwd" onclick="resetPassword()" class="px-4 py-2 text-sm rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 transition">
               Réinitialiser le mot de passe
             </button>
+            <button id="btn-delete-user" type="button" onclick="deleteUser()" class="px-4 py-2 text-sm rounded-lg border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-40">Supprimer le compte</button>
           </div>
         </div>
       </div>
@@ -402,6 +403,7 @@
 
     const loggedUserId = user?.id;
     document.getElementById('btn-toggle-active').disabled = currentUser.id === loggedUserId;
+    document.getElementById('btn-delete-user').disabled = currentUser.id === loggedUserId;
     if (currentUser.id === loggedUserId) {
       btnToggle.classList.add('opacity-40', 'cursor-not-allowed');
     }
@@ -520,6 +522,23 @@
     showToast(newState ? 'Compte réactivé' : 'Compte désactivé');
     closeDetail();
     loadUsers();
+  }
+
+  async function deleteUser() {
+    if (!currentUser || currentUser.id === user?.id) return;
+    if (!confirm(`Supprimer définitivement le compte de ${currentUser.name} ? Ses données de connexion seront supprimées. Cette action est irréversible. Un compte ayant un historique d'activité doit être désactivé.`)) return;
+    const button = document.getElementById('btn-delete-user');
+    button.disabled = true;
+    try {
+      const res = await fetch(`${API}/users/${currentUser.id}?permanent=true`, { method: 'DELETE', credentials: 'include' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Suppression impossible');
+      showToast('Compte supprimé');
+      closeDetail();
+      currentUser = null;
+      await loadUsers();
+    } catch (error) { showToast(error.message, 'error'); }
+    finally { button.disabled = false; }
   }
 
   function roleLabel(role) {
