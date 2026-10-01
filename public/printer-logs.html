@@ -34,7 +34,7 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <label class="text-xs font-medium text-slate-600">Imprimante<select id="printer-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Toutes</option></select></label>
         <label class="text-xs font-medium text-slate-600">Utilisateur<select id="owner-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option></select></label>
-        <label class="text-xs font-medium text-slate-600">Type<select id="kind-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option><option value="Copy" selected>Copie</option><option value="Print">Impression</option><option value="Scan">Scan</option></select></label>
+        <label class="text-xs font-medium text-slate-600">Type<select id="kind-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option><option value="Copy">Copie</option><option value="Print">Impression</option><option value="Scan">Scan</option></select></label>
         <label class="text-xs font-medium text-slate-600">Couleur<select id="color-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Toutes</option></select></label>
         <label class="text-xs font-medium text-slate-600">Recto verso<select id="duplex-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option></select></label>
         <label class="text-xs font-medium text-slate-600">Statut<select id="status-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option><option value="Done">Terminé</option><option value="Suspend">Suspendu</option><option value="Error">Erreur</option></select></label>
@@ -373,6 +373,7 @@ $('import-form').addEventListener('submit', async event => {
 });
 
 requireLogin().then(async user => {
+  for (const filter of document.querySelectorAll('[id$="-filter"]')) filter.value = '';
   renderNav('printer-logs');
   $('import-section').classList.toggle('hidden', !['ADMIN', 'PRINT_MANAGER'].includes(user.role));
   await loadFilters();
