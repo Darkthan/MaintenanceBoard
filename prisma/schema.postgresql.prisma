@@ -53,6 +53,7 @@ model PrinterJob {
 enum Role {
   ADMIN
   TECH
+  PRINT_MANAGER
 }
 
 enum EquipStatus {

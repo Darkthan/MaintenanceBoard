@@ -374,7 +374,7 @@ $('import-form').addEventListener('submit', async event => {
 
 requireLogin().then(async user => {
   renderNav('printer-logs');
-  $('import-section').classList.toggle('hidden', user.role !== 'ADMIN');
+  $('import-section').classList.toggle('hidden', !['ADMIN', 'PRINT_MANAGER'].includes(user.role));
   await loadFilters();
   await load();
 }).catch(error => showToast(error.message, 'error'));

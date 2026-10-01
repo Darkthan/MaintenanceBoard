@@ -102,7 +102,8 @@ async function registerPasskey(name) {
 // ── Initialisation page login ─────────────────────────────────────────────────
 
 function initLoginPage() {
-  const safeNextUrl = () => {
+  const safeNextUrl = (user) => {
+    if (user?.role === 'PRINT_MANAGER') return '/printer-logs.html';
     const next = new URLSearchParams(window.location.search).get('next');
     if (!next) return '/index.html';
     try {
@@ -115,8 +116,8 @@ function initLoginPage() {
   };
 
   // Vérifier si déjà connecté via le serveur
-  apiFetch('/auth/me').then(() => {
-    window.location.href = safeNextUrl();
+  apiFetch('/auth/me').then(user => {
+    window.location.href = safeNextUrl(user);
   }).catch(() => {
     // Non connecté — afficher le formulaire normalement
   });
@@ -149,8 +150,8 @@ function initLoginPage() {
     try {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Connexion...';
-      await loginWithPassword(email, password, { rememberMe });
-      window.location.href = safeNextUrl();
+      const result = await loginWithPassword(email, password, { rememberMe });
+      window.location.href = safeNextUrl(result.user);
     } catch (err) {
       showError(err.message || 'Identifiants incorrects');
       submitBtn.disabled = false;
@@ -167,8 +168,8 @@ function initLoginPage() {
     passkeyBtn.textContent = 'Authentification...';
 
     try {
-      await startPasskeyLogin(email, { rememberMe });
-      window.location.href = safeNextUrl();
+      const result = await startPasskeyLogin(email, { rememberMe });
+      window.location.href = safeNextUrl(result.user);
     } catch (err) {
       showError(err.message || 'Authentification passkey échouée');
       passkeyBtn.disabled = false;

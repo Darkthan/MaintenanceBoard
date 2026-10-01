@@ -3,6 +3,12 @@ const config = require('../config');
 
 const prisma = require('../lib/prisma');
 
+function canAccessPrintingOnly(req) {
+  const path = (req.originalUrl || '').split('?')[0];
+  return /^\/api\/printer-logs(?:\/|$)/.test(path) ||
+    /^\/api\/auth\/(?:me|logout|change-password|webauthn\/register\/(?:begin|finish)|passkeys\/[^/]+)$/.test(path);
+}
+
 /**
  * Middleware de vérification du JWT
  */
@@ -32,6 +38,9 @@ async function requireAuth(req, res, next) {
     }
 
     req.user = user;
+    if (user.role === 'PRINT_MANAGER' && !canAccessPrintingOnly(req)) {
+      return res.status(403).json({ error: 'Ce compte donne accès uniquement à la gestion des impressions' });
+    }
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
@@ -61,7 +70,7 @@ async function optionalAuth(req, res, next) {
       select: { id: true, email: true, contactEmail: true, name: true, role: true, isActive: true }
     });
 
-    if (user && user.isActive) req.user = user;
+    if (user && user.isActive && user.role !== 'PRINT_MANAGER') req.user = user;
   } catch {
     // Ignorer les erreurs
   }

@@ -138,9 +138,12 @@ const api = {
 
 // Vérifier l'auth — appel serveur, résultat mis en cache en mémoire
 async function requireLogin() {
-  if (_currentUser) return _currentUser;
   try {
-    _currentUser = await apiFetch('/auth/me');
+    if (!_currentUser) _currentUser = await apiFetch('/auth/me');
+    if (_currentUser.role === 'PRINT_MANAGER' && window.location.pathname !== '/printer-logs.html') {
+      window.location.href = '/printer-logs.html';
+      await new Promise(() => {});
+    }
     return _currentUser;
   } catch {
     if (!window.location.pathname.includes('/login')) {

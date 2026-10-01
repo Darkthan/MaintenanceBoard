@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
-const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
+const { requireRole } = require('../middleware/roles');
 const { parsePrinterLog } = require('../services/printerLogService');
 
 const router = express.Router();
@@ -24,7 +24,7 @@ const SUMMARY_COLUMNS = {
   printCount: 'Faces imprimées'
 };
 
-router.use(requireAuth, requireTechOrAdmin);
+router.use(requireAuth, requireRole('ADMIN', 'TECH', 'PRINT_MANAGER'));
 
 function dateBound(value, end = false) {
   if (!value) return null;
@@ -159,7 +159,7 @@ function waitForDrainOrClose(res) {
   });
 }
 
-router.post('/import', requireAdmin, upload.single('file'), async (req, res, next) => {
+router.post('/import', requireRole('ADMIN', 'PRINT_MANAGER'), upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file || !/\.csv$/i.test(req.file.originalname)) {
       return res.status(400).json({ error: 'Déposez un fichier CSV RISO' });

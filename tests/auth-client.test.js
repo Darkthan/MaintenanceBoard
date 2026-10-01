@@ -56,6 +56,23 @@ function loadAuthClient({ apiFetch, webauthn } = {}) {
 }
 
 describe('client de connexion', () => {
+  it('redirige un gestionnaire des impressions après connexion malgré une autre destination', async () => {
+    const apiFetch = jest.fn()
+      .mockRejectedValueOnce(new Error('Non connecté'))
+      .mockResolvedValueOnce({ user: { id: 'print-1', role: 'PRINT_MANAGER' } });
+    const { context, form } = loadAuthClient({ apiFetch });
+    context.window.location.search = '?next=/equipment.html';
+    context.initLoginPage();
+    await form.dispatch('submit', { preventDefault: jest.fn() });
+    expect(context.window.location.href).toBe('/printer-logs.html');
+  });
+
+  it('redirige un gestionnaire déjà connecté vers les impressions', async () => {
+    const { context } = loadAuthClient({ apiFetch: jest.fn().mockResolvedValue({ role: 'PRINT_MANAGER' }) });
+    context.initLoginPage();
+    await Promise.resolve();
+    expect(context.window.location.href).toBe('/printer-logs.html');
+  });
   it('charge auth.js et branche les actions du formulaire et de la passkey', () => {
     const { context, form, passkey } = loadAuthClient();
 

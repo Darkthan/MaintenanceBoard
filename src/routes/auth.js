@@ -90,7 +90,7 @@ router.post('/register',
     body('email').isEmail().normalizeEmail(),
     body('name').trim().isLength({ min: 2, max: 100 }),
     body('password').isLength({ min: 8 }).matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/),
-    body('role').optional().isIn(['ADMIN', 'TECH'])
+    body('role').optional().isIn(['ADMIN', 'TECH', 'PRINT_MANAGER'])
   ],
   async (req, res, next) => {
     try {

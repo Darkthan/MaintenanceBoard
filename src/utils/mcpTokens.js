@@ -129,6 +129,7 @@ function isDirectMcpClientId(clientId) {
 }
 
 function getUserMcpScopes(user) {
+  if (user?.role === 'PRINT_MANAGER') return [];
   if (user?.role === 'ADMIN') return ALL_MCP_SCOPES;
   return TECH_MCP_SCOPES;
 }

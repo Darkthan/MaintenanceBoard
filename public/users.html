@@ -212,6 +212,11 @@
             <button id="btn-toggle-active" onclick="toggleActive()" class="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition">
               Désactiver
             </button>
+            <select id="role-choice" aria-label="Nouveau rôle" class="px-3 py-2 text-sm rounded-lg border border-slate-300">
+              <option value="TECH">Technicien</option>
+              <option value="ADMIN">Administrateur</option>
+              <option value="PRINT_MANAGER">Gestion des impressions</option>
+            </select>
             <button id="btn-change-role" onclick="changeRole()" class="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition">
               Changer le rôle
             </button>
@@ -260,6 +265,7 @@
           <select name="role" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="TECH">Technicien</option>
             <option value="ADMIN">Administrateur</option>
+            <option value="PRINT_MANAGER">Gestion des impressions</option>
           </select>
         </div>
         <div id="create-error" class="hidden text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg"></div>
@@ -341,9 +347,7 @@
             </div>
           </td>
           <td class="px-4 py-3">
-            ${u.role === 'ADMIN'
-              ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Admin</span>'
-              : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Tech</span>'}
+            ${roleBadge(u.role)}
           </td>
           <td class="px-4 py-3">
             ${u.isActive
@@ -376,9 +380,7 @@
 
     const badges = document.getElementById('det-badges');
     badges.innerHTML =
-      (currentUser.role === 'ADMIN'
-        ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Admin</span>'
-        : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Tech</span>') +
+      roleBadge(currentUser.role) +
       (currentUser.isActive
         ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Actif</span>'
         : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Inactif</span>');
@@ -386,7 +388,8 @@
     // Tab Info
     document.getElementById('info-name').textContent = currentUser.name;
     document.getElementById('info-email').textContent = currentUser.email;
-    document.getElementById('info-role').textContent = currentUser.role === 'ADMIN' ? 'Administrateur' : 'Technicien';
+    document.getElementById('info-role').textContent = roleLabel(currentUser.role);
+    document.getElementById('role-choice').value = currentUser.role;
     document.getElementById('info-created').textContent = formatDate(currentUser.createdAt);
     document.getElementById('info-passkeys').textContent = currentUser._count?.passkeys ?? 0;
     document.getElementById('info-interventions').textContent = currentUser._count?.interventions ?? 0;
@@ -519,10 +522,19 @@
     loadUsers();
   }
 
+  function roleLabel(role) {
+    return { ADMIN: 'Administrateur', TECH: 'Technicien', PRINT_MANAGER: 'Gestion des impressions' }[role] || 'Rôle inconnu';
+  }
+
+  function roleBadge(role) {
+    return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">${roleLabel(role)}</span>`;
+  }
+
   async function changeRole() {
     if (!currentUser) return;
-    const newRole = currentUser.role === 'ADMIN' ? 'TECH' : 'ADMIN';
-    if (!confirm(`Changer le rôle de ${currentUser.name} en ${newRole === 'ADMIN' ? 'Administrateur' : 'Technicien'} ?`)) return;
+    const newRole = document.getElementById('role-choice').value;
+    if (newRole === currentUser.role) return;
+    if (!confirm(`Changer le rôle de ${currentUser.name} en ${roleLabel(newRole)} ?`)) return;
 
     const res = await fetch(`${API}/users/${currentUser.id}`, {
       method: 'PATCH',

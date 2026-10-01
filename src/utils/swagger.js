@@ -35,7 +35,7 @@ const swaggerDocument = {
           id: { type: 'string', format: 'uuid' },
           email: { type: 'string', format: 'email' },
           name: { type: 'string' },
-          role: { type: 'string', enum: ['ADMIN', 'TECH'] },
+          role: { type: 'string', enum: ['ADMIN', 'TECH', 'PRINT_MANAGER'] },
           isActive: { type: 'boolean' },
           createdAt: { type: 'string', format: 'date-time' }
         }

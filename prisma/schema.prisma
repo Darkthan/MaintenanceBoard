@@ -19,7 +19,7 @@ model User {
   contactEmail  String?
   name          String
   passwordHash  String?
-  role          String   @default("TECH")   // ADMIN | TECH
+  role          String   @default("TECH")   // ADMIN | TECH | PRINT_MANAGER
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

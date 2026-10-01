@@ -5,6 +5,7 @@ jest.mock('../src/middleware/auth', () => ({
   requireAuth: (req, _res, next) => { req.user = { id: 'tech', role: 'TECH' }; next(); }
 }));
 jest.mock('../src/middleware/roles', () => ({
+  requireRole: () => (_req, _res, next) => next(),
   requireAdmin: (_req, _res, next) => next(),
   requireTechOrAdmin: (_req, _res, next) => next()
 }));

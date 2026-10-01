@@ -1455,7 +1455,7 @@ function syncStoredUser(user) {
   const roleEl = document.getElementById('user-role');
   const avatarEl = document.getElementById('user-avatar');
   if (nameEl) nameEl.textContent = user.name || 'Utilisateur';
-  if (roleEl) roleEl.textContent = user.role || '';
+  if (roleEl) roleEl.textContent = user.role === 'PRINT_MANAGER' ? 'Gestion des impressions' : user.role || '';
   if (avatarEl) avatarEl.textContent = user.name ? user.name[0].toUpperCase() : '?';
 }
 
@@ -1821,7 +1821,7 @@ function renderNav(activePage) {
   const user = _currentUser;
   if (!user) return;
 
-  const navItems = [
+  let navItems = [
     { href: '/index.html', label: 'Accueil', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', id: 'dashboard' },
     { href: '/rooms.html', label: 'Salles', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', id: 'rooms' },
     { href: '/equipment.html', label: 'Équipements', icon: EQUIPMENT_ICON_PATH, id: 'equipment', children: [
@@ -1844,6 +1844,7 @@ function renderNav(activePage) {
     ] : []),
   ];
 
+  if (user.role === 'PRINT_MANAGER') navItems = navItems.filter(item => item.id === 'printer-logs');
   const navEl = document.getElementById('main-nav');
   if (!navEl) return;
 
@@ -1883,7 +1884,7 @@ function renderNav(activePage) {
   const roleEl   = document.getElementById('user-role');
   const avatarEl = document.getElementById('user-avatar');
   if (nameEl)   nameEl.textContent   = user.name;
-  if (roleEl)   roleEl.textContent   = user.role;
+  if (roleEl)   roleEl.textContent   = user.role === 'PRINT_MANAGER' ? 'Gestion des impressions' : user.role;
   if (avatarEl) avatarEl.textContent = user.name ? user.name[0].toUpperCase() : '?';
 
   const accountTrigger = document.getElementById('account-settings-btn')
@@ -1932,16 +1933,17 @@ function renderNav(activePage) {
   renderMobileTabbar(navItems, activePage);
 
   // Badge notifications messagerie
-  refreshNavBadge();
-  if (!_navBadgeInterval) {
+  if (user.role !== 'PRINT_MANAGER') refreshNavBadge();
+  if (user.role !== 'PRINT_MANAGER' && !_navBadgeInterval) {
     _navBadgeInterval = setInterval(refreshNavBadge, 30000);
   }
 
-  initSpotlight();
+  if (user.role !== 'PRINT_MANAGER') initSpotlight();
 }
 
 function renderMobileTabbar(navItems, activePage) {
   const coreIds = ['dashboard', 'equipment', 'interventions', 'todos'];
+  if (_currentUser?.role === 'PRINT_MANAGER') coreIds.splice(0, coreIds.length, 'printer-logs');
   const coreTabs = coreIds
     .map(id => navItems.find(item => item.id === id))
     .filter(Boolean);
@@ -1960,7 +1962,7 @@ function renderMobileTabbar(navItems, activePage) {
     <div id="mobile-tabbar-overlay" class="hidden fixed inset-0 z-[35] bg-black/40"></div>
     <div id="mobile-tabbar-bar" class="fixed inset-x-0 bottom-0 z-[40] lg:hidden px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-2">
       <div class="rounded-[1.75rem] border border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10 backdrop-blur">
-        <div class="grid grid-cols-5 gap-1 px-2 py-2">
+        <div class="grid grid-cols-5 gap-1 px-2 py-2" style="grid-template-columns:repeat(${coreTabs.length + (overflowTabs.length ? 1 : 0)},minmax(0,1fr))">
           ${coreTabs.map(item => `
             <a href="${item.href}"
               class="flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium transition ${
@@ -1978,7 +1980,7 @@ function renderMobileTabbar(navItems, activePage) {
             </a>
           `).join('')}
           <button id="mobile-tabbar-more-btn" type="button"
-            class="flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium transition ${
+            class="${overflowTabs.length ? 'flex' : 'hidden'} flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium transition ${
               moreActive
                 ? 'bg-blue-600 text-white shadow'
                 : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'

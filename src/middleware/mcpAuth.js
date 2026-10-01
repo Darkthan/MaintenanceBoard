@@ -68,6 +68,7 @@ async function handleNativeToken(req, res, next, token) {
   });
   if (!record || !isMcpTokenUsable(record)) return invalidToken(res, 'Token MCP invalide, révoqué ou expiré');
   if (!record.createdBy?.isActive) return invalidToken(res, 'Compte propriétaire du token désactivé');
+  if (record.createdBy.role === 'PRINT_MANAGER') return invalidToken(res, 'Compte limité à la gestion des impressions');
 
   req.mcpToken = { id: record.id, label: record.label, scopes: parseScopes(record.scopes), createdBy: record.createdBy, authMethod: 'token' };
   prisma.mcpToken.update({ where: { id: record.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
@@ -96,6 +97,7 @@ async function handleMcpAccessJwt(req, res, next, payload) {
   });
   if (!record || !isMcpTokenUsable(record)) return invalidToken(res, 'Token MCP révoqué ou expiré');
   if (!record.createdBy?.isActive) return invalidToken(res, 'Compte propriétaire du token désactivé');
+  if (record.createdBy.role === 'PRINT_MANAGER') return invalidToken(res, 'Compte limité à la gestion des impressions');
 
   req.mcpToken = { id: record.id, label: record.label, scopes: parseScopes(record.scopes), createdBy: record.createdBy, authMethod: 'oauth2' };
   prisma.mcpToken.update({ where: { id: record.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
@@ -112,6 +114,7 @@ async function handleMcpUserAccessJwt(req, res, next, payload) {
       select: { id: true, name: true, email: true, contactEmail: true, role: true, isActive: true }
     });
     if (!user || !user.isActive) return invalidToken(res, 'Compte utilisateur désactivé');
+    if (user.role === 'PRINT_MANAGER') return invalidToken(res, 'Compte limité à la gestion des impressions');
 
     const scopes = filterScopesForUser(payload.scopes || [], user);
     if (!scopes.length) return invalidToken(res, 'Aucun scope MCP autorisé pour cet utilisateur');
@@ -134,6 +137,7 @@ async function handleMcpUserAccessJwt(req, res, next, payload) {
   ]);
   if (!mcpToken || !isMcpTokenUsable(mcpToken)) return invalidToken(res, 'Client MCP révoqué ou expiré');
   if (!user || !user.isActive) return invalidToken(res, 'Compte utilisateur désactivé');
+  if (user.role === 'PRINT_MANAGER') return invalidToken(res, 'Compte limité à la gestion des impressions');
 
   req.mcpToken = { id: mcpToken.id, label: mcpToken.label, scopes: payload.scopes || [], createdBy: user, authMethod: 'oauth2_code' };
   prisma.mcpToken.update({ where: { id: mcpToken.id }, data: { lastUsedAt: new Date() } }).catch(() => {});

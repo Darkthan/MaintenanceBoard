@@ -57,7 +57,7 @@ router.patch('/:id',
   requireAuth, requireAdmin,
   [
     body('name').optional().trim().isLength({ min: 2, max: 100 }),
-    body('role').optional().isIn(['ADMIN', 'TECH']),
+    body('role').optional().isIn(['ADMIN', 'TECH', 'PRINT_MANAGER']),
     body('isActive').optional().isBoolean()
   ],
   async (req, res, next) => {
