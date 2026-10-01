@@ -140,7 +140,7 @@ const api = {
 async function requireLogin() {
   try {
     if (!_currentUser) _currentUser = await apiFetch('/auth/me');
-    if (_currentUser.role === 'PRINT_MANAGER' && window.location.pathname !== '/printer-logs.html') {
+    if (_currentUser.role === 'PRINT_MANAGER' && !['/printer-logs.html', '/printer-import.html', '/printer-settings.html'].includes(window.location.pathname)) {
       window.location.href = '/printer-logs.html';
       await new Promise(() => {});
     }
