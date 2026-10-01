@@ -171,17 +171,39 @@ function waitForDrainOrClose(res) {
   });
 }
 
+router.patch('/printers/:id', requireRole('ADMIN', 'PRINT_MANAGER'), async (req, res, next) => {
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  if (!name || name.length > 200) return res.status(400).json({ error: 'Le nom doit contenir entre 1 et 200 caractères' });
+  try {
+    const printer = await prisma.printer.update({
+      where: { id: req.params.id },
+      data: { name, nameIsManual: true },
+      select: { id: true, name: true, serial: true }
+    });
+    res.json(printer);
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Imprimante introuvable' });
+    next(error);
+  }
+});
+
 router.post('/import', requireRole('ADMIN', 'PRINT_MANAGER'), upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file || !/\.csv$/i.test(req.file.originalname)) {
       return res.status(400).json({ error: 'Déposez un fichier CSV RISO' });
     }
     const parsed = await parsePrinterLog(req.file.buffer);
-    const printer = await prisma.printer.upsert({
+    const importedPrinter = await prisma.printer.upsert({
       where: { serial: parsed.printer.serial },
       create: parsed.printer,
-      update: { name: parsed.printer.name, model: parsed.printer.model }
+      update: { model: parsed.printer.model }
     });
+    // Le changement conditionnel protège aussi un renommage effectué pendant l'import.
+    await prisma.printer.updateMany({
+      where: { id: importedPrinter.id, nameIsManual: false },
+      data: { name: parsed.printer.name }
+    });
+    const printer = await prisma.printer.findUnique({ where: { id: importedPrinter.id } });
     const existing = await prisma.printerJob.findMany({
       where: { printerId: printer.id, jobId: { in: [...new Set(parsed.jobs.map(job => job.jobId))] } }
     });

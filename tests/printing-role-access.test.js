@@ -6,7 +6,7 @@ jest.mock('../src/config', () => ({ jwt: { secret: 'printing-role-test' } }));
 jest.mock('../src/lib/prisma', () => ({
   mcpToken: { findUnique: jest.fn(), update: jest.fn() },
   user: { findUnique: jest.fn(), update: jest.fn() },
-  printer: { upsert: jest.fn(), findMany: jest.fn() },
+  printer: { upsert: jest.fn(), findMany: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
   printerJob: { findMany: jest.fn(), groupBy: jest.fn() }
 }));
 jest.mock('../src/services/printerLogService', () => ({
@@ -35,6 +35,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   prisma.user.findUnique.mockResolvedValue({ id: 'manager', name: 'Manager', role: 'PRINT_MANAGER', isActive: true });
   prisma.printer.upsert.mockResolvedValue({ id: 'p1', name: 'C2', serial: '123' });
+  prisma.printer.findUnique.mockResolvedValue({ id: 'p1', name: 'C2', serial: '123' });
   prisma.printer.findMany.mockResolvedValue([]);
   prisma.printerJob.findMany.mockResolvedValue([]);
   prisma.printerJob.groupBy.mockResolvedValue([]);
@@ -74,6 +75,50 @@ test('le technicien conserve la consultation mais ne peut pas importer', async (
   prisma.user.findUnique.mockResolvedValue({ id: 'tech', role: 'TECH', isActive: true });
   expect((await request(app).get('/api/printer-logs/summary').set('Authorization', authorization)).status).toBe(200);
   expect((await request(app).post('/api/printer-logs/import').set('Authorization', authorization)).status).toBe(403);
+  expect((await request(app).patch('/api/printer-logs/printers/p1').set('Authorization', authorization).send({ name: 'École' })).status).toBe(403);
+  expect(prisma.printer.update).not.toHaveBeenCalled();
+});
+
+test.each(['ADMIN', 'PRINT_MANAGER'])('%s peut renommer une imprimante sans modifier son numéro de série', async role => {
+  prisma.user.findUnique.mockResolvedValue({ id: 'manager', role, isActive: true });
+  prisma.printer.update.mockResolvedValue({ id: 'p1', name: 'RISO École', serial: '123' });
+  const response = await request(app).patch('/api/printer-logs/printers/p1').set('Authorization', authorization)
+    .send({ name: '  RISO École  ', serial: 'autre' });
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({ id: 'p1', name: 'RISO École', serial: '123' });
+  expect(prisma.printer.update).toHaveBeenCalledWith({
+    where: { id: 'p1' }, data: { name: 'RISO École', nameIsManual: true },
+    select: { id: true, name: true, serial: true }
+  });
+});
+
+test.each(['', '   ', 'x'.repeat(201), 42, null])('refuse un nom invalide : %p', async name => {
+  const response = await request(app).patch('/api/printer-logs/printers/p1').set('Authorization', authorization).send({ name });
+  expect(response.status).toBe(400);
+  expect(prisma.printer.update).not.toHaveBeenCalled();
+});
+
+test('renvoyer 404 si l’imprimante à renommer a disparu', async () => {
+  prisma.printer.update.mockRejectedValueOnce({ code: 'P2025' });
+  const response = await request(app).patch('/api/printer-logs/printers/inconnue').set('Authorization', authorization).send({ name: 'École' });
+  expect(response.status).toBe(404);
+});
+
+test.each([false, true])('un import met à jour seulement les noms automatiques (manuel : %s)', async nameIsManual => {
+  const printer = { id: 'p1', name: 'RISO École', serial: '123', nameIsManual };
+  prisma.printer.upsert.mockImplementation(async ({ update }) => {
+    expect(update).not.toHaveProperty('name');
+    return printer;
+  });
+  prisma.printer.updateMany.mockImplementation(async ({ where, data }) => {
+    expect(where).toEqual({ id: 'p1', nameIsManual: false });
+    if (printer.nameIsManual === where.nameIsManual) printer.name = data.name;
+    return { count: nameIsManual ? 0 : 1 };
+  });
+  prisma.printer.findUnique.mockImplementation(async () => printer);
+  const response = await request(app).post('/api/printer-logs/import').set('Authorization', authorization).attach('file', Buffer.from('csv'), 'journal.csv');
+  expect(response.status).toBe(200);
+  expect(response.body.printer).toEqual({ id: 'p1', serial: '123', name: nameIsManual ? 'RISO École' : 'C2' });
 });
 
 test.each(['native', 'client', 'direct', 'code'])('bloque aussi un ancien accès MCP après changement de rôle : %s', async mode => {

@@ -1,0 +1,1 @@
+ALTER TABLE "printers" ADD COLUMN "nameIsManual" BOOLEAN NOT NULL DEFAULT false;
