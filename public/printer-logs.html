@@ -32,8 +32,8 @@ document.getElementById('layout-root').innerHTML = getLayoutTemplate('Impression
       <h2 class="font-semibold text-slate-800">Analyser les impressions</h2>
       <p class="mt-1 text-sm text-slate-500">Les faces imprimées reprennent « Print count » du journal RISO : le recto verso y compte déjà deux faces. Grayscale est compté en noir et blanc. Les opérations suspendues restent incluses si elles ont imprimé des faces ; le mode Auto reste séparé.</p>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-        <label class="text-xs font-medium text-slate-600">Imprimante<select id="printer-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Toutes</option></select></label>
-        <label class="text-xs font-medium text-slate-600">Utilisateur<select id="owner-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option></select></label>
+        <div class="text-xs font-medium text-slate-600"><span>Imprimantes</span><details id="printer-filter" class="relative mt-1"><summary id="printer-selection" class="cursor-pointer truncate rounded-lg border border-slate-300 bg-white p-2 text-sm">Toutes</summary><div class="absolute left-0 top-full z-20 mt-1 w-72 max-w-[80vw] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"><button id="clear-printers" type="button" class="mb-2 text-blue-700 hover:underline">Toutes les imprimantes</button><input id="printer-search" type="search" aria-label="Rechercher une imprimante" placeholder="Rechercher…" class="mb-2 w-full rounded border border-slate-300 p-2 text-sm" /><div id="printer-options" class="max-h-60 overflow-y-auto space-y-1"></div></div></details></div>
+        <div class="text-xs font-medium text-slate-600"><span>Utilisateurs</span><details id="owner-filter" class="relative mt-1"><summary id="owner-selection" class="cursor-pointer truncate rounded-lg border border-slate-300 bg-white p-2 text-sm">Tous</summary><div class="absolute left-0 top-full z-20 mt-1 w-72 max-w-[80vw] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"><button id="clear-owners" type="button" class="mb-2 text-blue-700 hover:underline">Tous les utilisateurs</button><input id="owner-search" type="search" aria-label="Rechercher un utilisateur" placeholder="Rechercher…" class="mb-2 w-full rounded border border-slate-300 p-2 text-sm" /><div id="owner-options" class="max-h-60 overflow-y-auto space-y-1"></div></div></details></div>
         <label class="text-xs font-medium text-slate-600">Type<select id="kind-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option><option value="Copy">Copie</option><option value="Print">Impression</option><option value="Scan">Scan</option></select></label>
         <label class="text-xs font-medium text-slate-600">Couleur<select id="color-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Toutes</option></select></label>
         <label class="text-xs font-medium text-slate-600">Recto verso<select id="duplex-filter" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm"><option value="">Tous</option></select></label>
@@ -105,6 +105,58 @@ const jobColumnOptions = [
 let page = 1;
 let groups = ['ownerName'];
 let currentJobs = [];
+const selectedPrinters = new Set();
+const selectedOwners = new Set();
+
+function renderMultipleFilter(prefix, options, selected, allLabel, selectedLabel) {
+  const available = new Set(options.map(option => option.value));
+  for (const value of selected) if (!available.has(value)) selected.delete(value);
+  const updateLabel = () => {
+    $(prefix + '-selection').textContent = selected.size === 0 ? allLabel
+      : selected.size === 1 ? options.find(option => selected.has(option.value)).label
+      : `${selected.size} ${selectedLabel}`;
+  };
+  $(prefix + '-options').replaceChildren();
+  for (const option of options) {
+    const label = document.createElement('label');
+    label.className = 'flex cursor-pointer items-center gap-2 rounded p-2 text-sm hover:bg-slate-50';
+    label.dataset.search = option.label.toLocaleLowerCase('fr');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = option.value;
+    input.checked = selected.has(option.value);
+    input.addEventListener('change', () => {
+      if (input.checked) selected.add(option.value); else selected.delete(option.value);
+      updateLabel();
+      page = 1;
+      load();
+    });
+    label.append(input, option.label);
+    $(prefix + '-options').appendChild(label);
+  }
+  updateLabel();
+  $(prefix + '-search').dispatchEvent(new Event('input'));
+}
+
+for (const [prefix, selected, clearId, allLabel] of [
+  ['printer', selectedPrinters, 'clear-printers', 'Toutes'],
+  ['owner', selectedOwners, 'clear-owners', 'Tous']
+]) {
+  $(prefix + '-search').addEventListener('input', event => {
+    const text = event.target.value.toLocaleLowerCase('fr');
+    for (const label of $(prefix + '-options').children) label.style.display = label.dataset.search.includes(text) ? '' : 'none';
+  });
+  $(clearId).addEventListener('click', () => {
+    selected.clear();
+    for (const input of $(prefix + '-options').querySelectorAll('input')) input.checked = false;
+    $(prefix + '-selection').textContent = allLabel;
+    page = 1;
+    load();
+  });
+}
+document.addEventListener('click', event => {
+  for (const id of ['printer-filter', 'owner-filter']) if (!$(id).contains(event.target)) $(id).open = false;
+});
 
 function selectedGroups() {
   return groups;
@@ -247,7 +299,9 @@ function addRow(body, values, numericColumns = 1) {
 
 function query() {
   const params = new URLSearchParams();
-  for (const [id, key] of [['printer-filter', 'printerId'], ['owner-filter', 'ownerName'], ['kind-filter', 'jobKind'], ['color-filter', 'color'], ['duplex-filter', 'duplex'], ['status-filter', 'status'], ['from-filter', 'from'], ['to-filter', 'to']]) {
+  for (const value of selectedPrinters) params.append('printerId', value);
+  for (const value of selectedOwners) params.append('ownerName', value);
+  for (const [id, key] of [['kind-filter', 'jobKind'], ['color-filter', 'color'], ['duplex-filter', 'duplex'], ['status-filter', 'status'], ['from-filter', 'from'], ['to-filter', 'to']]) {
     if ($(id).value) params.set(key, $(id).value);
   }
   return params;
@@ -281,25 +335,19 @@ async function load() {
 
 async function loadFilters() {
   const data = await api.get('/printer-logs/filters');
-  const printerValue = $('printer-filter').value;
-  const ownerValue = $('owner-filter').value;
   const colorValue = $('color-filter').value;
   const duplexValue = $('duplex-filter').value;
-  $('printer-filter').replaceChildren(new Option('Toutes', ''));
-  $('owner-filter').replaceChildren(new Option('Tous', ''));
   $('color-filter').replaceChildren(new Option('Toutes', ''));
   $('duplex-filter').replaceChildren(new Option('Tous', ''));
-  for (const item of data.printers) $('printer-filter').add(new Option(`${item.name} (${item.serial})`, item.id));
-  for (const name of data.owners) $('owner-filter').add(new Option(name, name));
+  renderMultipleFilter('printer', data.printers.map(item => ({ value: item.id, label: `${item.name} (${item.serial})` })), selectedPrinters, 'Toutes', 'imprimantes sélectionnées');
+  renderMultipleFilter('owner', data.owners.map(name => ({ value: name, label: name })), selectedOwners, 'Tous', 'utilisateurs sélectionnés');
   for (const color of data.colors) $('color-filter').add(new Option(color, color));
   for (const duplex of data.duplexes) $('duplex-filter').add(new Option(duplex, duplex));
-  $('printer-filter').value = printerValue;
-  $('owner-filter').value = ownerValue;
   $('color-filter').value = colorValue;
   $('duplex-filter').value = duplexValue;
 }
 
-for (const id of ['printer-filter', 'owner-filter', 'kind-filter', 'color-filter', 'duplex-filter', 'status-filter', 'from-filter', 'to-filter']) {
+for (const id of ['kind-filter', 'color-filter', 'duplex-filter', 'status-filter', 'from-filter', 'to-filter']) {
   $(id).addEventListener('change', () => { page = 1; load(); });
 }
 async function downloadCsv(path, filename) {
@@ -373,7 +421,9 @@ $('import-form').addEventListener('submit', async event => {
 });
 
 requireLogin().then(async user => {
-  for (const filter of document.querySelectorAll('[id$="-filter"]')) filter.value = '';
+  selectedPrinters.clear();
+  selectedOwners.clear();
+  for (const filter of document.querySelectorAll('select[id$="-filter"], input[id$="-filter"]')) filter.value = '';
   renderNav('printer-logs');
   $('import-section').classList.toggle('hidden', !['ADMIN', 'PRINT_MANAGER'].includes(user.role));
   await loadFilters();

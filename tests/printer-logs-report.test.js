@@ -159,3 +159,24 @@ test('refuse une dimension de regroupement inconnue', async () => {
   const response = await request(app).get('/api/printer-logs/summary?groupBy=passwordHash');
   expect(response.status).toBe(400);
 });
+
+test.each(['/summary?groupBy=ownerName', '/summary/export?groupBy=ownerName', '/copies/export', '/jobs'])('applique plusieurs imprimantes et utilisateurs à %s', async endpoint => {
+  prisma.printerJob.findMany.mockResolvedValue([]);
+  prisma.printerJob.count.mockResolvedValue(0);
+  const params = new URLSearchParams();
+  for (const value of ['printer-1', 'printer-2']) params.append('printerId', value);
+  for (const value of ['Alice, service A', 'Bob']) params.append('ownerName', value);
+  const response = await request(app).get('/api/printer-logs' + endpoint + (endpoint.includes('?') ? '&' : '?') + params);
+  expect(response.status).toBe(200);
+  const query = endpoint.startsWith('/summary') ? prisma.printerJob.groupBy : prisma.printerJob.findMany;
+  expect(query).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
+    printerId: { in: ['printer-1', 'printer-2'] },
+    ownerName: { in: ['Alice, service A', 'Bob'] }
+  }) }));
+});
+
+test('ignore les sélections vides et déduplique les valeurs', async () => {
+  const response = await request(app).get('/api/printer-logs/summary?groupBy=ownerName&printerId=p1&printerId=p1&ownerName=');
+  expect(response.status).toBe(200);
+  expect(prisma.printerJob.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: { printerId: 'p1' } }));
+});

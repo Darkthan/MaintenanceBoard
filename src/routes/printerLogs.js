@@ -37,10 +37,22 @@ function dateBound(value, end = false) {
   return date;
 }
 
+function multipleFilter(value) {
+  if (value === undefined) return null;
+  const values = Array.isArray(value) ? value : [value];
+  if (values.some(item => typeof item !== 'string')) {
+    throw Object.assign(new Error('Sélection de filtre invalide'), { status: 400 });
+  }
+  const selected = [...new Set(values.filter(Boolean))];
+  return selected.length > 1 ? { in: selected } : selected[0] || null;
+}
+
 function filters(query) {
   const where = {};
-  if (query.printerId) where.printerId = String(query.printerId);
-  if (query.ownerName) where.ownerName = String(query.ownerName);
+  const printers = multipleFilter(query.printerId);
+  const owners = multipleFilter(query.ownerName);
+  if (printers) where.printerId = printers;
+  if (owners) where.ownerName = owners;
   if (query.jobKind) {
     if (!['Copy', 'Print', 'Scan'].includes(query.jobKind)) throw Object.assign(new Error('Type invalide'), { status: 400 });
     where.jobKind = query.jobKind;
