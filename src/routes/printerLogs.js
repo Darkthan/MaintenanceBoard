@@ -263,6 +263,51 @@ router.get('/summary', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.get('/timeline', async (req, res, next) => {
+  try {
+    const interval = req.query.interval || 'month';
+    if (!['month', 'day'].includes(interval)) return res.status(400).json({ error: 'Période invalide' });
+    const where = filters(req.query);
+    if (!where.jobKind) where.jobKind = { in: ['Print', 'Copy'] };
+    if (where.startedAt?.gte && where.startedAt?.lt && where.startedAt.gte >= where.startedAt.lt) {
+      return res.status(400).json({ error: 'La date de début doit précéder la date de fin' });
+    }
+    const groups = await prisma.printerJob.groupBy({
+      by: ['startedAt', 'color'], where, _count: { _all: true }, _sum: { printCount: true }
+    });
+    const length = interval === 'month' ? 7 : 10;
+    const buckets = new Map();
+    for (const group of groups) {
+      const period = group.startedAt.toISOString().slice(0, length);
+      if (!buckets.has(period)) buckets.set(period, { period, jobs: 0, blackCount: 0, colorCount: 0, otherCount: 0, printCount: 0 });
+      const row = buckets.get(period);
+      const count = group._sum.printCount || 0;
+      row.jobs += group._count._all;
+      row.printCount += count;
+      row[colorBucket(group.color)] += count;
+    }
+    const periods = [...buckets.keys()].sort();
+    const first = req.query.from?.slice(0, length) || periods[0];
+    const last = req.query.to?.slice(0, length) || periods.at(-1);
+    const rows = [];
+    if (first && last) {
+      const cursor = new Date(`${first}${interval === 'month' ? '-01' : ''}T00:00:00Z`);
+      const end = new Date(`${last}${interval === 'month' ? '-01' : ''}T00:00:00Z`);
+      while (cursor <= end) {
+        const period = cursor.toISOString().slice(0, length);
+        rows.push(buckets.get(period) || { period, jobs: 0, blackCount: 0, colorCount: 0, otherCount: 0, printCount: 0 });
+        if (interval === 'month') cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+        else cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+    }
+    const totals = rows.reduce((sum, row) => {
+      for (const key of ['jobs', 'blackCount', 'colorCount', 'otherCount', 'printCount']) sum[key] += row[key];
+      return sum;
+    }, { jobs: 0, blackCount: 0, colorCount: 0, otherCount: 0, printCount: 0 });
+    res.json({ interval, rows, totals });
+  } catch (error) { next(error); }
+});
+
 router.get('/copies/export', async (req, res, next) => {
   try {
     const where = filters(req.query);

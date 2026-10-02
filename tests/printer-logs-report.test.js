@@ -29,6 +29,46 @@ beforeEach(() => {
   ]);
 });
 
+test('le graphique mensuel additionne les faces et remplit les mois sans activité', async () => {
+  prisma.printerJob.groupBy.mockResolvedValue([
+    { startedAt: new Date('2025-01-31T23:00:00Z'), color: 'Grayscale', _count: { _all: 1 }, _sum: { printCount: 12 } },
+    { startedAt: new Date('2025-01-12T10:00:00Z'), color: 'Full color', _count: { _all: 2 }, _sum: { printCount: 8 } },
+    { startedAt: new Date('2025-03-01T00:00:00Z'), color: 'Auto', _count: { _all: 1 }, _sum: { printCount: 3 } }
+  ]);
+  const response = await request(app).get('/api/printer-logs/timeline');
+  expect(response.status).toBe(200);
+  expect(response.body.rows.map(row => row.period)).toEqual(['2025-01', '2025-02', '2025-03']);
+  expect(response.body.rows[1].printCount).toBe(0);
+  expect(response.body.totals).toEqual({ jobs: 4, blackCount: 12, colorCount: 8, otherCount: 3, printCount: 23 });
+  expect(prisma.printerJob.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: { jobKind: { in: ['Print', 'Copy'] } } }));
+});
+
+test('le graphique journalier inclut le jour final et transmet les sélections multiples', async () => {
+  prisma.printerJob.groupBy.mockResolvedValue([
+    { startedAt: new Date('2024-02-29T23:59:00Z'), color: 'Black', _count: { _all: 1 }, _sum: { printCount: 10 } }
+  ]);
+  const response = await request(app).get('/api/printer-logs/timeline?interval=day&from=2024-02-28&to=2024-03-01&printerId=p1&printerId=p2&ownerName=Alice&ownerName=Bob&jobKind=Copy');
+  expect(response.status).toBe(200);
+  expect(response.body.rows.map(row => row.period)).toEqual(['2024-02-28', '2024-02-29', '2024-03-01']);
+  expect(response.body.rows.map(row => row.printCount)).toEqual([0, 10, 0]);
+  expect(prisma.printerJob.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: {
+    printerId: { in: ['p1', 'p2'] }, ownerName: { in: ['Alice', 'Bob'] }, jobKind: 'Copy',
+    startedAt: { gte: new Date('2024-02-28T00:00:00Z'), lt: new Date('2024-03-02T00:00:00Z') }
+  } }));
+});
+
+test('le graphique sans données renvoie une liste vide ou des zéros pour une plage explicite', async () => {
+  prisma.printerJob.groupBy.mockResolvedValue([]);
+  expect((await request(app).get('/api/printer-logs/timeline')).body.rows).toEqual([]);
+  const response = await request(app).get('/api/printer-logs/timeline?from=2025-01-01&to=2025-02-01');
+  expect(response.body.rows.map(row => row.printCount)).toEqual([0, 0]);
+});
+
+test.each(['interval=year', 'from=2025-03-01&to=2025-01-01', 'from=2025-02-30'])('refuse les paramètres temporels invalides : %s', async query => {
+  expect((await request(app).get('/api/printer-logs/timeline?' + query)).status).toBe(400);
+  expect(prisma.printerJob.groupBy).not.toHaveBeenCalled();
+});
+
 test('regroupe les copies selon les dimensions choisies et conserve les totaux', async () => {
   const response = await request(app).get('/api/printer-logs/summary?jobKind=Copy&groupBy=ownerName,color,printerId');
   expect(response.status).toBe(200);

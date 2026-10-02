@@ -4,7 +4,7 @@ const vm = require('vm');
 
 const read = file => fs.readFileSync(path.join(__dirname, '../public', file), 'utf8');
 
-test.each(['/printer-logs.html', '/printer-import.html', '/printer-settings.html'])('le gestionnaire peut ouvrir %s sans redirection', async pathname => {
+test.each(['/printer-logs.html', '/printer-import.html', '/printer-settings.html', '/printer-charts.html'])('le gestionnaire peut ouvrir %s sans redirection', async pathname => {
   const user = { role: 'PRINT_MANAGER' };
   const context = { _currentUser: user, window: { location: { pathname, href: '' } } };
   const source = read('js/api.js');
