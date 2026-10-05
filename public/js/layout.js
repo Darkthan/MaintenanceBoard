@@ -155,8 +155,8 @@ function ensureResponsiveStyles() {
       body.app-mobile-refined main > header[data-app-header] [data-app-header-title] {
         width: 100%;
         min-width: 0;
-        justify-content: center;
-        text-align: center;
+        justify-content: flex-start;
+        text-align: left;
       }
 
       body.app-mobile-refined main > header[data-app-header] [data-mobile-header-actions] {
@@ -946,7 +946,7 @@ function ensureSpotlightStyles() {
       }
 
       main > header[data-app-header] [data-spotlight-center-slot] {
-        grid-column: 1;
+        grid-column: 2;
         grid-row: 1;
         justify-self: center;
         width: 100%;
@@ -967,11 +967,11 @@ function ensureSpotlightStyles() {
       }
 
       main > header[data-app-header] [data-app-header-title] {
-        grid-column: 2;
+        grid-column: 1;
         grid-row: 1;
         min-width: 0;
-        justify-self: center;
-        text-align: center;
+        justify-self: start;
+        text-align: left;
       }
     }
   `;

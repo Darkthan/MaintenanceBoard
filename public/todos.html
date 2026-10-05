@@ -53,12 +53,6 @@
           <p class="text-sm text-slate-500">Gérez vos tâches, liées ou non à une intervention.</p>
         </div>
       </div>
-      <button onclick="openTodoModal()" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition shadow-sm">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-        </svg>
-        Nouvelle tâche
-      </button>
     </header>
 
     <div class="p-6 flex-1">
@@ -127,6 +121,17 @@
       </section>
     </div>
   </main>
+</div>
+
+
+<div id="todo-fab" class="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3 pointer-events-none" data-mobile-fab="true">
+  <div id="fab-todo-menu" class="hidden rounded-xl border border-slate-200 bg-white p-2 shadow-xl pointer-events-auto">
+    <button type="button" onclick="toggleFabTodo(); openTodoModal()" class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 transition text-left">Nouvelle tâche</button>
+  </div>
+  <button id="fab-todo-main" type="button" onclick="toggleFabTodo()" aria-label="Actions tâches" title="Actions tâches" aria-expanded="false" aria-controls="fab-todo-menu"
+    class="h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 pointer-events-auto">
+    <svg id="fab-todo-icon" class="mx-auto h-6 w-6 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+  </button>
 </div>
 
 <!-- Modal création / édition -->
@@ -557,6 +562,24 @@ document.addEventListener('click', e => {
 function escHtml(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+
+let fabTodoOpen = false;
+function toggleFabTodo() {
+  fabTodoOpen = !fabTodoOpen;
+  document.getElementById('fab-todo-menu').classList.toggle('hidden', !fabTodoOpen);
+  document.getElementById('fab-todo-main').setAttribute('aria-expanded', String(fabTodoOpen));
+  document.getElementById('fab-todo-icon').style.transform = fabTodoOpen ? 'rotate(45deg)' : '';
+}
+document.addEventListener('click', event => {
+  if (fabTodoOpen && !document.getElementById('todo-fab').contains(event.target)) toggleFabTodo();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && fabTodoOpen) {
+    toggleFabTodo();
+    document.getElementById('fab-todo-main').focus();
+  }
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
