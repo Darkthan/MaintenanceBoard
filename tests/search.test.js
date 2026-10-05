@@ -90,6 +90,27 @@ describe('GET /api/search', () => {
     expect(Array.isArray(res.body.results)).toBe(true);
   });
 
+  it.each(['Camille', 'camille@example.com', 'Salle provisoire', 'Morgan'])('retrouve une demande d’intervention par %s', async query => {
+    prisma.intervention.findMany.mockResolvedValue([{
+      id: 'request-1', title: 'Écran en panne', description: 'À vérifier', source: 'PUBLIC',
+      status: 'OPEN', priority: 'NORMAL', createdAt: new Date(),
+      reporterName: 'Camille', reporterEmail: 'camille@example.com',
+      suggestedRoom: 'Salle provisoire', reporters: [{ name: 'Morgan', email: 'morgan@example.com' }]
+    }]);
+    const res = await request(app).get('/api/search').query({ q: query });
+    expect(res.status).toBe(200);
+    expect(res.body.results).toEqual(expect.arrayContaining([expect.objectContaining({
+      id: 'intervention:request-1', group: 'Demandes d’intervention',
+      href: '/interventions.html?focus=request-1'
+    })]));
+    const options = prisma.intervention.findMany.mock.calls[0][0];
+    expect(options.where.OR).toEqual(expect.arrayContaining([
+      { reporterName: expect.objectContaining({ contains: query }) },
+      { reporterEmail: expect.objectContaining({ contains: query }) },
+      { reporters: { some: { OR: expect.arrayContaining([{ name: expect.objectContaining({ contains: query }) }]) } } }
+    ]));
+  });
+
   it('retourne 200 avec results tableau pour une requête courte', async () => {
     const res = await request(app).get('/api/search?q=ab');
     expect(res.status).toBe(200);

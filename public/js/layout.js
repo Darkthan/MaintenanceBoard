@@ -152,6 +152,13 @@ function ensureResponsiveStyles() {
         line-height: 1.4;
       }
 
+      body.app-mobile-refined main > header[data-app-header] [data-app-header-title] {
+        width: 100%;
+        min-width: 0;
+        justify-content: center;
+        text-align: center;
+      }
+
       body.app-mobile-refined main > header[data-app-header] [data-mobile-header-actions] {
         width: 100%;
         display: flex;
@@ -168,7 +175,7 @@ function ensureResponsiveStyles() {
 
       body.app-mobile-refined main > header[data-app-header] [data-spotlight-center-slot] {
         width: 100%;
-        order: 2;
+        order: -1;
       }
 
       body.app-mobile-refined main > header[data-app-header] [data-spotlight-center-slot] .spotlight-trigger {
@@ -933,13 +940,14 @@ function ensureSpotlightStyles() {
     @media (min-width: 768px) {
       main > header[data-app-header] {
         display: grid !important;
-        grid-template-columns: minmax(0, max-content) minmax(14rem, 34rem) minmax(0, max-content);
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
         align-items: center;
         gap: 1rem;
       }
 
       main > header[data-app-header] [data-spotlight-center-slot] {
-        grid-column: 2;
+        grid-column: 1;
+        grid-row: 1;
         justify-self: center;
         width: 100%;
       }
@@ -951,7 +959,19 @@ function ensureSpotlightStyles() {
 
       main > header[data-app-header] [data-mobile-header-actions] {
         grid-column: 3;
+        grid-row: 1;
         justify-self: end;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      main > header[data-app-header] [data-app-header-title] {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+        justify-self: center;
+        text-align: center;
       }
     }
   `;
@@ -1069,9 +1089,33 @@ function ensureSpotlightTrigger() {
   const header = document.querySelector('main > header[data-app-header]');
   if (!header) return;
 
+  // Some pages wrap the entire header row; expose its title and actions as slots.
+  if (header.children.length === 1 && header.firstElementChild.tagName === 'DIV'
+      && header.firstElementChild.querySelector('h1')) {
+    const row = header.firstElementChild;
+    while (row.firstElementChild) header.insertBefore(row.firstElementChild, row);
+    row.remove();
+  }
+
+  const title = header.querySelector('h1') || header.querySelector('#project-selector-wrap');
+  let titleSlot;
+  if (title) {
+    titleSlot = Array.from(header.children).find(child => child === title || child.contains(title));
+    if (titleSlot) titleSlot.dataset.appHeaderTitle = 'true';
+  }
+
+  const menu = Array.from(header.children).find(child => child.matches('button[onclick*="toggleSidebar"]'));
+  if (menu && titleSlot && titleSlot.tagName === 'DIV') titleSlot.prepend(menu);
+
   let actions = header.querySelector('[data-mobile-header-actions]');
+  if (actions === titleSlot) {
+    delete actions.dataset.mobileHeaderActions;
+    delete actions.dataset.singleAction;
+    actions = null;
+  }
   if (!actions) {
-    const currentRight = header.lastElementChild && header.lastElementChild !== header.firstElementChild
+    const currentRight = header.lastElementChild && header.lastElementChild !== titleSlot
+      && header.lastElementChild !== header.firstElementChild
       ? header.lastElementChild
       : null;
 
@@ -1092,7 +1136,7 @@ function ensureSpotlightTrigger() {
     centerSlot = document.createElement('div');
     centerSlot.dataset.spotlightCenterSlot = 'true';
     centerSlot.className = 'flex items-center justify-center';
-    header.insertBefore(centerSlot, actions || null);
+    header.insertBefore(centerSlot, header.firstElementChild);
   }
 
   let trigger = header.querySelector('[data-spotlight-trigger="true"]');
@@ -1109,7 +1153,7 @@ function ensureSpotlightTrigger() {
       </span>
       <span class="spotlight-trigger__text">
         <span class="spotlight-trigger__label">Recherche globale</span>
-        <span class="spotlight-trigger__hint">Donnees, fichiers, parametres, documents, actions</span>
+        <span class="spotlight-trigger__hint">Données, demandes d’intervention, documents, actions</span>
       </span>
       <span class="spotlight-trigger__kbd">${getShortcutLabel()}</span>
     `;

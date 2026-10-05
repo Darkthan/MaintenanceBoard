@@ -820,7 +820,9 @@ router.get('/', requireAuth, async (req, res, next) => {
     const interventionWhere = (() => {
       // 'status' est un enum (IntStatus) sur PostgreSQL → contains invalide, exclure du filtre DB.
       // Le classement en mémoire utilise item.status dans searchText.
-      const or = buildContainsOr(rawQuery, ['title', 'description', 'room.name', 'room.number', 'equipment.name', 'equipment.type', 'tech.name', 'priority']);
+      const or = buildContainsOr(rawQuery, ['title', 'description', 'reporterName', 'reporterEmail', 'suggestedRoom', 'suggestedEquipment', 'room.name', 'room.number', 'equipment.name', 'equipment.type', 'tech.name', 'priority']);
+      const reporterOr = buildContainsOr(rawQuery, ['name', 'email']);
+      if (reporterOr?.length) or.push({ reporters: { some: { OR: reporterOr } } });
       return {
         ...techRestriction,
         ...(or?.length ? { OR: or } : {})
@@ -922,7 +924,8 @@ router.get('/', requireAuth, async (req, res, next) => {
         include: {
           room: { select: { id: true, name: true, number: true } },
           equipment: { select: { id: true, name: true, type: true } },
-          tech: { select: { id: true, name: true } }
+          tech: { select: { id: true, name: true } },
+          reporters: { select: { name: true, email: true } }
         }
       }),
       prisma.order.findMany({
@@ -1153,7 +1156,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const interventionResults = filterAndRank(interventions.map(item => ({
       id: `intervention:${item.id}`,
       type: 'intervention',
-      group: 'Interventions',
+      group: item.source === 'PUBLIC' ? 'Demandes d’intervention' : 'Interventions',
       title: item.title,
       subtitle: [item.room?.name, item.equipment?.name, formatDate(item.createdAt)].filter(Boolean).join(' · ') || 'Intervention',
       href: `/interventions.html?focus=${encodeURIComponent(item.id)}`,
@@ -1164,7 +1167,8 @@ router.get('/', requireAuth, async (req, res, next) => {
         lines: [
           item.room ? `Salle : ${item.room.name}${item.room.number ? ` (${item.room.number})` : ''}` : null,
           item.equipment ? `Equipement : ${item.equipment.name}` : null,
-          `Technicien : ${item.tech?.name || 'N/A'}`
+          `Technicien : ${item.tech?.name || 'N/A'}`,
+          item.source === 'PUBLIC' ? `Demandeur : ${item.reporterName || item.reporters?.[0]?.name || item.reporterEmail || 'Non renseigné'}` : null
         ].filter(Boolean),
         badges: [
           INTERVENTION_STATUS_LABELS[item.status] || item.status,
@@ -1174,6 +1178,11 @@ router.get('/', requireAuth, async (req, res, next) => {
       searchText: [
         item.title,
         item.description,
+        item.reporterName,
+        item.reporterEmail,
+        item.suggestedRoom,
+        item.suggestedEquipment,
+        ...(item.reporters || []).flatMap(reporter => [reporter.name, reporter.email]),
         item.room?.name,
         item.room?.number,
         item.equipment?.name,
