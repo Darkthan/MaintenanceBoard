@@ -41,8 +41,12 @@ function ensureResponsiveStyles() {
   const style = document.createElement('style');
   style.id = 'app-responsive-style';
   style.textContent = `
-    /* Garde la pagination hors de la zone occupée par le bouton d'action flottant. */
+    /* Laisse la colonne du bouton d'action flottant libre, même si la pagination tient sur deux lignes. */
     @media (min-width: 768px) {
+      body.app-mobile-refined [data-mobile-pagination] {
+        flex-wrap: wrap;
+      }
+
       body.app-mobile-refined [data-pagination-fab-clearance="true"] {
         padding-right: 5.5rem !important;
       }
@@ -214,6 +218,11 @@ function ensureResponsiveStyles() {
         align-items: stretch;
         gap: 0.75rem;
         padding-right: 0 !important;
+        scroll-margin-bottom: var(--mobile-content-clearance);
+      }
+
+      body.app-mobile-refined [data-mobile-pagination][data-pagination-fab-clearance="true"] {
+        padding-right: 5rem !important;
       }
 
       body.app-mobile-refined [data-mobile-pagination] > * {
@@ -225,6 +234,16 @@ function ensureResponsiveStyles() {
         align-items: center;
         justify-content: space-between;
         gap: 0.5rem;
+      }
+
+      body.app-mobile-refined [data-mobile-pagination][data-pagination-fab-clearance="true"] > div {
+        flex-wrap: wrap;
+      }
+
+      body.app-mobile-refined [data-mobile-pagination][data-pagination-fab-clearance="true"] > div > span {
+        flex: 0 0 100%;
+        order: -1;
+        text-align: center;
       }
 
       body.app-mobile-refined [data-mobile-table-wrap] {

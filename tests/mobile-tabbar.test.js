@@ -40,6 +40,10 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain('[data-mobile-fab="true"]');
     expect(res.text).toContain('data-pagination-fab-clearance');
     expect(res.text).toContain("el.dataset.paginationFabClearance = 'true'");
+    expect(res.text).toMatch(/@media \(min-width: 768px\)[\s\S]*?\[data-pagination-fab-clearance="true"\]\s*\{\s*padding-right: 5\.5rem !important/);
+    expect(res.text).toMatch(/\[data-mobile-pagination\]\[data-pagination-fab-clearance="true"\]\s*\{\s*padding-right: 5rem !important/);
+    expect(res.text).toMatch(/\[data-mobile-pagination\]\[data-pagination-fab-clearance="true"\] > div\s*\{\s*flex-wrap: wrap/);
+    expect(res.text).toMatch(/\[data-mobile-pagination\]\[data-pagination-fab-clearance="true"\] > div > span\s*\{[^}]*order: -1/);
     expect(res.text).toContain("document.body.classList.toggle('app-has-pagination-fab', hasPageFab && !!document.getElementById('pagination'))");
     expect(res.text).toMatch(/app-has-pagination-fab main > \.flex-1\s*\{[^}]*padding-bottom: calc\(var\(--mobile-content-clearance\) \+ 4rem\)/);
     expect(res.text).toContain('const THRESHOLD = 140');
@@ -51,11 +55,11 @@ describe('mobile tab bar navigation', () => {
     expect(res.text).toContain("const coreIds = ['dashboard', 'equipment', 'interventions', 'todos']");
   });
 
-  it.each(['/rooms.html', '/interventions.html'])('empêche le bouton flottant de bloquer la pagination sur %s', async page => {
+  it.each(['/equipment.html', '/rooms.html', '/interventions.html', '/orders.html'])('repère la pagination et le bouton flottant sur %s', async page => {
     const res = await request(app).get(page);
 
     expect(res.status).toBe(200);
-    expect(res.text).toMatch(/class="fixed right-6 bottom-6[^\"]*pointer-events-none" data-mobile-fab="true"/);
-    expect(res.text).toMatch(/class="[^\"]*pointer-events-auto[^\"]*"/);
+    expect(res.text).toContain('id="pagination"');
+    expect(res.text).toContain('data-mobile-fab="true"');
   });
 });
