@@ -6,8 +6,9 @@ const { z } = require('zod');
 const { MCP_SCOPES, hasScope } = require('../utils/mcpTokens');
 const reservations = require('./reservationsService');
 const work = require('./workService');
-
 const equipment = require('./equipmentService');
+const support = require('./supportService');
+
 const SERVER_INFO = { name: 'maintenanceboard', version: '1.1.0' };
 
 const READ_ONLY_TOOL = {
@@ -262,6 +263,49 @@ function buildMcpServer(ctx) {
       dueAt: z.string().optional()
     }
   }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => work.createIntervention(a, { userId, user })));
+
+  server.registerTool('create_support_request', {
+    title: 'Créer une demande de support',
+    description: 'Crée un ticket de support pour l’utilisateur connecté par défaut, ou pour une autre personne en indiquant son nom et son email. Retourne un token de suivi privé à transmettre seulement au demandeur.',
+    inputSchema: {
+      title: z.string().min(3).max(200),
+      description: z.string().max(2000).optional(),
+      reporterName: z.string().min(2).max(200).optional().describe('Nom du demandeur si la demande est pour une autre personne.'),
+      reporterEmail: z.string().email().max(254).optional().describe('Email du demandeur si la demande est pour une autre personne.'),
+      roomId: z.string().optional(),
+      suggestedRoom: z.string().max(200).optional()
+    },
+    annotations: ADDITIVE_WRITE_TOOL
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => support.createSupportRequest(a, { user })));
+
+  server.registerTool('list_support_requests', {
+    title: 'Lister les demandes de support',
+    description: 'Liste les demandes de support existantes accessibles à l’utilisateur connecté, avec filtre de statut ou recherche.',
+    inputSchema: {
+      status: z.enum(work.INTERVENTION_STATUSES).optional(),
+      search: z.string().max(200).optional(),
+      limit: z.number().int().min(1).max(100).optional()
+    }, annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_READ, (a) => support.listSupportRequests(a, { user })));
+
+  server.registerTool('get_support_request', {
+    title: 'Consulter une demande de support',
+    description: 'Récupère une demande de support existante par son identifiant.',
+    inputSchema: { id: z.string() }, annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_READ, (a) => support.getSupportRequest(a, { user })));
+
+  server.registerTool('list_support_messages', {
+    title: 'Lire le chat de support',
+    description: 'Lit les messages du chat d’une demande de support accessible et marque comme lus les messages reçus.',
+    inputSchema: { id: z.string() }
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_READ, (a) => support.listSupportMessages(a, { user })));
+
+  server.registerTool('send_support_message', {
+    title: 'Envoyer un message de support',
+    description: 'Envoie un message dans le chat d’une demande accessible, au nom de l’utilisateur connecté. Un administrateur ou technicien assigné répond côté support ; un demandeur répond côté demandeur.',
+    inputSchema: { id: z.string(), content: z.string().min(1).max(2000) },
+    annotations: ADDITIVE_WRITE_TOOL
+  }, tool(ctx, MCP_SCOPES.INTERVENTIONS_WRITE, (a) => support.sendSupportMessage(a, { user })));
 
   server.registerTool('update_intervention', {
     description: 'Modifie une intervention existante : titre, statut, priorité, planning, salle, équipement, notes ou résolution.',
