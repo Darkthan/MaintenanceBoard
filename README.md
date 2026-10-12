@@ -221,3 +221,23 @@ WEBAUTHN_ORIGIN=https://votre-domaine.com
 | Voir toutes les interventions | ✅ | ❌ (propres) |
 | Gérer utilisateurs | ✅ | ❌ |
 | Commandes | ✅ | ✅ (créer/voir) |
+# Carnet de passages des salles
+
+La page `/room-visits.html`, accessible depuis « Carnet de passages », permet aux
+techniciens et administrateurs de consigner leurs contrôles : salle, date et heure
+(préremplies à l'ouverture), observation et dégradations constatées. Les passages
+sont consultables en liste paginée ou calendrier mensuel, avec filtres par salle,
+auteur courant et dégradations. Un contrôle impossible peut être signalé avec une
+raison obligatoire, affichée dans les deux vues (créneau orange, ou rouge si des
+dégradations sont également signalées). Un constat de dégradation colore le passage en
+rouge ; cliquer dessus permet de le modifier ou de le supprimer.
+
+Après mise à jour, appliquer les migrations et régénérer le client Prisma avant
+de redémarrer l'application (`npm run prisma:migrate` puis `npx prisma generate`).
+Le démarrage Docker effectue déjà les migrations.
+
+Le serveur MCP authentifié expose `list_room_visits`, `create_room_visit`,
+`update_room_visit` et `delete_room_visit`. Les permissions `room_visits:read` et
+`room_visits:write` sont configurables dans les paramètres des jetons MCP.
+Les dates MCP suivent ISO 8601 ; sans décalage horaire, elles sont interprétées
+en Europe/Paris. L'auteur d'un nouveau passage est l'utilisateur du jeton MCP.

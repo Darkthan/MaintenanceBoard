@@ -1887,6 +1887,7 @@ function renderNav(activePage) {
   let navItems = [
     { href: '/index.html', label: 'Accueil', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', id: 'dashboard' },
     { href: '/rooms.html', label: 'Salles', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', id: 'rooms' },
+    { href: '/room-visits.html', label: 'Carnet de passages', icon: 'M9 5h10v16H5V5h4m0 0V3h6v4H9zM9 12h6m-6 4h6', id: 'room-visits' },
     { href: '/equipment.html', label: 'Équipements', icon: EQUIPMENT_ICON_PATH, id: 'equipment' },
     { href: '/interventions.html', label: 'Interventions', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', id: 'interventions' },
     { href: '/request.html', label: 'Demande', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a3 3 0 006 0M9 12h6m-6 4h4', id: 'requests' },

@@ -2,6 +2,8 @@ const crypto = require('crypto');
 
 // Scopes disponibles pour les tokens MCP.
 const MCP_SCOPES = {
+  ROOM_VISITS_READ: 'room_visits:read',
+  ROOM_VISITS_WRITE: 'room_visits:write',
   RESERVATIONS_READ: 'reservations:read',
   RESERVATIONS_WRITE: 'reservations:write',
   EQUIPMENT_BOOKINGS_READ: 'equipment_bookings:read',
@@ -36,6 +38,8 @@ const DIRECT_MCP_CLIENT_ID = 'maintenanceboard-direct-mcp';
 const DYNAMIC_MCP_CLIENT_PREFIX = 'mcp_dynamic_';
 
 const TECH_MCP_SCOPES = [
+  MCP_SCOPES.ROOM_VISITS_READ,
+  MCP_SCOPES.ROOM_VISITS_WRITE,
   MCP_SCOPES.RESERVATIONS_READ,
   MCP_SCOPES.RESERVATIONS_WRITE,
   MCP_SCOPES.EQUIPMENT_BOOKINGS_READ,

@@ -131,6 +131,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/display', require('./routes/display'));
 app.use('/api/calendar', require('./routes/calendar'));
+app.use('/api/room-visits', require('./routes/roomVisits'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/printer-logs', require('./routes/printerLogs'));

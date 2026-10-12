@@ -8,6 +8,7 @@ const reservations = require('./reservationsService');
 const work = require('./workService');
 const equipment = require('./equipmentService');
 const support = require('./supportService');
+const visits = require('../services/roomVisitService');
 
 const SERVER_INFO = { name: 'maintenanceboard', version: '1.1.0' };
 
@@ -62,6 +63,33 @@ function buildMcpServer(ctx) {
   const userId = ctx.createdBy?.id || null;
   const bookingsReadScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_READ, MCP_SCOPES.RESERVATIONS_READ];
   const bookingsWriteScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_WRITE, MCP_SCOPES.RESERVATIONS_WRITE];
+
+  const visitFields = {
+    roomId: z.string().min(1),
+    visitedAt: z.string().optional().describe('ISO 8601 avec décalage horaire ; sans décalage = Europe/Paris. Par défaut : maintenant.'),
+    observation: z.string().max(10000).optional(), damageFound: z.boolean().optional(),
+    controlImpossible: z.boolean().optional().describe('Signale que le contrôle de la salle n’a pas pu être effectué.'),
+    controlImpossibleReason: z.string().max(2000).optional().describe('Raison obligatoire lorsque controlImpossible est true.')
+  };
+  server.registerTool('list_room_visits', {
+    description: 'Consulte le carnet de contrôle des salles, avec filtres et pagination.',
+    inputSchema: { roomId: z.string().optional(), authorId: z.string().optional(), from: z.string().optional(), to: z.string().optional(), damageFound: z.boolean().optional(), page: z.number().int().min(1).optional(), limit: z.number().int().min(1).max(100).optional() },
+    annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.ROOM_VISITS_READ, visits.listRoomVisits));
+  server.registerTool('create_room_visit', {
+    description: 'Ajoute un passage de contrôle et une observation. Les dégradations rendent le créneau rouge.',
+    inputSchema: visitFields, annotations: ADDITIVE_WRITE_TOOL
+  }, tool(ctx, MCP_SCOPES.ROOM_VISITS_WRITE, args => visits.createRoomVisit(args, user)));
+  server.registerTool('update_room_visit', {
+    description: 'Modifie un passage et son observation ou son signalement de dégradations.',
+    inputSchema: { ...visitFields, roomId: z.string().min(1).optional(), id: z.string().min(1) },
+    annotations: { ...ADDITIVE_WRITE_TOOL, idempotentHint: true }
+  }, tool(ctx, MCP_SCOPES.ROOM_VISITS_WRITE, ({ id, ...args }) => visits.updateRoomVisit(id, args, user)));
+  server.registerTool('delete_room_visit', {
+    description: 'Supprime un passage et son observation du carnet de contrôle.',
+    inputSchema: { id: z.string().min(1) },
+    annotations: { ...ADDITIVE_WRITE_TOOL, destructiveHint: true }
+  }, tool(ctx, MCP_SCOPES.ROOM_VISITS_WRITE, ({ id }) => visits.deleteRoomVisit(id, user)));
 
   server.registerTool('list_equipment', {
     description: 'Recherche les équipements et leurs interfaces réseau, avec pagination.',

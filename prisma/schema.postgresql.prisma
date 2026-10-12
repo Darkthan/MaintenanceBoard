@@ -81,6 +81,7 @@ enum OrderStatus {
 }
 
 model User {
+  roomVisits RoomVisit[]
   id            String         @id @default(uuid())
   email         String         @unique
   contactEmail  String?
@@ -203,6 +204,7 @@ model RefreshToken {
 }
 
 model Room {
+  visits RoomVisit[]
   id          String   @id @default(uuid())
   name        String
   building    String?
@@ -976,4 +978,22 @@ model IpMigration {
   @@index([networkId])
   @@index([status])
   @@map("ip_migrations")
+}
+
+model RoomVisit {
+  id String @id @default(uuid())
+  roomId String
+  authorId String?
+  visitedAt DateTime @default(now())
+  observation String @default("")
+  damageFound Boolean @default(false)
+  controlImpossible Boolean @default(false)
+  controlImpossibleReason String @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  @@index([roomId, visitedAt])
+  @@index([visitedAt])
+  @@map("room_visits")
 }

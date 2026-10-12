@@ -1543,7 +1543,9 @@
               <p class="text-xs text-slate-400">Créer et modifier des emprunts de matériel</p>
             </div>
           </label>
-          <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+          <label class="flex items-start gap-3 p-3 rounded-lg border border-slate-200"><input type="checkbox" name="scopes" value="room_visits:read" class="h-4 w-4 rounded text-blue-600"/><div><p class="text-sm font-medium">room_visits:read</p><p class="text-xs text-slate-400">Consulter le carnet de passages</p></div></label>
+<label class="flex items-start gap-3 p-3 rounded-lg border border-slate-200"><input type="checkbox" name="scopes" value="room_visits:write" class="h-4 w-4 rounded text-blue-600"/><div><p class="text-sm font-medium">room_visits:write</p><p class="text-xs text-slate-400">Créer, modifier et supprimer les observations</p></div></label>
+<label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
             <input type="checkbox" name="scopes" value="equipment:read" class="h-4 w-4 rounded text-blue-600"/>
             <div><p class="text-sm font-medium text-slate-700">equipment:read</p><p class="text-xs text-slate-400">Consulter les PC, interfaces MAC et adresses IP</p></div>
           </label>
