@@ -85,9 +85,12 @@ function openVisit(visit = null) {
   el('visit-impossible-reason').value = visit?.controlImpossibleReason || '';
   updateImpossibleField();
   el('delete-visit').classList.toggle('hidden', !visit);
+  el('visit-media').value = '';
+  el('visit-media-list').replaceChildren(...(visit?.media || []).map(media => { const row = document.createElement('div'); row.className = 'flex items-center justify-between gap-2 text-sm'; const link = document.createElement('a'); link.href = `/api/room-visits/${visit.id}/media/${media.id}`; link.target = '_blank'; link.textContent = `${media.filename} (${Math.round(media.size / 1024)} Ko)`; link.className = 'text-blue-700 underline truncate'; row.append(link); return row; }));
   el('visit-dialog').showModal();
 }
 el('add-visit').onclick = () => openVisit();
+el('visit-fab').onclick = () => openVisit();
 function updateImpossibleField() {
   const impossible = el('visit-impossible').checked;
   el('impossible-reason-field').classList.toggle('hidden', !impossible);
@@ -106,7 +109,10 @@ el('visit-form').onsubmit = async event => {
   event.preventDefault(); el('save-visit').disabled = true; el('form-error').textContent = '';
   try {
     const data = { roomId: el('visit-room').value, visitedAt: new Date(el('visit-date').value).toISOString(), observation: el('visit-observation').value, damageFound: el('visit-damage').checked, controlImpossible: el('visit-impossible').checked, controlImpossibleReason: el('visit-impossible').checked ? el('visit-impossible-reason').value.trim() : '' };
-    if (editing) await api.patch(`/room-visits/${editing.id}`, data); else await api.post('/room-visits', data);
+    let saved;
+    if (editing) saved = await api.patch(`/room-visits/${editing.id}`, data); else saved = await api.post('/room-visits', data);
+    const file = el('visit-media').files[0];
+    if (file) { const form = new FormData(); form.append('media', file); await api.post(`/room-visits/${saved.id}/media`, form); }
     el('visit-dialog').close(); await loadVisits();
   } catch (error) { el('form-error').textContent = error.message; }
   finally { el('save-visit').disabled = false; }

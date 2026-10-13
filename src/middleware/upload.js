@@ -77,4 +77,13 @@ const uploadImport = multer({
   fileFilter: importFilter
 });
 
-module.exports = { uploadPhoto, uploadImport };
+const roomVisitMedia = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: config.upload.maxSize },
+  fileFilter: (req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype)) return cb(null, true);
+    cb(new Error('Seuls les fichiers JPG, PNG, WebP et PDF sont acceptés'), false);
+  }
+});
+
+module.exports = { uploadPhoto, uploadImport, roomVisitMedia };

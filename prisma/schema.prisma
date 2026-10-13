@@ -15,6 +15,7 @@ datasource db {
 
 model User {
   roomVisits RoomVisit[]
+  roomVisitMedia RoomVisitMedia[]
   id            String   @id @default(uuid())
   email         String   @unique
   contactEmail  String?
@@ -967,7 +968,23 @@ model RoomVisit {
   updatedAt DateTime @updatedAt
   room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
   author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  media RoomVisitMedia[]
   @@index([roomId, visitedAt])
   @@index([visitedAt])
   @@map("room_visits")
+}
+
+model RoomVisitMedia {
+  id String @id @default(uuid())
+  roomVisitId String
+  filename String
+  storedAs String @unique
+  mimetype String
+  size Int
+  uploadedBy String
+  createdAt DateTime @default(now())
+  roomVisit RoomVisit @relation(fields: [roomVisitId], references: [id], onDelete: Cascade)
+  uploader User @relation(fields: [uploadedBy], references: [id])
+  @@index([roomVisitId])
+  @@map("room_visit_media")
 }

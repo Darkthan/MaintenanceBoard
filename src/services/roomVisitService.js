@@ -1,6 +1,11 @@
 const prisma = require('../lib/prisma');
 const { z } = require('zod');
 const { localDateTimeToUTC } = require('../mcp/tzUtils');
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+const sharp = require('sharp');
+const config = require('../config');
 
 const fields = {
   roomId: z.string().trim().min(1),
@@ -15,6 +20,7 @@ const updateSchema = createSchema.partial();
 const include = {
   room: { select: { id: true, name: true, number: true, building: true } },
   author: { select: { id: true, name: true } }
+  ,media: { orderBy: { createdAt: 'asc' } }
 };
 function fail(status, message) { throw Object.assign(new Error(message), { status }); }
 function parse(schema, input) {
@@ -83,4 +89,31 @@ async function deleteRoomVisit(id, user) {
   try { await prisma.roomVisit.delete({ where: { id } }); return { message: 'Passage supprimé' }; }
   catch (error) { if (error.code === 'P2025') fail(404, 'Passage introuvable'); throw error; }
 }
-module.exports = { listRoomVisits, createRoomVisit, updateRoomVisit, deleteRoomVisit };
+async function addRoomVisitMedia(id, file, user) {
+  requireWriter(user);
+  if (!file) fail(400, 'Aucun fichier fourni');
+  const visit = await prisma.roomVisit.findUnique({ where: { id }, select: { id: true } });
+  if (!visit) fail(404, 'Passage introuvable');
+  const dir = path.join(config.upload.dir, 'room-visits'); fs.mkdirSync(dir, { recursive: true });
+  const base = `visit-${id}-${crypto.randomUUID()}`;
+  let buffer = file.buffer, mimetype = file.mimetype, extension = path.extname(file.originalname).toLowerCase() || '.bin';
+  if (file.mimetype.startsWith('image/')) { buffer = await sharp(file.buffer).rotate().resize({ width: 2200, height: 2200, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 78, mozjpeg: true }).toBuffer(); mimetype = 'image/jpeg'; extension = '.jpg'; }
+  const storedAs = `${base}${extension}`; fs.writeFileSync(path.join(dir, storedAs), buffer);
+  try { return await prisma.roomVisitMedia.create({ data: { roomVisitId: id, filename: file.originalname.slice(0, 255), storedAs, mimetype, size: buffer.length, uploadedBy: user.id } }); }
+  catch (error) { try { fs.unlinkSync(path.join(dir, storedAs)); } catch {} throw error; }
+}
+async function getRoomVisitMedia(id, mediaId, user) {
+  requireWriter(user);
+  const media = await prisma.roomVisitMedia.findFirst({ where: { id: mediaId, roomVisitId: id } });
+  if (!media) fail(404, 'Média introuvable');
+  const filePath = path.join(config.upload.dir, 'room-visits', media.storedAs);
+  if (!fs.existsSync(filePath)) fail(404, 'Fichier introuvable');
+  return { media, filePath };
+}
+async function deleteRoomVisitMedia(id, mediaId, user) {
+  const { media, filePath } = await getRoomVisitMedia(id, mediaId, user);
+  await prisma.roomVisitMedia.delete({ where: { id: media.id } });
+  try { fs.unlinkSync(filePath); } catch {}
+  return { message: 'Média supprimé' };
+}
+module.exports = { listRoomVisits, createRoomVisit, updateRoomVisit, deleteRoomVisit, addRoomVisitMedia, getRoomVisitMedia, deleteRoomVisitMedia };
