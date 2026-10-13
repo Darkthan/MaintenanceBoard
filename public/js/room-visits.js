@@ -112,7 +112,7 @@ el('visit-form').onsubmit = async event => {
     let saved;
     if (editing) saved = await api.patch(`/room-visits/${editing.id}`, data); else saved = await api.post('/room-visits', data);
     const file = el('visit-media').files[0];
-    if (file) { const form = new FormData(); form.append('media', file); await api.post(`/room-visits/${saved.id}/media`, form); }
+    if (file) { const form = new FormData(); form.append('media', file, file.name); await api.upload(`/room-visits/${saved.id}/media`, form); }
     el('visit-dialog').close(); await loadVisits();
   } catch (error) { el('form-error').textContent = error.message; }
   finally { el('save-visit').disabled = false; }
