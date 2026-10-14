@@ -4,6 +4,7 @@ const { equipmentReferences, REFERENCE_FIELDS } = require('../utils/equipmentRef
 const STATUSES = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE'];
 const detailInclude = {
   room: { select: { id: true, name: true, number: true, building: true } },
+  supplierRef: { select: { id: true, name: true } },
   ipAddresses: { include: { network: { select: { id: true, name: true, vlan: true, cidr: true } } } },
   networkInterfaces: { include: { ipAddress: { include: { network: { select: { id: true, name: true, vlan: true, cidr: true } } } } }, orderBy: { name: 'asc' } }
 };
@@ -51,10 +52,31 @@ async function listEquipment({ search, serialNumbers, type, roomId, status, ip, 
   return { data: rows.slice(0, take).map(present), nextCursor: rows.length > take ? rows[take - 1].id : null };
 }
 
+function normalizePurchaseFields(input) {
+  const data = {};
+  for (const key of ['purchaseDate', 'warrantyEnd']) {
+    if (input[key] === undefined) continue;
+    if (input[key] !== null && Number.isNaN(Date.parse(input[key]))) fail(`${key} doit être une date ISO valide`);
+    data[key] = input[key] === null ? null : new Date(input[key]);
+  }
+  if (input.purchasePrice !== undefined) {
+    if (input.purchasePrice !== null && (typeof input.purchasePrice !== 'number' || !Number.isFinite(input.purchasePrice) || input.purchasePrice < 0)) {
+      fail('purchasePrice doit être un nombre positif ou nul');
+    }
+    data.purchasePrice = input.purchasePrice;
+  }
+  if (input.supplierId !== undefined) {
+    if (input.supplierId !== null && (typeof input.supplierId !== 'string' || !input.supplierId.trim())) fail('supplierId invalide');
+    data.supplierId = input.supplierId ? input.supplierId.trim() : null;
+  }
+  return data;
+}
+
 async function updateEquipment({ id, ...input }) {
-  const allowed = ['name', 'type', 'brand', 'model', 'serialNumber', 'status', 'description', 'roomId', 'agentHostname', 'purchaseDate', 'warrantyEnd'];
+  const allowed = ['name', 'type', 'brand', 'model', 'serialNumber', 'status', 'description', 'roomId', 'agentHostname'];
   const data = Object.fromEntries(allowed.filter(key => input[key] !== undefined).map(key => [key, input[key]]));
   Object.assign(data, equipmentReferences(input));
+  Object.assign(data, normalizePurchaseFields(input));
   if (!Object.keys(data).length) fail('Aucun champ à modifier');
   if (data.status && !STATUSES.includes(data.status)) fail('Statut invalide');
   for (const key of ['name', 'type']) if (key in data && !String(data[key] || '').trim()) fail(`${key} ne peut pas être vide`);
@@ -67,6 +89,7 @@ async function updateEquipment({ id, ...input }) {
   if (data.roomId) {
     if (!await prisma.room.findUnique({ where: { id: data.roomId }, select: { id: true } })) fail('Salle introuvable', 404);
   }
+  if (data.supplierId && !await prisma.supplier.findUnique({ where: { id: data.supplierId }, select: { id: true } })) fail('Fournisseur introuvable', 404);
   if (!await prisma.equipment.findUnique({ where: { id }, select: { id: true } })) fail('Équipement introuvable', 404);
   try {
     await prisma.equipment.update({ where: { id }, data });
@@ -148,12 +171,25 @@ async function prepareEquipmentDocuments(db, input) {
   if (!Object.keys(references).length || Object.values(references).some(value => !value)) {
     fail('Renseignez au moins un numéro de facture ou de BL non vide ; les champs omis restent inchangés');
   }
+  const purchase = normalizePurchaseFields(input);
+  if (input.supplierId && !await db.supplier.findUnique({ where: { id: input.supplierId }, select: { id: true } })) fail('Fournisseur introuvable', 404);
   const rows = await db.equipment.findMany({
     where: { serialNumber: { in: serialNumbers } },
     select: { id: true, name: true, serialNumber: true, invoiceNumber: true, deliveryNoteNumber: true }
   });
   const bySerial = new Map(rows.map(row => [row.serialNumber, row]));
   const missingSerialNumbers = serialNumbers.filter(serial => !bySerial.has(serial));
+  const creations = missingSerialNumbers.map(serial => ({
+    serialNumber: serial,
+    name: input.name?.trim() || `PC ${serial}`,
+    type: input.type?.trim() || 'PC',
+    status: 'INACTIVE',
+    brand: input.brand?.trim() || null,
+    model: input.model?.trim() || null,
+    ...references,
+    ...purchase,
+    supplierId: input.supplierId || null
+  }));
   const matches = serialNumbers.filter(serial => bySerial.has(serial)).map(serial => {
     const row = bySerial.get(serial);
     const changes = Object.entries(references).filter(([field, value]) => row[field] !== value)
@@ -163,7 +199,7 @@ async function prepareEquipmentDocuments(db, input) {
   const conflicts = matches.flatMap(row => row.changes.filter(change => change.previous !== null && change.previous !== '')
     .map(change => ({ serialNumber: row.serialNumber, ...change })));
   return { references, matches, missingSerialNumbers, conflicts,
-    canApply: !missingSerialNumbers.length && (!conflicts.length || input.overwrite === true) };
+    creations, canApply: !conflicts.length || input.overwrite === true };
 }
 
 async function previewEquipmentDocuments(input) {
@@ -177,6 +213,11 @@ async function associateEquipmentDocuments(input) {
       fail(`Association refusée : ${JSON.stringify({ missingSerialNumbers: preview.missingSerialNumbers, conflicts: preview.conflicts })}`, 409);
     }
     let updatedCount = 0;
+    let createdCount = 0;
+    for (const creation of preview.creations) {
+      await tx.equipment.create({ data: creation });
+      createdCount++;
+    }
     for (const row of preview.matches) {
       if (!row.changes.length) continue;
       const where = { id: row.id, serialNumber: row.serialNumber };
@@ -185,7 +226,7 @@ async function associateEquipmentDocuments(input) {
       if (result.count !== 1) fail('La fiche a changé pendant l’association. Relancez l’aperçu.', 409);
       updatedCount++;
     }
-    return { ...preview, updatedCount, unchangedCount: preview.matches.length - updatedCount };
+    return { ...preview, updatedCount, createdCount, unchangedCount: preview.matches.length - updatedCount };
   });
 }
 

@@ -118,7 +118,8 @@ function buildMcpServer(ctx) {
       status: z.enum(['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE']).optional(),
       description: z.string().nullable().optional(), roomId: z.string().nullable().optional(),
       agentHostname: z.string().max(255).nullable().optional(),
-      purchaseDate: z.string().nullable().optional(), warrantyEnd: z.string().nullable().optional()
+      purchaseDate: z.string().nullable().optional(), warrantyEnd: z.string().nullable().optional(),
+      purchasePrice: z.number().nonnegative().nullable().optional(), supplierId: z.string().nullable().optional()
     }, annotations: { ...ADDITIVE_WRITE_TOOL, idempotentHint: true }
   }, tool(ctx, MCP_SCOPES.EQUIPMENT_WRITE, equipment.updateEquipment));
 
@@ -126,6 +127,14 @@ function buildMcpServer(ctx) {
     serialNumbers: z.array(z.string().trim().min(1).max(200)).min(1).max(100),
     invoiceNumber: z.string().trim().min(1).max(200).optional(),
     deliveryNoteNumber: z.string().trim().min(1).max(200).optional(),
+    name: z.string().trim().min(1).max(200).optional(),
+    type: z.string().trim().min(1).max(100).optional(),
+    brand: z.string().trim().max(200).nullable().optional(),
+    model: z.string().trim().max(200).nullable().optional(),
+    purchaseDate: z.string().nullable().optional(),
+    warrantyEnd: z.string().nullable().optional(),
+    purchasePrice: z.number().nonnegative().nullable().optional(),
+    supplierId: z.string().nullable().optional(),
     overwrite: z.boolean().optional().describe('Remplace les références existantes uniquement si ce remplacement est demandé par l’utilisateur.')
   };
   server.registerTool('preview_equipment_documents', {

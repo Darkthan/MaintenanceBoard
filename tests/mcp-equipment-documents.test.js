@@ -1,5 +1,6 @@
 jest.mock('../src/lib/prisma', () => ({
-  equipment: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+  equipment: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn(), create: jest.fn() },
+  supplier: { findUnique: jest.fn() },
   $transaction: jest.fn()
 }));
 const prisma = require('../src/lib/prisma');
@@ -18,13 +19,15 @@ describe('Références facture / BL via MCP', () => {
     const out = await service.previewEquipmentDocuments({ serialNumbers: ['SN-001', 'UNKNOWN'], deliveryNoteNumber: ' BL-42 ' });
     expect(out.references).toEqual({ deliveryNoteNumber: 'BL-42' });
     expect(out.missingSerialNumbers).toEqual(['UNKNOWN']);
-    expect(out.canApply).toBe(false);
+    expect(out.canApply).toBe(true);
+    expect(out.creations[0]).toEqual(expect.objectContaining({ serialNumber: 'UNKNOWN', status: 'INACTIVE' }));
     expect(prisma.equipment.updateMany).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
-  it('bloque tout le lot si une série est inconnue', async () => {
-    await expect(service.associateEquipmentDocuments({ serialNumbers: ['SN-001', 'UNKNOWN'], invoiceNumber: 'F-1' })).rejects.toThrow('Association refusée');
-    expect(prisma.equipment.updateMany).not.toHaveBeenCalled();
+  it('crée une fiche inactive si une série est inconnue', async () => {
+    const out = await service.associateEquipmentDocuments({ serialNumbers: ['SN-001', 'UNKNOWN'], invoiceNumber: 'F-1' });
+    expect(out.createdCount).toBe(1);
+    expect(prisma.equipment.create).toHaveBeenCalledWith({ data: expect.objectContaining({ serialNumber: 'UNKNOWN', status: 'INACTIVE' }) });
   });
   it('refuse les doublons et les références absentes ou invalides', async () => {
     for (const input of [
@@ -66,6 +69,19 @@ describe('Références facture / BL via MCP', () => {
     prisma.equipment.updateMany.mockResolvedValue({ count: 0 });
     await expect(service.associateEquipmentDocuments({ serialNumbers: ['SN-001'], invoiceNumber: 'F-1' })).rejects.toThrow('fiche a changé');
   });
+  it('crée une fiche inactive avec les informations d’achat et le fournisseur', async () => {
+    prisma.equipment.findMany.mockResolvedValue([]);
+    prisma.supplier.findUnique.mockResolvedValue({ id: 'sup1' });
+    const out = await service.associateEquipmentDocuments({
+      serialNumbers: ['SN-NEW'], deliveryNoteNumber: 'BL-9', invoiceNumber: 'F-9',
+      supplierId: 'sup1', purchaseDate: '2026-10-14', warrantyEnd: '2029-10-14', purchasePrice: 899.9
+    });
+    expect(out.createdCount).toBe(1);
+    expect(prisma.equipment.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      serialNumber: 'SN-NEW', status: 'INACTIVE', supplierId: 'sup1', purchasePrice: 899.9,
+      invoiceNumber: 'F-9', deliveryNoteNumber: 'BL-9', purchaseDate: expect.any(Date), warrantyEnd: expect.any(Date)
+    }) });
+  });
   it('filtre les séries exactes et retourne les références', async () => {
     const out = await service.listEquipment({ serialNumbers: [' SN-001 '] });
     expect(prisma.equipment.findMany.mock.calls[0][0].where.serialNumber).toEqual({ in: ['SN-001'] });
@@ -84,5 +100,13 @@ describe('Références facture / BL via MCP', () => {
     prisma.equipment.findUnique.mockResolvedValue(row);
     await service.updateEquipment({ id: 'pc1', invoiceNumber: ' F-1 ', deliveryNoteNumber: null });
     expect(prisma.equipment.update).toHaveBeenCalledWith({ where: { id: 'pc1' }, data: { invoiceNumber: 'F-1', deliveryNoteNumber: null } });
+  });
+  it('permet de renseigner fournisseur, achat, garantie et prix sur une fiche', async () => {
+    prisma.supplier.findUnique.mockResolvedValue({ id: 'sup1' });
+    prisma.equipment.findUnique.mockResolvedValue(row);
+    await service.updateEquipment({ id: 'pc1', supplierId: 'sup1', purchaseDate: '2026-10-14', warrantyEnd: '2029-10-14', purchasePrice: 1200 });
+    expect(prisma.equipment.update).toHaveBeenCalledWith({ where: { id: 'pc1' }, data: {
+      supplierId: 'sup1', purchaseDate: expect.any(Date), warrantyEnd: expect.any(Date), purchasePrice: 1200
+    } });
   });
 });

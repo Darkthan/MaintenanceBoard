@@ -1,5 +1,6 @@
 jest.mock('../src/lib/prisma', () => ({
   equipment: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn() },
+  supplier: { findUnique: jest.fn() },
   equipmentNetworkInterface: { findUnique: jest.fn() },
   ipAddress: { findUnique: jest.fn() },
   room: { findUnique: jest.fn() },
