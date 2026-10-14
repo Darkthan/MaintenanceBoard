@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Autorisation – MaintenanceBoard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/js/mcp-permissions.js"></script>
 </head>
 <body class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
 
@@ -35,9 +36,9 @@
       <div class="px-6 py-4 border-b border-slate-100">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Accès demandé</p>
-          <span class="text-xs text-slate-400">Décochez pour refuser</span>
+          <span class="text-xs text-slate-400">Choisissez par page</span>
         </div>
-        <ul id="scope-list" class="space-y-2 text-sm"></ul>
+        <div id="scope-list" class="space-y-3 text-sm"></div>
         <p id="scope-error" class="hidden mt-2 text-xs text-red-500">Sélectionnez au moins un accès.</p>
       </div>
 
@@ -144,28 +145,6 @@
   </div>
 
   <script>
-    const SCOPE_LABELS = {
-      'room_visits:read': { label: 'Consulter le carnet de passages', desc: 'Lire les contrôles des salles et les observations' },
-      'room_visits:write': { label: 'Gérer le carnet de passages', desc: 'Créer, modifier et supprimer les observations' },
-      'ip_addressing:read': { label: 'Consulter le plan IP', desc: 'Lire les réseaux, adresses et migrations IP' },
-      'reservations:read':  { label: 'Consulter les emprunts',      desc: 'Lire le matériel informatique scolaire et les emprunts existants' },
-      'reservations:write': { label: 'Créer des emprunts',          desc: 'Créer et modifier des emprunts de matériel informatique scolaire' },
-      'equipment_bookings:read':  { label: 'Consulter les emprunts', desc: 'Lire le matériel informatique scolaire et les emprunts existants' },
-      'equipment_bookings:write': { label: 'Créer des emprunts',     desc: 'Créer et modifier des emprunts de matériel informatique scolaire' },
-      'equipment:read': { label: 'Consulter les PC', desc: 'Lire les fiches, interfaces MAC et adresses IP' },
-      'equipment:write': { label: 'Modifier les PC', desc: 'Modifier les fiches et interfaces réseau' },
-      'ip_addressing:write': { label: 'Modifier le plan IP', desc: 'Lier les interfaces réseau aux adresses IPAM' },
-      'interventions:read': { label: 'Consulter les interventions', desc: 'Lire les demandes de maintenance et leur suivi' },
-      'interventions:write': { label: 'Gérer les interventions',    desc: 'Créer et modifier les interventions de maintenance' },
-      'todos:read':         { label: 'Consulter les tâches',        desc: 'Lire les tâches standalone ou liées aux interventions' },
-      'todos:write':        { label: 'Gérer les tâches',            desc: 'Créer et modifier les tâches' },
-      'projects:read':      { label: 'Consulter les projets',       desc: 'Lire les projets Kanban, colonnes et cartes' },
-      'projects:write':     { label: 'Gérer les projets',           desc: 'Créer et modifier projets, colonnes et cartes' },
-      'orders:read':        { label: 'Consulter les commandes',     desc: 'Lire les commandes, lignes et suivis liés aux interventions' },
-      'orders:write':       { label: 'Gérer les commandes',         desc: 'Créer et modifier les commandes et leur suivi' },
-      'stock:read':         { label: 'Consulter le stock',          desc: 'Lire les articles, alertes et mouvements de stock' },
-      'stock:write':        { label: 'Gérer le stock',              desc: 'Créer et modifier les articles et mouvements de stock' }
-    };
 
     const params              = new URLSearchParams(window.location.search);
     const clientId            = params.get('client_id')             || '';
@@ -223,18 +202,18 @@
     function injectGrantedScopes(containerId) {
       const container = document.getElementById(containerId);
       container.replaceChildren();
-      document.querySelectorAll('.scope-cb:checked').forEach(cb => {
+      McpPermissions.selected(document.getElementById('scope-list')).forEach(scope => {
         const input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'granted_scopes';
-        input.value = cb.value;
+        input.value = scope;
         container.appendChild(input);
       });
     }
 
     // Validation : au moins un scope coché
     function validateScopes() {
-      const anyChecked = document.querySelector('.scope-cb:checked');
+      const anyChecked = McpPermissions.selected(document.getElementById('scope-list')).length > 0;
       const errEl = document.getElementById('scope-error');
       if (!anyChecked) {
         errEl.classList.remove('hidden');
@@ -295,50 +274,10 @@
     document.getElementById('session-form').addEventListener('submit', e => submitConsent(e, e.currentTarget, 'sf-granted-scopes'));
     document.getElementById('oauth-form').addEventListener('submit', e => submitConsent(e, e.currentTarget, 'f-granted-scopes'));
 
-    function buildScopeItem(scopeKey) {
-      const info = SCOPE_LABELS[scopeKey] || { label: scopeKey, desc: '' };
-      const li = document.createElement('li');
-
-      const label = document.createElement('label');
-      label.className = 'flex items-start gap-3 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-slate-50 transition-colors';
-
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'scope-cb mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 cursor-pointer flex-shrink-0';
-      checkbox.value = scopeKey;
-      checkbox.checked = true;
-
-      const textDiv = document.createElement('div');
-      const labelP = document.createElement('p');
-      labelP.className = 'font-medium text-slate-700 text-sm leading-snug';
-      labelP.textContent = info.label;
-      textDiv.appendChild(labelP);
-      if (info.desc) {
-        const descP = document.createElement('p');
-        descP.className = 'text-xs text-slate-400 mt-0.5';
-        descP.textContent = info.desc;
-        textDiv.appendChild(descP);
-      }
-
-      label.appendChild(checkbox);
-      label.appendChild(textDiv);
-      li.appendChild(label);
-      return li;
-    }
-
     function renderScopes(allowedScopes) {
-      const requestedScopes = scope ? scope.split(' ').filter(Boolean) : allowedScopes;
-      const granted = requestedScopes.filter(s => allowedScopes.includes(s));
-      const list = document.getElementById('scope-list');
-      list.textContent = '';
-      if (granted.length) {
-        granted.forEach(s => list.appendChild(buildScopeItem(s)));
-      } else {
-        const li = document.createElement('li');
-        li.className = 'text-slate-400 text-sm px-2';
-        li.textContent = 'Aucun scope valide demandé.';
-        list.appendChild(li);
-      }
+      const requested = scope ? scope.split(' ').filter(Boolean) : allowedScopes;
+      const granted = requested.filter(item => allowedScopes.includes(item));
+      McpPermissions.mount(document.getElementById('scope-list'), granted, granted);
     }
 
     Promise.all([

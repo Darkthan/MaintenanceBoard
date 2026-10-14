@@ -64,12 +64,34 @@ describe('OAuth et droits du catalogue MCP', () => {
 
   it('propose tous les droits dans les paramètres et explique tous les droits du consentement', () => {
     const consentHtml = fs.readFileSync(path.join(__dirname, '../public/oauth-authorize.html'), 'utf8');
-    const labels = vm.runInNewContext(`(${consentHtml.match(/const SCOPE_LABELS = (\{[\s\S]*?\n    \});/)[1]})`);
+    const permissions = require('../public/js/mcp-permissions');
     const settingsHtml = fs.readFileSync(path.join(__dirname, '../public/settings.html'), 'utf8');
-    const options = new Set([...settingsHtml.matchAll(/name="scopes"\s+value="([^"]+)"/g)].map(match => match[1]));
+    const options = new Set(permissions.categories.flatMap(category => [category.id + ':read', category.id + ':write']));
     for (const scope of ALL_MCP_SCOPES) {
-      expect(labels[scope]?.label).toBeTruthy();
+      expect(permissions.groups([scope])[0]?.label).toBeTruthy();
       expect(options.has(scope) || options.has(MCP_SCOPE_ALIASES[scope])).toBe(true);
     }
+    for (const html of [consentHtml, settingsHtml]) {
+      expect(html).toContain('src="/js/mcp-permissions.js"');
+      expect(html).toContain('McpPermissions.mount(');
+      expect(html).toContain('McpPermissions.selected(');
+      for (const script of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
+        new vm.Script(script[1]);
+      }
+    }
+  });
+
+  it('accorde uniquement la lecture quand la catégorie équipements est limitée à la lecture', async () => {
+    const result = await request(app).post('/oauth/authorize').type('form').send({ ...consent, granted_scopes: ['equipment:read'] });
+    const granted = consumeCode(new URL(result.body.redirect).searchParams.get('code'));
+    expect(granted.scopes).toEqual(['equipment:read']);
+  });
+
+  it('ne peut pas accorder un droit hors de la demande OAuth', async () => {
+    const result = await request(app).post('/oauth/authorize').type('form').send({
+      ...consent, scope: 'equipment:read', granted_scopes: ['equipment:read', 'equipment:write']
+    });
+    const granted = consumeCode(new URL(result.body.redirect).searchParams.get('code'));
+    expect(granted.scopes).toEqual(['equipment:read']);
   });
 });
