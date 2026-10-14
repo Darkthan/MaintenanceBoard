@@ -1,5 +1,7 @@
 const prisma = require('../lib/prisma');
-const { equipmentReferences, REFERENCE_FIELDS } = require('../utils/equipmentReferences');
+const { equipmentReferences } = require('../utils/equipmentReferences');
+const { z } = require('zod');
+const { equipmentFields } = require('./equipmentFields');
 
 const STATUSES = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE'];
 const detailInclude = {
@@ -26,8 +28,13 @@ function present(row) {
   };
 }
 
-async function getEquipment({ id }) {
-  const row = await prisma.equipment.findUnique({ where: { id }, include: detailInclude });
+function equipmentSelector({ id, serialNumber }) {
+  if (!!id === !!serialNumber) fail('Renseignez soit id, soit serialNumber pour identifier la fiche');
+  return id ? { id } : { serialNumber: serialNumber.trim() };
+}
+
+async function getEquipment(input) {
+  const row = await prisma.equipment.findUnique({ where: equipmentSelector(input), include: detailInclude });
   if (!row) fail('Équipement introuvable', 404);
   return present(row);
 }
@@ -41,7 +48,7 @@ async function listEquipment({ search, serialNumbers, type, roomId, status, ip, 
   }
   if (type) where.type = { contains: type };
   if (roomId) where.roomId = roomId;
-  if (search) where.OR = ['name', 'serialNumber', 'brand', 'model', 'agentHostname'].map(field => ({ [field]: { contains: search } }));
+  if (search) where.OR = ['name', 'serialNumber', 'brand', 'model', 'agentHostname', 'invoiceNumber', 'deliveryNoteNumber'].map(field => ({ [field]: { contains: search } }));
   if (ip) where.ipAddresses = { some: { ip: { contains: ip } } };
   if (mac) where.networkInterfaces = { some: { macAddress: { contains: mac } } };
   const take = Math.min(Math.max(Number(limit) || 50, 1), 100);
@@ -56,7 +63,8 @@ function normalizePurchaseFields(input) {
   const data = {};
   for (const key of ['purchaseDate', 'warrantyEnd']) {
     if (input[key] === undefined) continue;
-    if (input[key] !== null && Number.isNaN(Date.parse(input[key]))) fail(`${key} doit être une date ISO valide`);
+    if (input[key] !== null && (typeof input[key] !== 'string' || Number.isNaN(Date.parse(input[key])) ||
+        (/^\d{4}-\d{2}-\d{2}$/.test(input[key]) && new Date(input[key]).toISOString().slice(0, 10) !== input[key]))) fail(`${key} doit être une date ISO valide`);
     data[key] = input[key] === null ? null : new Date(input[key]);
   }
   if (input.purchasePrice !== undefined) {
@@ -72,25 +80,54 @@ function normalizePurchaseFields(input) {
   return data;
 }
 
-async function updateEquipment({ id, ...input }) {
-  const allowed = ['name', 'type', 'brand', 'model', 'serialNumber', 'status', 'description', 'roomId', 'agentHostname'];
-  const data = Object.fromEntries(allowed.filter(key => input[key] !== undefined).map(key => [key, input[key]]));
-  Object.assign(data, equipmentReferences(input));
-  Object.assign(data, normalizePurchaseFields(input));
+async function normalizeEquipment(db, input) {
+  if (input.status !== undefined && !STATUSES.includes(input.status)) fail('Statut invalide');
+  const parsed = z.object(equipmentFields).strict().safeParse(input);
+  if (!parsed.success) fail(parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; '));
+  const data = parsed.data;
+  Object.assign(data, equipmentReferences(data), normalizePurchaseFields(data));
+  for (const key of ['brand', 'model', 'serialNumber', 'description', 'roomId', 'suggestedRoomId', 'supplierId', 'enrollmentTokenId', 'agentHostname']) {
+    if (data[key] === '') data[key] = null;
+  }
+  if (data.lastSeenAt !== undefined && data.lastSeenAt !== null) {
+    if (Number.isNaN(Date.parse(data.lastSeenAt)) ||
+        (/^\d{4}-\d{2}-\d{2}$/.test(data.lastSeenAt) && new Date(data.lastSeenAt).toISOString().slice(0, 10) !== data.lastSeenAt)) fail('lastSeenAt doit être une date ISO valide');
+    data.lastSeenAt = new Date(data.lastSeenAt);
+  }
+  if (data.agentInfo !== undefined && data.agentInfo !== null) {
+    let info;
+    try { info = typeof data.agentInfo === 'string' ? JSON.parse(data.agentInfo) : data.agentInfo; }
+    catch { fail('agentInfo doit être un objet JSON valide'); }
+    if (!info || typeof info !== 'object' || Array.isArray(info)) fail('agentInfo doit être un objet JSON valide');
+    data.agentInfo = JSON.stringify(info);
+    if (data.agentInfo.length > 10000) fail('agentInfo dépasse 10000 caractères');
+  }
+  for (const key of ['roomId', 'suggestedRoomId']) {
+    if (data[key] && !await db.room.findUnique({ where: { id: data[key] }, select: { id: true } })) fail('Salle introuvable', 404);
+  }
+  if (data.supplierId && !await db.supplier.findUnique({ where: { id: data.supplierId }, select: { id: true } })) fail('Fournisseur introuvable', 404);
+  if (data.enrollmentTokenId && !await db.agentToken.findUnique({ where: { id: data.enrollmentTokenId }, select: { id: true } })) fail('Jeton de déploiement introuvable', 404);
+  return data;
+}
+
+async function createEquipment(input) {
+  const data = await normalizeEquipment(prisma, input);
+  if (!data.name || !data.type) fail('name et type sont requis');
+  try {
+    return present(await prisma.equipment.create({ data: { status: 'INACTIVE', ...data }, include: detailInclude }));
+  } catch (error) {
+    if (error.code === 'P2002') fail('Numéro de série déjà utilisé', 409);
+    throw error;
+  }
+}
+
+async function updateEquipment({ id, targetSerialNumber, ...input }) {
+  const data = await normalizeEquipment(prisma, input);
   if (!Object.keys(data).length) fail('Aucun champ à modifier');
-  if (data.status && !STATUSES.includes(data.status)) fail('Statut invalide');
-  for (const key of ['name', 'type']) if (key in data && !String(data[key] || '').trim()) fail(`${key} ne peut pas être vide`);
-  for (const key of ['purchaseDate', 'warrantyEnd']) {
-    if (key in data && data[key] !== null) {
-      if (Number.isNaN(Date.parse(data[key]))) fail(`${key} doit être une date ISO valide`);
-      data[key] = new Date(data[key]);
-    }
-  }
-  if (data.roomId) {
-    if (!await prisma.room.findUnique({ where: { id: data.roomId }, select: { id: true } })) fail('Salle introuvable', 404);
-  }
-  if (data.supplierId && !await prisma.supplier.findUnique({ where: { id: data.supplierId }, select: { id: true } })) fail('Fournisseur introuvable', 404);
-  if (!await prisma.equipment.findUnique({ where: { id }, select: { id: true } })) fail('Équipement introuvable', 404);
+  const selector = equipmentSelector({ id, serialNumber: targetSerialNumber });
+  const current = await prisma.equipment.findUnique({ where: selector, select: { id: true } });
+  if (!current) fail('Équipement introuvable', 404);
+  id = current.id;
   try {
     await prisma.equipment.update({ where: { id }, data });
   } catch (error) {
@@ -98,6 +135,16 @@ async function updateEquipment({ id, ...input }) {
     throw error;
   }
   return getEquipment({ id });
+}
+
+async function listEquipmentSuppliers({ search, limit = 50, cursor } = {}) {
+  const take = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const rows = await prisma.supplier.findMany({
+    where: search ? { name: { contains: search } } : {},
+    select: { id: true, name: true }, orderBy: { id: 'asc' }, take: take + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+  });
+  return { data: rows.slice(0, take), nextCursor: rows.length > take ? rows[take - 1].id : null };
 }
 
 async function listEquipmentNetworkInterfaces({ equipmentId }) {
@@ -172,10 +219,12 @@ async function prepareEquipmentDocuments(db, input) {
     fail('Renseignez au moins un numéro de facture ou de BL non vide ; les champs omis restent inchangés');
   }
   const purchase = normalizePurchaseFields(input);
-  if (input.supplierId && !await db.supplier.findUnique({ where: { id: input.supplierId }, select: { id: true } })) fail('Fournisseur introuvable', 404);
+  if (purchase.supplierId && !await db.supplier.findUnique({ where: { id: purchase.supplierId }, select: { id: true } })) fail('Fournisseur introuvable', 404);
+  const data = { ...references, ...purchase };
   const rows = await db.equipment.findMany({
     where: { serialNumber: { in: serialNumbers } },
-    select: { id: true, name: true, serialNumber: true, invoiceNumber: true, deliveryNoteNumber: true }
+    select: { id: true, name: true, serialNumber: true, invoiceNumber: true, deliveryNoteNumber: true,
+      purchaseDate: true, warrantyEnd: true, purchasePrice: true, supplierId: true }
   });
   const bySerial = new Map(rows.map(row => [row.serialNumber, row]));
   const missingSerialNumbers = serialNumbers.filter(serial => !bySerial.has(serial));
@@ -188,17 +237,18 @@ async function prepareEquipmentDocuments(db, input) {
     model: input.model?.trim() || null,
     ...references,
     ...purchase,
-    supplierId: input.supplierId || null
+    supplierId: purchase.supplierId || null
   }));
   const matches = serialNumbers.filter(serial => bySerial.has(serial)).map(serial => {
     const row = bySerial.get(serial);
-    const changes = Object.entries(references).filter(([field, value]) => row[field] !== value)
+    const comparable = value => value instanceof Date ? value.toISOString() : value ?? null;
+    const changes = Object.entries(data).filter(([field, value]) => comparable(row[field]) !== comparable(value))
       .map(([field, value]) => ({ field, previous: row[field] ?? null, next: value }));
     return { ...row, changes };
   });
   const conflicts = matches.flatMap(row => row.changes.filter(change => change.previous !== null && change.previous !== '')
     .map(change => ({ serialNumber: row.serialNumber, ...change })));
-  return { references, matches, missingSerialNumbers, conflicts,
+  return { references, data, matches, missingSerialNumbers, conflicts,
     creations, canApply: !conflicts.length || input.overwrite === true };
 }
 
@@ -207,28 +257,33 @@ async function previewEquipmentDocuments(input) {
 }
 
 async function associateEquipmentDocuments(input) {
-  return prisma.$transaction(async tx => {
-    const preview = await prepareEquipmentDocuments(tx, input);
-    if (!preview.canApply) {
-      fail(`Association refusée : ${JSON.stringify({ missingSerialNumbers: preview.missingSerialNumbers, conflicts: preview.conflicts })}`, 409);
-    }
-    let updatedCount = 0;
-    let createdCount = 0;
-    for (const creation of preview.creations) {
-      await tx.equipment.create({ data: creation });
-      createdCount++;
-    }
-    for (const row of preview.matches) {
-      if (!row.changes.length) continue;
-      const where = { id: row.id, serialNumber: row.serialNumber };
-      for (const field of REFERENCE_FIELDS) where[field] = row[field] ?? null;
-      const result = await tx.equipment.updateMany({ where, data: preview.references });
-      if (result.count !== 1) fail('La fiche a changé pendant l’association. Relancez l’aperçu.', 409);
-      updatedCount++;
-    }
-    return { ...preview, updatedCount, createdCount, unchangedCount: preview.matches.length - updatedCount };
-  });
+  try {
+    return await prisma.$transaction(async tx => {
+      const preview = await prepareEquipmentDocuments(tx, input);
+      if (!preview.canApply) {
+        fail(`Association refusée : ${JSON.stringify({ missingSerialNumbers: preview.missingSerialNumbers, conflicts: preview.conflicts })}`, 409);
+      }
+      let updatedCount = 0;
+      let createdCount = 0;
+      for (const creation of preview.creations) {
+        await tx.equipment.create({ data: creation });
+        createdCount++;
+      }
+      for (const row of preview.matches) {
+        if (!row.changes.length) continue;
+        const where = { id: row.id, serialNumber: row.serialNumber };
+        for (const field of Object.keys(preview.data)) where[field] = row[field] ?? null;
+        const result = await tx.equipment.updateMany({ where, data: preview.data });
+        if (result.count !== 1) fail('La fiche a changé pendant l’association. Relancez l’aperçu.', 409);
+        updatedCount++;
+      }
+      return { ...preview, updatedCount, createdCount, unchangedCount: preview.matches.length - updatedCount };
+    });
+  } catch (error) {
+    if (error.code === 'P2002') fail('Une série a été créée pendant l’association. Relancez l’aperçu.', 409);
+    throw error;
+  }
 }
 
-module.exports = { listEquipment, getEquipment, updateEquipment, listEquipmentNetworkInterfaces, updateEquipmentNetworkInterface,
+module.exports = { listEquipment, getEquipment, createEquipment, updateEquipment, listEquipmentSuppliers, listEquipmentNetworkInterfaces, updateEquipmentNetworkInterface,
   previewEquipmentDocuments, associateEquipmentDocuments };

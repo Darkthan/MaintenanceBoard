@@ -87,6 +87,18 @@ describe('Références facture / BL via MCP', () => {
     expect(prisma.equipment.findMany.mock.calls[0][0].where.serialNumber).toEqual({ in: ['SN-001'] });
     expect(out.data[0]).toHaveProperty('invoiceNumber', null);
   });
+  it('complète achat, fournisseur et garantie sur les PC existants même si la facture est déjà associée', async () => {
+    prisma.equipment.findMany.mockResolvedValue([{ ...row, invoiceNumber: 'F1', purchaseDate: null,
+      warrantyEnd: null, purchasePrice: null, supplierId: null }]);
+    prisma.supplier.findUnique.mockResolvedValue({ id: 'sup1' });
+    const result = await service.associateEquipmentDocuments({ serialNumbers: ['SN-001'], invoiceNumber: 'F1',
+      supplierId: ' sup1 ', purchaseDate: '2026-10-14', warrantyEnd: '2029-10-14', purchasePrice: 850 });
+    expect(result.updatedCount).toBe(1);
+    expect(prisma.equipment.updateMany).toHaveBeenCalledWith({
+      where: { id: 'pc1', serialNumber: 'SN-001', invoiceNumber: 'F1', supplierId: null, purchaseDate: null, warrantyEnd: null, purchasePrice: null },
+      data: { invoiceNumber: 'F1', supplierId: 'sup1', purchaseDate: new Date('2026-10-14'), warrantyEnd: new Date('2029-10-14'), purchasePrice: 850 }
+    });
+  });
   it('protège chaque outil par son scope', async () => {
     const read = buildMcpServer({ scopes: ['equipment:read'], createdBy: { id: 'u1' } });
     const input = { serialNumbers: ['SN-001'], deliveryNoteNumber: 'BL-1' };

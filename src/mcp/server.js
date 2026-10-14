@@ -7,10 +7,11 @@ const { MCP_SCOPES, hasScope } = require('../utils/mcpTokens');
 const reservations = require('./reservationsService');
 const work = require('./workService');
 const equipment = require('./equipmentService');
+const { equipmentFields, readOnlyFields, protectedFields } = require('./equipmentFields');
 const support = require('./supportService');
 const visits = require('../services/roomVisitService');
 
-const SERVER_INFO = { name: 'maintenanceboard', version: '1.1.0' };
+const SERVER_INFO = { name: 'maintenanceboard', version: '1.2.0' };
 
 const READ_ONLY_TOOL = {
   readOnlyHint: true,
@@ -92,7 +93,7 @@ function buildMcpServer(ctx) {
   }, tool(ctx, MCP_SCOPES.ROOM_VISITS_WRITE, ({ id }) => visits.deleteRoomVisit(id, user)));
 
   server.registerTool('list_equipment', {
-    description: 'Recherche les équipements et leurs interfaces réseau, avec pagination.',
+    description: 'Liste et recherche les fiches du parc informatique (PC, séries, numéros de facture et BL), avec tous les champs métier, fournisseur, achat, garantie, prix et interfaces réseau. Pagination via nextCursor.',
     inputSchema: {
       search: z.string().optional(), type: z.string().optional(), roomId: z.string().optional(),
       serialNumbers: z.array(z.string().trim().min(1).max(200)).min(1).max(100).optional().describe('Filtre exact par numéros de série relevés sur un BL ou une facture.'),
@@ -103,25 +104,40 @@ function buildMcpServer(ctx) {
   }, tool(ctx, MCP_SCOPES.EQUIPMENT_READ, equipment.listEquipment));
 
   server.registerTool('get_equipment', {
-    description: 'Consulte la fiche équipement, les interfaces MAC et les adresses IPAM.',
-    inputSchema: { id: z.string().min(1) }, annotations: READ_ONLY_TOOL
+    description: 'Consulte tous les champs de la fiche équipement, dont facture, BL, achat, fournisseur, garantie, prix, informations agent, interfaces MAC et adresses IPAM. Identifier par id OU numéro de série exact.',
+    inputSchema: { id: z.string().min(1).optional(), serialNumber: z.string().trim().min(1).optional() }, annotations: READ_ONLY_TOOL
   }, tool(ctx, MCP_SCOPES.EQUIPMENT_READ, equipment.getEquipment));
 
+  server.registerTool('create_equipment', {
+    description: 'Crée une fiche du parc informatique avec tous ses champs métier, dont série, facture, BL, fournisseur, dates et prix. name et type requis. Statut INACTIVE par défaut.',
+    inputSchema: { ...equipmentFields, name: equipmentFields.name.unwrap(), type: equipmentFields.type.unwrap() },
+    annotations: ADDITIVE_WRITE_TOOL
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_WRITE, equipment.createEquipment));
+
   server.registerTool('update_equipment', {
-    description: 'Modifie partiellement la fiche équipement.',
+    description: 'Modifie tous les champs métier de la fiche équipement, y compris facture/BL, fournisseur, achat, garantie, prix, découverte et données agent. Identifier par id OU targetSerialNumber exact. Champs omis conservés, null efface un champ facultatif. Les dates automatiques et secrets sont gérés par le système.',
     inputSchema: {
-      id: z.string().min(1), name: z.string().min(1).max(200).optional(), type: z.string().min(1).max(100).optional(),
-      brand: z.string().max(200).nullable().optional(), model: z.string().max(200).nullable().optional(),
-      serialNumber: z.string().max(200).nullable().optional(),
-      invoiceNumber: z.string().max(200).nullable().optional(),
-      deliveryNoteNumber: z.string().max(200).nullable().optional(),
-      status: z.enum(['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE']).optional(),
-      description: z.string().nullable().optional(), roomId: z.string().nullable().optional(),
-      agentHostname: z.string().max(255).nullable().optional(),
-      purchaseDate: z.string().nullable().optional(), warrantyEnd: z.string().nullable().optional(),
-      purchasePrice: z.number().nonnegative().nullable().optional(), supplierId: z.string().nullable().optional()
+      ...equipmentFields, id: z.string().min(1).optional(),
+      targetSerialNumber: z.string().trim().min(1).max(200).optional()
+        .describe('Numéro de série actuel pour identifier la fiche sans connaître son id. serialNumber reste le champ à modifier.')
     }, annotations: { ...ADDITIVE_WRITE_TOOL, idempotentHint: true }
   }, tool(ctx, MCP_SCOPES.EQUIPMENT_WRITE, equipment.updateEquipment));
+
+  server.registerTool('list_equipment_suppliers', {
+    description: 'Recherche les fournisseurs existants et leurs identifiants pour renseigner supplierId sur les fiches équipements.',
+    inputSchema: { search: z.string().optional(), limit: z.number().int().min(1).max(100).optional(), cursor: z.string().optional() },
+    annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_READ, equipment.listEquipmentSuppliers));
+
+  server.registerTool('get_equipment_fields', {
+    description: 'Liste les champs modifiables des équipements et les champs internes gérés par le système. Les valeurs des champs métier sont accessibles avec get_equipment et list_equipment.',
+    inputSchema: {}, annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_READ, async () => ({
+    editable: Object.keys(equipmentFields), readOnly: readOnlyFields, protected: protectedFields,
+    networkTools: ['list_equipment_network_interfaces', 'update_equipment_network_interface'],
+    supplierTool: 'list_equipment_suppliers',
+    note: 'Les données agent peuvent être actualisées par le prochain passage de l’agent. Les champs omis sont conservés ; null efface un champ facultatif.'
+  })));
 
   const documentFields = {
     serialNumbers: z.array(z.string().trim().min(1).max(200)).min(1).max(100),
@@ -138,11 +154,11 @@ function buildMcpServer(ctx) {
     overwrite: z.boolean().optional().describe('Remplace les références existantes uniquement si ce remplacement est demandé par l’utilisateur.')
   };
   server.registerTool('preview_equipment_documents', {
-    description: 'Après lecture d’une photo de BL/facture dans la conversation, vérifie les séries exactes et prépare les références à associer sans enregistrer de fichier. Signale les séries inconnues et les conflits. Ne jamais inventer une référence absente ou corriger une série incertaine.',
+    description: 'Après lecture d’une photo de BL/facture, prépare les références et informations d’achat à associer aux séries exactes, sans enregistrer de fichier. Présente les créations INACTIVE prévues pour les séries absentes et les conflits sur les fiches existantes. Ne jamais inventer une référence ou corriger une série incertaine.',
     inputSchema: documentFields, annotations: READ_ONLY_TOOL
   }, tool(ctx, MCP_SCOPES.EQUIPMENT_READ, equipment.previewEquipmentDocuments));
   server.registerTool('associate_equipment_documents', {
-    description: 'Associe un numéro de BL et/ou de facture à un lot de PC par séries exactes. Utiliser l’aperçu au préalable. Tout le lot est refusé si une série est inconnue ou une référence existante est en conflit (sauf overwrite explicite). Champs omis inchangés, aucun fichier conservé.',
+    description: 'Associe facture, BL, fournisseur, achat, garantie et prix unitaire à un lot de PC par séries exactes. Crée automatiquement les séries absentes en INACTIVE. Utiliser l’aperçu au préalable. Un conflit bloque le lot sauf overwrite demandé. Champs omis inchangés, aucun fichier conservé.',
     inputSchema: documentFields, annotations: { ...ADDITIVE_WRITE_TOOL, idempotentHint: true, destructiveHint: true }
   }, tool(ctx, MCP_SCOPES.EQUIPMENT_WRITE, equipment.associateEquipmentDocuments));
 
