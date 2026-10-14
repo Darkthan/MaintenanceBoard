@@ -497,8 +497,8 @@ router.post('/authorize', authorizeLimiter, async (req, res) => {
       // Mode login : email + mot de passe
       if (!email || !password) return redirectError('invalid_request', 'Identifiants manquants');
       user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase().trim() } });
-      if (!user || !user.isActive || !user.password) return redirectError('access_denied', 'Identifiants invalides');
-      const passwordOk = await bcrypt.compare(String(password), user.password);
+      if (!user || !user.isActive || !user.passwordHash) return redirectError('access_denied', 'Identifiants invalides');
+      const passwordOk = await bcrypt.compare(String(password), user.passwordHash);
       if (!passwordOk) return redirectError('access_denied', 'Identifiants invalides');
     }
 
