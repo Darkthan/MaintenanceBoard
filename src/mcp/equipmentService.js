@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const { equipmentReferences, REFERENCE_FIELDS } = require('../utils/equipmentReferences');
 
 const STATUSES = ['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE'];
 const detailInclude = {
@@ -30,8 +31,9 @@ async function getEquipment({ id }) {
   return present(row);
 }
 
-async function listEquipment({ search, type, roomId, status, ip, mac, limit = 50, cursor } = {}) {
+async function listEquipment({ search, serialNumbers, type, roomId, status, ip, mac, limit = 50, cursor } = {}) {
   const where = {};
+  if (serialNumbers) where.serialNumber = { in: serialNumbers.map(value => value.trim()) };
   if (status) {
     if (!STATUSES.includes(status)) fail('Statut invalide');
     where.status = status;
@@ -52,6 +54,7 @@ async function listEquipment({ search, type, roomId, status, ip, mac, limit = 50
 async function updateEquipment({ id, ...input }) {
   const allowed = ['name', 'type', 'brand', 'model', 'serialNumber', 'status', 'description', 'roomId', 'agentHostname', 'purchaseDate', 'warrantyEnd'];
   const data = Object.fromEntries(allowed.filter(key => input[key] !== undefined).map(key => [key, input[key]]));
+  Object.assign(data, equipmentReferences(input));
   if (!Object.keys(data).length) fail('Aucun champ à modifier');
   if (data.status && !STATUSES.includes(data.status)) fail('Statut invalide');
   for (const key of ['name', 'type']) if (key in data && !String(data[key] || '').trim()) fail(`${key} ne peut pas être vide`);
@@ -133,4 +136,58 @@ async function updateEquipmentNetworkInterface({ equipmentId, interfaceId, name,
   }
 }
 
-module.exports = { listEquipment, getEquipment, updateEquipment, listEquipmentNetworkInterfaces, updateEquipmentNetworkInterface };
+// Correspondances exactes uniquement : aucune correction OCR implicite des séries.
+async function prepareEquipmentDocuments(db, input) {
+  if (!Array.isArray(input.serialNumbers) || !input.serialNumbers.length || input.serialNumbers.length > 100 ||
+      input.serialNumbers.some(value => typeof value !== 'string' || !value.trim() || value.trim().length > 200)) {
+    fail('Renseignez de 1 à 100 numéros de série non vides (200 caractères maximum)');
+  }
+  const serialNumbers = input.serialNumbers.map(value => value.trim());
+  if (new Set(serialNumbers).size !== serialNumbers.length) fail('Numéros de série dupliqués dans le lot');
+  const references = equipmentReferences(input);
+  if (!Object.keys(references).length || Object.values(references).some(value => !value)) {
+    fail('Renseignez au moins un numéro de facture ou de BL non vide ; les champs omis restent inchangés');
+  }
+  const rows = await db.equipment.findMany({
+    where: { serialNumber: { in: serialNumbers } },
+    select: { id: true, name: true, serialNumber: true, invoiceNumber: true, deliveryNoteNumber: true }
+  });
+  const bySerial = new Map(rows.map(row => [row.serialNumber, row]));
+  const missingSerialNumbers = serialNumbers.filter(serial => !bySerial.has(serial));
+  const matches = serialNumbers.filter(serial => bySerial.has(serial)).map(serial => {
+    const row = bySerial.get(serial);
+    const changes = Object.entries(references).filter(([field, value]) => row[field] !== value)
+      .map(([field, value]) => ({ field, previous: row[field] ?? null, next: value }));
+    return { ...row, changes };
+  });
+  const conflicts = matches.flatMap(row => row.changes.filter(change => change.previous !== null && change.previous !== '')
+    .map(change => ({ serialNumber: row.serialNumber, ...change })));
+  return { references, matches, missingSerialNumbers, conflicts,
+    canApply: !missingSerialNumbers.length && (!conflicts.length || input.overwrite === true) };
+}
+
+async function previewEquipmentDocuments(input) {
+  return prepareEquipmentDocuments(prisma, input);
+}
+
+async function associateEquipmentDocuments(input) {
+  return prisma.$transaction(async tx => {
+    const preview = await prepareEquipmentDocuments(tx, input);
+    if (!preview.canApply) {
+      fail(`Association refusée : ${JSON.stringify({ missingSerialNumbers: preview.missingSerialNumbers, conflicts: preview.conflicts })}`, 409);
+    }
+    let updatedCount = 0;
+    for (const row of preview.matches) {
+      if (!row.changes.length) continue;
+      const where = { id: row.id, serialNumber: row.serialNumber };
+      for (const field of REFERENCE_FIELDS) where[field] = row[field] ?? null;
+      const result = await tx.equipment.updateMany({ where, data: preview.references });
+      if (result.count !== 1) fail('La fiche a changé pendant l’association. Relancez l’aperçu.', 409);
+      updatedCount++;
+    }
+    return { ...preview, updatedCount, unchangedCount: preview.matches.length - updatedCount };
+  });
+}
+
+module.exports = { listEquipment, getEquipment, updateEquipment, listEquipmentNetworkInterfaces, updateEquipmentNetworkInterface,
+  previewEquipmentDocuments, associateEquipmentDocuments };

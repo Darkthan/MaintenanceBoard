@@ -203,6 +203,8 @@ model Equipment {
   brand           String?
   model           String?
   serialNumber    String?   @unique
+  invoiceNumber   String?
+  deliveryNoteNumber String?
   status          String    @default("ACTIVE")     // ACTIVE | INACTIVE | REPAIR | DECOMMISSIONED | DEEE
   description     String?
   purchaseDate    DateTime?

@@ -151,3 +151,28 @@ describe('POST /api/equipment', () => {
     }));
   });
 });
+
+describe('Références des équipements via la page', () => {
+  beforeEach(() => jest.clearAllMocks());
+  it('enregistre uniquement les numéros normalisés à la création', async () => {
+    prisma.equipment.create.mockResolvedValue({ id: 'pc1', invoiceNumber: 'F-01', deliveryNoteNumber: 'BL-01' });
+    const res = await request(buildApp()).post('/api/equipment').send({ name: 'PC', type: 'PC', invoiceNumber: ' F-01 ', deliveryNoteNumber: ' BL-01 ' });
+    expect(res.status).toBe(201);
+    expect(prisma.equipment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ invoiceNumber: 'F-01', deliveryNoteNumber: 'BL-01' }) }));
+  });
+  it('permet de compléter la facture sans effacer le BL et d’effacer explicitement', async () => {
+    prisma.equipment.update.mockResolvedValue({ id: 'pc1' });
+    const res = await request(buildApp()).patch('/api/equipment/pc1').send({ invoiceNumber: ' F-02 ' });
+    expect(res.status).toBe(200);
+    expect(prisma.equipment.update.mock.calls[0][0].data).toEqual({ invoiceNumber: 'F-02' });
+    await request(buildApp()).patch('/api/equipment/pc1').send({ invoiceNumber: null, deliveryNoteNumber: '' });
+    expect(prisma.equipment.update.mock.calls[1][0].data).toEqual({ invoiceNumber: null, deliveryNoteNumber: null });
+  });
+  it('refuse les références invalides avant toute écriture', async () => {
+    for (const value of [42, 'F'.repeat(201), {}]) {
+      const res = await request(buildApp()).patch('/api/equipment/pc1').send({ invoiceNumber: value });
+      expect(res.status).toBe(400);
+    }
+    expect(prisma.equipment.update).not.toHaveBeenCalled();
+  });
+});

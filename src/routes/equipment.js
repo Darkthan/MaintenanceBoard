@@ -10,6 +10,7 @@ const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
 const { uploadImport } = require('../middleware/upload');
 const importService = require('../services/importService');
 const qrService = require('../services/qrService');
+const { equipmentReferences } = require('../utils/equipmentReferences');
 
 // Multer pour les pièces jointes équipement
 const equipAttachStorage = multer.diskStorage({
@@ -355,6 +356,7 @@ router.post('/',
           brand: brand || null,
           model: model || null,
           serialNumber: serialNumber || null,
+          ...equipmentReferences(req.body),
           status: status || 'ACTIVE',
           description: description || null,
           roomId: roomId || null,
@@ -451,6 +453,7 @@ router.patch('/:id',
       if (!validate(req, res)) return;
       const { name, type, brand, model, serialNumber, status, description, roomId, purchaseDate, warrantyEnd, purchasePrice, supplierId } = req.body;
       const data = {};
+      Object.assign(data, equipmentReferences(req.body));
       if (name !== undefined) data.name = name;
       if (type !== undefined) data.type = type;
       if (brand !== undefined) data.brand = brand || null;

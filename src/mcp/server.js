@@ -95,6 +95,7 @@ function buildMcpServer(ctx) {
     description: 'Recherche les équipements et leurs interfaces réseau, avec pagination.',
     inputSchema: {
       search: z.string().optional(), type: z.string().optional(), roomId: z.string().optional(),
+      serialNumbers: z.array(z.string().trim().min(1).max(200)).min(1).max(100).optional().describe('Filtre exact par numéros de série relevés sur un BL ou une facture.'),
       status: z.enum(['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE']).optional(),
       ip: z.string().optional(), mac: z.string().optional(),
       limit: z.number().int().min(1).max(100).optional(), cursor: z.string().optional()
@@ -112,12 +113,29 @@ function buildMcpServer(ctx) {
       id: z.string().min(1), name: z.string().min(1).max(200).optional(), type: z.string().min(1).max(100).optional(),
       brand: z.string().max(200).nullable().optional(), model: z.string().max(200).nullable().optional(),
       serialNumber: z.string().max(200).nullable().optional(),
+      invoiceNumber: z.string().max(200).nullable().optional(),
+      deliveryNoteNumber: z.string().max(200).nullable().optional(),
       status: z.enum(['ACTIVE', 'INACTIVE', 'REPAIR', 'DECOMMISSIONED', 'DEEE']).optional(),
       description: z.string().nullable().optional(), roomId: z.string().nullable().optional(),
       agentHostname: z.string().max(255).nullable().optional(),
       purchaseDate: z.string().nullable().optional(), warrantyEnd: z.string().nullable().optional()
     }, annotations: { ...ADDITIVE_WRITE_TOOL, idempotentHint: true }
   }, tool(ctx, MCP_SCOPES.EQUIPMENT_WRITE, equipment.updateEquipment));
+
+  const documentFields = {
+    serialNumbers: z.array(z.string().trim().min(1).max(200)).min(1).max(100),
+    invoiceNumber: z.string().trim().min(1).max(200).optional(),
+    deliveryNoteNumber: z.string().trim().min(1).max(200).optional(),
+    overwrite: z.boolean().optional().describe('Remplace les références existantes uniquement si ce remplacement est demandé par l’utilisateur.')
+  };
+  server.registerTool('preview_equipment_documents', {
+    description: 'Après lecture d’une photo de BL/facture dans la conversation, vérifie les séries exactes et prépare les références à associer sans enregistrer de fichier. Signale les séries inconnues et les conflits. Ne jamais inventer une référence absente ou corriger une série incertaine.',
+    inputSchema: documentFields, annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_READ, equipment.previewEquipmentDocuments));
+  server.registerTool('associate_equipment_documents', {
+    description: 'Associe un numéro de BL et/ou de facture à un lot de PC par séries exactes. Utiliser l’aperçu au préalable. Tout le lot est refusé si une série est inconnue ou une référence existante est en conflit (sauf overwrite explicite). Champs omis inchangés, aucun fichier conservé.',
+    inputSchema: documentFields, annotations: { ...ADDITIVE_WRITE_TOOL, idempotentHint: true, destructiveHint: true }
+  }, tool(ctx, MCP_SCOPES.EQUIPMENT_WRITE, equipment.associateEquipmentDocuments));
 
   server.registerTool('list_equipment_network_interfaces', {
     description: 'Liste les interfaces MAC et les adresses IPAM liées à un équipement.',

@@ -229,6 +229,8 @@ model Equipment {
   brand           String?
   model           String?
   serialNumber    String?     @unique
+  invoiceNumber   String?
+  deliveryNoteNumber String?
   status          EquipStatus @default(ACTIVE)
   description     String?
   purchaseDate    DateTime?

@@ -375,6 +375,14 @@
           <input id="equip-serial" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <div>
+          <label for="equip-invoice" class="block text-sm font-medium text-slate-700 mb-1">Numéro de facture</label>
+          <input id="equip-invoice" type="text" maxlength="200" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label for="equip-delivery-note" class="block text-sm font-medium text-slate-700 mb-1">Numéro de bon de livraison</label>
+          <input id="equip-delivery-note" type="text" maxlength="200" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Salle</label>
           <select id="equip-room" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Non assigné</option>
@@ -887,6 +895,8 @@ function editEquip(e) {
   document.getElementById('equip-brand').value = e.brand || '';
   document.getElementById('equip-model').value = e.model || '';
   document.getElementById('equip-serial').value = e.serialNumber || '';
+  document.getElementById('equip-invoice').value = e.invoiceNumber || '';
+  document.getElementById('equip-delivery-note').value = e.deliveryNoteNumber || '';
   document.getElementById('equip-description').value = e.description || '';
   document.getElementById('equip-purchase').value = e.purchaseDate ? e.purchaseDate.slice(0,10) : '';
   document.getElementById('equip-warranty').value = e.warrantyEnd ? e.warrantyEnd.slice(0,10) : '';
@@ -908,6 +918,8 @@ document.getElementById('equip-form').addEventListener('submit', async e => {
     brand: document.getElementById('equip-brand').value || null,
     model: document.getElementById('equip-model').value || null,
     serialNumber: document.getElementById('equip-serial').value || null,
+    invoiceNumber: document.getElementById('equip-invoice').value.trim() || null,
+    deliveryNoteNumber: document.getElementById('equip-delivery-note').value.trim() || null,
     roomId: document.getElementById('equip-room').value || null,
     description: document.getElementById('equip-description').value || null,
     purchaseDate: document.getElementById('equip-purchase').value || null,
@@ -1441,6 +1453,8 @@ async function openEquipDetail(equipId) {
       detailField('Salle', e.room ? `${e.room.name}${e.room.number ? ` (n°${e.room.number})` : ''}${e.room.building ? ` — ${e.room.building}` : ''}` : '<span class="text-slate-400 font-normal">Non assigné</span>'),
       detailField('Numéro de série', e.serialNumber ? `<span class="font-mono">${e.serialNumber}</span>` : null),
       detailField('Date d\'achat', fmtDate(e.purchaseDate)),
+      detailField('Numéro de facture', e.invoiceNumber ? escapeHtml(e.invoiceNumber) : null),
+      detailField('Bon de livraison', e.deliveryNoteNumber ? escapeHtml(e.deliveryNoteNumber) : null),
       detailField('Fin de garantie', warrantyDate ? `<span class="${warrantyExpired ? 'text-red-600' : warrantyDaysLeft <= 30 ? 'text-orange-600' : 'text-slate-800'}">${warrantyDate}${warrantyExpired ? ' <span class="text-xs">(expirée)</span>' : warrantyDaysLeft <= 30 ? ' <span class="text-xs">(expire bientôt)</span>' : ''}</span>` : null),
       detailField('Prix d\'achat', e.purchasePrice !== null && e.purchasePrice !== undefined ? `${e.purchasePrice.toFixed(2)} €` : null),
       detailField('Fournisseur', e.supplier ? e.supplier.name : null),
