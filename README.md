@@ -11,6 +11,8 @@ L'audit relève des défauts de sécurité et de fiabilité non corrigés ; cons
 
 ## Fonctionnalités
 
+- **Suggestions de résolution** : procédures de la base de connaissances proposées pendant la saisie d’une panne ; recherche sémantique via un service Ollama local facultatif, avec repli par mots-clés. [Configuration et limites mémoire](docs/RECHERCHE-SEMANTIQUE.md).
+
 - **Authentification** : Passkeys (WebAuthn/biométrie) + mot de passe + JWT
 - **Gestion des salles** : CRUD + import CSV/Excel + QR codes imprimables
 - **Gestion des équipements** : inventaire, statuts, assignation aux salles, QR codes

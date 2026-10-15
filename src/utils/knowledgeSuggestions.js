@@ -47,7 +47,7 @@ function fieldScore(queryTokens, value, weight) {
 }
 
 function rankKnowledgeSuggestions(articles, query, limit = 3) {
-  const cleanQuery = String(query || '').trim().slice(0, 200);
+  const cleanQuery = String(query || '').trim().slice(0, 2201);
   const queryTokens = tokenize(cleanQuery);
   if (cleanQuery.length < 3 || queryTokens.length === 0) return [];
 

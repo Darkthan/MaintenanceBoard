@@ -11,7 +11,7 @@ const { createSmtpTransporter } = require('../utils/mail');
 const { readSettings, writeSettings } = require('../utils/settings');
 const config = require('../config');
 const { listKnowledgeBaseArticles, stripMarkdown } = require('../utils/knowledgeBase');
-const { rankKnowledgeSuggestions } = require('../utils/knowledgeSuggestions');
+const { searchKnowledgeSuggestions } = require('../services/knowledgeSemanticSearch');
 const { getPushConfig, isPushConfigured } = require('../utils/supervision');
 const { notifyAdminsOfNewTicket, parsePushSubscription } = require('../utils/ticketNotifications');
 const {
@@ -31,11 +31,21 @@ const magicLinkEmailLimiter = process.env.NODE_ENV !== 'test'
   : (req, res, next) => next();
 
 // GET /api/tickets/knowledge-suggestions — Aide publique pendant la saisie d'un problème
-router.get('/knowledge-suggestions', (req, res) => {
-  const query = String(req.query.q || '').trim().slice(0, 200);
-  const results = rankKnowledgeSuggestions(listKnowledgeBaseArticles(), query, 3);
+const knowledgeSuggestionsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 90,
+  message: { error: 'Trop de recherches, réessayez dans une minute.' }
+});
 
+router.get('/knowledge-suggestions', knowledgeSuggestionsLimiter, async (req, res) => {
+  const title = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 200) : '';
+  const description = typeof req.query.description === 'string' ? req.query.description.trim().slice(0, 2000) : '';
+  const query = [title, description].filter(Boolean).join('\n');
+  const { results, mode } = await searchKnowledgeSuggestions(listKnowledgeBaseArticles(), query, 3);
+
+  res.set('Cache-Control', 'no-store');
   res.json({
+    mode,
     items: results.map(({ article }) => ({
       id: article.id,
       title: article.title,

@@ -113,6 +113,11 @@ describe('GET /api/tickets/knowledge-suggestions', () => {
       id: 'display-help',
       content: expect.stringContaining('Windows + P')
     }));
+    expect(res.headers['cache-control']).toBe('no-store');
+
+    const fromDescription = await request(app).get('/api/tickets/knowledge-suggestions')
+      .query({ q: 'Panne', description: 'Le projecteur ne duplique plus mon écran' });
+    expect(fromDescription.body.items.map(item => item.id)).toEqual(['display-help']);
   });
 });
 

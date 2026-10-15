@@ -104,7 +104,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5s3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18s-3.332.477-4.5 1.253" />
               </svg>
               <div class="min-w-0 flex-1">
-                <p class="text-xs font-semibold text-blue-900">Une procédure peut peut-être vous aider</p>
+                <p class="text-xs font-semibold text-blue-900">Des pistes pour résoudre votre problème</p>
                 <p class="mt-0.5 text-xs text-blue-700">Consultez-la sans quitter votre demande.</p>
               </div>
             </div>
@@ -369,10 +369,16 @@ function esc(s) {
 
 // ── Suggestions de la documentation ──────────────────────────────────────────
 const problemTitleInput = document.getElementById('title');
+const problemDescriptionInput = document.getElementById('description');
 const knowledgeSuggestionsEl = document.getElementById('knowledge-suggestions');
 const knowledgeSuggestionsListEl = document.getElementById('knowledge-suggestions-list');
 let knowledgeSearchTimer = null;
 let knowledgeSearchController = null;
+let knowledgeSearchVersion = 0;
+
+function knowledgeQuery() {
+  return new URLSearchParams({ q: problemTitleInput.value.trim(), description: problemDescriptionInput.value.trim() }).toString();
+}
 
 function hideKnowledgeSuggestions() {
   knowledgeSuggestionsEl.classList.add('hidden');
@@ -424,32 +430,34 @@ function renderKnowledgeSuggestions(items) {
   knowledgeSuggestionsEl.classList.remove('hidden');
 }
 
-async function searchKnowledgeSuggestions(query) {
+async function searchKnowledgeSuggestions(query, version) {
   if (knowledgeSearchController) knowledgeSearchController.abort();
   knowledgeSearchController = new AbortController();
 
   try {
-    const response = await fetch(`/api/tickets/knowledge-suggestions?q=${encodeURIComponent(query)}`, {
+    const response = await fetch(`/api/tickets/knowledge-suggestions?${query}`, {
       signal: knowledgeSearchController.signal
     });
     if (!response.ok) throw new Error();
     const data = await response.json();
-    if (problemTitleInput.value.trim() === query) renderKnowledgeSuggestions(data.items);
+    if (version === knowledgeSearchVersion && knowledgeQuery() === query) renderKnowledgeSuggestions(data.items);
   } catch (error) {
-    if (error.name !== 'AbortError') hideKnowledgeSuggestions();
+    if (version === knowledgeSearchVersion && error.name !== 'AbortError') hideKnowledgeSuggestions();
   }
 }
 
-problemTitleInput.addEventListener('input', () => {
+function scheduleKnowledgeSearch() {
   clearTimeout(knowledgeSearchTimer);
-  const query = problemTitleInput.value.trim();
-  if (query.length < 3) {
-    if (knowledgeSearchController) knowledgeSearchController.abort();
-    hideKnowledgeSuggestions();
-    return;
-  }
-  knowledgeSearchTimer = setTimeout(() => searchKnowledgeSuggestions(query), 350);
-});
+  const version = ++knowledgeSearchVersion;
+  if (knowledgeSearchController) knowledgeSearchController.abort();
+  hideKnowledgeSuggestions();
+  if ([problemTitleInput.value, problemDescriptionInput.value].join(' ').trim().length < 3) return;
+  const query = knowledgeQuery();
+  knowledgeSearchTimer = setTimeout(() => searchKnowledgeSuggestions(query, version), 600);
+}
+
+problemTitleInput.addEventListener('input', scheduleKnowledgeSearch);
+problemDescriptionInput.addEventListener('input', scheduleKnowledgeSearch);
 
 function roomLabel(r) {
   let label = r.name;

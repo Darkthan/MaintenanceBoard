@@ -74,7 +74,7 @@ describe('interventions page', () => {
     expect(res.text).toContain('getBrowserPushSupport()');
     expect(res.text).toContain('app-icon-192.png');
     expect(res.text).toContain('id="knowledge-suggestions"');
-    expect(res.text).toContain('/api/tickets/knowledge-suggestions?q=');
+    expect(res.text).toContain('/api/tickets/knowledge-suggestions?${query}');
     expect(res.text).toContain('Afficher la procédure');
   });
 
