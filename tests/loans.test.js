@@ -46,6 +46,7 @@ jest.mock('../src/lib/prisma', () => ({
     update: jest.fn()
   },
   loanReservation: {
+    updateMany: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
     findUnique: jest.fn(),
@@ -949,9 +950,9 @@ describe('free-form loans', () => {
   it('filters private loans from non-administrator reservations and the shared calendar feed', async () => {
     prisma.loanReservation.findMany.mockResolvedValue([]);
     const app = buildApp();
-    expect((await request(app).get('/api/loans/reservations').set('x-user-role','TECH')).status).toBe(200);
+    expect((await request(app).get('/api/loans/reservations').set('x-user-role','USER')).status).toBe(200);
     expect(prisma.loanReservation.findMany.mock.calls[0][0].where.resourceId).toEqual({ not: 'free-loan' });
-    expect((await request(app).get('/api/loans/calendar').set('x-user-role','TECH')).status).toBe(200);
+    expect((await request(app).get('/api/loans/calendar').set('x-user-role','USER')).status).toBe(200);
     expect(prisma.loanReservation.findMany.mock.calls[1][0].where.resourceId).toEqual({ not: 'free-loan' });
   });
   it('generates a one-use mobile link and QR code without SMTP', async () => {
@@ -1018,6 +1019,113 @@ describe('free-form loans', () => {
     expect((await request(app).get('/api/loan-request/resources/%66ree-loan/schedule')).status).toBe(404);
     expect(prisma.loanReservation.findMany).not.toHaveBeenCalled();
     expect(prisma.loanResource.findUnique).not.toHaveBeenCalled();
+  });
+
+  it.each([{ startAt:undefined, endAt:undefined }, { startAt:null, endAt:null }])('creates a free loan without a reservation period', async dates => {
+    const res=await request(buildApp()).post('/api/loans/reservations').send({ ...payload, ...dates });
+    expect(res.status).toBe(201);
+    expect(prisma.loanReservation.create.mock.calls[0][0].data).toMatchObject({ startAt:null, endAt:null });
+    expect(res.body.reservations[0]).toMatchObject({ startAt:null, endAt:null });
+  });
+  it('rejects partial periods and recurrence without dates', async () => {
+    const app=buildApp();
+    expect((await request(app).post('/api/loans/reservations').send({ ...payload, startAt:null })).status).toBe(400);
+    expect((await request(app).post('/api/loans/reservations').send({ ...payload, startAt:null, endAt:null, recurrence:{ type:'daily', until:'2026-11-30' } })).status).toBe(400);
+    expect(prisma.loanReservation.create).not.toHaveBeenCalled();
+  });
+  it('still requires dates for catalogue reservations', async () => {
+    const { freeEquipments, ...catalogue }=payload;
+    const res=await request(buildApp()).post('/api/loans/reservations').send({ ...catalogue, resourceId:'catalogue', startAt:null, endAt:null });
+    expect(res.status).toBe(400);
+    expect(prisma.loanReservation.create).not.toHaveBeenCalled();
+  });
+  it('can clear a free-loan period before its contract is signed', async () => {
+    const loan=existingLoan();
+    prisma.loanReservation.findUnique.mockResolvedValue(loan);
+    prisma.loanReservation.update.mockResolvedValue({ ...loan, startAt:null, endAt:null });
+    const res=await request(buildApp()).patch('/api/loans/reservations/free-1').send({ startAt:null, endAt:null });
+    expect(res.status).toBe(200);
+    expect(prisma.loanReservation.update.mock.calls[0][0].data).toMatchObject({ startAt:null, endAt:null });
+  });
+  it('keeps signed undated loans editable without changing the signed period', async () => {
+    const loan=existingLoan({ startAt:null, endAt:null, contractSignatureRequestId:'signed', contractSignatureRequest:{ id:'signed', status:'SIGNED' } });
+    prisma.loanReservation.findUnique.mockResolvedValue(loan);
+    prisma.loanReservation.update.mockResolvedValue(loan);
+    expect((await request(buildApp()).patch('/api/loans/reservations/free-1').send({ internalNotes:'Remis' })).status).toBe(200);
+    expect(prisma.signatureRequest.update).not.toHaveBeenCalled();
+  });
+  it('includes undated and overdue active loans for staff to validate their returns', async () => {
+    prisma.loanReservation.findMany.mockResolvedValue([]);
+    const res=await request(buildApp()).get('/api/loans/reservations').set('x-user-role','TECH');
+    expect(res.status).toBe(200);
+    const where=prisma.loanReservation.findMany.mock.calls[0][0].where;
+    expect(where).not.toHaveProperty('resourceId');
+    expect(where.OR).toEqual(expect.arrayContaining([{ startAt:null, endAt:null }, expect.objectContaining({ status:{ in:['PENDING','APPROVED'] } })]));
+  });
+  it.each(['ADMIN','TECH'])('allows %s to approve a free-loan return and records the validator', async role => {
+    let loan=existingLoan({ startAt:null, endAt:null, contractSignatureRequest:null });
+    prisma.loanReservation.findUnique.mockImplementation(async () => loan);
+    prisma.loanReservation.updateMany.mockImplementation(async ({ data }) => { loan={ ...loan, ...data }; return { count:1 }; });
+    const res=await request(buildApp()).post('/api/loans/reservations/free-1/approve-return').set('x-user-role',role).send({ returnedById:'forged', returnedByName:'Forged' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status:'RETURNED', returnedById:'admin-1', returnedByName:'Admin' });
+    expect(new Date(res.body.returnedAt).getTime()).toBeGreaterThan(0);
+    expect(prisma.loanReservation.updateMany.mock.calls[0][0].where).toEqual({ id:'free-1', status:'APPROVED' });
+  });
+  it('forbids return approval by a requester or other role', async () => {
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan({ resourceId:'catalogue' }));
+    const app=buildApp();
+    expect((await request(app).post('/api/loans/reservations/free-1/approve-return').set('x-user-role','USER').send({})).status).toBe(403);
+    expect((await request(app).patch('/api/loans/reservations/free-1').set('x-user-role','USER').send({ status:'RETURNED' })).status).toBe(403);
+    expect(prisma.loanReservation.updateMany).not.toHaveBeenCalled();
+    expect(prisma.loanReservation.update).not.toHaveBeenCalled();
+  });
+  it('does not overwrite the original return approval when the action is repeated', async () => {
+    const returnedAt=new Date('2026-11-02T12:00:00Z');
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan({ status:'RETURNED', returnedAt, returnedById:'first-tech', returnedByName:'Premier technicien' }));
+    const res=await request(buildApp()).post('/api/loans/reservations/free-1/approve-return').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.returnedById).toBe('first-tech');
+    expect(prisma.loanReservation.updateMany).not.toHaveBeenCalled();
+  });
+  it.each(['PENDING','CANCELLED','REJECTED'])('does not validate a return for a %s loan', async status => {
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan({ status }));
+    expect((await request(buildApp()).post('/api/loans/reservations/free-1/approve-return').send({})).status).toBe(409);
+    expect(prisma.loanReservation.updateMany).not.toHaveBeenCalled();
+  });
+  it('keeps an overdue loan active until return approval and shows undated periods correctly', () => {
+    const vm=require('vm');
+    const page=fs.readFileSync('public/loans.html','utf8');
+    const archive=page.match(/function isArchivedReservation\(item\) \{[\s\S]*?\n\}/)[0];
+    const period=page.match(/function formatReservationPeriod\(item\) \{[\s\S]*?\n\}/)[0];
+    const context={ formatDateTime:value => String(value) };
+    vm.runInNewContext(archive+';'+period+'; this.archive=isArchivedReservation; this.period=formatReservationPeriod;',context);
+    expect(context.archive({ status:'APPROVED', endAt:'2020-01-01' })).toBe(false);
+    expect(context.archive({ status:'APPROVED', endAt:null })).toBe(false);
+    expect(context.archive({ status:'RETURNED', endAt:null })).toBe(true);
+    expect(context.period({ startAt:null, endAt:null })).toBe('Sans période définie');
+  });
+
+  it('builds an undated contract without inventing dates or a return deadline', async () => {
+    const { getDocument }=require('pdfjs-dist/legacy/build/pdf.js');
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan({ startAt:null, endAt:null, requesterEmail:'', contractBody:null }));
+    prisma.signatureRequest.create.mockImplementation(async ({ data }) => ({ id:'undated-sign', status:'PENDING', ...data }));
+    const mkdir=jest.spyOn(fs,'mkdirSync').mockImplementation(() => undefined);
+    const write=jest.spyOn(fs,'writeFileSync').mockImplementation(() => undefined);
+    try {
+      const res=await request(buildApp()).post('/api/loans/reservations/free-1/contract-signature').send({ mode:'LOAN_LINK' });
+      expect(res.status).toBe(201);
+      const buffer=write.mock.calls.find(call => Buffer.isBuffer(call[1]))[1];
+      const pdf=await getDocument({ data:new Uint8Array(buffer),disableFontFace:true }).promise;
+      const text=[];
+      for(let n=1;n<=pdf.numPages;n++)text.push(...(await (await pdf.getPage(n)).getTextContent()).items.map(item=>item.str));
+      const content=text.join(' ').replace(/\s+/g,' ');
+      expect(content).toContain('Sans période définie');
+      expect(content).toContain('sans période prédéfinie');
+      expect(content).not.toContain('1970');
+      expect(content).not.toContain('à la date prévue');
+      await pdf.destroy();
+    } finally { mkdir.mockRestore(); write.mockRestore(); }
   });
 
 });

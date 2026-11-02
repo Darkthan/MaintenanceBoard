@@ -766,8 +766,8 @@ model LoanReservation {
   requesterEmail        String
   requesterPhone        String?
   requesterOrganization String?
-  startAt               DateTime
-  endAt                 DateTime
+  startAt               DateTime?
+  endAt                 DateTime?
   requestedUnits        Int
   reservedSlots         Int
   additionalNeeds       String?
@@ -777,6 +777,9 @@ model LoanReservation {
   contractGeneratedAt   DateTime?
   createdById           String?
   approvedById          String?
+  returnedAt            DateTime?
+  returnedById          String?
+  returnedByName        String? // Snapshot of the staff member who approved the return
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 

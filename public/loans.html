@@ -403,6 +403,10 @@
       </div>
       <input type="hidden" id="resv-start" />
       <input type="hidden" id="resv-end" />
+      <label id="resv-no-period-row" class="hidden flex items-center gap-2 text-sm text-slate-700">
+        <input id="resv-no-period" type="checkbox" checked onchange="syncFreeLoanForm()" class="h-4 w-4 rounded border-slate-300" />
+        Sans période définie — le matériel reste en prêt jusqu’à validation du retour
+      </label>
       <div id="resv-date-picker" class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div class="flex items-center justify-between">
           <button type="button" id="dp-prev" class="p-1 rounded-lg hover:bg-slate-200 transition text-slate-600">
@@ -473,7 +477,7 @@
             <option value="PENDING">En attente</option>
             <option value="REJECTED">Refusé</option>
             <option value="CANCELLED">Annulé</option>
-            <option value="RETURNED">Restitué</option>
+            <option value="RETURNED" disabled>Restitué (retour validé)</option>
           </select>
         </div>
       </div>
@@ -655,6 +659,11 @@ function addFreeLoanItem(item = {}) {
 function syncFreeLoanForm() {
   const isFree = document.getElementById('resv-resource').value === FREE_LOAN_RESOURCE_ID;
   document.getElementById('free-loan-panel').classList.toggle('hidden', !isFree);
+  const noPeriod = document.getElementById('resv-no-period');
+  noPeriod.disabled = !isFree;
+  document.getElementById('resv-no-period-row').classList.toggle('hidden', !isFree);
+  document.getElementById('resv-date-picker').classList.toggle('hidden', isFree && noPeriod.checked);
+  document.getElementById('resv-recurrence-panel').classList.toggle('hidden', !!currentReservationEditId || (isFree && noPeriod.checked));
   const email = document.getElementById('resv-email');
   if (email.dataset.defaultPlaceholder === undefined) email.dataset.defaultPlaceholder = email.placeholder;
   email.placeholder = isFree ? 'Facultatif pour le lien mobile ; email de l’emprunteur pour l’envoi' : email.dataset.defaultPlaceholder;
@@ -677,7 +686,7 @@ function getLoanResourceById(resourceId) {
 
 function buildReservationContractDefaultText(resource) {
   const resourceLabel = resource?.name || 'le matériel concerné';
-  return `Je reconnais recevoir en prêt ${resourceLabel} et m'engage à l'utiliser conformément aux consignes, à en prendre soin, puis à restituer l'ensemble du matériel complet et en bon état à la date prévue.`;
+  return `Je reconnais recevoir en prêt ${resourceLabel} et m'engage à l'utiliser conformément aux consignes, à en prendre soin, puis à restituer l'ensemble du matériel complet et en bon état selon les modalités convenues avec l’établissement. Le retour sera validé par un administrateur ou un technicien.`;
 }
 
 function updateReservationEquipmentCount() {
@@ -1001,6 +1010,7 @@ async function openResourceModal(resource = null) {
 
 function openReservationModal(reservation = null) {
   document.getElementById('reservation-form').reset();
+  document.getElementById('resv-no-period').checked = reservation ? !reservation.startAt && !reservation.endAt : true;
   document.getElementById('reservation-error').classList.add('hidden');
   reservationEquipmentSelection = new Set();
   document.getElementById('free-loan-items').replaceChildren();
@@ -1038,7 +1048,7 @@ function openReservationModal(reservation = null) {
     document.getElementById('resv-notes').value = reservation.internalNotes || '';
     reservationEquipmentSelection = new Set((reservation.selectedEquipments || []).map(item => item.equipmentId).filter(Boolean));
     document.getElementById('resv-contract-body').value = reservation.contractBody || buildReservationContractDefaultText(getLoanResourceById(resourceId));
-    dpSetFromExisting(reservation.startAt, reservation.endAt);
+    if (reservation.startAt && reservation.endAt) dpSetFromExisting(reservation.startAt, reservation.endAt);
     dpRenderCalendar();
     dpShowStartTimeGrid();
     dpShowEndTimeGrid();
@@ -1309,7 +1319,7 @@ function getReservationsForDay(dayKey) {
   const dayStart = new Date(`${dayKey}T00:00:00`);
   const dayEnd = new Date(`${dayKey}T23:59:59`);
   return loanReservations.filter(item =>
-    ['PENDING', 'APPROVED'].includes(item.status) &&
+    item.startAt && item.endAt && ['PENDING', 'APPROVED'].includes(item.status) &&
     new Date(item.startAt) <= dayEnd && new Date(item.endAt) >= dayStart
   );
 }
@@ -1382,15 +1392,16 @@ function showDayDetail(dayKey) {
               <div class="flex-1 min-w-0">
                 <p class="font-medium text-slate-800 text-sm">${escapeHtml(item.resource.name)}</p>
                 <p class="text-sm text-slate-500 mt-0.5">${escapeHtml(item.requesterName)} · ${item.requestedUnits} unité(s)</p>
-                <p class="text-xs text-slate-400 mt-0.5">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)}</p>
+                <p class="text-xs text-slate-400 mt-0.5">${formatReservationPeriod(item)}</p>
               </div>
               ${formatStatus(item.status)}
+              ${item.returnedAt ? `<span class="text-xs text-slate-500">Retour validé le ${formatDateTime(item.returnedAt)} par ${escapeHtml(item.returnedByName || 'un membre de l’équipe')}</span>` : ''}
             </div>
             <div class="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
-              ${item.status !== 'APPROVED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="APPROVED" class="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 transition">Approuver</button>` : ''}
-              ${item.status !== 'REJECTED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="REJECTED" class="px-2 py-1 border border-red-300 text-red-700 rounded text-xs hover:bg-red-50 transition">Refuser</button>` : ''}
-              ${item.status !== 'RETURNED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="RETURNED" class="px-2 py-1 border border-slate-300 text-slate-700 rounded text-xs hover:bg-slate-100 transition">Restitué</button>` : ''}
-              ${item.status !== 'CANCELLED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="CANCELLED" class="px-2 py-1 border border-slate-300 text-slate-700 rounded text-xs hover:bg-slate-100 transition">Annuler</button>` : ''}
+              ${canManageReservation(item) && item.status !== 'APPROVED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="APPROVED" class="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 transition">Approuver</button>` : ''}
+              ${canManageReservation(item) && item.status !== 'REJECTED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="REJECTED" class="px-2 py-1 border border-red-300 text-red-700 rounded text-xs hover:bg-red-50 transition">Refuser</button>` : ''}
+              ${canApproveLoanReturn(item) ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="RETURNED" class="px-2 py-1 border border-slate-300 text-slate-700 rounded text-xs hover:bg-slate-100 transition">Valider le retour</button>` : ''}
+              ${canManageReservation(item) && item.status !== 'CANCELLED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="CANCELLED" class="px-2 py-1 border border-slate-300 text-slate-700 rounded text-xs hover:bg-slate-100 transition">Annuler</button>` : ''}
               <button type="button" data-action="reservation-edit" data-id="${item.id}" class="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-300 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition" title="Modifier" aria-label="Modifier">
                 <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 013.536 3.536L12.536 14.536A4 4 0 0110.05 15.65L7 16l.35-3.05A4 4 0 018.464 10.464L9 11z"/></svg>
               </button>
@@ -1407,7 +1418,7 @@ function showDayDetail(dayKey) {
 function renderCalendarList() {
   const now = new Date(); now.setHours(0, 0, 0, 0);
   const upcoming = loanReservations
-    .filter(item => ['PENDING', 'APPROVED'].includes(item.status) && new Date(item.endAt) >= now)
+    .filter(item => item.startAt && item.endAt && ['PENDING', 'APPROVED'].includes(item.status) && new Date(item.endAt) >= now)
     .sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
 
   const el = document.getElementById('calendar-list-view');
@@ -1439,7 +1450,7 @@ function renderCalendarList() {
                   ${formatStatus(item.status)}
                 </div>
                 <p class="text-sm text-slate-500 mt-0.5">${item.requesterName}${item.requesterOrganization ? ` · ${item.requesterOrganization}` : ''} · ${item.requestedUnits} unité(s)</p>
-                <p class="text-xs text-slate-400 mt-0.5">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)}</p>
+                <p class="text-xs text-slate-400 mt-0.5">${formatReservationPeriod(item)}</p>
               </div>
             </div>`).join('')}
         </div>
@@ -1448,7 +1459,7 @@ function renderCalendarList() {
 }
 
 function isArchivedReservation(item) {
-  return new Date(item.endAt) < new Date();
+  return ['RETURNED', 'CANCELLED', 'REJECTED'].includes(item.status);
 }
 
 function updateArchivedReservationsButton(count) {
@@ -1465,6 +1476,15 @@ function updateArchivedReservationsButton(count) {
     : `Afficher les archives (${count})`;
 }
 
+function canManageReservation(item) {
+  return currentUser?.role === 'ADMIN' || (currentUser?.role === 'TECH' && item.resourceId !== FREE_LOAN_RESOURCE_ID);
+}
+function canApproveLoanReturn(item) {
+  return ['ADMIN', 'TECH'].includes(currentUser?.role) && item.status === 'APPROVED';
+}
+function formatReservationPeriod(item) {
+  return item.startAt && item.endAt ? formatDateTime(item.startAt) + ' → ' + formatDateTime(item.endAt) : 'Sans période définie';
+}
 function renderReservationCard(item, { archived = false } = {}) {
   const contractState = item.contractSignatureRequest
     ? formatContractStatus(item.contractSignatureRequest.status)
@@ -1474,7 +1494,7 @@ function renderReservationCard(item, { archived = false } = {}) {
     : 'Aucun appareil nominatif sélectionné.';
   const mobileAction = currentUser?.role === 'ADMIN' && ['PENDING', 'APPROVED'].includes(item.status) && (!item.contractSignatureRequest || ['EXPIRED', 'CANCELLED'].includes(item.contractSignatureRequest.status) || (item.contractSignatureRequest.status === 'PENDING' && item.contractSignatureRequest.verificationMethod === 'LOAN_LINK'))
     ? `<button type="button" data-action="reservation-mobile-signature" data-id="${item.id}" class="px-3 py-2 border border-blue-300 text-blue-700 rounded-lg text-xs hover:bg-blue-50 transition">Lien pour signer au doigt</button>` : '';
-  const contractAction = item.contractSignatureRequest?.status === 'SIGNED'
+  const contractAction = !canManageReservation(item) ? '' : item.contractSignatureRequest?.status === 'SIGNED'
     ? `<button type="button" data-action="reservation-contract-download" data-signature-id="${item.contractSignatureRequest.id}" class="px-3 py-2 border border-emerald-300 text-emerald-700 rounded-lg text-xs hover:bg-emerald-50 transition">Télécharger la fiche</button>`
     : item.contractSignatureRequest?.status === 'PENDING'
       ? `<span class="px-3 py-2 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-medium border border-cyan-200">${item.contractSignatureRequest?.verificationMethod === 'LOAN_LINK' ? 'Lien mobile prêt' : 'Fiche envoyée'}</span>`
@@ -1489,13 +1509,13 @@ function renderReservationCard(item, { archived = false } = {}) {
               ${archived ? '<span class="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">Archivé</span>' : ''}
             </div>
             <p class="text-sm text-slate-500">${item.requesterName} · ${item.requesterEmail}${item.requesterOrganization ? ` · ${item.requesterOrganization}` : ''}</p>
-            <p class="text-xs text-slate-400">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)} · ${item.requestedUnits} unité(s) · ${item.resourceId === FREE_LOAN_RESOURCE_ID ? "Matériel non référencé" : `${item.reservedSlots} lot(s) verrouillé(s)`}</p>
+            <p class="text-xs text-slate-400">${formatReservationPeriod(item)} · ${item.requestedUnits} unité(s) · ${item.resourceId === FREE_LOAN_RESOURCE_ID ? "Matériel non référencé" : `${item.reservedSlots} lot(s) verrouillé(s)`}</p>
           </div>
           <div class="relative z-10 flex flex-wrap items-center gap-2">
-            ${item.status !== 'APPROVED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="APPROVED" class="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs hover:bg-emerald-700 transition">Approuver</button>` : ''}
-            ${item.status !== 'REJECTED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="REJECTED" class="px-3 py-2 border border-red-300 text-red-700 rounded-lg text-xs hover:bg-red-50 transition">Refuser</button>` : ''}
-            ${item.status !== 'RETURNED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="RETURNED" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Restitué</button>` : ''}
-            ${item.status !== 'CANCELLED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="CANCELLED" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Annuler</button>` : ''}
+            ${canManageReservation(item) && item.status !== 'APPROVED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="APPROVED" class="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs hover:bg-emerald-700 transition">Approuver</button>` : ''}
+            ${canManageReservation(item) && item.status !== 'REJECTED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="REJECTED" class="px-3 py-2 border border-red-300 text-red-700 rounded-lg text-xs hover:bg-red-50 transition">Refuser</button>` : ''}
+            ${canApproveLoanReturn(item) ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="RETURNED" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Valider le retour</button>` : ''}
+            ${canManageReservation(item) && item.status !== 'CANCELLED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="CANCELLED" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Annuler</button>` : ''}
             ${contractAction}
             ${mobileAction}
             <button
@@ -1503,6 +1523,7 @@ function renderReservationCard(item, { archived = false } = {}) {
               data-action="reservation-edit"
               data-id="${item.id}"
               class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+              style="display:${canManageReservation(item) ? 'inline-flex' : 'none'}"
               title="Modifier la demande"
               aria-label="Modifier la demande">
               <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1514,6 +1535,7 @@ function renderReservationCard(item, { archived = false } = {}) {
               data-action="reservation-delete"
               data-id="${item.id}"
               class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-500 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition"
+              style="display:${canManageReservation(item) ? 'inline-flex' : 'none'}"
               title="Supprimer la demande"
               aria-label="Supprimer la demande">
               <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1653,7 +1675,8 @@ async function updateReservationStatus(id, status, triggerButton = null) {
     triggerButton.classList.add('opacity-60', 'cursor-not-allowed');
   }
   try {
-    await api.patch(`/loans/reservations/${id}`, { status });
+    if (status === 'RETURNED') await api.post(`/loans/reservations/${id}/approve-return`, {});
+    else await api.patch(`/loans/reservations/${id}`, { status });
     await loadReservations();
     showToast('Réservation mise à jour', 'success');
   } catch (err) {
@@ -1923,19 +1946,20 @@ document.getElementById('reservation-form').addEventListener('submit', async eve
   const errorEl = document.getElementById('reservation-error');
   errorEl.classList.add('hidden');
   const reservationId = document.getElementById('resv-id').value;
-  const startVal = document.getElementById('resv-start').value;
-  const endVal = document.getElementById('resv-end').value;
-  if (!startVal || !endVal) {
+  const noPeriod = document.getElementById('resv-resource').value === FREE_LOAN_RESOURCE_ID && document.getElementById('resv-no-period').checked;
+  const startVal = noPeriod ? null : document.getElementById('resv-start').value;
+  const endVal = noPeriod ? null : document.getElementById('resv-end').value;
+  if (!noPeriod && (!startVal || !endVal)) {
     errorEl.textContent = 'Veuillez sélectionner une période complète (début et fin) dans le calendrier.';
     errorEl.classList.remove('hidden');
     return;
   }
-  if (new Date(endVal) <= new Date(startVal)) {
+  if (!noPeriod && new Date(endVal) <= new Date(startVal)) {
     errorEl.textContent = 'La date de fin doit être après la date de début.';
     errorEl.classList.remove('hidden');
     return;
   }
-  const recurrenceType = document.getElementById('resv-recurrence-type').value;
+  const recurrenceType = noPeriod ? 'none' : document.getElementById('resv-recurrence-type').value;
   const payload = {
     resourceId: document.getElementById('resv-resource').value,
     requesterName: document.getElementById('resv-name').value.trim(),

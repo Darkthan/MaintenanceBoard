@@ -258,7 +258,11 @@ function sameEquipmentSelection(current = [], next = []) {
 
 function buildDefaultLoanContractBody(reservation, resource) {
   const orgPart = reservation.requesterOrganization ? ` pour ${reservation.requesterOrganization}` : '';
-  return `Je soussigné(e) ${reservation.requesterName}${orgPart}, reconnais recevoir en prêt le matériel décrit ci-dessous pour la période du ${fmtLoanDate(reservation.startAt)} au ${fmtLoanDate(reservation.endAt)}. Je m'engage à en prendre soin, à respecter les consignes de prêt et à restituer l'ensemble du matériel complet et en bon état à la date prévue.`;
+  const period = reservation.startAt && reservation.endAt
+    ? `pour la période du ${fmtLoanDate(reservation.startAt)} au ${fmtLoanDate(reservation.endAt)}`
+    : 'sans période prédéfinie';
+  const returnTerms = reservation.endAt ? 'à la date prévue' : 'selon les modalités convenues avec l’établissement';
+  return `Je soussigné(e) ${reservation.requesterName}${orgPart}, reconnais recevoir en prêt le matériel décrit ci-dessous ${period}. Je m'engage à en prendre soin, à respecter les consignes de prêt et à restituer l'ensemble du matériel complet et en bon état ${returnTerms}. Le retour sera validé par un administrateur ou un technicien.`;
 }
 
 function getEffectiveContractBody(reservation, resource) {
@@ -267,8 +271,8 @@ function getEffectiveContractBody(reservation, resource) {
 }
 
 function hasContractRelevantChange(existing, nextData, options = {}) {
-  const startChanged = new Date(nextData.startAt).getTime() !== new Date(existing.startAt).getTime();
-  const endChanged = new Date(nextData.endAt).getTime() !== new Date(existing.endAt).getTime();
+  const startChanged = loanDateValue(nextData.startAt) !== loanDateValue(existing.startAt);
+  const endChanged = loanDateValue(nextData.endAt) !== loanDateValue(existing.endAt);
   const contractBodyChanged = options.contractBodyProvided
     ? (String(nextData.contractBody || '').trim() || null) !== (String(existing.contractBody || '').trim() || null)
     : false;
@@ -296,7 +300,7 @@ function getLoanContractDocumentTitle(reservation, resource) {
 
 function getLoanContractDocumentNotes(reservation, resource) {
   return [
-    `Période : ${fmtLoanDate(reservation.startAt)} → ${fmtLoanDate(reservation.endAt)}`,
+    `Période : ${formatLoanPeriod(reservation)}`,
     reservation.requesterOrganization ? `Organisation : ${reservation.requesterOrganization}` : null,
     `Ressource : ${resource.name}`
   ].filter(Boolean).join(' · ');
@@ -389,7 +393,7 @@ function buildLoanContractPdf({ reservation, resource, contractBody, selectedEqu
       doc.text(`Organisation : ${reservation.requesterOrganization}`, 50, doc.y);
       doc.y += 14;
     }
-    doc.text(`Période : ${fmtLoanDate(reservation.startAt)} → ${fmtLoanDate(reservation.endAt)}`, 50, doc.y);
+    doc.text(`Période : ${formatLoanPeriod(reservation)}`, 50, doc.y);
     doc.y += 14;
     doc.text(`Quantité demandée : ${reservation.requestedUnits} unité(s)`, 50, doc.y);
     doc.y += 20;
@@ -471,7 +475,7 @@ function buildLoanContractPdf({ reservation, resource, contractBody, selectedEqu
       .text('La signature électronique sera apposée dans cet encadré.', sigX + 14, sigY + 34, { width: sigW - 28 });
     doc.moveTo(sigX + 14, sigY + sigH - 18).lineTo(sigX + sigW - 14, sigY + sigH - 18).strokeColor(LIGHT).lineWidth(0.7).stroke();
     doc.font('Helvetica').fontSize(8).fillColor(SLATE)
-      .text(`${reservation.requesterName} · ${new Date(reservation.startAt).toLocaleDateString('fr-FR')}`, sigX + 14, sigY + sigH - 14, { width: sigW - 28 });
+      .text(`${reservation.requesterName} · ${new Date(reservation.startAt || reservation.createdAt || Date.now()).toLocaleDateString('fr-FR')}`, sigX + 14, sigY + sigH - 14, { width: sigW - 28 });
 
     signaturePlacement = {
       posX: sigX / pageWidth,
@@ -503,6 +507,7 @@ function computeOccurrences(startAt, endAt, recurrence) {
 }
 
 function fmtLoanDate(d) {
+  if (!d) return 'Non définie';
   return new Date(d).toLocaleString('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit'
@@ -790,7 +795,17 @@ loanPublicRouter.patch('/account', [
   }
 });
 
-function ensureValidDates(startAt, endAt) {
+function loanDateValue(value) { return value == null ? null : new Date(value).getTime(); }
+
+function formatLoanPeriod(reservation) {
+  return reservation.startAt && reservation.endAt
+    ? fmtLoanDate(reservation.startAt) + ' → ' + fmtLoanDate(reservation.endAt)
+    : 'Sans période définie';
+}
+
+function ensureValidDates(startAt, endAt, { optional = false } = {}) {
+  if (!startAt && !endAt && optional) return { start: null, end: null };
+  if (!startAt || !endAt) throw Object.assign(new Error('Renseignez une période complète ou choisissez un prêt libre sans période.'), { status: 400 });
   const start = new Date(startAt);
   const end = new Date(endAt);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
@@ -805,8 +820,8 @@ function ensureValidDates(startAt, endAt) {
 function hasReservationScheduleChange(existing, nextData) {
   if (nextData.resourceId && nextData.resourceId !== existing.resourceId) return true;
   if (nextData.requestedUnits !== undefined && Number(nextData.requestedUnits) !== Number(existing.requestedUnits)) return true;
-  if (nextData.startAt && new Date(nextData.startAt).getTime() !== new Date(existing.startAt).getTime()) return true;
-  if (nextData.endAt && new Date(nextData.endAt).getTime() !== new Date(existing.endAt).getTime()) return true;
+  if (nextData.startAt !== undefined && loanDateValue(nextData.startAt) !== loanDateValue(existing.startAt)) return true;
+  if (nextData.endAt !== undefined && loanDateValue(nextData.endAt) !== loanDateValue(existing.endAt)) return true;
   return false;
 }
 
@@ -1059,7 +1074,7 @@ loansRouter.use(async (req, res, next) => {
     const match = req.path.match(/^\/reservations\/([^/]+)(?:\/|$)/);
     if (match && req.user.role !== 'ADMIN') {
       const loan = await prisma.loanReservation.findUnique({ where: { id: decodeURIComponent(match[1]) }, select: { resourceId: true } });
-      if (loan?.resourceId === FREE_LOAN_RESOURCE_ID) return res.status(403).json({ error: 'Les prêts libres sont réservés aux administrateurs.' });
+      if (loan?.resourceId === FREE_LOAN_RESOURCE_ID && !(req.user.role === 'TECH' && req.method === 'POST' && /\/approve-return\/?$/.test(req.path))) return res.status(403).json({ error: 'Les prêts libres sont réservés aux administrateurs.' });
     }
     next();
   } catch (err) { next(err); }
@@ -1388,9 +1403,12 @@ loansRouter.get('/reservations',
       const end = req.query.end ? new Date(req.query.end) : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
 
       const where = {
-        ...(req.user.role !== 'ADMIN' ? { resourceId: { not: FREE_LOAN_RESOURCE_ID } } : {}),
-        startAt: { lt: end },
-        endAt: { gt: start }
+        ...(!['ADMIN', 'TECH'].includes(req.user.role) ? { resourceId: { not: FREE_LOAN_RESOURCE_ID } } : {}),
+        OR: [
+          { startAt: { lt: end }, endAt: { gt: start } },
+          { startAt: null, endAt: null },
+          { status: { in: ACTIVE_LOAN_STATUSES }, endAt: { lte: start } }
+        ]
       };
 
       if (req.query.status) {
@@ -1431,8 +1449,8 @@ loansRouter.post('/reservations',
     body('requesterEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
     body('requesterPhone').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
     body('requesterOrganization').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
-    body('startAt').isISO8601(),
-    body('endAt').isISO8601(),
+    body('startAt').optional({ values: 'null' }).isISO8601(),
+    body('endAt').optional({ values: 'null' }).isISO8601(),
     body('requestedUnits').isInt({ min: 1, max: 500 }),
     body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
     body('internalNotes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
@@ -1445,9 +1463,10 @@ loansRouter.post('/reservations',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { start, end } = ensureValidDates(req.body.startAt, req.body.endAt);
-      const occurrences = computeOccurrences(start, end, req.body.recurrence);
       const isFreeLoan = req.body.resourceId === FREE_LOAN_RESOURCE_ID;
+      const { start, end } = ensureValidDates(req.body.startAt, req.body.endAt, { optional: isFreeLoan });
+      if (!start && req.body.recurrence?.type && req.body.recurrence.type !== 'none') return res.status(400).json({ error: 'Une récurrence nécessite une période.' });
+      const occurrences = start ? computeOccurrences(start, end, req.body.recurrence) : [{ startAt: null, endAt: null }];
       const requesterEmail = isFreeLoan ? normalizeEmail(req.body.requesterEmail || '') : resolveLoanRequesterEmail(req.body.requesterEmail, req.user);
       if (!requesterEmail && !isFreeLoan) {
         return res.status(400).json({ error: 'Aucun email disponible pour la réservation. Renseignez un email de profil ou un email par défaut dans les paramètres.' });
@@ -1504,8 +1523,8 @@ loansRouter.patch('/reservations/:id',
     body('requesterEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
     body('requesterPhone').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
     body('requesterOrganization').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
-    body('startAt').optional().isISO8601(),
-    body('endAt').optional().isISO8601(),
+    body('startAt').optional({ values: 'null' }).isISO8601(),
+    body('endAt').optional({ values: 'null' }).isISO8601(),
     body('requestedUnits').optional().isInt({ min: 1, max: 500 }),
     body('status').optional().isIn(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'RETURNED']),
     body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
@@ -1518,6 +1537,7 @@ loansRouter.patch('/reservations/:id',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
+      if (req.body.status === 'RETURNED' && !['ADMIN', 'TECH'].includes(req.user.role)) return res.status(403).json({ error: 'Le retour doit être validé par un administrateur ou un technicien.' });
 
       const existing = await prisma.loanReservation.findUnique({
         where: { id: req.params.id },
@@ -1539,17 +1559,14 @@ loansRouter.patch('/reservations/:id',
         status: req.body.status !== undefined ? req.body.status : existing.status
       };
 
-      if (req.body.startAt !== undefined || req.body.endAt !== undefined) {
-        const { start, end } = ensureValidDates(
-          req.body.startAt !== undefined ? req.body.startAt : existing.startAt,
-          req.body.endAt !== undefined ? req.body.endAt : existing.endAt
-        );
-        nextData.startAt = start;
-        nextData.endAt = end;
-      } else {
-        nextData.startAt = existing.startAt;
-        nextData.endAt = existing.endAt;
-      }
+      const dates = ensureValidDates(
+        req.body.startAt !== undefined ? req.body.startAt : existing.startAt,
+        req.body.endAt !== undefined ? req.body.endAt : existing.endAt,
+        { optional: nextData.resourceId === FREE_LOAN_RESOURCE_ID }
+      );
+      nextData.startAt = dates.start;
+      nextData.endAt = dates.end;
+      if (req.body.status === 'RETURNED' && !['APPROVED', 'RETURNED'].includes(existing.status)) return res.status(409).json({ error: 'Seul un prêt approuvé peut être restitué.' });
 
       if (req.body.requestedUnits !== undefined) {
         nextData.requestedUnits = parseInt(req.body.requestedUnits, 10);
@@ -1648,6 +1665,7 @@ loansRouter.patch('/reservations/:id',
           ...(req.body.requestedUnits !== undefined ? { requestedUnits: nextData.requestedUnits } : {}),
           ...(availability ? { reservedSlots: availability.reservedSlots } : {}),
           ...(req.body.notes !== undefined ? { notes: nextData.notes } : {}),
+          ...(req.body.status === 'RETURNED' && existing.status !== 'RETURNED' ? { returnedAt: new Date(), returnedById: req.user.id, returnedByName: req.user.name } : {}),
           ...(req.body.status !== undefined ? { status: nextData.status, approvedById: nextData.status === 'APPROVED' ? req.user.id : existing.approvedById } : {}),
           ...(req.body.internalNotes !== undefined ? { internalNotes: nextData.internalNotes } : {}),
           ...(req.body.additionalNeeds !== undefined ? { additionalNeeds: nextData.additionalNeeds } : {}),
@@ -1687,6 +1705,28 @@ loansRouter.patch('/reservations/:id',
     }
   }
 );
+
+loansRouter.post('/reservations/:id/approve-return', async (req, res, next) => {
+  try {
+    if (!['ADMIN', 'TECH'].includes(req.user.role)) return res.status(403).json({ error: 'Le retour doit être validé par un administrateur ou un technicien.' });
+    const reservation = await prisma.loanReservation.findUnique({ where: { id: req.params.id }, include: RESERVATION_INCLUDE });
+    if (!reservation) return res.status(404).json({ error: 'Réservation introuvable' });
+    if (reservation.status === 'RETURNED') return res.json(mapReservation(reservation));
+    if (reservation.status !== 'APPROVED') return res.status(409).json({ error: 'Seul un prêt approuvé peut être restitué.' });
+    if (reservation.contractSignatureRequest?.status === 'SIGNING') return res.status(409).json({ error: 'Une signature est en cours. Réessayez dans un instant.' });
+    if (reservation.contractSignatureRequest?.status === 'PENDING') {
+      const cancelled = await prisma.signatureRequest.updateMany({ where: { id: reservation.contractSignatureRequest.id, status: 'PENDING' }, data: { status: 'CANCELLED' } });
+      if (!cancelled.count) return res.status(409).json({ error: 'La signature a commencé. Réessayez dans un instant.' });
+    }
+    const changed = await prisma.loanReservation.updateMany({
+      where: { id: reservation.id, status: 'APPROVED' },
+      data: { status: 'RETURNED', returnedAt: new Date(), returnedById: req.user.id, returnedByName: req.user.name }
+    });
+    if (!changed.count) return res.status(409).json({ error: 'Le prêt a été modifié. Actualisez la liste.' });
+    const updated = await prisma.loanReservation.findUnique({ where: { id: reservation.id }, include: RESERVATION_INCLUDE });
+    res.json(mapReservation(updated));
+  } catch (err) { next(err); }
+});
 
 loansRouter.post('/reservations/:id/contract-signature',
   [
