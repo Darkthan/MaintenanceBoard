@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const QRCode = require('qrcode');
 const { randomUUID } = require('crypto');
 const { body, query, validationResult } = require('express-validator');
 const prisma = require('../lib/prisma');
@@ -23,6 +24,47 @@ const {
 
 const loansRouter = express.Router();
 const loanPublicRouter = express.Router();
+// Private, inactive resource: hidden from catalogues and public booking.
+const FREE_LOAN_RESOURCE_ID = 'free-loan';
+
+function buildFreeEquipmentSnapshots(raw) {
+  if (!Array.isArray(raw) || !raw.length || raw.length > 500) {
+    throw Object.assign(new Error('Ajoutez au moins un matériel pour le prêt libre (500 maximum).'), { status: 400 });
+  }
+  return raw.map(item => {
+    if (!item || typeof item.name !== 'string' || !item.name.trim() || item.name.trim().length > 200
+      || (item.type != null && (typeof item.type !== 'string' || item.type.length > 200))
+      || (item.serialNumber != null && (typeof item.serialNumber !== 'string' || item.serialNumber.length > 200))) {
+      throw Object.assign(new Error('Chaque matériel doit avoir une désignation (200 caractères maximum).'), { status: 400 });
+    }
+    return { equipmentName: item.name.trim(), equipmentType: item.type?.trim() || null, equipmentSerialNumber: item.serialNumber?.trim() || null };
+  });
+}
+
+function sameFreeEquipmentSelection(current, next) {
+  const normalize = items => items.map(item => [item.equipmentName || item.name, item.equipmentSerialNumber || item.serialNumber || null, item.equipmentType || item.type || null])
+    .map(item => JSON.stringify(item)).sort();
+  return JSON.stringify(normalize(current || [])) === JSON.stringify(normalize(next || []));
+}
+
+async function ensureManagedLoanAvailability(resourceId, startAt, endAt, requestedUnits, excludeReservationId = null) {
+  if (resourceId !== FREE_LOAN_RESOURCE_ID) return ensureAvailable(resourceId, startAt, endAt, requestedUnits, excludeReservationId);
+  const resource = await prisma.loanResource.upsert({
+    where: { id: FREE_LOAN_RESOURCE_ID },
+    create: { id: FREE_LOAN_RESOURCE_ID, name: 'Libre', isActive: false, usesBundles: false },
+    update: {}
+  });
+  // Unrelated free loans do not consume a shared stock capacity.
+  return { resource, requestedUnits: Number(requestedUnits), reservedSlots: 0 };
+}
+
+loanPublicRouter.use((req, res, next) => {
+  if (req.body?.resourceId === FREE_LOAN_RESOURCE_ID || req.body?.freeEquipments !== undefined) {
+    return res.status(403).json({ error: 'Les prêts libres sont réservés aux administrateurs.' });
+  }
+  next();
+});
+
 const loanAccessLinkLimiter = process.env.NODE_ENV !== 'test'
   ? rateLimit({
       windowMs: 60 * 60 * 1000,
@@ -88,7 +130,8 @@ const CONTRACT_SIGNATURE_SELECT = {
     signedAt: true,
     expiresAt: true,
     documentTitle: true,
-    signedFilename: true
+    signedFilename: true,
+    verificationMethod: true
   }
 };
 
@@ -142,7 +185,8 @@ function mapContractSignatureRequest(item) {
     signedAt: item.signedAt,
     expiresAt: item.expiresAt,
     documentTitle: item.documentTitle,
-    signedFilename: item.signedFilename
+    signedFilename: item.signedFilename,
+    verificationMethod: item.verificationMethod
   };
 }
 
@@ -241,6 +285,7 @@ function hasContractRelevantChange(existing, nextData, options = {}) {
     startChanged ||
     endChanged ||
     contractBodyChanged ||
+    options.freeEquipmentChanged ||
     equipmentSelectionChanged
   );
 }
@@ -292,7 +337,7 @@ async function sendLoanContractSignatureEmail(signatureRequest, reservation, doc
               Signer la fiche de prêt
             </a>
           </div>
-          <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0 0 6px">Ce lien est valable 7 jours. Votre identité sera vérifiée par un code envoyé à cette adresse email.</p>
+          <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0 0 6px">${signatureRequest.verificationMethod === 'LOAN_LINK' ? 'Ce lien personnel est à usage unique et valable 7 jours. Ouvrez-le sur votre téléphone pour lire la fiche et signer au doigt.' : 'Ce lien est valable 7 jours. Votre identité sera vérifiée par un code envoyé à cette adresse email.'}</p>
           <p style="font-size:11px;color:#cbd5e1;text-align:center;margin:0">Si vous n'étiez pas attendu(e), ignorez ce message.</p>
         </div>
       </div>`
@@ -465,6 +510,7 @@ function fmtLoanDate(d) {
 }
 
 async function getResourceSchedule(resourceId, start, end) {
+  if (resourceId === FREE_LOAN_RESOURCE_ID) return null;
   const resource = await prisma.loanResource.findUnique({ where: { id: resourceId } });
   if (!resource) return null;
   const bundle = getBundleInfo(resource);
@@ -608,7 +654,7 @@ async function getRequestResources(link) {
     },
     orderBy: [{ category: 'asc' }, { name: 'asc' }]
   });
-  return resources.map(mapResource);
+  return resources.filter(resource => resource.id !== FREE_LOAN_RESOURCE_ID).map(mapResource);
 }
 
 // GET /api/loan-request/general-link — accès du portail public de demandes
@@ -640,7 +686,7 @@ loanPublicRouter.get('/account', async (req, res, next) => {
     const email = normalizeEmail(accessLink.email);
     const [reservations, reporterLinks, legacyTickets] = await Promise.all([
       prisma.loanReservation.findMany({
-        where: { requesterEmail: email },
+        where: { requesterEmail: email, resourceId: { not: FREE_LOAN_RESOURCE_ID } },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
@@ -802,9 +848,10 @@ function buildIcs(events) {
   return lines.join('\r\n');
 }
 
-async function getCalendarEvents(startAt, endAt) {
+async function getCalendarEvents(startAt, endAt, includeFree = false) {
   return prisma.loanReservation.findMany({
     where: {
+      ...(!includeFree ? { resourceId: { not: FREE_LOAN_RESOURCE_ID } } : {}),
       status: { in: ACTIVE_LOAN_STATUSES },
       startAt: { lt: endAt },
       endAt: { gt: startAt }
@@ -1002,6 +1049,22 @@ loansRouter.get('/calendar.ics', async (req, res, next) => {
 
 loansRouter.use(requireAuth);
 
+loansRouter.use(async (req, res, next) => {
+  try {
+    if (req.body?.resourceId === FREE_LOAN_RESOURCE_ID && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Les prêts libres sont réservés aux administrateurs.' });
+    }
+    const resourceMatch = req.path.match(/^\/resources\/([^/]+)(?:\/|$)/);
+    if (resourceMatch && decodeURIComponent(resourceMatch[1]) === FREE_LOAN_RESOURCE_ID) return res.status(404).json({ error: 'Ressource introuvable' });
+    const match = req.path.match(/^\/reservations\/([^/]+)(?:\/|$)/);
+    if (match && req.user.role !== 'ADMIN') {
+      const loan = await prisma.loanReservation.findUnique({ where: { id: decodeURIComponent(match[1]) }, select: { resourceId: true } });
+      if (loan?.resourceId === FREE_LOAN_RESOURCE_ID) return res.status(403).json({ error: 'Les prêts libres sont réservés aux administrateurs.' });
+    }
+    next();
+  } catch (err) { next(err); }
+});
+
 loansRouter.get('/calendar-feed', (req, res) => {
   const token = getCalendarFeedToken();
   res.json({
@@ -1029,7 +1092,7 @@ loansRouter.get('/resources', async (_req, res, next) => {
         ...EQUIPMENT_SELECT
       }
     });
-    res.json(resources.map(resource => ({ ...mapResource(resource) })));
+    res.json(resources.filter(resource => resource.id !== FREE_LOAN_RESOURCE_ID).map(resource => ({ ...mapResource(resource) })));
   } catch (err) {
     next(err);
   }
@@ -1325,6 +1388,7 @@ loansRouter.get('/reservations',
       const end = req.query.end ? new Date(req.query.end) : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
 
       const where = {
+        ...(req.user.role !== 'ADMIN' ? { resourceId: { not: FREE_LOAN_RESOURCE_ID } } : {}),
         startAt: { lt: end },
         endAt: { gt: start }
       };
@@ -1350,7 +1414,7 @@ loansRouter.get('/calendar', async (req, res, next) => {
   try {
     const start = req.query.start ? new Date(req.query.start) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const end = req.query.end ? new Date(req.query.end) : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
-    const reservations = await getCalendarEvents(start, end);
+    const reservations = await getCalendarEvents(start, end, req.user.role === 'ADMIN');
     res.json(reservations.map(item => ({
       ...item,
       resource: mapResource(item.resource)
@@ -1383,16 +1447,21 @@ loansRouter.post('/reservations',
       if (!validate(req, res)) return;
       const { start, end } = ensureValidDates(req.body.startAt, req.body.endAt);
       const occurrences = computeOccurrences(start, end, req.body.recurrence);
-      const requesterEmail = resolveLoanRequesterEmail(req.body.requesterEmail, req.user);
-      if (!requesterEmail) {
+      const isFreeLoan = req.body.resourceId === FREE_LOAN_RESOURCE_ID;
+      const requesterEmail = isFreeLoan ? normalizeEmail(req.body.requesterEmail || '') : resolveLoanRequesterEmail(req.body.requesterEmail, req.user);
+      if (!requesterEmail && !isFreeLoan) {
         return res.status(400).json({ error: 'Aucun email disponible pour la réservation. Renseignez un email de profil ou un email par défaut dans les paramètres.' });
       }
 
       const created = [];
       const selectedEquipmentIds = normalizeSelectedEquipmentIds(req.body.selectedEquipmentIds);
+      if ((isFreeLoan && selectedEquipmentIds.length) || (!isFreeLoan && req.body.freeEquipments !== undefined)) {
+        return res.status(400).json({ error: 'Le matériel libre est réservé aux feuilles de prêt Libre.' });
+      }
+      const freeSnapshots = isFreeLoan ? buildFreeEquipmentSnapshots(req.body.freeEquipments) : null;
       for (const occ of occurrences) {
-        const availability = await ensureAvailable(req.body.resourceId, occ.startAt, occ.endAt, req.body.requestedUnits);
-        const selectedEquipments = buildSelectedEquipmentSnapshots(availability.resource, selectedEquipmentIds);
+        const availability = await ensureManagedLoanAvailability(req.body.resourceId, occ.startAt, occ.endAt, req.body.requestedUnits);
+        const selectedEquipments = freeSnapshots || buildSelectedEquipmentSnapshots(availability.resource, selectedEquipmentIds);
         const reservation = await prisma.loanReservation.create({
           data: {
             resourceId: availability.resource.id,
@@ -1432,7 +1501,7 @@ loansRouter.patch('/reservations/:id',
   [
     body('resourceId').optional().isString(),
     body('requesterName').optional().trim().isLength({ min: 2, max: 200 }),
-    body('requesterEmail').optional().isEmail().normalizeEmail(),
+    body('requesterEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
     body('requesterPhone').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
     body('requesterOrganization').optional({ values: 'falsy' }).trim().isLength({ max: 200 }),
     body('startAt').optional().isISO8601(),
@@ -1455,6 +1524,7 @@ loansRouter.patch('/reservations/:id',
         include: RESERVATION_INCLUDE
       });
       if (!existing) return res.status(404).json({ error: 'Réservation introuvable' });
+      if (existing.contractSignatureRequest?.status === 'SIGNING') return res.status(409).json({ error: 'Une signature est en cours. Réessayez dans un instant.' });
 
       const nextData = {
         resourceId: req.body.resourceId || existing.resourceId,
@@ -1492,9 +1562,17 @@ loansRouter.patch('/reservations/:id',
       let availability = null;
       const selectedEquipmentProvided = req.body.selectedEquipmentIds !== undefined;
       let selectedEquipmentSnapshots = null;
+      const isFreeLoan = nextData.resourceId === FREE_LOAN_RESOURCE_ID;
+      const freeEquipmentProvided = req.body.freeEquipments !== undefined;
+      if ((isFreeLoan && normalizeSelectedEquipmentIds(req.body.selectedEquipmentIds).length) || (!isFreeLoan && freeEquipmentProvided)) {
+        return res.status(400).json({ error: 'Le matériel libre est réservé aux feuilles de prêt Libre.' });
+      }
+      if (isFreeLoan && (freeEquipmentProvided || nextData.resourceId !== existing.resourceId)) {
+        selectedEquipmentSnapshots = buildFreeEquipmentSnapshots(req.body.freeEquipments);
+      }
 
       if (shouldRecheckAvailability) {
-        availability = await ensureAvailable(
+        availability = await ensureManagedLoanAvailability(
           nextData.resourceId,
           nextData.startAt,
           nextData.endAt,
@@ -1526,7 +1604,7 @@ loansRouter.patch('/reservations/:id',
         });
       }
 
-      if (selectedEquipmentProvided || nextData.resourceId !== existing.resourceId) {
+      if (!isFreeLoan && (selectedEquipmentProvided || nextData.resourceId !== existing.resourceId)) {
         selectedEquipmentSnapshots = buildSelectedEquipmentSnapshots(
           selectionResource,
           selectedEquipmentProvided ? req.body.selectedEquipmentIds : []
@@ -1536,22 +1614,25 @@ loansRouter.patch('/reservations/:id',
       const contractRelevantChange = existing.contractSignatureRequestId
         ? hasContractRelevantChange(existing, nextData, {
             contractBodyProvided: req.body.contractBody !== undefined,
+            freeEquipmentChanged: isFreeLoan && freeEquipmentProvided && !sameFreeEquipmentSelection(existing.selectedEquipments, selectedEquipmentSnapshots),
             selectedEquipmentProvided,
             selectedEquipmentIds: selectedEquipmentProvided ? req.body.selectedEquipmentIds : []
           })
         : false;
 
-      if (contractRelevantChange && existing.contractSignatureRequest?.status === 'SIGNED') {
+      if (contractRelevantChange && ['SIGNED', 'SIGNING'].includes(existing.contractSignatureRequest?.status)) {
         return res.status(409).json({
           error: 'Ce prêt possède déjà une fiche signée. Modifiez d’abord la fiche contractuelle ou créez une nouvelle réservation.'
         });
       }
 
-      if (contractRelevantChange && existing.contractSignatureRequest?.status === 'PENDING') {
-        await prisma.signatureRequest.update({
-          where: { id: existing.contractSignatureRequest.id },
-          data: { status: 'CANCELLED' }
-        });
+      if ((contractRelevantChange || ['CANCELLED', 'REJECTED', 'RETURNED'].includes(nextData.status)) && existing.contractSignatureRequest?.status === 'PENDING') {
+        if (existing.contractSignatureRequest.verificationMethod === 'LOAN_LINK') {
+          const cancelled = await prisma.signatureRequest.updateMany({ where: { id: existing.contractSignatureRequest.id, status: 'PENDING' }, data: { status: 'CANCELLED' } });
+          if (!cancelled.count) return res.status(409).json({ error: 'La signature a commencé. La fiche ne peut plus être modifiée.' });
+        } else {
+          await prisma.signatureRequest.update({ where: { id: existing.contractSignatureRequest.id }, data: { status: 'CANCELLED' } });
+        }
       }
 
       const reservation = await prisma.loanReservation.update({
@@ -1609,11 +1690,14 @@ loansRouter.patch('/reservations/:id',
 
 loansRouter.post('/reservations/:id/contract-signature',
   [
+    body('mode').optional().isIn(['EMAIL_OTP', 'LOAN_LINK']),
     body('message').optional({ values: 'falsy' }).trim().isLength({ max: 2000 })
   ],
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
+      const verificationMethod = req.body.mode || 'EMAIL_OTP';
+      if (verificationMethod === 'LOAN_LINK' && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Accès réservé aux administrateurs.' });
 
       const reservation = await prisma.loanReservation.findUnique({
         where: { id: req.params.id },
@@ -1623,7 +1707,13 @@ loansRouter.post('/reservations/:id/contract-signature',
         return res.status(404).json({ error: 'Réservation introuvable' });
       }
 
-      if (reservation.contractSignatureRequest && ['PENDING', 'SIGNED'].includes(reservation.contractSignatureRequest.status)) {
+      if (verificationMethod === 'LOAN_LINK' && !ACTIVE_LOAN_STATUSES.includes(reservation.status)) return res.status(409).json({ error: 'Ce prêt n’est plus en attente de remise.' });
+      if (reservation.contractSignatureRequest?.status === 'PENDING' && new Date(reservation.contractSignatureRequest.expiresAt) <= new Date()) {
+        const expired = await prisma.signatureRequest.updateMany({ where: { id: reservation.contractSignatureRequest.id, status: 'PENDING' }, data: { status: 'EXPIRED' } });
+        if (!expired.count) return res.status(409).json({ error: 'La signature a commencé. Réessayez dans un instant.' });
+        reservation.contractSignatureRequest.status = 'EXPIRED';
+      }
+      if (reservation.contractSignatureRequest && ['PENDING', 'SIGNING', 'SIGNED'].includes(reservation.contractSignatureRequest.status)) {
         return res.status(409).json({
           error: reservation.contractSignatureRequest.status === 'SIGNED'
             ? 'Une fiche signée existe déjà pour cette réservation.'
@@ -1632,6 +1722,10 @@ loansRouter.post('/reservations/:id/contract-signature',
         });
       }
 
+      if (verificationMethod === 'EMAIL_OTP') {
+        if (!reservation.requesterEmail) return res.status(400).json({ error: 'Renseignez l’email de l’emprunteur pour envoyer la fiche en signature.' });
+        if (!createSmtpTransporter().transporter) return res.status(400).json({ error: 'SMTP non configuré (voir Paramètres → Emails)' });
+      }
       const resource = reservation.resource;
       const contractBody = getEffectiveContractBody(reservation, resource);
       const selectedEquipments = Array.isArray(reservation.selectedEquipments)
@@ -1649,6 +1743,7 @@ loansRouter.post('/reservations/:id/contract-signature',
       const sigReq = await prisma.signatureRequest.create({
         data: {
           orderId: null,
+          verificationMethod,
           token: randomUUID(),
           documentTitle,
           documentNotes,
@@ -1688,11 +1783,12 @@ loansRouter.post('/reservations/:id/contract-signature',
         }
       });
 
-      await sendLoanContractSignatureEmail(sigReq, reservation, documentTitle, documentNotes);
+      if (verificationMethod === 'EMAIL_OTP') await sendLoanContractSignatureEmail(sigReq, reservation, documentTitle, documentNotes);
 
       res.status(201).json({
         success: true,
-        message: 'Fiche de prêt générée et envoyée en signature.',
+        ...(verificationMethod === 'LOAN_LINK' ? { signUrl: getLoanSignatureLink(sigReq.token), expiresAt: sigReq.expiresAt, qrCode: await QRCode.toDataURL(getLoanSignatureLink(sigReq.token), { width: 240, margin: 1 }) } : {}),
+        message: verificationMethod === 'LOAN_LINK' ? 'Lien de signature à usage unique généré.' : 'Fiche de prêt générée et envoyée en signature.',
         signatureRequest: {
           id: sigReq.id,
           status: sigReq.status,
@@ -1708,13 +1804,37 @@ loansRouter.post('/reservations/:id/contract-signature',
   }
 );
 
+loansRouter.post('/reservations/:id/signature-link/email', async (req, res, next) => {
+  try {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Accès réservé aux administrateurs.' });
+    const loan = await prisma.loanReservation.findUnique({ where: { id: req.params.id }, include: { resource: true, contractSignatureRequest: true } });
+    const signature = loan?.contractSignatureRequest;
+    if (!signature || signature.verificationMethod !== 'LOAN_LINK' || signature.status !== 'PENDING' || new Date(signature.expiresAt) <= new Date()) return res.status(404).json({ error: 'Aucun lien de signature actif.' });
+    if (!loan.requesterEmail) return res.status(400).json({ error: 'Renseignez l’email de l’emprunteur dans la fiche de prêt.' });
+    await sendLoanContractSignatureEmail(signature, loan, getLoanContractDocumentTitle(loan, loan.resource), getLoanContractDocumentNotes(loan, loan.resource));
+    res.json({ success: true });
+  } catch (err) { if (err.message?.includes('SMTP')) return res.status(400).json({ error: err.message }); next(err); }
+});
+
+loansRouter.get('/reservations/:id/signature-link', async (req, res, next) => {
+  try {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Accès réservé aux administrateurs.' });
+    const loan = await prisma.loanReservation.findUnique({ where: { id: req.params.id }, include: { contractSignatureRequest: true } });
+    const signature = loan?.contractSignatureRequest;
+    if (!signature || signature.verificationMethod !== 'LOAN_LINK' || signature.status !== 'PENDING' || new Date(signature.expiresAt) <= new Date()) {
+      return res.status(404).json({ error: 'Aucun lien de signature actif pour ce prêt.' });
+    }
+    res.json({ signUrl: getLoanSignatureLink(signature.token), expiresAt: signature.expiresAt, qrCode: await QRCode.toDataURL(getLoanSignatureLink(signature.token), { width: 240, margin: 1 }) });
+  } catch (err) { next(err); }
+});
+
 loansRouter.delete('/reservations/:id', async (req, res, next) => {
   try {
     const existing = await prisma.loanReservation.findUnique({
       where: { id: req.params.id },
       include: {
         contractSignatureRequest: {
-          select: { id: true, status: true }
+          select: { id: true, status: true, verificationMethod: true }
         }
       }
     });
@@ -1723,11 +1843,14 @@ loansRouter.delete('/reservations/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Réservation introuvable' });
     }
 
+    if (existing.contractSignatureRequest?.status === 'SIGNING') return res.status(409).json({ error: 'Une signature est en cours. Réessayez dans un instant.' });
     if (existing.contractSignatureRequest?.status === 'PENDING') {
-      await prisma.signatureRequest.update({
-        where: { id: existing.contractSignatureRequest.id },
-        data: { status: 'CANCELLED' }
-      });
+      if (existing.contractSignatureRequest.verificationMethod === 'LOAN_LINK') {
+        const cancelled = await prisma.signatureRequest.updateMany({ where: { id: existing.contractSignatureRequest.id, status: 'PENDING' }, data: { status: 'CANCELLED' } });
+        if (!cancelled.count) return res.status(409).json({ error: 'La signature a commencé. Le prêt ne peut plus être supprimé.' });
+      } else {
+        await prisma.signatureRequest.update({ where: { id: existing.contractSignatureRequest.id }, data: { status: 'CANCELLED' } });
+      }
     }
 
     await prisma.loanReservation.delete({

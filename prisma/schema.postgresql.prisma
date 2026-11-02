@@ -558,6 +558,7 @@ model OrderAttachment {
 }
 
 model SignatureRequest {
+  verificationMethod String @default("EMAIL_OTP") // EMAIL_OTP | LOAN_LINK
   id             String    @id @default(uuid())
   orderId        String?   // null = document générique (non lié à une commande)
   token          String    @unique
@@ -573,7 +574,7 @@ model SignatureRequest {
   recipientEmail String
   recipientName  String
   message        String?
-  status         String    @default("PENDING")  // PENDING | SIGNED | EXPIRED | CANCELLED
+  status         String    @default("PENDING")  // PENDING | SIGNING | SIGNED | EXPIRED | CANCELLED
   otpHash        String?
   otpExpiresAt   DateTime?
   otpAttempts    Int       @default(0)

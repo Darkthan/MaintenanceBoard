@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
+const sharp = require('sharp');
 const { PDFDocument: PDFLibDocument, StandardFonts, rgb } = require('pdf-lib');
 const multer = require('multer');
 const { createSmtpTransporter } = require('../utils/mail');
@@ -364,6 +365,7 @@ ordersRouter.delete('/:id/signature-requests/:reqId', requireAuth, async (req, r
 // ── Router public pour /api/sign/:token ───────────────────────────────────────
 
 const signRouter = express.Router();
+signRouter.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); res.setHeader('Referrer-Policy', 'no-referrer'); next(); });
 
 // GET /api/sign/:token — Infos de la demande (pour la page de signature)
 signRouter.get('/:token', async (req, res, next) => {
@@ -413,8 +415,9 @@ signRouter.get('/:token', async (req, res, next) => {
       const num = orderNum(sigReq.order);
       return res.json({
         status: 'PENDING',
+        requiresOtp: sigReq.verificationMethod !== 'LOAN_LINK',
         recipientName: sigReq.recipientName,
-        maskedEmail: maskEmail(sigReq.recipientEmail),
+        maskedEmail: sigReq.recipientEmail ? maskEmail(sigReq.recipientEmail) : '',
         expiresAt: sigReq.expiresAt,
         message: sigReq.message,
         order: {
@@ -440,8 +443,9 @@ signRouter.get('/:token', async (req, res, next) => {
     // ── Document standalone (orderId null) ─────────────────────────────────────
     return res.json({
       status: 'PENDING',
+      requiresOtp: sigReq.verificationMethod !== 'LOAN_LINK',
       recipientName: sigReq.recipientName,
-      maskedEmail: maskEmail(sigReq.recipientEmail),
+      maskedEmail: sigReq.recipientEmail ? maskEmail(sigReq.recipientEmail) : '',
       expiresAt: sigReq.expiresAt,
       message: sigReq.message,
       document: {
@@ -462,6 +466,7 @@ signRouter.get('/:token/source', async (req, res, next) => {
       where: { token: req.params.token }
     });
     if (!sigReq) return res.status(404).json({ error: 'Lien de signature invalide' });
+    if (sigReq.verificationMethod === 'LOAN_LINK' && sigReq.status !== 'PENDING') return res.status(410).json({ error: 'Ce lien de signature a déjà été utilisé ou désactivé.' });
     if (sigReq.status === 'CANCELLED' || sigReq.status === 'EXPIRED') {
       return res.status(410).json({ error: 'Ce lien n\'est plus actif' });
     }
@@ -495,6 +500,8 @@ signRouter.post('/:token/send-otp', async (req, res, next) => {
     if (new Date() > sigReq.expiresAt) {
       return res.status(410).json({ error: 'Ce lien a expiré' });
     }
+
+    if (sigReq.verificationMethod === 'LOAN_LINK') return res.status(400).json({ error: 'Ce lien permet de signer directement sans code email.' });
 
     // Anti-spam : refuser si un OTP valide a été envoyé il y a moins de 2 minutes
     if (sigReq.otpExpiresAt && new Date() < sigReq.otpExpiresAt) {
@@ -552,15 +559,17 @@ signRouter.post('/:token/send-otp', async (req, res, next) => {
 
 // POST /api/sign/:token/submit — Soumettre la signature
 signRouter.post('/:token/submit', async (req, res, next) => {
+  let claimedId = null;
   try {
-    const { otpCode, signatureData, signerTitle, signerPlace } = req.body;
-    if (!otpCode || !signatureData) {
+    let { otpCode, signatureData, signerTitle, signerPlace } = req.body;
+    if (!signatureData) {
       return res.status(400).json({ error: 'Code de vérification et signature requis' });
     }
 
     const sigReq = await prisma.signatureRequest.findUnique({
       where: { token: req.params.token },
       include: {
+        loanReservationContracts: { select: { id: true, status: true } },
         order: {
           include: {
             items: true,
@@ -575,26 +584,49 @@ signRouter.post('/:token/submit', async (req, res, next) => {
     if (sigReq.status !== 'PENDING') return res.status(410).json({ error: 'Cette demande n\'est plus active' });
     if (new Date() > sigReq.expiresAt) return res.status(410).json({ error: 'Ce lien a expiré' });
 
-    if (!sigReq.otpHash || !sigReq.otpExpiresAt) {
-      return res.status(400).json({ error: 'Veuillez d\'abord demander un code de vérification' });
-    }
-    if (new Date() > sigReq.otpExpiresAt) {
-      return res.status(400).json({ error: 'Le code de vérification a expiré. Demandez un nouveau code.' });
-    }
-    if (sigReq.otpAttempts >= 5) {
-      return res.status(429).json({ error: 'Trop de tentatives incorrectes. Demandez un nouveau code.' });
-    }
+    const isLoanLink = sigReq.verificationMethod === 'LOAN_LINK';
+    if (isLoanLink) {
+      if (sigReq.orderId || !sigReq.loanReservationContracts?.some(loan => ['PENDING', 'APPROVED'].includes(loan.status))) return res.status(403).json({ error: 'Ce lien n’est pas lié à un prêt actif.' });
+      if (req.body.consent !== true) return res.status(400).json({ error: 'Veuillez accepter l’engagement de prêt avant de signer.' });
+      if (typeof signatureData !== 'string' || signatureData.length > 2000000 || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(signatureData)) {
+        return res.status(400).json({ error: 'Une signature PNG valide est requise.' });
+      }
+      try {
+        const decoded = sharp(Buffer.from(signatureData.split(',')[1], 'base64'), { limitInputPixels: 5000000 });
+        const stats = await decoded.stats();
+        if (stats.channels.every(channel => channel.min === channel.max)) throw new Error('Empty image');
+        signatureData = 'data:image/png;base64,' + (await decoded.png().toBuffer()).toString('base64');
+      } catch (_) { return res.status(400).json({ error: 'La signature est vide ou illisible.' }); }
+    } else {
+      if (!otpCode || typeof otpCode !== 'string') return res.status(400).json({ error: 'Code de vérification requis' });
+      if (!sigReq.otpHash || !sigReq.otpExpiresAt) {
+        return res.status(400).json({ error: 'Veuillez d\'abord demander un code de vérification' });
+      }
+      if (new Date() > sigReq.otpExpiresAt) {
+        return res.status(400).json({ error: 'Le code de vérification a expiré. Demandez un nouveau code.' });
+      }
+      if (sigReq.otpAttempts >= 5) {
+        return res.status(429).json({ error: 'Trop de tentatives incorrectes. Demandez un nouveau code.' });
+      }
 
-    const valid = await bcrypt.compare(otpCode.trim(), sigReq.otpHash);
-    if (!valid) {
-      await prisma.signatureRequest.update({
-        where: { id: sigReq.id },
-        data: { otpAttempts: sigReq.otpAttempts + 1 }
+      const valid = await bcrypt.compare(otpCode.trim(), sigReq.otpHash);
+      if (!valid) {
+        await prisma.signatureRequest.update({
+          where: { id: sigReq.id },
+          data: { otpAttempts: sigReq.otpAttempts + 1 }
+        });
+        const remaining = 5 - (sigReq.otpAttempts + 1);
+        return res.status(400).json({
+          error: `Code incorrect. ${remaining > 0 ? `${remaining} tentative(s) restante(s).` : 'Demandez un nouveau code.'}`
+        });
+      }
+    }
+    if (isLoanLink) {
+      const claim = await prisma.signatureRequest.updateMany({
+        where: { id: sigReq.id, status: 'PENDING', expiresAt: { gt: new Date() } }, data: { status: 'SIGNING' }
       });
-      const remaining = 5 - (sigReq.otpAttempts + 1);
-      return res.status(400).json({
-        error: `Code incorrect. ${remaining > 0 ? `${remaining} tentative(s) restante(s).` : 'Demandez un nouveau code.'}`
-      });
+      if (claim.count !== 1) return res.status(409).json({ error: 'Ce lien est déjà utilisé ou une signature est en cours.' });
+      claimedId = sigReq.id;
     }
 
     const signatureId = generateSignatureId();
@@ -649,6 +681,8 @@ signRouter.post('/:token/submit', async (req, res, next) => {
       }
     }
 
+    if (isLoanLink && !sourceBuffer) throw Object.assign(new Error('Le document source est indisponible.'), { status: 404 });
+
     // Utiliser la position définie par le demandeur (stockée en DB), avec fallback bas-droite
     const px = sigReq.posX ?? 0.7;
     const py = sigReq.posY ?? 0.85;
@@ -674,6 +708,11 @@ signRouter.post('/:token/submit', async (req, res, next) => {
 
     return res.json({ success: true, signatureId, signedAt, filename: signedFilename, message: 'Document signé avec succès' });
   } catch (err) { next(err); }
+  finally {
+    // A successful signature stays SIGNED forever. Failed PDF generation frees
+    // the claim so the borrower can retry without consuming the one-use link.
+    if (claimedId) await prisma.signatureRequest.updateMany({ where: { id: claimedId, status: 'SIGNING' }, data: { status: 'PENDING' } }).catch(err => console.error('[sign] release claim:', err.message));
+  }
 });
 
 // ── Router authentifié pour /api/signatures ───────────────────────────────────
@@ -1257,7 +1296,7 @@ function renderSignatureBlock(doc, sigReq, signatureId, signedAt, signatureDataU
 
   doc.rect(50, certY, W - 100, 28).fill(INDIGO);
   doc.fillColor('#fff').font('Helvetica-Bold').fontSize(11)
-     .text('SIGNATURE ELECTRONIQUE CERTIFIEE', 66, certY + 9);
+     .text(sigReq.verificationMethod === 'LOAN_LINK' ? 'SIGNATURE PAR LIEN UNIQUE' : 'SIGNATURE ELECTRONIQUE CERTIFIEE', 66, certY + 9);
 
   const blockY = certY + 36;
 
@@ -1292,7 +1331,11 @@ function renderSignatureBlock(doc, sigReq, signatureId, signedAt, signatureDataU
 
   // Build label/value rows dynamically to accommodate optional fields
   const labels = ['Signataire :', 'Email :'];
-  const values = [sigReq.recipientName, sigReq.recipientEmail];
+  const values = [sigReq.recipientName, sigReq.recipientEmail || '-'];
+  if (sigReq.verificationMethod === 'LOAN_LINK') {
+    labels.push('Vérification :');
+    values.push('Lien personnel à usage unique, engagement accepté');
+  }
 
   if (signerTitle) {
     labels.push('Qualité :');

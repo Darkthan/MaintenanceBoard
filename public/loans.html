@@ -181,6 +181,10 @@
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
       </button>
     </div>
+    <div data-admin-only class="hidden flex items-center gap-3">
+      <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Feuille de prêt Libre</span>
+      <button type="button" onclick="openCreateMenuAction('free-loan')" aria-label="Créer une feuille de prêt Libre" class="h-11 w-11 rounded-full bg-white border border-slate-200 text-blue-700 shadow flex items-center justify-center hover:bg-blue-50 transition">Libre</button>
+    </div>
     <div class="flex items-center gap-3">
       <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Nouvelle réservation</span>
       <button type="button" onclick="openCreateMenuAction('reservation')"
@@ -379,7 +383,7 @@
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Nom demandeur *</label>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Nom et prénom de l’emprunteur *</label>
           <input id="resv-name" type="text" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
         </div>
         <div>
@@ -473,6 +477,14 @@
           </select>
         </div>
       </div>
+      <div id="free-loan-panel" class="hidden rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+        <div>
+          <p class="text-sm font-medium text-slate-700">Matériel non référencé *</p>
+          <p class="text-xs text-slate-500">Saisis le matériel remis. Il figurera sur la fiche sans être ajouté au parc informatique.</p>
+        </div>
+        <div id="free-loan-items" class="space-y-2"></div>
+        <button type="button" onclick="addFreeLoanItem()" class="text-sm font-medium text-blue-700 hover:text-blue-900">+ Ajouter du matériel</button>
+      </div>
       <div id="reservation-equipment-panel" class="hidden rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
         <div class="flex items-center justify-between gap-3">
           <div>
@@ -552,6 +564,25 @@
   </div>
 </div>
 
+<div id="signature-link-modal" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
+  <div role="dialog" aria-modal="true" aria-labelledby="signature-link-title" class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 space-y-4">
+    <div class="flex justify-between items-center gap-3">
+      <h3 id="signature-link-title" class="font-semibold text-slate-800">Signature au doigt sur portable</h3>
+      <button type="button" onclick="closeSignatureLinkModal()" aria-label="Fermer" class="p-2 text-slate-500">×</button>
+    </div>
+    <p class="text-sm text-slate-600">Transmets ce lien à l’emprunteur ou fais-lui scanner le QR code. Il consulte la fiche et signe au doigt, sans compte ni code email. Le lien ne peut servir qu’une fois.</p>
+    <img id="signature-link-qr" alt="QR code du lien personnel de signature" class="mx-auto h-48 w-48" />
+    <label class="block text-sm text-slate-700">Lien personnel à usage unique
+      <input id="signature-link-url" readonly class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    </label>
+    <p id="signature-link-expiry" class="text-xs text-slate-500"></p>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" onclick="copyText(document.getElementById('signature-link-url').value)" class="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm">Copier le lien</button>
+      <button id="signature-link-email" type="button" onclick="emailMobileSignatureLink(this)" class="rounded-lg border border-blue-300 text-blue-700 px-4 py-2 text-sm">Envoyer par email</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
@@ -604,7 +635,43 @@ function formatContractStatus(status) {
   }[status] || '<span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Sans fiche</span>';
 }
 
+const FREE_LOAN_RESOURCE_ID = 'free-loan';
+function addFreeLoanItem(item = {}) {
+  const row = document.createElement('div');
+  row.className = 'grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] items-center gap-2';
+  row.dataset.freeLoanItem = '';
+  row.innerHTML = `<input data-free-name type="text" maxlength="200" required aria-label="Désignation du matériel" placeholder="Désignation du matériel" value="${escapeHtml(item.name || '')}" class="min-w-0 w-full sm:flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    <input data-free-type type="text" maxlength="200" aria-label="Type de matériel" placeholder="Type de matériel" value="${escapeHtml(item.type || '')}" class="min-w-0 w-full sm:flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    <input data-free-serial type="text" maxlength="200" aria-label="Numéro de série (facultatif)" placeholder="N° de série (facultatif)" value="${escapeHtml(item.serialNumber || '')}" class="min-w-0 flex-1 sm:w-40 sm:flex-none rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    <button type="button" aria-label="Retirer ce matériel" class="px-2 py-2 text-red-600 hover:text-red-800">×</button>`;
+  row.querySelector('button').addEventListener('click', () => {
+    row.remove();
+    if (!document.querySelector('[data-free-loan-item]')) addFreeLoanItem();
+  });
+  document.getElementById('free-loan-items').appendChild(row);
+  syncFreeLoanForm();
+}
+
+function syncFreeLoanForm() {
+  const isFree = document.getElementById('resv-resource').value === FREE_LOAN_RESOURCE_ID;
+  document.getElementById('free-loan-panel').classList.toggle('hidden', !isFree);
+  const email = document.getElementById('resv-email');
+  if (email.dataset.defaultPlaceholder === undefined) email.dataset.defaultPlaceholder = email.placeholder;
+  email.placeholder = isFree ? 'Facultatif pour le lien mobile ; email de l’emprunteur pour l’envoi' : email.dataset.defaultPlaceholder;
+  document.querySelectorAll('#free-loan-items input').forEach(input => { input.disabled = !isFree; });
+}
+
+function openFreeLoanModal() {
+  if (currentUser?.role !== 'ADMIN') return;
+  openReservationModal();
+  document.getElementById('resv-resource').value = FREE_LOAN_RESOURCE_ID;
+  document.getElementById('reservation-modal-title').textContent = 'Feuille de prêt Libre';
+  renderReservationEquipmentSelector();
+  dpLoadSchedule(FREE_LOAN_RESOURCE_ID);
+}
+
 function getLoanResourceById(resourceId) {
+  if (resourceId === FREE_LOAN_RESOURCE_ID) return { id: resourceId, name: 'Libre', equipments: [] };
   return loanResources.find(item => item.id === resourceId) || null;
 }
 
@@ -634,6 +701,7 @@ function toggleReservationEquipment(id) {
 }
 
 function renderReservationEquipmentSelector() {
+  syncFreeLoanForm();
   const panel = document.getElementById('reservation-equipment-panel');
   const list = document.getElementById('resv-equip-list');
   const resource = getLoanResourceById(document.getElementById('resv-resource').value);
@@ -935,6 +1003,9 @@ function openReservationModal(reservation = null) {
   document.getElementById('reservation-form').reset();
   document.getElementById('reservation-error').classList.add('hidden');
   reservationEquipmentSelection = new Set();
+  document.getElementById('free-loan-items').replaceChildren();
+  const freeItems = reservation?.resourceId === FREE_LOAN_RESOURCE_ID ? reservation.selectedEquipments || [] : [];
+  (freeItems.length ? freeItems : [{}]).forEach(addFreeLoanItem);
   currentReservationEditId = reservation?.id || null;
   document.getElementById('resv-id').value = currentReservationEditId || '';
   document.getElementById('resv-recurrence-type').value = 'none';
@@ -946,7 +1017,7 @@ function openReservationModal(reservation = null) {
   dpInit();
 
   const sel = document.getElementById('resv-resource');
-  sel.innerHTML = '<option value="">-- Choisir une ressource --</option>';
+  sel.innerHTML = '<option value="">-- Choisir une ressource --</option>' + (currentUser?.role === 'ADMIN' ? '<option value="free-loan">Libre — matériel non référencé</option>' : '');
   loanResources.filter(r => r.isActive || r.id === reservation?.resourceId || r.id === reservation?.resource?.id).forEach(r => {
     const opt = document.createElement('option');
     opt.value = r.id;
@@ -1109,6 +1180,7 @@ function openCreateMenuAction(type) {
   closeCreateMenu();
   if (type === 'resource') { openResourceModal(); return; }
   if (type === 'reservation') { openReservationModal(); return; }
+  if (type === 'free-loan') { openFreeLoanModal(); return; }
   if (type === 'bulk') { openBulkModal(); return; }
   openLinkModal();
 }
@@ -1400,11 +1472,13 @@ function renderReservationCard(item, { archived = false } = {}) {
   const selectedSummary = Array.isArray(item.selectedEquipments) && item.selectedEquipments.length
     ? item.selectedEquipments.map(eq => `${escapeHtml(eq.name)}${eq.serialNumber ? ` <span class="font-mono text-slate-400">${escapeHtml(eq.serialNumber)}</span>` : ''}`).join(' · ')
     : 'Aucun appareil nominatif sélectionné.';
+  const mobileAction = currentUser?.role === 'ADMIN' && ['PENDING', 'APPROVED'].includes(item.status) && (!item.contractSignatureRequest || ['EXPIRED', 'CANCELLED'].includes(item.contractSignatureRequest.status) || (item.contractSignatureRequest.status === 'PENDING' && item.contractSignatureRequest.verificationMethod === 'LOAN_LINK'))
+    ? `<button type="button" data-action="reservation-mobile-signature" data-id="${item.id}" class="px-3 py-2 border border-blue-300 text-blue-700 rounded-lg text-xs hover:bg-blue-50 transition">Lien pour signer au doigt</button>` : '';
   const contractAction = item.contractSignatureRequest?.status === 'SIGNED'
     ? `<button type="button" data-action="reservation-contract-download" data-signature-id="${item.contractSignatureRequest.id}" class="px-3 py-2 border border-emerald-300 text-emerald-700 rounded-lg text-xs hover:bg-emerald-50 transition">Télécharger la fiche</button>`
     : item.contractSignatureRequest?.status === 'PENDING'
-      ? `<span class="px-3 py-2 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-medium border border-cyan-200">Fiche envoyée</span>`
-      : `<button type="button" data-action="reservation-contract-generate" data-id="${item.id}" class="px-3 py-2 border border-cyan-300 text-cyan-700 rounded-lg text-xs hover:bg-cyan-50 transition">Générer la fiche</button>`;
+      ? `<span class="px-3 py-2 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-medium border border-cyan-200">${item.contractSignatureRequest?.verificationMethod === 'LOAN_LINK' ? 'Lien mobile prêt' : 'Fiche envoyée'}</span>`
+      : `<button type="button" data-action="reservation-contract-generate" data-id="${item.id}" class="px-3 py-2 border border-cyan-300 text-cyan-700 rounded-lg text-xs hover:bg-cyan-50 transition">Générer la fiche par email</button>`;
   return `
       <article class="rounded-2xl border border-slate-200 ${archived ? 'bg-slate-100' : 'bg-slate-50'} p-4 space-y-3">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1415,7 +1489,7 @@ function renderReservationCard(item, { archived = false } = {}) {
               ${archived ? '<span class="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">Archivé</span>' : ''}
             </div>
             <p class="text-sm text-slate-500">${item.requesterName} · ${item.requesterEmail}${item.requesterOrganization ? ` · ${item.requesterOrganization}` : ''}</p>
-            <p class="text-xs text-slate-400">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)} · ${item.requestedUnits} unité(s) · ${item.reservedSlots} lot(s) verrouillé(s)</p>
+            <p class="text-xs text-slate-400">${formatDateTime(item.startAt)} → ${formatDateTime(item.endAt)} · ${item.requestedUnits} unité(s) · ${item.resourceId === FREE_LOAN_RESOURCE_ID ? "Matériel non référencé" : `${item.reservedSlots} lot(s) verrouillé(s)`}</p>
           </div>
           <div class="relative z-10 flex flex-wrap items-center gap-2">
             ${item.status !== 'APPROVED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="APPROVED" class="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs hover:bg-emerald-700 transition">Approuver</button>` : ''}
@@ -1423,6 +1497,7 @@ function renderReservationCard(item, { archived = false } = {}) {
             ${item.status !== 'RETURNED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="RETURNED" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Restitué</button>` : ''}
             ${item.status !== 'CANCELLED' ? `<button type="button" data-action="reservation-status" data-id="${item.id}" data-status="CANCELLED" class="px-3 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-100 transition">Annuler</button>` : ''}
             ${contractAction}
+            ${mobileAction}
             <button
               type="button"
               data-action="reservation-edit"
@@ -1619,6 +1694,43 @@ async function deleteReservation(id, triggerButton = null) {
   }
 }
 
+let mobileSignatureLoanId = null;
+function closeSignatureLinkModal() {
+  const modal = document.getElementById('signature-link-modal');
+  modal.classList.add('hidden'); modal.classList.remove('flex');
+  document.getElementById('signature-link-url').value = '';
+  document.getElementById('signature-link-qr').removeAttribute('src');
+  mobileSignatureLoanId = null;
+}
+async function openMobileSignatureLink(id, button) {
+  if (currentUser?.role !== 'ADMIN') return;
+  if (button) button.disabled = true;
+  try {
+    const loan = loanReservations.find(item => item.id === id);
+    const result = loan?.contractSignatureRequest?.status === 'PENDING' && new Date(loan.contractSignatureRequest.expiresAt) > new Date()
+      ? await api.get(`/loans/reservations/${id}/signature-link`)
+      : await api.post(`/loans/reservations/${id}/contract-signature`, { mode: 'LOAN_LINK' });
+    mobileSignatureLoanId = id;
+    document.getElementById('signature-link-url').value = result.signUrl;
+    document.getElementById('signature-link-qr').src = result.qrCode;
+    document.getElementById('signature-link-expiry').textContent = 'Expire le ' + formatDateTime(result.expiresAt);
+    document.getElementById('signature-link-email').disabled = !loan?.requesterEmail;
+    const modal = document.getElementById('signature-link-modal');
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+    await loadReservations();
+  } catch (err) { showToast(err.message, 'error'); }
+  finally { if (button) button.disabled = false; }
+}
+async function emailMobileSignatureLink(button) {
+  if (!mobileSignatureLoanId) return;
+  button.disabled = true;
+  try {
+    await api.post(`/loans/reservations/${mobileSignatureLoanId}/signature-link/email`, {});
+    showToast('Lien de signature envoyé à l’emprunteur', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+  finally { button.disabled = false; }
+}
+
 async function generateReservationContract(id, triggerButton = null) {
   const requestKey = `contract:${id}`;
   if (reservationUpdatesInFlight.has(requestKey)) return;
@@ -1699,6 +1811,12 @@ function bindLoansPageEvents() {
       return;
     }
 
+    const mobileBtn = event.target.closest('[data-action="reservation-mobile-signature"]');
+    if (mobileBtn && !mobileBtn.disabled) {
+      event.preventDefault(); event.stopPropagation();
+      openMobileSignatureLink(mobileBtn.dataset.id, mobileBtn);
+      return;
+    }
     const contractBtn = event.target.closest('[data-action="reservation-contract-generate"]');
     if (contractBtn && !contractBtn.disabled) {
       event.preventDefault();
@@ -1748,6 +1866,7 @@ function bindLoansPageEvents() {
     if (event.key === 'Escape') {
       closeCreateMenu();
       closeReservationModal();
+      closeSignatureLinkModal();
       closeBulkModal();
     }
   });
@@ -1829,7 +1948,14 @@ document.getElementById('reservation-form').addEventListener('submit', async eve
     status: document.getElementById('resv-status').value,
     internalNotes: document.getElementById('resv-notes').value.trim() || null,
     contractBody: document.getElementById('resv-contract-body').value.trim() || null,
-    selectedEquipmentIds: [...reservationEquipmentSelection]
+    selectedEquipmentIds: [...reservationEquipmentSelection],
+    ...(document.getElementById('resv-resource').value === FREE_LOAN_RESOURCE_ID ? {
+      freeEquipments: [...document.querySelectorAll('[data-free-loan-item]')].map(row => ({
+        name: row.querySelector('[data-free-name]').value.trim(),
+        type: row.querySelector('[data-free-type]').value.trim() || null,
+        serialNumber: row.querySelector('[data-free-serial]').value.trim() || null
+      }))
+    } : {})
   };
   try {
     if (reservationId) {
@@ -2345,7 +2471,7 @@ function dpSetFromExisting(startAt, endAt) {
 }
 
 async function dpLoadSchedule(resourceId) {
-  if (!resourceId) {
+  if (!resourceId || resourceId === FREE_LOAN_RESOURCE_ID) {
     dpSchedule = { totalSlots: 1, reservations: [] };
     dpRenderCalendar();
     return;
@@ -2369,6 +2495,7 @@ async function initLoansPage({ forceReload = false } = {}) {
 
     const user = await requireLogin();
     currentUser = user;
+    document.querySelectorAll('[data-admin-only]').forEach(el => el.classList.toggle('hidden', user.role !== 'ADMIN'));
     renderNav('requests');
 
     if (forceReload) {

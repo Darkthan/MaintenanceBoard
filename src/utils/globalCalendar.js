@@ -198,6 +198,7 @@ async function fetchGlobalCalendarEntries(prisma, { startAt, endAt }) {
     prisma.loanReservation.findMany({
       where: {
         status: { in: GLOBAL_CALENDAR_LOAN_STATUSES },
+        resourceId: { not: 'free-loan' },
         startAt: { lt: endAt },
         endAt: { gt: startAt }
       },

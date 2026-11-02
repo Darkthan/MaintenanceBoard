@@ -1,10 +1,11 @@
 const express = require('express');
+const fs = require('fs');
 const request = require('supertest');
 const { createSmtpTransporter } = require('../src/utils/mail');
 
 jest.mock('../src/middleware/auth', () => ({
   requireAuth: (req, _res, next) => {
-    req.user = { id: 'admin-1', role: 'ADMIN', name: 'Admin', email: 'admin@test.com', isActive: true };
+    req.user = { id: 'admin-1', role: req.headers['x-user-role'] || 'ADMIN', name: 'Admin', email: 'admin@test.com', isActive: true };
     next();
   }
 }));
@@ -22,6 +23,7 @@ jest.mock('../src/utils/mail', () => ({
 
 jest.mock('../src/lib/prisma', () => ({
   loanResource: {
+    upsert: jest.fn(),
     findUnique: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
@@ -57,6 +59,8 @@ jest.mock('../src/lib/prisma', () => ({
     findMany: jest.fn()
   },
   signatureRequest: {
+    findUnique: jest.fn(),
+    updateMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn()
   }
@@ -64,12 +68,14 @@ jest.mock('../src/lib/prisma', () => ({
 
 const prisma = require('../src/lib/prisma');
 const { loansRouter, loanPublicRouter } = require('../src/routes/loans');
+const { signRouter } = require('../src/routes/signatures');
 
 function buildApp() {
   const app = express();
   app.use(express.json());
   app.use('/api/loans', loansRouter);
   app.use('/api/loan-request', loanPublicRouter);
+  app.use('/api/sign', signRouter);
   app.use((err, _req, res, _next) => {
     res.status(err.status || 500).json({ error: err.message });
   });
@@ -775,5 +781,333 @@ describe('loan requests', () => {
       })
     });
     expect(sendMail).toHaveBeenCalled();
+  });
+});
+
+describe('free-form loans', () => {
+  const resource = { id: 'free-loan', name: 'Libre', isActive: false, usesBundles: false, equipments: [] };
+  const payload = {
+    resourceId: 'free-loan', requesterName: 'Louis Ducreux', requesterEmail: 'louis@example.com',
+    startAt: '2026-11-02T08:00:00Z', endAt: '2026-11-03T17:00:00Z', requestedUnits: 2,
+    freeEquipments: [{ name: '  Adaptateur HDMI  ', serialNumber: 'AD-123' }, { name: 'Câble USB-C' }]
+  };
+  const existingLoan = (extra = {}) => ({
+    id: 'free-1', ...payload, resource, status: 'APPROVED', reservedSlots: 0,
+    selectedEquipments: [{ equipmentId: null, equipmentName: 'Adaptateur HDMI', equipmentSerialNumber: 'AD-123' }, { equipmentId: null, equipmentName: 'Câble USB-C' }],
+    ...extra
+  });
+  beforeEach(() => {
+    jest.resetAllMocks();
+    prisma.loanResource.upsert.mockResolvedValue(resource);
+    prisma.loanReservation.create.mockImplementation(async ({ data }) => ({ ...data, id: 'free-1', resource, selectedEquipments: data.selectedEquipments?.create || [] }));
+  });
+  it('stores unregistered items without stock conflicts, including overlapping free loans', async () => {
+    for (let i = 0; i < 2; i++) {
+      const res = await request(buildApp()).post('/api/loans/reservations').send(payload);
+      expect(res.status).toBe(201);
+      expect(res.body.reservations[0].selectedEquipments).toEqual([
+        expect.objectContaining({ name: 'Adaptateur HDMI', serialNumber: 'AD-123', equipmentId: null }),
+        expect.objectContaining({ name: 'Câble USB-C', equipmentId: null })
+      ]);
+    }
+    expect(prisma.loanResource.create).not.toHaveBeenCalled();
+    expect(prisma.loanReservation.findMany).not.toHaveBeenCalled();
+    expect(prisma.loanReservation.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ reservedSlots: 0, requestedUnits: 2 }) }));
+    expect(prisma.loanResource.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ isActive: false }) }));
+  });
+  it.each([undefined, [], [{ name: '   ' }], [{ name: 'a'.repeat(201) }], [{ name: 'Cable', serialNumber: 123 }]])('rejects missing or invalid descriptions before writing', async freeEquipments => {
+    const res = await request(buildApp()).post('/api/loans/reservations').send({ ...payload, freeEquipments });
+    expect(res.status).toBe(400);
+    expect(prisma.loanResource.upsert).not.toHaveBeenCalled();
+    expect(prisma.loanReservation.create).not.toHaveBeenCalled();
+  });
+  it('rejects free items on catalogue loans', async () => {
+    const res = await request(buildApp()).post('/api/loans/reservations').send({ ...payload, resourceId: 'catalogue-item' });
+    expect(res.status).toBe(400);
+    expect(prisma.loanReservation.create).not.toHaveBeenCalled();
+  });
+  it('keeps the internal free resource out of the catalogue', async () => {
+    prisma.loanResource.findMany.mockResolvedValue([resource, { id: 'normal', name: 'Tablette' }]);
+    const res = await request(buildApp()).get('/api/loans/resources');
+    expect(res.status).toBe(200);
+    expect(res.body.map(item => item.id)).toEqual(['normal']);
+  });
+  it('edits descriptions and invalidates a pending contract', async () => {
+    const loan = existingLoan({ contractSignatureRequestId: 'sig-free', contractSignatureRequest: { id: 'sig-free', status: 'PENDING' } });
+    prisma.loanReservation.findUnique.mockResolvedValue(loan);
+    prisma.loanReservation.update.mockResolvedValue(loan);
+    const res = await request(buildApp()).patch('/api/loans/reservations/free-1').send({ freeEquipments: [{ name: 'Chargeur' }] });
+    expect(res.status).toBe(200);
+    expect(prisma.signatureRequest.update).toHaveBeenCalledWith({ where: { id: 'sig-free' }, data: { status: 'CANCELLED' } });
+    expect(prisma.loanReservationEquipment.createMany).toHaveBeenCalledWith({ data: [{ loanReservationId: 'free-1', equipmentName: 'Chargeur', equipmentType: null, equipmentSerialNumber: null }] });
+    expect(prisma.loanReservation.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ contractSignatureRequestId: null }) }));
+  });
+  it('protects descriptions on a signed contract', async () => {
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan({ contractSignatureRequestId: 'sig-free', contractSignatureRequest: { id: 'sig-free', status: 'SIGNED' } }));
+    const res = await request(buildApp()).patch('/api/loans/reservations/free-1').send({ freeEquipments: [{ name: 'Chargeur' }] });
+    expect(res.status).toBe(409);
+    expect(prisma.loanReservation.update).not.toHaveBeenCalled();
+    expect(prisma.loanReservationEquipment.deleteMany).not.toHaveBeenCalled();
+  });
+  it('allows returning a signed loan without changing its descriptions', async () => {
+    const loan = existingLoan({ contractSignatureRequestId: 'sig-free', contractSignatureRequest: { id: 'sig-free', status: 'SIGNED' } });
+    prisma.loanReservation.findUnique.mockResolvedValue(loan);
+    prisma.loanReservation.update.mockResolvedValue({ ...loan, status: 'RETURNED' });
+    const res = await request(buildApp()).patch('/api/loans/reservations/free-1').send({ status: 'RETURNED', skipNotification: true });
+    expect(res.status).toBe(200);
+    expect(prisma.loanReservationEquipment.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.loanResource.findUnique).not.toHaveBeenCalled();
+  });
+  it('allows date changes without stock checks', async () => {
+    const loan = existingLoan();
+    prisma.loanReservation.findUnique.mockResolvedValue(loan);
+    prisma.loanReservation.update.mockResolvedValue(loan);
+    const res = await request(buildApp()).patch('/api/loans/reservations/free-1').send({ endAt: '2026-11-05T17:00:00Z' });
+    expect(res.status).toBe(200);
+    expect(prisma.loanReservation.findMany).not.toHaveBeenCalled();
+    expect(prisma.loanReservationEquipment.deleteMany).not.toHaveBeenCalled();
+  });
+  it('retains a signed contract when the same free items are saved from the form', async () => {
+    const loan = existingLoan({ contractSignatureRequestId: 'sig-free', contractSignatureRequest: { id: 'sig-free', status: 'SIGNED' } });
+    prisma.loanReservation.findUnique.mockResolvedValue(loan);
+    prisma.loanReservation.update.mockResolvedValue(loan);
+    const res = await request(buildApp()).patch('/api/loans/reservations/free-1').send({ ...payload, selectedEquipmentIds: [], skipNotification: true });
+    expect(res.status).toBe(200);
+    expect(prisma.signatureRequest.update).not.toHaveBeenCalled();
+    expect(prisma.loanReservation.update.mock.calls[0][0].data).not.toHaveProperty('contractSignatureRequestId');
+  });
+  it('rejects removing every free item without deleting existing descriptions', async () => {
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan());
+    const res = await request(buildApp()).patch('/api/loans/reservations/free-1').send({ freeEquipments: [] });
+    expect(res.status).toBe(400);
+    expect(prisma.loanReservationEquipment.deleteMany).not.toHaveBeenCalled();
+  });
+  it('does not allow the inactive free resource through public availability checks', async () => {
+    const { ensureLoanAvailability } = require('../src/utils/loans');
+    prisma.loanResource.findUnique.mockResolvedValue(resource);
+    await expect(ensureLoanAvailability(prisma, payload)).rejects.toMatchObject({ status: 404 });
+  });
+  it('generates a valid contract PDF containing the free equipment and serial numbers', async () => {
+    const fs = require('fs');
+    const { getDocument } = require('pdfjs-dist/legacy/build/pdf.js');
+    const sendMail = jest.fn().mockResolvedValue({});
+    createSmtpTransporter.mockReturnValue({ transporter: { sendMail }, from: 'test@example.com' });
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan());
+    prisma.signatureRequest.create.mockResolvedValue({ id: 'sig-free-pdf', token: 'free-sign-token', recipientEmail: payload.requesterEmail, recipientName: payload.requesterName, status: 'PENDING' });
+    const mkdir = jest.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined);
+    const write = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
+    try {
+      const res = await request(buildApp()).post('/api/loans/reservations/free-1/contract-signature').send({});
+      expect(res.status).toBe(201);
+      const pdfBuffer = write.mock.calls.find(call => Buffer.isBuffer(call[1]))[1];
+      const document = await getDocument({ data: new Uint8Array(pdfBuffer), disableFontFace: true }).promise;
+      const texts = [];
+      for (let page = 1; page <= document.numPages; page++) {
+        const content = await (await document.getPage(page)).getTextContent();
+        texts.push(...content.items.map(item => item.str));
+      }
+      const text = texts.join(' ');
+      expect(text).toContain('Libre');
+      expect(text).toContain('Adaptateur HDMI');
+      expect(text).toContain('AD-123');
+      expect(text).toContain('Câble USB-C');
+      expect(sendMail).toHaveBeenCalled();
+      await document.destroy();
+    } finally {
+      mkdir.mockRestore();
+      write.mockRestore();
+    }
+  });
+
+  it('keeps borrower email optional without substituting the administrator email', async () => {
+    const res = await request(buildApp()).post('/api/loans/reservations').send({ ...payload, requesterEmail: '' });
+    expect(res.status).toBe(201);
+    expect(prisma.loanReservation.create.mock.calls[0][0].data.requesterEmail).toBe('');
+  });
+  it('stores the equipment type on the loan sheet', async () => {
+    const res = await request(buildApp()).post('/api/loans/reservations').send({ ...payload, freeEquipments: [{ name: 'Dell Latitude', type: 'Ordinateur portable', serialNumber: 'ABC' }] });
+    expect(res.status).toBe(201);
+    expect(res.body.reservations[0].selectedEquipments[0]).toMatchObject({ name: 'Dell Latitude', type: 'Ordinateur portable', serialNumber: 'ABC' });
+  });
+  it('rejects non-administrator creation, edits, deletion and signature creation', async () => {
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan());
+    const app = buildApp();
+    expect((await request(app).post('/api/loans/reservations').set('x-user-role','TECH').send(payload)).status).toBe(403);
+    expect((await request(app).patch('/api/loans/reservations/free-1').set('x-user-role','TECH').send({ status: 'RETURNED' })).status).toBe(403);
+    expect((await request(app).delete('/api/loans/reservations/free-1').set('x-user-role','TECH')).status).toBe(403);
+    expect((await request(app).post('/api/loans/reservations/free-1/contract-signature').set('x-user-role','TECH').send({ mode: 'LOAN_LINK' })).status).toBe(403);
+    expect((await request(app).get('/api/loans/reservations/free-1/signature-link').set('x-user-role','TECH')).status).toBe(403);
+    expect(prisma.loanReservation.update).not.toHaveBeenCalled();
+    expect(prisma.signatureRequest.create).not.toHaveBeenCalled();
+  });
+  it('forbids free loans through a public link even if the resource was activated', async () => {
+    prisma.loanResource.findUnique.mockResolvedValue({ ...resource, isActive: true });
+    const res = await request(buildApp()).post('/api/loan-request/public-token/requests').send({ ...payload, accessToken: 'valid-public-access' });
+    expect(res.status).toBe(403);
+    expect(prisma.loanReservation.create).not.toHaveBeenCalled();
+  });
+  it('filters private loans from non-administrator reservations and the shared calendar feed', async () => {
+    prisma.loanReservation.findMany.mockResolvedValue([]);
+    const app = buildApp();
+    expect((await request(app).get('/api/loans/reservations').set('x-user-role','TECH')).status).toBe(200);
+    expect(prisma.loanReservation.findMany.mock.calls[0][0].where.resourceId).toEqual({ not: 'free-loan' });
+    expect((await request(app).get('/api/loans/calendar').set('x-user-role','TECH')).status).toBe(200);
+    expect(prisma.loanReservation.findMany.mock.calls[1][0].where.resourceId).toEqual({ not: 'free-loan' });
+  });
+  it('generates a one-use mobile link and QR code without SMTP', async () => {
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan({ requesterEmail: '' }));
+    prisma.signatureRequest.create.mockImplementation(async ({ data }) => ({ id: 'mobile-sig', status: 'PENDING', ...data }));
+    const mkdir = jest.spyOn(fs,'mkdirSync').mockImplementation(() => undefined);
+    const write = jest.spyOn(fs,'writeFileSync').mockImplementation(() => undefined);
+    try {
+      const res = await request(buildApp()).post('/api/loans/reservations/free-1/contract-signature').send({ mode: 'LOAN_LINK' });
+      expect(res.status).toBe(201);
+      expect(res.body.signUrl).toMatch(/^https:\/\/maintenanceboard.test\/sign.html\?token=/);
+      expect(res.body.qrCode).toMatch(/^data:image\/png;base64,/);
+      expect(prisma.signatureRequest.create.mock.calls[0][0].data.verificationMethod).toBe('LOAN_LINK');
+      expect(createSmtpTransporter).not.toHaveBeenCalled();
+    } finally { mkdir.mockRestore(); write.mockRestore(); }
+  });
+  it('requires borrower email before generating an email signature request', async () => {
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan({ requesterEmail: '' }));
+    const res = await request(buildApp()).post('/api/loans/reservations/free-1/contract-signature').send({});
+    expect(res.status).toBe(400);
+    expect(prisma.signatureRequest.create).not.toHaveBeenCalled();
+  });
+  it('sends an existing mobile link to the borrower with no OTP instructions', async () => {
+    const sendMail = jest.fn().mockResolvedValue({});
+    createSmtpTransporter.mockReturnValue({ transporter: { sendMail }, from: 'test@example.com' });
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan({ contractSignatureRequest: {
+      id: 'mobile-sig', verificationMethod: 'LOAN_LINK', status: 'PENDING', token: 'unique-mobile-token',
+      recipientEmail: payload.requesterEmail, recipientName: payload.requesterName, expiresAt: new Date(Date.now()+86400000)
+    } }));
+    const res = await request(buildApp()).post('/api/loans/reservations/free-1/signature-link/email').send({});
+    expect(res.status).toBe(200);
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: payload.requesterEmail, html: expect.stringContaining('usage unique') }));
+    expect(sendMail.mock.calls[0][0].html).not.toContain('code envoyé');
+  });
+
+  it('enforces administrator permissions for URL-encoded reservation IDs too', async () => {
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan());
+    const res = await request(buildApp()).patch('/api/loans/reservations/%66ree-1').set('x-user-role','TECH').send({ status: 'RETURNED' });
+    expect(res.status).toBe(403);
+    expect(prisma.loanReservation.findUnique.mock.calls[0][0].where.id).toBe('free-1');
+    expect(prisma.loanReservation.update).not.toHaveBeenCalled();
+  });
+  it('refuses editing a mobile loan when signing won the one-use claim', async () => {
+    prisma.loanReservation.findUnique.mockResolvedValue(existingLoan({ contractSignatureRequestId: 'mobile-sig', contractSignatureRequest: { id:'mobile-sig', status:'PENDING', verificationMethod:'LOAN_LINK' } }));
+    prisma.signatureRequest.updateMany.mockResolvedValue({ count:0 });
+    const res = await request(buildApp()).patch('/api/loans/reservations/free-1').send({ freeEquipments:[{ name:'Another item' }] });
+    expect(res.status).toBe(409);
+    expect(prisma.loanReservation.update).not.toHaveBeenCalled();
+    expect(prisma.loanReservationEquipment.deleteMany).not.toHaveBeenCalled();
+  });
+  it('cancels a mobile link when the loan is cancelled', async () => {
+    const loan=existingLoan({ contractSignatureRequestId:'mobile-sig', contractSignatureRequest:{ id:'mobile-sig', status:'PENDING', verificationMethod:'LOAN_LINK' } });
+    prisma.loanReservation.findUnique.mockResolvedValue(loan);
+    prisma.loanReservation.update.mockResolvedValue(loan);
+    prisma.signatureRequest.updateMany.mockResolvedValue({ count:1 });
+    const res=await request(buildApp()).patch('/api/loans/reservations/free-1').send({ status:'CANCELLED', skipNotification:true });
+    expect(res.status).toBe(200);
+    expect(prisma.signatureRequest.updateMany).toHaveBeenCalledWith({ where:{ id:'mobile-sig', status:'PENDING' }, data:{ status:'CANCELLED' } });
+  });
+
+  it('never exposes a free-loan schedule through the public resources API', async () => {
+    const app = buildApp();
+    expect((await request(app).get('/api/loan-request/resources/free-loan/schedule')).status).toBe(404);
+    expect((await request(app).get('/api/loan-request/resources/%66ree-loan/schedule')).status).toBe(404);
+    expect(prisma.loanReservation.findMany).not.toHaveBeenCalled();
+    expect(prisma.loanResource.findUnique).not.toHaveBeenCalled();
+  });
+
+});
+
+describe('one-use mobile signature security', () => {
+  let state, mobileSignature;
+  const sharp = require('sharp');
+  async function ink() {
+    const pixels = Buffer.alloc(20*10*4);
+    for (let x=0;x<10;x++) pixels[(x*20+x)*4+3] = 255;
+    const png = await sharp(pixels, { raw: { width:20, height:10, channels:4 } }).png().toBuffer();
+    return 'data:image/png;base64,' + png.toString('base64');
+  }
+  beforeEach(() => {
+    jest.resetAllMocks();
+    state = 'PENDING';
+    mobileSignature = {
+      id: 'mobile-sig', token: 'one-use-token', verificationMethod: 'LOAN_LINK', orderId: null,
+      recipientName: 'Louis Ducreux', recipientEmail: '', documentTitle: 'Fiche de prêt Libre',
+      sourceFileStoredAs: 'source.pdf', sourceFilename: 'fiche.pdf', sourceFileMimetype: 'application/pdf',
+      expiresAt: new Date(Date.now()+86400000), loanReservationContracts: [{ id: 'free-1', status: 'APPROVED' }]
+    };
+    prisma.signatureRequest.findUnique.mockImplementation(async () => ({ ...mobileSignature, status: state }));
+    prisma.signatureRequest.updateMany.mockImplementation(async ({ where, data }) => {
+      if (where.status !== state) return { count: 0 };
+      state = data.status; return { count: 1 };
+    });
+    prisma.signatureRequest.update.mockImplementation(async ({ data }) => { if(data.status) state = data.status; return { ...mobileSignature, ...data }; });
+  });
+  it('opens the mobile signature without an account or OTP and disables caching', async () => {
+    const res = await request(buildApp()).get('/api/sign/one-use-token');
+    expect(res.status).toBe(200);
+    expect(res.body.requiresOtp).toBe(false);
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+  it('keeps OTP mandatory for existing email requests regardless of the submitted mode', async () => {
+    mobileSignature.verificationMethod = 'EMAIL_OTP';
+    const res = await request(buildApp()).post('/api/sign/one-use-token/submit').send({ signatureData: await ink(), consent: true, mode: 'LOAN_LINK' });
+    expect(res.status).toBe(400);
+    expect(prisma.signatureRequest.updateMany).not.toHaveBeenCalled();
+  });
+  it('requires explicit acceptance before consuming the link', async () => {
+    const res = await request(buildApp()).post('/api/sign/one-use-token/submit').send({ signatureData: await ink() });
+    expect(res.status).toBe(400);
+    expect(state).toBe('PENDING');
+  });
+  it('rejects invalid images and expired or detached links', async () => {
+    const app = buildApp();
+    expect((await request(app).post('/api/sign/one-use-token/submit').send({ signatureData: 'not-an-image', consent: true })).status).toBe(400);
+    mobileSignature.expiresAt = new Date(Date.now()-1000);
+    expect((await request(app).post('/api/sign/one-use-token/submit').send({ signatureData: await ink(), consent: true })).status).toBe(410);
+    mobileSignature.expiresAt = new Date(Date.now()+86400000);
+    mobileSignature.loanReservationContracts = [];
+    expect((await request(app).post('/api/sign/one-use-token/submit').send({ signatureData: await ink(), consent: true })).status).toBe(403);
+    expect(prisma.signatureRequest.updateMany).not.toHaveBeenCalled();
+  });
+  it('signs only once even with simultaneous submissions, embeds the signature and rejects replays', async () => {
+    const { PDFDocument } = require('pdf-lib');
+    const pdf = await PDFDocument.create(); pdf.addPage();
+    const source = Buffer.from(await pdf.save());
+    const originalRead = fs.readFileSync;
+    const originalExists = fs.existsSync;
+    const read = jest.spyOn(fs,'readFileSync').mockImplementation((file,...args) => String(file).endsWith('source.pdf') ? source : originalRead(file,...args));
+    const exists = jest.spyOn(fs,'existsSync').mockImplementation(file => String(file).endsWith('source.pdf') || originalExists(file));
+    const mkdir = jest.spyOn(fs,'mkdirSync').mockImplementation(() => undefined);
+    const write = jest.spyOn(fs,'writeFileSync').mockImplementation(() => undefined);
+    try {
+      const app = buildApp();
+      const payload = { signatureData: await ink(), consent: true };
+      const results = await Promise.all([
+        request(app).post('/api/sign/one-use-token/submit').send(payload),
+        request(app).post('/api/sign/one-use-token/submit').send(payload)
+      ]);
+      expect(results.map(res => res.status).sort()).toEqual([200,409]);
+      expect(state).toBe('SIGNED');
+      const signed = write.mock.calls.find(call => Buffer.isBuffer(call[1]))[1];
+      const signedPdf = await PDFDocument.load(signed);
+      expect(signedPdf.getPageCount()).toBe(2);
+      expect((await request(app).post('/api/sign/one-use-token/submit').send(payload)).status).toBe(409);
+      expect((await request(app).get('/api/sign/one-use-token/source')).status).toBe(410);
+    } finally { read.mockRestore(); exists.mockRestore(); mkdir.mockRestore(); write.mockRestore(); }
+  });
+  it('releases a failed signing attempt so the borrower can retry', async () => {
+    const exists = jest.spyOn(fs,'existsSync').mockReturnValue(false);
+    try {
+      const res = await request(buildApp()).post('/api/sign/one-use-token/submit').send({ signatureData: await ink(), consent: true });
+      expect(res.status).toBe(404);
+      // The finally block releases only SIGNING; it cannot reset a SIGNED link.
+      await Promise.resolve();
+      expect(state).toBe('PENDING');
+    } finally { exists.mockRestore(); }
   });
 });
