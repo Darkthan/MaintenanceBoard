@@ -41,7 +41,6 @@
           </svg>
         </button>
         <h1 class="text-xl font-semibold text-slate-800">Signatures</h1>
-        <button type="button" onclick="openNewSigModal(true)" class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm">Signer un document au téléphone</button>
       </div>
     </header>
 
@@ -209,13 +208,19 @@
   <span id="toast-msg"></span>
 </div>
 
-<button id="new-sig-btn" type="button" onclick="openNewSigModal()"
-  class="fixed right-6 bottom-6 z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
-  aria-label="Nouvelle signature" title="Nouvelle signature">
-  <svg class="mx-auto h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<div id="signature-fab" class="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3 pointer-events-none" data-mobile-fab="true">
+  <div id="signature-fab-menu" class="hidden rounded-xl border border-slate-200 bg-white p-2 shadow-xl pointer-events-auto">
+    <button type="button" onclick="toggleSignatureMenu(false); openNewSigModal()" class="flex w-full items-center rounded-lg px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 transition text-left">Demander une signature par email</button>
+    <button type="button" onclick="toggleSignatureMenu(false); openNewSigModal(true)" class="flex w-full items-center rounded-lg px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 transition text-left">Signer un document au téléphone</button>
+  </div>
+  <button id="new-sig-btn" type="button" onclick="toggleSignatureMenu()"
+    class="h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200 pointer-events-auto"
+    aria-label="Actions de signature" title="Actions de signature" aria-expanded="false" aria-controls="signature-fab-menu">
+  <svg id="signature-fab-icon" class="mx-auto h-6 w-6 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
   </svg>
-</button>
+  </button>
+</div>
 
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
@@ -718,6 +723,24 @@ function showToast(msg, type = 'info') {
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3500);
 }
+
+function toggleSignatureMenu(force) {
+  const menu = document.getElementById('signature-fab-menu');
+  const open = typeof force === 'boolean' ? force : menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !open);
+  document.getElementById('new-sig-btn').setAttribute('aria-expanded', String(open));
+  document.getElementById('signature-fab-icon').style.transform = open ? 'rotate(45deg)' : '';
+}
+
+document.addEventListener('click', event => {
+  if (!document.getElementById('signature-fab').contains(event.target)) toggleSignatureMenu(false);
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !document.getElementById('signature-fab-menu').classList.contains('hidden')) {
+    toggleSignatureMenu(false);
+    document.getElementById('new-sig-btn').focus();
+  }
+});
 
 initSignaturesPage();
 </script>
