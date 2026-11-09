@@ -16,7 +16,7 @@ function harness() {
   const c = { document: { getElementById: get, querySelector: get }, handwrittenMode: false,
     selectedFile: null, placementReady: true, SigPlacement: { DEFAULT_POS: {}, getPos: () => ({ x: .2, y: .3, w: .4, h: .15 }) },
     clearFile: jest.fn(), FormData, fetch: jest.fn(), loadSignatures: jest.fn(), showPhoneSignature: jest.fn(), showToast: jest.fn() };
-  for (const name of ['openNewSigModal', 'submitNewSig']) {
+  for (const name of ['openNewSigModal', 'showModalPlacement', 'submitNewSig']) {
     const match = source.match(new RegExp('(?:async )?function ' + name + '\\([^]*?(?=\\n(?:async )?function )'));
     vm.runInNewContext(match[0], c);
   }
@@ -57,4 +57,31 @@ test('blocks submission while a document preview is unavailable', async () => {
   await c.submitNewSig({ preventDefault() {} });
   expect(c.fetch).not.toHaveBeenCalled();
   expect(get('form-error').classList.contains('hidden')).toBe(false);
+});
+
+test('previews imported PDFs from bytes without a blob fetch forbidden by CSP', async () => {
+  const { c, get } = harness();
+  const { PDFDocument } = require('pdf-lib');
+  const pdf = await PDFDocument.create();
+  pdf.addPage([400, 600]);
+  const bytes = await pdf.save();
+  const file = new Blob([bytes], { type: 'application/pdf' });
+  const page = { getViewport: () => ({ width: 400, height: 600 }), render: jest.fn(() => ({ promise: Promise.resolve() })) };
+  const parsed = { numPages: 1, getPage: jest.fn().mockResolvedValue(page) };
+  Object.assign(c, {
+    handwrittenMode: true, placementVersion: 0, currentBlobUrl: null, Uint8Array,
+    requestAnimationFrame: callback => callback(), Option: function (label, value) { this.value = value; },
+    URL: { createObjectURL: jest.fn(() => { throw Error('PDF preview must not use a blob URL'); }), revokeObjectURL: jest.fn() },
+    pdfjsLib: { GlobalWorkerOptions: {}, getDocument: jest.fn(() => ({ promise: Promise.resolve(parsed) })) }
+  });
+  get('modal-placement-container').appendChild = jest.fn();
+  get('signature-page').replaceChildren = jest.fn();
+  c.document.createElement = () => ({ style: {}, getContext: () => ({}) });
+  c.SigPlacement.destroy = jest.fn();
+  c.SigPlacement.init = jest.fn();
+  await c.showModalPlacement(file);
+  expect(c.pdfjsLib.getDocument).toHaveBeenCalledWith({ data: bytes });
+  expect(c.URL.createObjectURL).not.toHaveBeenCalled();
+  expect(page.render).toHaveBeenCalled();
+  expect(c.placementReady).toBe(true);
 });
