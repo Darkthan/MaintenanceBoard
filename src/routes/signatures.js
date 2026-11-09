@@ -9,6 +9,8 @@ const PDFDocument = require('pdfkit');
 const sharp = require('sharp');
 const { PDFDocument: PDFLibDocument, StandardFonts, rgb } = require('pdf-lib');
 const multer = require('multer');
+const QRCode = require('qrcode');
+const { prepareHandwrittenDocument, stampHandwrittenSignature } = require('../utils/handwrittenSignature');
 const { createSmtpTransporter } = require('../utils/mail');
 
 const prisma = require('../lib/prisma');
@@ -443,7 +445,8 @@ signRouter.get('/:token', async (req, res, next) => {
     // ── Document standalone (orderId null) ─────────────────────────────────────
     return res.json({
       status: 'PENDING',
-      requiresOtp: sigReq.verificationMethod !== 'LOAN_LINK',
+      requiresOtp: !['LOAN_LINK', 'HANDWRITTEN_LINK'].includes(sigReq.verificationMethod),
+      handwritten: sigReq.verificationMethod === 'HANDWRITTEN_LINK',
       recipientName: sigReq.recipientName,
       maskedEmail: sigReq.recipientEmail ? maskEmail(sigReq.recipientEmail) : '',
       expiresAt: sigReq.expiresAt,
@@ -466,7 +469,7 @@ signRouter.get('/:token/source', async (req, res, next) => {
       where: { token: req.params.token }
     });
     if (!sigReq) return res.status(404).json({ error: 'Lien de signature invalide' });
-    if (sigReq.verificationMethod === 'LOAN_LINK' && sigReq.status !== 'PENDING') return res.status(410).json({ error: 'Ce lien de signature a déjà été utilisé ou désactivé.' });
+    if (['LOAN_LINK', 'HANDWRITTEN_LINK'].includes(sigReq.verificationMethod) && sigReq.status !== 'PENDING') return res.status(410).json({ error: 'Ce lien de signature a déjà été utilisé ou désactivé.' });
     if (sigReq.status === 'CANCELLED' || sigReq.status === 'EXPIRED') {
       return res.status(410).json({ error: 'Ce lien n\'est plus actif' });
     }
@@ -501,7 +504,7 @@ signRouter.post('/:token/send-otp', async (req, res, next) => {
       return res.status(410).json({ error: 'Ce lien a expiré' });
     }
 
-    if (sigReq.verificationMethod === 'LOAN_LINK') return res.status(400).json({ error: 'Ce lien permet de signer directement sans code email.' });
+    if (['LOAN_LINK', 'HANDWRITTEN_LINK'].includes(sigReq.verificationMethod)) return res.status(400).json({ error: 'Ce lien permet de signer directement sans code email.' });
 
     // Anti-spam : refuser si un OTP valide a été envoyé il y a moins de 2 minutes
     if (sigReq.otpExpiresAt && new Date() < sigReq.otpExpiresAt) {
@@ -585,9 +588,10 @@ signRouter.post('/:token/submit', async (req, res, next) => {
     if (new Date() > sigReq.expiresAt) return res.status(410).json({ error: 'Ce lien a expiré' });
 
     const isLoanLink = sigReq.verificationMethod === 'LOAN_LINK';
-    if (isLoanLink) {
-      if (sigReq.orderId || !sigReq.loanReservationContracts?.some(loan => ['PENDING', 'APPROVED'].includes(loan.status))) return res.status(403).json({ error: 'Ce lien n’est pas lié à un prêt actif.' });
-      if (req.body.consent !== true) return res.status(400).json({ error: 'Veuillez accepter l’engagement de prêt avant de signer.' });
+    const isHandwritten = sigReq.verificationMethod === 'HANDWRITTEN_LINK';
+    if (isLoanLink || isHandwritten) {
+      if (isLoanLink && (sigReq.orderId || !sigReq.loanReservationContracts?.some(loan => ['PENDING', 'APPROVED'].includes(loan.status)))) return res.status(403).json({ error: 'Ce lien n\'est pas lié à un prêt actif.' });
+      if (req.body.consent !== true) return res.status(400).json({ error: isHandwritten ? 'Confirmez l’ajout de votre signature au document.' : 'Veuillez accepter l’engagement de prêt avant de signer.' });
       if (typeof signatureData !== 'string' || signatureData.length > 2000000 || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(signatureData)) {
         return res.status(400).json({ error: 'Une signature PNG valide est requise.' });
       }
@@ -621,7 +625,7 @@ signRouter.post('/:token/submit', async (req, res, next) => {
         });
       }
     }
-    if (isLoanLink) {
+    if (isLoanLink || isHandwritten) {
       const claim = await prisma.signatureRequest.updateMany({
         where: { id: sigReq.id, status: 'PENDING', expiresAt: { gt: new Date() } }, data: { status: 'SIGNING' }
       });
@@ -681,12 +685,14 @@ signRouter.post('/:token/submit', async (req, res, next) => {
       }
     }
 
-    if (isLoanLink && !sourceBuffer) throw Object.assign(new Error('Le document source est indisponible.'), { status: 404 });
+    if ((isLoanLink || isHandwritten) && !sourceBuffer) throw Object.assign(new Error('Le document source est indisponible.'), { status: 404 });
 
     // Utiliser la position définie par le demandeur (stockée en DB), avec fallback bas-droite
     const px = sigReq.posX ?? 0.7;
     const py = sigReq.posY ?? 0.85;
-    const pdfBuffer = await generateStandaloneSignedPDF(sigReq, signatureId, signedAt, signatureData, tpl, ipAddress, sourceBuffer, sourceMime, signerTitle, signerPlace, px, py);
+    const pdfBuffer = isHandwritten
+      ? await stampHandwrittenSignature(sourceBuffer, signatureData, sigReq)
+      : await generateStandaloneSignedPDF(sigReq, signatureId, signedAt, signatureData, tpl, ipAddress, sourceBuffer, sourceMime, signerTitle, signerPlace, px, py);
 
     const signedDir = path.join(process.cwd(), 'uploads', 'signatures', 'signed', sigReq.id);
     if (!fs.existsSync(signedDir)) fs.mkdirSync(signedDir, { recursive: true });
@@ -718,6 +724,51 @@ signRouter.post('/:token/submit', async (req, res, next) => {
 // ── Router authentifié pour /api/signatures ───────────────────────────────────
 
 const signaturesRouter = express.Router();
+
+async function handwrittenLink(sigReq) {
+  const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const signUrl = `${appUrl}/sign.html?token=${sigReq.token}`;
+  return { signatureRequest: sigReq, signUrl, expiresAt: sigReq.expiresAt,
+    qrCode: await QRCode.toDataURL(signUrl, { width: 280, margin: 2 }) };
+}
+
+// Import a received attachment and prepare a personal, one-use phone link.
+signaturesRouter.post('/handwritten', requireAuth, upload.single('file'), async (req, res, next) => {
+  let created;
+  try {
+    const prepared = await prepareHandwrittenDocument(req.file, req.body);
+    const documentTitle = String(req.body.documentTitle || req.file.originalname).trim();
+    if (!documentTitle) return res.status(400).json({ error: 'Titre du document requis.' });
+    created = await prisma.signatureRequest.create({ data: {
+      orderId: null, token: uuidv4(), verificationMethod: 'HANDWRITTEN_LINK',
+      documentTitle, recipientName: req.user.name || 'Signataire', recipientEmail: req.user.email || '',
+      createdBy: req.user.id, expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      ...prepared.placement,
+      sourceFileStoredAs: uuidv4() + '.pdf', sourceFilename: req.file.originalname.replace(/\.[^.]+$/, '') + '.pdf',
+      sourceFileMimetype: 'application/pdf'
+    } });
+    const dir = path.join(process.cwd(), 'uploads', 'signatures', 'source', created.id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, created.sourceFileStoredAs), prepared.buffer);
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(201).json(await handwrittenLink(created));
+  } catch (err) {
+    if (created) await prisma.signatureRequest.update({ where: { id: created.id }, data: { status: 'CANCELLED' } }).catch(() => {});
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+signaturesRouter.get('/:id/phone-link', requireAuth, async (req, res, next) => {
+  try {
+    const sigReq = await prisma.signatureRequest.findUnique({ where: { id: req.params.id } });
+    if (!sigReq || sigReq.verificationMethod !== 'HANDWRITTEN_LINK') return res.status(404).json({ error: 'Demande introuvable.' });
+    if (!canManageSignatureRequest(req.user, sigReq)) return res.status(403).json({ error: 'Accès refusé.' });
+    if (sigReq.status !== 'PENDING' || new Date() > sigReq.expiresAt) return res.status(410).json({ error: 'Ce lien n\'est plus actif.' });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(await handwrittenLink(sigReq));
+  } catch (err) { next(err); }
+});
 
 // GET /api/signatures — Lister toutes les demandes standalone
 signaturesRouter.get('/', requireAuth, async (req, res, next) => {

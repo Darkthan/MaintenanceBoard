@@ -563,7 +563,8 @@ model OrderAttachment {
 }
 
 model SignatureRequest {
-  verificationMethod String @default("EMAIL_OTP") // EMAIL_OTP | LOAN_LINK
+  signaturePage Int? // One-based page for handwritten signatures
+  verificationMethod String @default("EMAIL_OTP") // EMAIL_OTP | LOAN_LINK | HANDWRITTEN_LINK
   id             String    @id @default(uuid())
   orderId        String?   // null = document générique (non lié à une commande)
   token          String    @unique

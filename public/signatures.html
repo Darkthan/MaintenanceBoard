@@ -41,6 +41,7 @@
           </svg>
         </button>
         <h1 class="text-xl font-semibold text-slate-800">Signatures</h1>
+        <button type="button" onclick="openNewSigModal(true)" class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm">Signer un document au téléphone</button>
       </div>
     </header>
 
@@ -82,6 +83,7 @@
     </div>
 
     <form id="new-sig-form" onsubmit="submitNewSig(event)" class="px-6 py-5 space-y-4">
+      <p id="handwritten-help" class="hidden text-sm text-slate-600">Importez une pièce jointe reçue par email, placez la signature, puis scannez le QR code avec votre téléphone. Seul votre tracé sera ajouté au document, sans encadré ni certificat.</p>
       <!-- Titre du document -->
       <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Titre du document <span class="text-red-500">*</span></label>
@@ -129,12 +131,13 @@
 
       <!-- Zone de signature (visible après sélection d'un PDF ou image) -->
       <div id="placement-section" class="hidden">
+        <label id="signature-page-wrap" class="hidden block text-sm mb-2">Page à signer <select id="signature-page" class="border rounded px-2 py-1" onchange="showModalPlacement(selectedFile, Number(this.value))"></select></label>
         <div class="border border-slate-200 rounded-xl p-3 bg-slate-50">
           <p class="text-sm font-medium text-slate-700 mb-1">Zone de signature sur le document</p>
           <p class="text-xs text-slate-400 mb-2">Dessinez un rectangle sur l'aperçu pour définir précisément la zone de signature.</p>
           <div id="modal-placement-container"
             class="rounded-xl select-none bg-white border border-slate-200"
-            style="min-height:120px;max-height:340px;">
+            style="min-height:120px;">
             <div id="modal-placement-loading" class="flex flex-col items-center justify-center py-8 gap-2 text-slate-400">
               <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -147,6 +150,7 @@
         </div>
       </div>
 
+      <div id="signature-recipient-fields" class="space-y-4">
       <hr class="border-slate-200" />
 
       <!-- Destinataire -->
@@ -169,6 +173,7 @@
       </div>
 
       <!-- Erreur formulaire -->
+      </div>
       <div id="form-error" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700"></div>
 
       <div class="flex gap-3 pt-2">
@@ -189,6 +194,17 @@
 </div>
 
 <!-- Toast -->
+<div id="phone-signature-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl p-6 max-w-md w-full text-center space-y-4">
+    <h3 class="font-semibold text-lg">Signer sur votre téléphone</h3>
+    <p class="text-sm text-slate-600">Scannez ce QR code et dessinez votre signature au doigt. Le lien personnel est valable 30 minutes : gardez-le confidentiel.</p>
+    <img id="phone-signature-qr" alt="QR code du lien de signature" class="mx-auto w-56 h-56" />
+    <a id="phone-signature-url" target="_blank" rel="noopener noreferrer" class="block text-indigo-600 underline">Ouvrir le lien de signature</a>
+    <p id="phone-signature-status" role="status" class="text-sm text-slate-500">En attente de la signature…</p>
+    <a id="phone-signature-download" class="hidden block rounded-lg bg-green-600 text-white py-3">Télécharger le PDF signé</a>
+    <button type="button" onclick="closePhoneSignature()" class="text-slate-600">Fermer</button>
+  </div>
+</div>
 <div id="toast" class="hidden fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-sm">
   <span id="toast-msg"></span>
 </div>
@@ -211,6 +227,10 @@ let allSignatures = [];
 let selectedFile = null;
 let sigPlacementPos = { ...SigPlacement.DEFAULT_POS };
 let currentBlobUrl = null;
+let handwrittenMode = false;
+let phonePollTimer = null;
+let placementReady = false;
+let placementVersion = 0;
 
 // ── Diagnostic erreurs globales ────────────────────────────────────────────────
 window.addEventListener('unhandledrejection', e => {
@@ -296,6 +316,7 @@ function renderSignatures(list) {
       </div>
       <div class="flex items-center gap-2 flex-shrink-0 flex-wrap">
         ${statusBadge}
+        ${s.verificationMethod === 'HANDWRITTEN_LINK' && s.status === 'PENDING' ? `<button onclick="reopenPhoneSignature('${s.id}')" class="px-2 py-1 text-indigo-600 text-sm">Signer au téléphone</button>` : ''}
         <button onclick="copySignLink('${escapeHtml(signLink)}')"
           title="Copier le lien de signature"
           class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
@@ -394,9 +415,16 @@ function downloadSigned(id) {
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
-function openNewSigModal() {
+function openNewSigModal(handwritten = false) {
   document.getElementById('modal-backdrop').classList.remove('hidden');
   document.getElementById('new-sig-form').reset();
+  handwrittenMode = handwritten;
+  document.getElementById('handwritten-help').classList.toggle('hidden', !handwritten);
+  document.getElementById('signature-recipient-fields').classList.toggle('hidden', handwritten);
+  document.getElementById('form-recipient-name').required = !handwritten;
+  document.getElementById('form-recipient-email').required = !handwritten;
+  document.querySelector('#modal-backdrop h3').textContent = handwritten ? 'Signature manuscrite sur un document' : 'Nouvelle demande de signature';
+  document.getElementById('form-submit-btn').textContent = handwritten ? 'Signer au téléphone' : 'Envoyer pour signature';
   document.getElementById('form-error').classList.add('hidden');
   sigPlacementPos = { ...SigPlacement.DEFAULT_POS };
   clearFile();
@@ -435,6 +463,7 @@ function setFile(file) {
     return;
   }
   selectedFile = file;
+  if (handwrittenMode && !document.getElementById('form-title').value) document.getElementById('form-title').value = file.name.replace(/\.[^.]+$/, '');
   document.getElementById('file-name').textContent = file.name;
   document.getElementById('file-info').classList.remove('hidden');
   document.getElementById('drop-text').textContent = 'Fichier sélectionné';
@@ -447,6 +476,8 @@ function setFile(file) {
 }
 
 function clearFile() {
+  placementReady = false;
+  placementVersion++;
   selectedFile = null;
   document.getElementById('file-input').value = '';
   document.getElementById('file-info').classList.add('hidden');
@@ -459,7 +490,11 @@ function clearFile() {
 
 // ── Placement de signature dans le modal ──────────────────────────────────────
 
-async function showModalPlacement(file) {
+async function showModalPlacement(file, pageNumber) {
+  if (!file) return;
+  placementReady = false;
+  const version = ++placementVersion;
+  document.getElementById('signature-page-wrap').classList.add('hidden');
   const section = document.getElementById('placement-section');
   const container = document.getElementById('modal-placement-container');
   section.classList.remove('hidden');
@@ -479,18 +514,25 @@ async function showModalPlacement(file) {
   currentBlobUrl = URL.createObjectURL(file);
 
   const initPlacement = () => requestAnimationFrame(() => {
+    if (version !== placementVersion) return;
     SigPlacement.init(container, { onUpdate: pos => { sigPlacementPos = pos; } });
+    placementReady = true;
   });
 
   if (file.type.startsWith('image/')) {
     const img = new Image();
     img.onload = () => {
+      if (version !== placementVersion) return;
       container.innerHTML = '';
       img.style.cssText = 'display:block;width:100%;height:auto;pointer-events:none;';
       container.appendChild(img);
       initPlacement();
     };
-    img.onerror = () => { container.innerHTML = '<div style="height:180px"></div>'; initPlacement(); };
+    img.onerror = () => {
+      if (version !== placementVersion) return;
+      if (handwrittenMode) { container.textContent = 'Image illisible. Importez une autre image ou un PDF.'; return; }
+      container.innerHTML = '<div style="height:180px"></div>'; initPlacement();
+    };
     img.src = currentBlobUrl;
     return;
   }
@@ -500,7 +542,13 @@ async function showModalPlacement(file) {
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         '/js/pdf.worker.min.js';
       const pdf = await pdfjsLib.getDocument({ url: currentBlobUrl }).promise;
-      const page = await pdf.getPage(pdf.numPages);
+      const pageSelect = document.getElementById('signature-page');
+      if (handwrittenMode) {
+        document.getElementById('signature-page-wrap').classList.remove('hidden');
+        pageSelect.replaceChildren(...Array.from({ length: pdf.numPages }, (_, i) => new Option(String(i + 1), String(i + 1))));
+        pageSelect.value = String(pageNumber || pdf.numPages);
+      }
+      const page = await pdf.getPage(handwrittenMode ? Number(pageSelect.value) : pdf.numPages);
       const baseVp = page.getViewport({ scale: 1 });
       const containerW = container.clientWidth || 500;
       const scale = containerW / baseVp.width;
@@ -509,6 +557,7 @@ async function showModalPlacement(file) {
       canvas.width = vp.width;
       canvas.height = vp.height;
       await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      if (version !== placementVersion) return;
       container.innerHTML = '';
       // Forcer les dimensions CSS — height:auto est mal supporté sur canvas
       canvas.style.cssText = `display:block;width:${vp.width}px;height:${vp.height}px;max-width:100%;pointer-events:none;`;
@@ -519,6 +568,11 @@ async function showModalPlacement(file) {
   }
 
   // Fallback sans aperçu
+  if (version !== placementVersion) return;
+  if (handwrittenMode) {
+    container.textContent = 'Impossible de prévisualiser ce document. Importez un PDF non protégé ou une image lisible.';
+    return;
+  }
   container.innerHTML = '<div style="height:200px;background:#f8fafc;display:flex;align-items:center;justify-content:center;"><p style="font-size:12px;color:#94a3b8;">Aperçu non disponible — dessinez la zone ci-dessous</p></div>';
   initPlacement();
 }
@@ -533,12 +587,15 @@ async function submitNewSig(e) {
   btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Envoi…`;
 
   try {
+    if (handwrittenMode && (!selectedFile || !['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(selectedFile.type))) throw new Error('Importez un PDF ou une image à signer.');
+    if (handwrittenMode && !placementReady) throw new Error('Attendez l’aperçu et choisissez la zone de signature avant de continuer.');
     const formData = new FormData();
     formData.append('documentTitle', document.getElementById('form-title').value.trim());
     formData.append('documentNotes', document.getElementById('form-notes').value.trim());
     formData.append('recipientName', document.getElementById('form-recipient-name').value.trim());
     formData.append('recipientEmail', document.getElementById('form-recipient-email').value.trim());
     formData.append('message', document.getElementById('form-message').value.trim());
+    if (handwrittenMode && selectedFile.type === 'application/pdf') formData.append('signaturePage', document.getElementById('signature-page').value);
     if (selectedFile) {
       formData.append('file', selectedFile);
       const pos = SigPlacement.getPos(document.getElementById('modal-placement-container'));
@@ -548,7 +605,7 @@ async function submitNewSig(e) {
       formData.append('sigHeight', String(pos.h));
     }
 
-    const res = await fetch('/api/signatures', {
+    const res = await fetch(handwrittenMode ? '/api/signatures/handwritten' : '/api/signatures', {
       method: 'POST',
       body: formData,
       credentials: 'include'
@@ -562,6 +619,11 @@ async function submitNewSig(e) {
     }
 
     document.getElementById('modal-backdrop').classList.add('hidden');
+    if (handwrittenMode) {
+      showPhoneSignature(data);
+      loadSignatures();
+      return;
+    }
     showToast('Demande de signature envoyée', 'success');
     loadSignatures();
   } catch (err) {
@@ -569,11 +631,54 @@ async function submitNewSig(e) {
     errEl.classList.remove('hidden');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg> Envoyer pour signature`;
+    btn.textContent = handwrittenMode ? 'Signer au téléphone' : 'Envoyer pour signature';
   }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function closePhoneSignature() {
+  clearTimeout(phonePollTimer);
+  document.getElementById('phone-signature-modal').classList.add('hidden');
+  document.getElementById('phone-signature-qr').removeAttribute('src');
+  document.getElementById('phone-signature-url').removeAttribute('href');
+}
+
+async function reopenPhoneSignature(id) {
+  try { showPhoneSignature(await api.get(`/signatures/${id}/phone-link`)); }
+  catch (err) { showToast(err.message, 'error'); }
+}
+
+function showPhoneSignature(data) {
+  clearTimeout(phonePollTimer);
+  const modal = document.getElementById('phone-signature-modal');
+  const status = document.getElementById('phone-signature-status');
+  const download = document.getElementById('phone-signature-download');
+  document.getElementById('phone-signature-qr').src = data.qrCode;
+  document.getElementById('phone-signature-url').href = data.signUrl;
+  status.textContent = 'En attente de la signature…';
+  download.classList.add('hidden');
+  modal.classList.remove('hidden');
+  const poll = async () => {
+    if (modal.classList.contains('hidden')) return;
+    try {
+      const res = await fetch(`/api/sign/${data.signatureRequest.token}`, { cache: 'no-store' });
+      const state = await res.json();
+      if (modal.classList.contains('hidden')) return;
+      if (!res.ok) { status.textContent = state.error || 'Lien indisponible.'; return; }
+      if (state.status === 'SIGNED') {
+        status.textContent = 'Signature reçue. Votre document est prêt.';
+        download.href = `/api/signatures/${data.signatureRequest.id}/download`;
+        download.classList.remove('hidden');
+        loadSignatures();
+        return;
+      }
+      status.textContent = 'En attente de la signature…';
+    } catch (_) { status.textContent = 'Connexion interrompue. Nouvelle tentative en cours…'; }
+    phonePollTimer = setTimeout(poll, 3000);
+  };
+  phonePollTimer = setTimeout(poll, 1500);
+}
+
 function escapeHtml(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
