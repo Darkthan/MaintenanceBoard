@@ -2,6 +2,21 @@
 
 Application de gestion du parc informatique scolaire/entreprise.
 
+## Signature manuscrite sur téléphone
+
+Dans **Signatures → Signer un document au téléphone**, importer une pièce jointe
+reçue par email (PDF non protégé ou image, 20 Mo maximum). Choisir la page du PDF,
+puis tracer la zone où placer la signature. Scanner le QR code avec le téléphone,
+dessiner et confirmer la signature ; l'écran de départ propose ensuite le PDF signé.
+Le lien est personnel, valable 30 minutes et utilisable une seule fois. Une demande
+en attente peut être rouverte depuis la liste. Aucun email ni code OTP n'est requis.
+Seul le tracé manuscrit est ajouté au document : aucun encadré, certificat ou page
+supplémentaire. L'import se fait manuellement depuis la pièce jointe enregistrée.
+
+La mise à jour ajoute `signaturePage` aux demandes de signature. Appliquer les
+migrations et régénérer le client Prisma avant redémarrage ; l'image Docker génère
+le client lors du build et applique les migrations au démarrage.
+
 ## Supervision par pullers
 
 - [Procédure de déploiement et de configuration](docs/DEPLOIEMENT-PULLERS.md)
@@ -97,10 +112,10 @@ Les credentials du seed sont définis via des variables d'environnement (voir `.
 | Variable | Défaut | Description |
 |----------|--------|-------------|
 | `SEED_ADMIN_EMAIL` | `admin@maintenance.local` | Email du compte admin |
-| `SEED_ADMIN_PASSWORD` | `Admin@1234` | Mot de passe admin |
+| `SEED_ADMIN_PASSWORD` | À définir via l’environnement | Mot de passe admin |
 | `SEED_ADMIN_NAME` | `Administrateur` | Nom affiché admin |
 | `SEED_TECH_EMAIL` | `tech@maintenance.local` | Email du compte technicien |
-| `SEED_TECH_PASSWORD` | `Tech@1234` | Mot de passe technicien |
+| `SEED_TECH_PASSWORD` | À définir via l’environnement | Mot de passe technicien |
 | `SEED_TECH_NAME` | `Technicien Démo` | Nom affiché technicien |
 | `SEED_DEMO_DATA` | `true` | `false` pour créer uniquement les comptes, sans données de démo |
 
@@ -170,7 +185,7 @@ src/
 ## Variables d'environnement importantes
 
 ```env
-DATABASE_URL=postgresql://user:pass@localhost:5432/db
+DATABASE_URL=postgresql://<utilisateur>:<mot_de_passe>@localhost:5432/<base>
 JWT_SECRET=<min 32 caractères aléatoires>
 SESSION_SECRET=<min 32 caractères aléatoires>
 WEBAUTHN_RP_ID=votre-domaine.com   # En production
@@ -202,12 +217,12 @@ WEBAUTHN_ORIGIN=https://votre-domaine.com
 | `SMTP_FROM` | `noreply@maintenance.local` | Adresse expéditeur des emails |
 | `POSTGRES_DB` | `maintenance_db` | Nom de la base (Docker Compose) |
 | `POSTGRES_USER` | `maintenance_user` | Utilisateur PostgreSQL (Docker Compose) |
-| `POSTGRES_PASSWORD` | `maintenance_pass` | Mot de passe PostgreSQL (Docker Compose) |
+| `POSTGRES_PASSWORD` | À définir via l’environnement | Mot de passe PostgreSQL (Docker Compose) |
 | `SEED_ADMIN_EMAIL` | `admin@maintenance.local` | Email du compte admin initial |
-| `SEED_ADMIN_PASSWORD` | `Admin@1234` | Mot de passe admin initial — **à changer en prod** |
+| `SEED_ADMIN_PASSWORD` | À définir via l’environnement | Mot de passe admin initial — **à changer en prod** |
 | `SEED_ADMIN_NAME` | `Administrateur` | Nom affiché du compte admin |
 | `SEED_TECH_EMAIL` | `tech@maintenance.local` | Email du compte technicien initial |
-| `SEED_TECH_PASSWORD` | `Tech@1234` | Mot de passe technicien initial — **à changer en prod** |
+| `SEED_TECH_PASSWORD` | À définir via l’environnement | Mot de passe technicien initial — **à changer en prod** |
 | `SEED_TECH_NAME` | `Technicien Démo` | Nom affiché du compte technicien |
 | `SEED_DEMO_DATA` | `true` | `false` pour créer uniquement les comptes sans données de démo |
 | `AGENT_ENROLLMENT_MAX_AGE` | `0` | Durée de validité des tokens d'enrollment agent en ms (0 = illimité) |
