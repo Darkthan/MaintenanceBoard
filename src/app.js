@@ -148,7 +148,6 @@ app.use('/api/todos', require('./routes/todos'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/knowledge-base', require('./routes/knowledgeBase'));
-app.use('/api/user-documentation', require('./routes/userDocumentation'));
 app.use('/api/supervision', require('./routes/supervision'));
 app.use('/api/ip-networks', require('./routes/ipAddressing').router);
 app.use('/api/orders', require('./routes/orders'));
