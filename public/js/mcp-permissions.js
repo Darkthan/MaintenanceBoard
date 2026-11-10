@@ -2,6 +2,7 @@
   'use strict';
   const categories = [
     { id: 'equipment', label: 'Équipements', description: 'Fiches du parc, factures, bons de livraison et interfaces réseau' },
+    { id: 'rooms', label: 'Salles', description: 'Liste et détail des salles' },
     { id: 'equipment_bookings', label: 'Emprunts', description: 'Matériel empruntable et réservations', aliases: ['reservations'] },
     { id: 'room_visits', label: 'Carnet de passages', description: 'Contrôles des salles et observations' },
     { id: 'interventions', label: 'Interventions', description: 'Maintenance et demandes de support' },

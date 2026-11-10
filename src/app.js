@@ -59,6 +59,14 @@ app.use('/mcp-public', cors({
   exposedHeaders: ['Mcp-Session-Id'],
   credentials: false
 }));
+// CORS permissif pour l'API publique /api/v1 : consommée par des intégrations
+// externes (OAuth2 ou clé API), pas uniquement par le navigateur de l'app.
+app.use('/api/v1', cors({
+  origin: '*',
+  methods: ['GET', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false
+}));
 
 // ── Rate limiting ──────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
@@ -140,6 +148,7 @@ app.use('/api/todos', require('./routes/todos'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/knowledge-base', require('./routes/knowledgeBase'));
+app.use('/api/user-documentation', require('./routes/userDocumentation'));
 app.use('/api/supervision', require('./routes/supervision'));
 app.use('/api/ip-networks', require('./routes/ipAddressing').router);
 app.use('/api/orders', require('./routes/orders'));
@@ -200,6 +209,9 @@ app.delete('/mcp-public', publicMcpAuth, handlePublicMcp);
 app.post('/mcp', mcpLimiter, mcpAuth, handleMcpRequest);
 app.get('/mcp', mcpAuth, handleMcpRequest);    // canal SSE (notifications serveur → client)
 app.delete('/mcp', mcpAuth, handleMcpRequest); // fermeture de session
+
+// ── API publique /api/v1 (lecture équipements/salles, OAuth2 ou clé API) ──────
+app.use('/api/v1', mcpLimiter, require('./routes/publicApi'));
 
 // ── Tickets publics (sans auth, rate limit IP strict) ─────────────────────────
 const { createTicketRateLimiter } = require('./middleware/ticketRateLimit');
