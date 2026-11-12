@@ -9,6 +9,7 @@ const qrService = require('../services/qrService');
 const { readSettings, writeSettings } = require('../utils/settings');
 
 const prisma = require('../lib/prisma');
+const roomService = require('../services/roomService');
 
 const validate = (req, res) => {
   const errors = validationResult(req);
@@ -234,16 +235,9 @@ router.post('/',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { name, building, floor, number, description } = req.body;
-      const room = await prisma.room.create({
-        data: {
-          name,
-          building: building || null,
-          floor: floor != null ? parseInt(floor) : null,
-          number: number || null,
-          description: description || null
-        }
-      });
+      const input = { ...req.body };
+      if (input.floor != null) input.floor = Number(input.floor);
+      const room = await roomService.createRoom(input, req.user);
       res.status(201).json(room);
     } catch (err) { next(err); }
   }
@@ -262,18 +256,9 @@ router.patch('/:id',
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { name, building, floor, number, description } = req.body;
-      const data = {};
-      if (name !== undefined) data.name = name;
-      if (building !== undefined) data.building = building || null;
-      if (floor !== undefined) data.floor = floor !== null ? parseInt(floor) : null;
-      if (number !== undefined) data.number = number || null;
-      if (description !== undefined) data.description = description || null;
-
-      const room = await prisma.room.update({
-        where: { id: req.params.id },
-        data
-      });
+      const input = { ...req.body };
+      if (input.floor != null) input.floor = Number(input.floor);
+      const room = await roomService.updateRoom({ ...input, id: req.params.id }, req.user);
       res.json(room);
     } catch (err) {
       if (err.code === 'P2025') return res.status(404).json({ error: 'Salle introuvable' });

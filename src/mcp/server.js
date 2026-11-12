@@ -10,6 +10,8 @@ const equipment = require('./equipmentService');
 const { equipmentFields, readOnlyFields, protectedFields } = require('./equipmentFields');
 const support = require('./supportService');
 const visits = require('../services/roomVisitService');
+const rooms = require('../services/roomService');
+const { roomFields } = require('../services/roomFields');
 
 const SERVER_INFO = { name: 'maintenanceboard', version: '1.2.0' };
 
@@ -64,6 +66,31 @@ function buildMcpServer(ctx) {
   const userId = ctx.createdBy?.id || null;
   const bookingsReadScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_READ, MCP_SCOPES.RESERVATIONS_READ];
   const bookingsWriteScopes = [MCP_SCOPES.EQUIPMENT_BOOKINGS_WRITE, MCP_SCOPES.RESERVATIONS_WRITE];
+
+  server.registerTool('list_rooms', {
+    description: 'Liste et recherche les salles par texte ou bâtiment. Pagination via nextCursor.',
+    inputSchema: { search: z.string().optional(), building: z.string().optional(), limit: z.number().int().min(1).max(100).optional(), cursor: z.string().min(1).optional() },
+    annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.ROOMS_READ, args => {
+    rooms.requireRoomUser(user);
+    return rooms.listRooms(args);
+  }));
+  server.registerTool('get_room', {
+    description: 'Consulte une salle par id, ses équipements et les compteurs associés.',
+    inputSchema: { id: z.string().min(1) }, annotations: READ_ONLY_TOOL
+  }, tool(ctx, MCP_SCOPES.ROOMS_READ, args => {
+    rooms.requireRoomUser(user);
+    return rooms.getRoom(args);
+  }));
+  server.registerTool('create_room', {
+    description: 'Crée une salle. Administrateur requis. Refuse un doublon de nom et localisation (bâtiment, étage, numéro).',
+    inputSchema: roomFields, annotations: ADDITIVE_WRITE_TOOL
+  }, tool(ctx, MCP_SCOPES.ROOMS_WRITE, args => rooms.createRoom(args, user)));
+  server.registerTool('update_room', {
+    description: 'Modifie une salle par id. Administrateur requis. Champs omis conservés ; null efface un champ facultatif.',
+    inputSchema: { ...roomFields, name: roomFields.name.optional(), id: z.string().min(1) },
+    annotations: { ...ADDITIVE_WRITE_TOOL, idempotentHint: true, destructiveHint: true }
+  }, tool(ctx, MCP_SCOPES.ROOMS_WRITE, args => rooms.updateRoom(args, user)));
 
   const visitFields = {
     roomId: z.string().min(1),
