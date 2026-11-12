@@ -167,10 +167,10 @@ async function loadData() {
   try {
     const [machines, roomsResp] = await Promise.all([
       api.get('/agents/unassigned'),
-      api.get('/rooms', { limit: 500 })
+      api.get('/rooms/print-list')
     ]);
     allMachines = machines;
-    allRooms = roomsResp.data || [];
+    allRooms = roomsResp;
 
     document.getElementById('loading').classList.add('hidden');
 
@@ -293,7 +293,9 @@ function buildCard(m) {
       <div class="px-4 pb-4 border-t border-slate-100 pt-3">
         <div class="relative search-container">
           <input type="text"
-            placeholder="Rechercher une salle manuellement..."
+            placeholder="Rechercher ou créer une salle..."
+            aria-label="Rechercher ou créer une salle"
+            maxlength="200"
             class="search-input w-full border border-slate-200 rounded-lg px-3 py-2 text-xs pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500"
             data-pc-id="${m.id}"
             autocomplete="off" />
@@ -330,12 +332,6 @@ function bindSearchEvents() {
         (r.building && r.building.toLowerCase().includes(q))
       ).slice(0, 8);
 
-      if (matches.length === 0) {
-        results.innerHTML = '<p class="px-3 py-2 text-xs text-slate-400">Aucune salle trouvée</p>';
-        results.classList.remove('hidden');
-        return;
-      }
-
       results.innerHTML = matches.map(r => `
         <button class="w-full text-left px-3 py-2 hover:bg-blue-50 transition flex items-center justify-between gap-2"
           onclick="openRoomModal('${r.id}', '${pcId}')">
@@ -346,12 +342,43 @@ function bindSearchEvents() {
           ${r.building ? `<span class="text-xs text-slate-400 flex-shrink-0">${esc(r.building)}</span>` : ''}
         </button>`
       ).join('');
+      if (!allRooms.some(r => r.name.trim().toLowerCase() === q)) {
+        const createButton = document.createElement('button');
+        createButton.type = 'button';
+        createButton.className = 'w-full text-left px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 transition';
+        createButton.textContent = `+ Créer la salle « ${input.value.trim()} »`;
+        createButton.addEventListener('click', () => createRoom(input));
+        results.appendChild(createButton);
+      }
       results.classList.remove('hidden');
     });
 
     input.addEventListener('blur', () => setTimeout(() => results.classList.add('hidden'), 200));
     input.addEventListener('focus', () => { if (input.value.trim()) input.dispatchEvent(new Event('input')); });
   });
+}
+
+async function createRoom(input) {
+  const name = input.value.trim();
+  if (!name || input.disabled) return;
+  const results = input.closest('.search-container').querySelector('.search-results');
+  input.disabled = true;
+  results.classList.add('hidden');
+  try {
+    // Reuse a room created from another PC card while this search was open.
+    let room = allRooms.find(r => r.name.trim().toLowerCase() === name.toLowerCase());
+    if (!room) {
+      room = await api.post('/rooms', { name });
+      allRooms.push(room);
+      showToast('Salle créée', 'success');
+    }
+    input.value = room.name;
+    await openRoomModal(room.id, input.dataset.pcId);
+  } catch (err) {
+    showToast('Création impossible : ' + err.message, 'error');
+  } finally {
+    input.disabled = false;
+  }
 }
 
 // ── Modal détail salle ───────────────────────────────────────────────────────
