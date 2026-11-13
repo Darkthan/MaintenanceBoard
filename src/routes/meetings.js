@@ -3,6 +3,8 @@ const { z } = require('zod');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
 const { linkSchema, parseInternalLink, resolveLink, searchLinks } = require('../services/meetingLinks');
+const { waitForMeetingChange } = require('../services/meetingUpdates');
+const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 router.use(requireAuth, (req, res, next) => {
@@ -23,6 +25,7 @@ const documentSchema = z.object({
     .refine(topics => topics.reduce((count, t) => count + t.links.length, 0) <= 100, 'Trop de liens')
 }).strict();
 const updateSchema = documentSchema.extend({ version: z.number().int().min(1) });
+const createSchema = documentSchema.extend({ creationId: z.string().uuid().optional() });
 const summarySelect = { id: true, title: true, scheduledAt: true, status: true, version: true, createdAt: true, updatedAt: true,
   creator: { select: { id: true, name: true } } };
 
@@ -68,6 +71,30 @@ router.get('/link-search', async (req, res, next) => {
   catch (err) { next(err); }
 });
 
+const updatesLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1200,
+  keyGenerator: req => req.user.id, message: { error: 'Trop de synchronisations. Réessayez dans quelques instants.' } });
+router.get('/:id/updates', updatesLimiter, async (req, res, next) => {
+  const parsed = z.object({ version: z.coerce.number().int().min(1) }).strict().safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'Version de synchronisation invalide' });
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  res.once('close', cancel);
+  try {
+    const result = await waitForMeetingChange(req.params.id, parsed.data.version, controller.signal);
+    if (result.cancelled || controller.signal.aborted) return;
+    // Recheck current rights at delivery time, not just when the long request began.
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { id: true, role: true, isActive: true } });
+    if (!user?.isActive) return res.status(401).json({ error: 'Session expirée' });
+    if (!['ADMIN', 'TECH'].includes(user.role)) return res.status(403).json({ error: 'Accès refusé' });
+    if (result.missing) return res.status(404).json({ error: 'Réunion introuvable' });
+    if (!result.changed) return res.status(204).end();
+    const meeting = await prisma.meeting.findUnique({ where: { id: req.params.id } });
+    if (!meeting) return res.status(404).json({ error: 'Réunion introuvable' });
+    res.json(await serialize(meeting, user));
+  } catch (err) { if (!controller.signal.aborted) next(err); }
+  finally { res.removeListener('close', cancel); }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
     const meeting = await prisma.meeting.findUnique({ where: { id: req.params.id }, include: { creator: { select: { id: true, name: true } } } });
@@ -89,15 +116,28 @@ async function validateLinks(topics, user) {
 }
 
 router.post('/', async (req, res, next) => {
-  const parsed = documentSchema.safeParse(req.body);
+  const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Réunion invalide : vérifiez le titre, la date et les sujets.' });
   try {
-    const { topics, scheduledAt, ...fields } = parsed.data;
+    const { topics, scheduledAt, creationId, ...fields } = parsed.data;
+    if (creationId) {
+      const existing = await prisma.meeting.findUnique({ where: { id: creationId } });
+      if (existing) return existing.createdBy === req.user.id ? res.json(await serialize(existing, req.user)) : res.status(404).json({ error: 'Réunion indisponible' });
+    }
     if (!await validateLinks(topics, req.user)) return res.status(404).json({ error: 'Objet indisponible' });
-    const meeting = await prisma.meeting.create({ data: { ...fields, scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+    const meeting = await prisma.meeting.create({ data: { ...fields, ...(creationId ? { id: creationId } : {}), scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       topics: JSON.stringify(topics), createdBy: req.user.id } });
     res.status(201).json(await serialize(meeting, req.user));
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.code === 'P2002' && parsed.data.creationId) {
+      try {
+        const existing = await prisma.meeting.findUnique({ where: { id: parsed.data.creationId } });
+        if (existing?.createdBy === req.user.id) return res.json(await serialize(existing, req.user));
+        return res.status(404).json({ error: 'Réunion indisponible' });
+      } catch (readError) { return next(readError); }
+    }
+    next(err);
+  }
 });
 
 router.patch('/:id', async (req, res, next) => {

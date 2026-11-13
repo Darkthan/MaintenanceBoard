@@ -19,12 +19,12 @@ module.exports = document => {
     get: operation('Historique paginé des réunions', { 200: { description: 'data et pagination (30 réunions/page), sans notes ni aperçus' } }, {
       parameters: [{ name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } }, { name: 'status', in: 'query', schema: meeting.properties.status }]
     }),
-    post: operation('Créer une réunion', { 201: { description: 'Réunion créée, version initiale 1' }, 400: { description: 'Document invalide' }, 404: { description: 'Référence indisponible' } }, body(meeting))
+    post: operation('Créer une réunion', { 200: { description: 'Création déjà effectuée pour creationId, sans réécriture' }, 201: { description: 'Réunion créée, version initiale 1' }, 400: { description: 'Document invalide' }, 404: { description: 'Référence indisponible' } }, body({ ...meeting, properties: { ...meeting.properties, creationId: { type: 'string', format: 'uuid', description: 'Identifiant optionnel de création idempotente, conservé lors des nouvelles tentatives réseau.' } } }))
   };
   document.paths['/meetings/{id}'] = {
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
     get: operation('Consulter une réunion et ses aperçus autorisés', { 200: { description: 'Sujets ordonnés ; chaque lien comporte preview (null si objet indisponible ou accès refusé)' }, 404: { description: 'Réunion introuvable' } }),
-    patch: operation('Enregistrer le document complet avec sa version', { 200: { description: 'Version incrémentée et aperçus recalculés' }, 400: { description: 'Document invalide' }, 404: { description: 'Réunion ou référence indisponible' }, 409: { description: 'MEETING_CONFLICT : recharger après avoir conservé les notes locales' } }, body({ ...meeting, required: [...meeting.required, 'version'], properties: { ...meeting.properties, version: { type: 'integer', minimum: 1 } } }))
+    patch: operation('Enregistrer le document complet avec sa version', { 200: { description: 'Version incrémentée et aperçus recalculés' }, 400: { description: 'Document invalide' }, 404: { description: 'Réunion ou référence indisponible' }, 409: { description: 'MEETING_CONFLICT : récupérer la version courante et fusionner avec les changements locaux avant une nouvelle écriture' } }, body({ ...meeting, required: [...meeting.required, 'version'], properties: { ...meeting.properties, version: { type: 'integer', minimum: 1 } } }))
   };
   document.paths['/meetings/link-preview'] = {
     post: operation('Résoudre un lien interne sans requête réseau externe', { 200: { description: 'type, id, preview (titre, statut, référence, URL canonique ; montant TTC et devise pour les commandes)' }, 400: { description: 'URL non admise' }, 404: { description: 'Objet absent ou accès refusé, même réponse' } }, body({ type: 'object', required: ['url'], properties: { url: { type: 'string', maxLength: 2048, example: '/orders.html?id=00000000-0000-4000-8000-000000000000' } } }))
@@ -37,5 +37,15 @@ module.exports = document => {
         { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 10000, default: 1 } }
       ]
     })
+  };
+  document.paths['/meetings/{id}/updates'] = {
+    get: operation('Attendre une nouvelle version de réunion (20 secondes maximum)', {
+      200: { description: 'Nouvelle version complète avec aperçus autorisés pour le lecteur courant' },
+      204: { description: 'Aucune modification ; reconnecter avec la même version' },
+      400: { description: 'Version invalide' }, 404: { description: 'Réunion absente' }, 429: { description: 'Attendre avant de reconnecter' }
+    }, { parameters: [
+      { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+      { name: 'version', in: 'query', required: true, schema: { type: 'integer', minimum: 1 } }
+    ] })
   };
 };

@@ -4,6 +4,13 @@ La page **Réunions** du menu et du menu mobile permet de créer une réunion,
 de retrouver l’historique paginé, de filtrer par état (planifiée, en cours,
 terminée), puis de reprendre les notes après rechargement.
 
+Le bouton **+**, fixé en bas à droite, s’adapte à la vue : dans la liste ou le
+menu des réunions, il crée une réunion ; dans une réunion ouverte, il ajoute
+un sujet et ouvre directement son champ de titre. Le bouton **← Réunions**
+revient à la liste, avec confirmation si des modifications ne sont pas
+enregistrées. Sur téléphone, le bouton flottant reste au-dessus de la navigation
+et laisse les commandes de sauvegarde accessibles.
+
 Les comptes ADMIN et TECH actifs partagent les réunions, comme les projets.
 Les comptes dédiés aux impressions et les rôles inconnus sont refusés côté API.
 Il n’y a pas de réunions privées ni de liste de participants dans cette version.
@@ -12,17 +19,45 @@ Chaque sujet a un titre, une case « traité », des notes et des liens. Les bou
 Monter/Descendre changent son ordre, y compris au clavier et sur téléphone.
 Les sujets s’affichent par défaut sous forme de cartes compactes : titre, état,
 présence de notes et nombre de liens. Cliquer sur une carte l’agrandit pour
-modifier ses notes et ses liens. **Tout agrandir** et **Tout réduire** changent
+modifier ses notes et ses liens. **Tout ouvrir** et **Tout replier** changent
 la vue de l’ensemble des sujets, sans modifier leur contenu ni leur ordre.
 Une barre d’avancement se met à jour quand on coche les sujets.
 Sur téléphone, l’historique est replié pour laisser la place à la réunion. Pour
 les réunions en cours ou terminées, les informations de préparation sont aussi
-repliées ; elles restent accessibles via **Informations de la réunion**.
-On peut ajouter et retirer des sujets pendant la séance. **Enregistrer** sauvegarde
-la réunion complète ; le message indique les modifications non enregistrées.
-Quitter ou changer de réunion demande confirmation en présence de modifications.
-Une version périmée est refusée (409) : les notes restent à l’écran. Les copier
-avant de recharger pour fusionner manuellement les changements d’un collègue.
+repliées ; elles restent accessibles via **Modifier le titre, la date ou l’état**.
+On peut ajouter et retirer des sujets pendant la séance. Les modifications sont
+**enregistrées automatiquement après une pause de saisie de 800 ms**. Le bouton
+**Enregistrer** permet aussi de déclencher une sauvegarde immédiate. Les titres
+de la réunion et des sujets doivent être remplis avant l’enregistrement.
+Quitter ou changer de réunion demande confirmation si des modifications ne sont
+pas encore enregistrées.
+
+## Synchronisation en direct
+
+Les autres écrans ouverts sur la même réunion reçoivent les versions enregistrées,
+généralement dans la seconde suivant la sauvegarde. Les sujets ouverts, les notes
+en cours de saisie et la position du curseur sont conservés. Les modifications
+de champs différents sont fusionnées automatiquement (par exemple une case cochée
+et les notes d’un autre sujet). Les ajouts simultanés de sujets et de liens sont
+conservés. Si deux personnes modifient la même note, ou si un sujet modifié est
+supprimé ailleurs, un bandeau demande de **garder mes modifications** ou
+**utiliser la version distante**. Les changements sans conflit sont conservés
+dans les deux cas. Aucun texte concurrent n’est écrasé silencieusement.
+
+Une coupure interrompt la synchronisation et laisse les notes à l’écran ; les
+tentatives de sauvegarde et de connexion reprennent automatiquement avec un délai
+progressif. Une création rejouée après perte de réponse ne crée pas de doublon.
+Il n’y a pas de stockage de brouillon local après fermeture : attendre le message
+de sauvegarde avant de quitter. La liste des réunions s’actualise toutes les cinq
+secondes lorsqu’elle est visible.
+
+Le serveur attend les changements via `GET /api/meetings/:id/updates?version=N`,
+pendant vingt secondes au maximum, avec vérification de la version en base chaque
+seconde. Cela fonctionne entre plusieurs processus sans bus d’événements local.
+Les droits du compte sont revérifiés avant chaque réponse et les aperçus sont
+calculés pour ce lecteur. Une connexion quittée est interrompue sans laisser de
+minuteur actif ; les requêtes de synchronisation ont des limites dédiées par
+compte et par adresse IP. Aucune migration supplémentaire n’est nécessaire.
 
 ## Liens et confidentialité
 
@@ -37,7 +72,7 @@ Choisir une fiche ajoute son lien avec aperçu au sujet et retire le texte de
 recherche. Les notes autour de la mention sont conservées. Les résultats sont
 paginés par dix ; les flèches du clavier permettent de les parcourir, Entrée de
 sélectionner et Échap de fermer la liste. La sélection est aussi possible au
-clic ou au toucher. Enregistrer ensuite la réunion pour conserver les liens.
+clic ou au toucher. Les liens sont enregistrés automatiquement avec les notes.
 La recherche est effectuée côté serveur avec les droits du lecteur, et les droits
 sont revérifiés à la sélection puis à chaque consultation de la réunion.
 
@@ -152,3 +187,14 @@ de Git et les copies de tests temporaires sont exclues de Jest.
 Les parcours Chrome des réunions et de la revue des PC réussissent sur ordinateur
 et téléphone. Les schémas SQLite et PostgreSQL sont valides. Ces contrôles ne
 constituent pas une vérification de l’état de la production.
+
+### Vérification de la synchronisation
+
+Après ajout de la synchronisation et de l’enregistrement automatique : **81 suites
+et 698 tests réussis**. Les tests couvrent la réception de nouvelles versions,
+la révocation d’un compte pendant une attente, l’arrêt des requêtes abandonnées,
+le délai maximal d’attente, les aperçus soumis aux droits, les créations rejouées
+sans doublon et les fusions de notes/sujets/liens/ordres concurrents.
+Les parcours Chrome à 1280 px et 390 px vérifient l’enregistrement automatique,
+les modifications distantes, la conservation du curseur et de la saisie,
+la résolution des conflits et la reprise de sauvegarde après une coupure simulée.

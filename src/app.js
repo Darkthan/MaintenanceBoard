@@ -70,6 +70,8 @@ app.use('/api/v1', cors({
 
 // ── Rate limiting ──────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
+  // Authenticated meeting updates have their own bounded long-poll rate limit.
+  skip: req => req.method === 'GET' && /^\/api\/meetings\/[a-f\d-]{36}\/updates(?:\?|$)/i.test(req.originalUrl),
   windowMs: 15 * 60 * 1000,
   max: 500,
   message: { error: 'Trop de requêtes, réessayez dans 15 minutes.' }
@@ -81,6 +83,8 @@ const authLimiter = rateLimit({
   message: { error: 'Trop de tentatives de connexion, réessayez dans 15 minutes.' }
 });
 
+app.use('/api/meetings/:id/updates', rateLimit({ windowMs: 15 * 60 * 1000, max: 2400,
+  message: { error: 'Trop de synchronisations. Réessayez dans quelques instants.' } }));
 app.use('/api/', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 

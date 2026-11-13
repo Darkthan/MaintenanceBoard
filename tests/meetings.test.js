@@ -91,7 +91,7 @@ test('une sauvegarde périmée ne peut pas écraser les notes d’un collègue',
 
 test.each([null, 'INACTIVE', 'PRINT_MANAGER', 'VIEWER'])('refuse les accès non autorisés : %s', async role => {
   for (const [method, suffix, body] of [['get', ''], ['post', '', draft()], ['get', `/${randomUUID()}`],
-    ['patch', `/${randomUUID()}`, { ...draft(), version: 1 }], ['post', '/link-preview', { url: `/orders.html?id=${ids.order}` }], ['get', '/link-search?type=orders']]) {
+    ['patch', `/${randomUUID()}`, { ...draft(), version: 1 }], ['post', '/link-preview', { url: `/orders.html?id=${ids.order}` }], ['get', '/link-search?type=orders'], ['get', `/${randomUUID()}/updates?version=1`]]) {
     expect((await call(method, suffix, body, role)).status).toBe([null, 'INACTIVE'].includes(role) ? 401 : 403);
   }
 });
@@ -228,4 +228,63 @@ test.each([['equipment', 'PC'], ['rooms', 'Salle'], ['projects', 'Projet']])('me
 test.each(['', '?type=users', '?type=orders&page=0', '?type=orders&page=1.5', '?type=orders&page=10001',
   '?type=orders&q=' + 'x'.repeat(101), '?type=orders&q[x]=test', '?type=orders&url=https://example.com'])('mentions : valide la recherche %s', async query => {
   expect((await call('get', `/link-search${query}`)).status).toBe(400);
+});
+
+test('synchronisation : reçoit la version suivante après une modification sur un autre écran', async () => {
+  const body = draft(); const created = (await call('post', '', body)).body;
+  const pending = Promise.resolve(call('get', `/${created.id}/updates?version=1`, undefined, 'TECH'));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  await call('patch', `/${created.id}`, { ...body, title: 'Changement en direct', version: 1 });
+  const response = await pending;
+  expect(response.status).toBe(200); expect(response.headers['cache-control']).toBe('no-store');
+  expect(response.body).toMatchObject({ title: 'Changement en direct', version: 2 });
+});
+test('synchronisation : contrôle les aperçus avec les droits du lecteur', async () => {
+  await prisma.intervention.update({ where: { id: ids.intervention }, data: { techId: 'ADMIN' } });
+  const body = draft(); body.topics[0].links = [{ type: 'interventions', id: ids.intervention }];
+  const created = (await call('post', '', body)).body;
+  await call('patch', `/${created.id}`, { ...body, version: 1 });
+  const response = await call('get', `/${created.id}/updates?version=1`, undefined, 'TECH2');
+  expect(response.status).toBe(200); expect(response.body.topics[0].links[0].preview).toBeNull();
+  expect(response.text).not.toContain('SECRET_INTERVENTION');
+});
+test('synchronisation : arrête une requête interrompue et révoque un compte désactivé en attente', async () => {
+  const body = draft(); const { id } = (await call('post', '', body)).body;
+  const controller = new AbortController();
+  const watch = require('../src/services/meetingUpdates').waitForMeetingChange(id, 1, controller.signal);
+  controller.abort(); expect(await watch).toEqual({ cancelled: true });
+  const pending = Promise.resolve(call('get', `/${id}/updates?version=1`, undefined, 'TECH2'));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  await prisma.user.update({ where: { id: 'TECH2' }, data: { isActive: false } });
+  await call('patch', `/${id}`, { ...body, version: 1 });
+  expect((await pending).status).toBe(401);
+  await prisma.user.update({ where: { id: 'TECH2' }, data: { isActive: true } });
+});
+test.each(['', '?version=0', '?version=abc', '?version=1.5', '?version=1&extra=true'])('synchronisation : refuse une version invalide %s', async query => {
+  expect((await call('get', `/${randomUUID()}/updates${query}`)).status).toBe(400);
+});
+test('synchronisation : réunion absente', async () => {
+  expect((await call('get', `/${randomUUID()}/updates?version=1`)).status).toBe(404);
+});
+
+test('sauvegarde automatique : rejouer une création ne duplique pas une réunion et ne réécrit pas sa version courante', async () => {
+  const body = { ...draft(), creationId: randomUUID() };
+  const responses = await Promise.all([call('post', '', body, 'TECH'), call('post', '', body, 'TECH')]);
+  expect(responses.map(r => r.status).sort()).toEqual([200, 201]);
+  expect(await prisma.meeting.count()).toBe(1);
+  const { creationId, ...updated } = body;
+  await call('patch', `/${creationId}`, { ...updated, title: 'Titre plus récent', version: 1 }, 'TECH');
+  const retry = await call('post', '', body, 'TECH');
+  expect(retry.body).toMatchObject({ id: creationId, title: 'Titre plus récent', version: 2 });
+  expect((await call('post', '', body, 'TECH2')).status).toBe(404);
+});
+
+test('synchronisation : termine l’attente sans changement après 20 secondes', async () => {
+  const read = jest.spyOn(prisma.meeting, 'findUnique').mockResolvedValue({ version: 1 });
+  jest.useFakeTimers();
+  try {
+    const pending = require('../src/services/meetingUpdates').waitForMeetingChange(randomUUID(), 1, new AbortController().signal);
+    await jest.advanceTimersByTimeAsync(20000);
+    expect(await pending).toEqual({ changed: false });
+  } finally { jest.useRealTimers(); read.mockRestore(); }
 });
