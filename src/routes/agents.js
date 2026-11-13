@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 const { requireAdmin, requireTechOrAdmin } = require('../middleware/roles');
 const { agentAuth } = require('../middleware/agentAuth');
 const discoveryService = require('../services/discoveryService');
+const { updateAgentEquipment } = require('../services/hostnameReviewService');
 const { sanitizeAgentNetworkInterfaces, syncAgentNetworkInterfaces } = require('../services/agentNetworkInterfaces');
 const { readSettings } = require('../utils/settings');
 const {
@@ -183,7 +184,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
     const { hostname, serialNumber, type, manufacturer, model, cpu, ramGb, os, osVersion, user, ips, macs, networkInterfaces, peripherals, disks, harvests } = req.body;
 
     // Validation hostname
-    if (hostname && !/^[a-zA-Z0-9._-]{1,255}$/.test(hostname)) {
+    if ((hostname != null && typeof hostname !== 'string') || (hostname && !/^[a-zA-Z0-9._-]{1,255}$/.test(hostname))) {
       return res.status(400).json({ error: 'Hostname invalide' });
     }
 
@@ -243,7 +244,6 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
           brand: sanitized.manufacturer || equipment.brand,
           model: sanitized.model || equipment.model,
           agentInfo,
-          agentHostname: hostname || null,
           agentToken: machineToken,
           lastSeenAt: new Date(),
           discoverySource: 'AGENT'
@@ -252,10 +252,7 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
         if (!equipment.enrollmentTokenId) {
           updateData.enrollmentTokenId = enrollToken.id;
         }
-        equipment = await prisma.equipment.update({
-          where: { id: equipment.id },
-          data: updateData
-        });
+        equipment = await updateAgentEquipment(equipment, hostname, updateData);
         await syncAgentNetworkInterfaces(equipment.id, agentInterfaces);
         await maybeCreateLowDiskIntervention(equipment, sanitized);
         await maybeCreateHarvestInterventions(equipment, sanitized);
@@ -305,15 +302,11 @@ router.post('/checkin', agentAuth, async (req, res, next) => {
 
     // ── Cas 2 : token machine (check-in périodique) ────────────────────────
     if (req.equipmentRecord) {
-      const updatedEquipment = await prisma.equipment.update({
-        where: { id: req.equipmentRecord.id },
-        data: {
-          brand: sanitized.manufacturer || req.equipmentRecord.brand || null,
-          model: sanitized.model || req.equipmentRecord.model || null,
-          agentInfo,
-          agentHostname: hostname || null,
-          lastSeenAt: new Date()
-        }
+      const updatedEquipment = await updateAgentEquipment(req.equipmentRecord, hostname, {
+        brand: sanitized.manufacturer || req.equipmentRecord.brand || null,
+        model: sanitized.model || req.equipmentRecord.model || null,
+        agentInfo,
+        lastSeenAt: new Date()
       });
       await syncAgentNetworkInterfaces(updatedEquipment.id, agentInterfaces);
       await maybeCreateLowDiskIntervention(updatedEquipment, sanitized);

@@ -3,7 +3,7 @@ const path = require('path');
 const vm = require('vm');
 
 function setup(count) {
-  const html = fs.readFileSync(path.join(__dirname, '../public/printer-import.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../public/printer-import.html'), 'utf8').replace(/\r\n/g, '\n');
   const elements = {};
   let submit;
   const element = id => elements[id] ||= {

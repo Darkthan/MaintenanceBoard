@@ -10,6 +10,14 @@ Il n’y a pas de réunions privées ni de liste de participants dans cette vers
 
 Chaque sujet a un titre, une case « traité », des notes et des liens. Les boutons
 Monter/Descendre changent son ordre, y compris au clavier et sur téléphone.
+Les sujets s’affichent par défaut sous forme de cartes compactes : titre, état,
+présence de notes et nombre de liens. Cliquer sur une carte l’agrandit pour
+modifier ses notes et ses liens. **Tout agrandir** et **Tout réduire** changent
+la vue de l’ensemble des sujets, sans modifier leur contenu ni leur ordre.
+Une barre d’avancement se met à jour quand on coche les sujets.
+Sur téléphone, l’historique est replié pour laisser la place à la réunion. Pour
+les réunions en cours ou terminées, les informations de préparation sont aussi
+repliées ; elles restent accessibles via **Informations de la réunion**.
 On peut ajouter et retirer des sujets pendant la séance. **Enregistrer** sauvegarde
 la réunion complète ; le message indique les modifications non enregistrées.
 Quitter ou changer de réunion demande confirmation en présence de modifications.
@@ -17,6 +25,21 @@ Une version périmée est refusée (409) : les notes restent à l’écran. Les 
 avant de recharger pour fusionner manuellement les changements d’un collègue.
 
 ## Liens et confidentialité
+
+Dans les notes d’un sujet ou le champ **Lien ou mention de page**, saisir `@`
+pour choisir une page, ou directement `@commandes` pour afficher les commandes.
+Ajouter un nom après la mention, par exemple `@commandes ordinateurs`, pour
+filtrer les résultats. Les commandes peuvent aussi être retrouvées par fournisseur
+ou référence du bon. Les pages suivantes sont disponibles : `@commandes`,
+`@equipements` (ou `@équipements`), `@salles`, `@interventions` et `@projets`.
+
+Choisir une fiche ajoute son lien avec aperçu au sujet et retire le texte de
+recherche. Les notes autour de la mention sont conservées. Les résultats sont
+paginés par dix ; les flèches du clavier permettent de les parcourir, Entrée de
+sélectionner et Échap de fermer la liste. La sélection est aussi possible au
+clic ou au toucher. Enregistrer ensuite la réunion pour conserver les liens.
+La recherche est effectuée côté serveur avec les droits du lecteur, et les droits
+sont revérifiés à la sélection puis à chaque consultation de la réunion.
 
 Coller une URL de fiche dans un sujet puis choisir **Ajouter le lien** :
 
@@ -104,3 +127,28 @@ en CRLF). Les 614 tests de cette sélection ont ainsi été vérifiés avec succ
 Les cinq échecs du dossier de travail complet mentionnés plus haut ne sont pas
 reproduits par la sélection publiée. La validation PostgreSQL en préproduction
 reste à effectuer avant une mise en production.
+
+### Mentions et vue compacte
+
+Après ajout des mentions et modernisation de l’interface : 37 tests Réunions
+réussis, 44 tests réussis en incluant la navigation mobile et la documentation API.
+Les parcours Chrome à 1280 px et 390 px vérifient aussi le choix d’une page, la
+recherche vide/en erreur et son réessai, les réponses de recherche périmées,
+l’insertion au clavier et la revérification d’accès lors du choix d’une fiche.
+La vue compacte par défaut, le dépliage individuel/global, la sauvegarde et les
+conflits de notes sont vérifiés sur ces deux formats.
+
+### Publication de l’ensemble des travaux
+
+Le 13 novembre 2026, vérification complète après intégration des travaux locaux :
+**80 suites et 680 tests réussis**. Les échecs antérieurs ont été corrigés :
+les aperçus PDF reçoivent directement les octets du document pour respecter la
+politique de sécurité du navigateur ; les champs de suivi des renommages sont
+déclarés en lecture seule dans le contrat MCP ; la page PC à vérifier suit le
+format mobile commun. Les tests d’import des impressions acceptent les fins de
+ligne Windows. Les fichiers temporaires et profils de navigateur sont exclus
+de Git et les copies de tests temporaires sont exclues de Jest.
+
+Les parcours Chrome des réunions et de la revue des PC réussissent sur ordinateur
+et téléphone. Les schémas SQLite et PostgreSQL sont valides. Ces contrôles ne
+constituent pas une vérification de l’état de la production.

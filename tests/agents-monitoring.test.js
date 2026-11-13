@@ -166,7 +166,7 @@ describe('POST /api/agents/checkin', () => {
 
     expect(res.status).toBe(200);
     expect(prisma.equipment.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'equip-1' },
+      where: { id: 'equip-1', agentHostname: null, hostnameChangeId: null },
       data: expect.objectContaining({
         brand: 'Dell',
         model: 'OptiPlex 7010'

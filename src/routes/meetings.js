@@ -2,7 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
-const { linkSchema, parseInternalLink, resolveLink } = require('../services/meetingLinks');
+const { linkSchema, parseInternalLink, resolveLink, searchLinks } = require('../services/meetingLinks');
 
 const router = express.Router();
 router.use(requireAuth, (req, res, next) => {
@@ -58,6 +58,14 @@ router.get('/', async (req, res, next) => {
     ]);
     res.json({ data, pagination: { page, total, totalPages: Math.ceil(total / 30) } });
   } catch (err) { next(err); }
+});
+
+router.get('/link-search', async (req, res, next) => {
+  const parsed = z.object({ type: linkSchema.shape.type, q: z.string().trim().max(100).default(''),
+    page: z.coerce.number().int().min(1).max(10000).default(1) }).strict().safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'Recherche de lien invalide' });
+  try { res.json(await searchLinks(parsed.data, req.user)); }
+  catch (err) { next(err); }
 });
 
 router.get('/:id', async (req, res, next) => {

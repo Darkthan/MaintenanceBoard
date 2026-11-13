@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Prêt de matériel – MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+<style>#loan-catalogue-section,#loan-calendar-section{display:none}</style>
+</head>
+<body class="bg-slate-50" data-loan-scope="free">
+
+<div class="min-h-screen flex">
+  <aside id="sidebar" class="w-64 bg-slate-800 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+        </svg>
+      </div>
+      <div><p class="text-white font-bold text-sm">MaintenanceBoard</p><p class="text-slate-400 text-xs">Parc informatique</p></div>
+    </div>
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto"></nav>
+    <div class="p-3 border-t border-slate-700">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <span id="user-avatar">?</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="user-name" class="text-white text-sm font-medium truncate">...</p>
+          <p id="user-role" class="text-slate-400 text-xs"></p>
+        </div>
+        <button id="logout-btn" class="text-slate-400 hover:text-red-400 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 lg:ml-64 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <div>
+          <h1 class="text-xl font-semibold text-slate-800">Prêts libres</h1>
+          <p class="text-sm text-slate-500">Matériel non référencé, signatures et validation des retours.</p>
+        </div>
+      </div>
+      <a id="loan-scope-link" href="/loans.html" class="rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50">Voir le catalogue de prêt</a>
+    </header>
+
+    <div class="flex-1 p-6 pb-28 md:pb-6 space-y-6">
+      <div id="loan-catalogue-section" class="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
+        <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="font-semibold text-slate-800">Catalogue de prêt</h2>
+              <p class="text-sm text-slate-500">Définis les ressources, leur capacité totale et la taille des lots verrouillés.</p>
+            </div>
+            <span id="resource-count" class="text-xs font-medium text-slate-400">0 ressource</span>
+          </div>
+          <div id="resources-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </section>
+
+        <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="font-semibold text-slate-800">Flux calendrier</h2>
+              <p class="text-sm text-slate-500">Agenda des prêts pour intégration externe et liens personnalisés de demande.</p>
+            </div>
+            <button id="refresh-calendar-feed-btn" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <p class="text-sm text-slate-600">Lien iCal</p>
+            <textarea id="calendar-feed-url" rows="3" readonly class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"></textarea>
+            <button id="copy-calendar-feed-btn" class="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+              Copier le lien iCal
+            </button>
+          </div>
+          <div>
+            <h3 class="font-medium text-slate-800 mb-1">Liens de demande actifs</h3>
+            <p class="mb-3 text-xs text-slate-500">Ces liens ouvrent directement le formulaire de prêt. Ils sont distincts de l’authentification du back-office.</p>
+            <div id="magic-links-list" class="space-y-3"></div>
+          </div>
+        </section>
+      </div>
+
+      <section id="loan-calendar-section" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 class="font-semibold text-slate-800">Agenda des prêts</h2>
+            <p class="text-sm text-slate-500">Réservations en attente et approuvées.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <button id="view-calendar-btn" type="button" data-action="calendar-view" data-view="calendar"
+                class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition bg-white text-slate-800 shadow-sm">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                Agenda
+              </button>
+              <button id="view-list-btn" type="button" data-action="calendar-view" data-view="list"
+                class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition text-slate-500 hover:text-slate-700">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                Liste
+              </button>
+            </div>
+            <button id="refresh-calendar-btn" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+          </div>
+        </div>
+
+        <!-- Vue calendrier -->
+        <div id="calendar-view">
+          <div class="flex items-center justify-between mb-4">
+            <button id="cal-prev" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-600">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <h3 id="cal-month-label" class="text-sm font-semibold text-slate-800 capitalize"></h3>
+            <button id="cal-next" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-600">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+          <div class="grid grid-cols-7 mb-1">
+            <div class="text-center text-xs font-medium text-slate-400 py-1">L</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">M</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">M</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">J</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">V</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">S</div>
+            <div class="text-center text-xs font-medium text-slate-400 py-1">D</div>
+          </div>
+          <div id="calendar-grid" class="grid grid-cols-7 gap-px bg-slate-100 rounded-xl overflow-hidden border border-slate-100"></div>
+          <!-- Popup détail jour -->
+          <div id="cal-day-detail" class="hidden mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2"></div>
+        </div>
+
+        <!-- Vue liste -->
+        <div id="calendar-list-view" class="hidden space-y-2"></div>
+      </section>
+
+      <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="font-semibold text-slate-800">Demandes de prêt</h2>
+            <p class="text-sm text-slate-500">Valide, refuse ou clôture les réservations internes et externes.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="toggle-archived-reservations-btn" type="button" class="hidden rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition"></button>
+            <button id="refresh-reservations-btn" class="text-sm text-blue-600 hover:text-blue-700 transition">Rafraîchir</button>
+          </div>
+        </div>
+        <div id="reservations-list" class="space-y-4"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3 pointer-events-none" data-mobile-fab="true">
+  <div id="loan-create-menu"
+    class="flex flex-col items-end gap-2.5 transition-all duration-200 ease-out opacity-0 scale-95 pointer-events-none origin-bottom-right">
+    <div class="flex items-center gap-3">
+      <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Depuis équipements</span>
+      <button type="button" onclick="openCreateMenuAction('bulk')"
+        class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+      </button>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Nouveau lien de demande</span>
+      <button type="button" onclick="openCreateMenuAction('link')"
+        class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5m5.656-5.656a4 4 0 015.656 5.656l-1.5 1.5m-4.242 4.242l-4.242-4.242"/></svg>
+      </button>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Nouvelle ressource</span>
+      <button type="button" onclick="openCreateMenuAction('resource')"
+        class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      </button>
+    </div>
+    <div data-admin-only class="hidden flex items-center gap-3">
+      <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Feuille de prêt Libre</span>
+      <button type="button" onclick="openCreateMenuAction('free-loan')" aria-label="Créer une feuille de prêt Libre" class="h-11 w-11 rounded-full bg-white border border-slate-200 text-blue-700 shadow flex items-center justify-center hover:bg-blue-50 transition">Libre</button>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="bg-white text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg shadow border border-slate-200 whitespace-nowrap">Nouvelle réservation</span>
+      <button type="button" onclick="openCreateMenuAction('reservation')"
+        class="h-11 w-11 rounded-full bg-white border border-slate-200 text-slate-700 shadow flex items-center justify-center hover:bg-slate-50 transition">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      </button>
+    </div>
+  </div>
+  <button id="loan-create-btn" type="button" onclick="openFreeLoanModal()"
+    class="pointer-events-auto h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-200"
+    aria-label="Créer un prêt" title="Créer un prêt">
+    <svg id="loan-create-icon" class="mx-auto h-6 w-6 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+  </button>
+</div>
+
+<div id="resource-modal" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[90vh]">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+      <h3 id="resource-modal-title" class="font-semibold text-slate-800">Nouvelle ressource</h3>
+      <button type="button" onclick="closeResourceModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="resource-form" class="p-6 space-y-4 overflow-y-auto flex-1">
+      <input type="hidden" id="resource-id" />
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Nom *</label>
+          <input id="resource-name" type="text" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Catégorie</label>
+          <input id="resource-category" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+        <textarea id="resource-description" rows="2" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></textarea>
+      </div>
+      <label class="flex items-center gap-3 text-sm text-slate-700 rounded-xl border border-slate-200 px-4 py-3">
+        <input id="resource-uses-bundles" type="checkbox" class="h-4 w-4 rounded text-blue-600" checked />
+        <span>Fonctionner par lots</span>
+      </label>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Capacité totale *</label>
+          <input id="resource-total-units" type="number" min="1" value="1" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div id="bundle-size-group">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Taille d’un lot</label>
+          <input id="resource-bundle-size" type="number" min="1" value="1" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div id="total-lots-group" class="hidden">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Nombre de lots</label>
+          <input id="resource-total-lots" type="number" min="1" value="1" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Couleur</label>
+          <input id="resource-color" type="text" placeholder="#2563eb" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Emplacement</label>
+        <input id="resource-location" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Consignes / besoins préparatoires</label>
+        <textarea id="resource-instructions" rows="3" placeholder="Ex : installer l’application X sur le menu des tablettes." class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          Équipements liés
+          <span class="text-slate-400 font-normal">(optionnel)</span>
+          <span id="eq-picker-count" class="ml-2 inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold hidden"></span>
+        </label>
+        <div class="border border-slate-300 rounded-xl overflow-hidden">
+          <div class="px-3 py-2 bg-slate-50 border-b border-slate-200">
+            <input id="eq-picker-search" type="text" placeholder="Rechercher un équipement..."
+              class="w-full bg-transparent text-sm outline-none placeholder-slate-400" />
+          </div>
+          <div id="eq-picker-list" class="max-h-48 overflow-y-auto divide-y divide-slate-100 text-sm">
+            <p class="px-3 py-3 text-slate-400 text-xs text-center">Chargement…</p>
+          </div>
+        </div>
+        <!-- Bouton répartition lots (visible si totalSlots > 1) -->
+        <div id="eq-lot-btn-row" class="hidden mt-2">
+          <button type="button" onclick="openLotModal()"
+            class="inline-flex items-center gap-2 text-sm text-violet-600 hover:text-violet-800 font-medium transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h8M4 18h8"/>
+            </svg>
+            Répartir par lots
+            <span id="eq-lot-btn-summary" class="text-xs text-slate-400 font-normal"></span>
+          </button>
+        </div>
+      </div>
+      <label class="flex items-center gap-3 text-sm text-slate-700">
+        <input id="resource-active" type="checkbox" class="h-4 w-4 rounded text-blue-600" checked />
+        Ressource active
+      </label>
+      <div id="resource-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeResourceModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal répartition des lots -->
+<div id="lot-modal" class="hidden fixed inset-0 bg-black/60 z-[60] items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh]">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+      <div>
+        <h3 class="font-semibold text-slate-800">Répartition par lots</h3>
+        <p id="lot-modal-subtitle" class="text-xs text-slate-400 mt-0.5"></p>
+      </div>
+      <button type="button" onclick="closeLotModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="lot-modal-body" class="p-5 space-y-3 overflow-y-auto flex-1"></div>
+    <div class="px-6 py-4 border-t border-slate-200 flex-shrink-0 flex justify-end gap-3">
+      <button type="button" onclick="closeLotModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+      <button type="button" onclick="saveLotModal()" class="px-5 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700 transition">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<div id="link-modal" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800">Créer un lien de demande</h3>
+      <button type="button" onclick="closeLinkModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="link-form" class="p-6 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Titre</label>
+        <input id="link-title" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-2">Portée du lien</label>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input id="link-scope-all" type="radio" name="link-scope" value="all" checked class="mt-0.5 h-4 w-4 text-blue-600" />
+            <span>
+              <span class="block font-medium text-slate-800">Lien générique</span>
+              <span class="mt-0.5 block text-xs text-slate-500">Le demandeur choisira librement parmi toutes les ressources actives.</span>
+            </span>
+          </label>
+          <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700">
+            <input id="link-scope-resource" type="radio" name="link-scope" value="resource" class="mt-0.5 h-4 w-4 text-blue-600" />
+            <span>
+              <span class="block font-medium text-slate-800">Ressource précise</span>
+              <span class="mt-0.5 block text-xs text-slate-500">Le lien sera limité à une seule ressource ou un seul lot.</span>
+            </span>
+          </label>
+        </div>
+      </div>
+      <div id="link-resource-picker" class="hidden">
+        <label class="block text-sm font-medium text-slate-700 mb-1">Ressource liée</label>
+        <select id="link-resource-id" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+          <option value="">Choisir une ressource active</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Expiration</label>
+        <input id="link-expires-at" type="datetime-local" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+      </div>
+      <div id="link-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeLinkModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Créer le lien</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="reservation-modal" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+      <h3 id="reservation-modal-title" class="font-semibold text-slate-800">Nouvelle réservation</h3>
+      <button type="button" onclick="closeReservationModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="reservation-form" class="p-6 space-y-4">
+      <input type="hidden" id="resv-id" />
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Ressource *</label>
+        <select id="resv-resource" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></select>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Nom et prénom de l’emprunteur *</label>
+          <input id="resv-name" type="text" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Email demandeur</label>
+          <input id="resv-email" type="email" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
+          <input id="resv-phone" type="tel" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Organisation</label>
+          <input id="resv-org" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+      </div>
+      <input type="hidden" id="resv-start" />
+      <input type="hidden" id="resv-end" />
+      <label id="resv-no-period-row" class="hidden flex items-center gap-2 text-sm text-slate-700">
+        <input id="resv-no-period" type="checkbox" checked onchange="syncFreeLoanForm()" class="h-4 w-4 rounded border-slate-300" />
+        Sans période définie — le matériel reste en prêt jusqu’à validation du retour
+      </label>
+      <div id="resv-date-picker" class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <div class="flex items-center justify-between">
+          <button type="button" id="dp-prev" class="p-1 rounded-lg hover:bg-slate-200 transition text-slate-600">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <span id="dp-month-label" class="text-sm font-semibold text-slate-800 capitalize"></span>
+          <button type="button" id="dp-next" class="p-1 rounded-lg hover:bg-slate-200 transition text-slate-600">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+        <div class="grid grid-cols-7 text-center">
+          <div class="text-xs text-slate-400 py-0.5">L</div><div class="text-xs text-slate-400 py-0.5">M</div><div class="text-xs text-slate-400 py-0.5">M</div><div class="text-xs text-slate-400 py-0.5">J</div><div class="text-xs text-slate-400 py-0.5">V</div><div class="text-xs text-slate-400 py-0.5">S</div><div class="text-xs text-slate-400 py-0.5">D</div>
+        </div>
+        <div id="dp-grid" class="grid grid-cols-7 gap-0.5"></div>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-500 pt-1">
+          <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-orange-400"></span>Prêt(s) ce jour</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span>Complet</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-blue-600"></span>Sélectionné</span>
+        </div>
+        <div class="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+          <button type="button" id="dp-start-date-btn" onclick="dpEditStep('start-date')" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-left transition">
+            <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">1. Date de début</span>
+            <span id="dp-start-date-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+          </button>
+          <button type="button" id="dp-start-time-btn" onclick="dpEditStep('start-time')" class="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left transition" disabled>
+            <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">2. Heure de début</span>
+            <span id="dp-start-time-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+          </button>
+          <button type="button" id="dp-end-date-btn" onclick="dpEditStep('end-date')" class="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left transition" disabled>
+            <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">3. Date de fin</span>
+            <span id="dp-end-date-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+          </button>
+          <button type="button" id="dp-end-time-btn" onclick="dpEditStep('end-time')" class="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-left transition" disabled>
+            <span class="block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">4. Heure de fin</span>
+            <span id="dp-end-time-value" class="mt-1 block text-sm font-medium text-slate-800">Choisir</span>
+          </button>
+        </div>
+        <p id="dp-hint" class="text-xs text-slate-400 text-center italic pt-1"></p>
+        <div id="dp-time-section" class="hidden space-y-3 pt-2 border-t border-slate-200">
+          <div id="dp-start-time-section" class="space-y-1.5">
+            <p class="text-xs font-semibold text-slate-600">Heure de début — <span id="dp-start-date-label" class="font-normal text-slate-400"></span></p>
+            <div id="dp-start-time-grid" class="grid grid-cols-8 gap-1"></div>
+            <div id="dp-start-minute-section" class="hidden space-y-1 pt-1">
+              <p class="text-xs text-slate-500">Minutes de début</p>
+              <div id="dp-start-minute-grid" class="grid grid-cols-6 gap-1"></div>
+            </div>
+          </div>
+          <div id="dp-end-time-section" class="hidden space-y-1.5">
+            <p class="text-xs font-semibold text-slate-600">Heure de fin — <span id="dp-end-date-label" class="font-normal text-slate-400"></span></p>
+            <div id="dp-end-time-grid" class="grid grid-cols-8 gap-1"></div>
+            <div id="dp-end-minute-section" class="hidden space-y-1 pt-1">
+              <p class="text-xs text-slate-500">Minutes de fin</p>
+              <div id="dp-end-minute-grid" class="grid grid-cols-6 gap-1"></div>
+            </div>
+          </div>
+        </div>
+        <div id="dp-selection-display" class="hidden rounded-xl bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-900 text-center font-medium"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Unités *</label>
+          <input id="resv-units" type="number" min="1" value="1" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Statut</label>
+          <select id="resv-status" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+            <option value="APPROVED">Approuvé</option>
+            <option value="PENDING">En attente</option>
+            <option value="REJECTED">Refusé</option>
+            <option value="CANCELLED">Annulé</option>
+            <option value="RETURNED" disabled>Restitué (retour validé)</option>
+          </select>
+        </div>
+      </div>
+      <div id="free-loan-panel" class="hidden rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+        <div>
+          <p class="text-sm font-medium text-slate-700">Matériel non référencé *</p>
+          <p class="text-xs text-slate-500">Saisis le matériel remis. Il figurera sur la fiche sans être ajouté au parc informatique.</p>
+        </div>
+        <div id="free-loan-items" class="space-y-2"></div>
+        <button type="button" onclick="addFreeLoanItem()" class="text-sm font-medium text-blue-700 hover:text-blue-900">+ Ajouter du matériel</button>
+      </div>
+      <div id="reservation-equipment-panel" class="hidden rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-medium text-slate-700">Appareils prêtés</p>
+            <p class="text-xs text-slate-500">Optionnel. Sélectionne les appareils réellement remis pour les intégrer à la fiche de prêt.</p>
+          </div>
+          <span id="resv-equip-count" class="hidden rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700"></span>
+        </div>
+        <div id="resv-equip-list" class="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white divide-y divide-slate-100"></div>
+      </div>
+      <!-- Récurrence -->
+      <div id="resv-recurrence-panel" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Récurrence</label>
+          <select id="resv-recurrence-type" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm bg-white" onchange="toggleRecurrenceUntil()">
+            <option value="none">Aucune (occurrence unique)</option>
+            <option value="daily">Quotidienne</option>
+            <option value="weekly">Hebdomadaire</option>
+            <option value="biweekly">Bihebdomadaire (toutes les 2 semaines)</option>
+            <option value="monthly">Mensuelle</option>
+          </select>
+        </div>
+        <div id="resv-until-row" class="hidden">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Répéter jusqu'au</label>
+          <input id="resv-until" type="date" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm bg-white" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Notes internes</label>
+        <textarea id="resv-notes" rows="2" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Paragraphe principal du contrat</label>
+        <textarea id="resv-contract-body" rows="4" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></textarea>
+        <p class="mt-1 text-xs text-slate-500">Ce texte sera inséré dans la fiche de prêt avant la liste des appareils et la zone de signature.</p>
+      </div>
+      <div id="reservation-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeReservationModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button id="reservation-submit-btn" type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale sélection en masse depuis équipements -->
+<div id="bulk-modal" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <div>
+        <h3 class="font-semibold text-slate-800">Créer des ressources depuis les équipements</h3>
+        <p class="text-xs text-slate-500 mt-0.5">Seuls les équipements sans ressource de prêt liée sont affichés.</p>
+      </div>
+      <button type="button" onclick="closeBulkModal()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 pt-4 pb-2 border-b border-slate-100 space-y-3">
+      <input id="bulk-search" type="text" placeholder="Rechercher un équipement…"
+        class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" oninput="filterBulkList()" />
+      <div class="flex items-center gap-3">
+        <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+          <input id="bulk-select-all" type="checkbox" class="rounded" onchange="toggleBulkSelectAll()" />
+          Tout sélectionner
+        </label>
+        <span id="bulk-selected-count" class="text-xs text-slate-400">0 sélectionné(s)</span>
+      </div>
+    </div>
+    <div id="bulk-list" class="flex-1 overflow-y-auto px-6 py-3 space-y-1"></div>
+    <div class="px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-3">
+      <div id="bulk-result" class="text-sm text-slate-600 hidden"></div>
+      <div class="flex gap-3 ml-auto">
+        <button type="button" onclick="closeBulkModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Annuler</button>
+        <button type="button" id="bulk-submit-btn" onclick="submitBulk()" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50">Créer les ressources</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="signature-link-modal" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
+  <div role="dialog" aria-modal="true" aria-labelledby="signature-link-title" class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 space-y-4">
+    <div class="flex justify-between items-center gap-3">
+      <h3 id="signature-link-title" class="font-semibold text-slate-800">Signature au doigt sur portable</h3>
+      <button type="button" onclick="closeSignatureLinkModal()" aria-label="Fermer" class="p-2 text-slate-500">×</button>
+    </div>
+    <p class="text-sm text-slate-600">Transmets ce lien à l’emprunteur ou fais-lui scanner le QR code. Il consulte la fiche et signe au doigt, sans compte ni code email. Le lien ne peut servir qu’une fois.</p>
+    <label id="signature-link-reservations-row" class="hidden block text-sm text-slate-700">Prêt à signer
+      <select id="signature-link-reservations" onchange="openSelectedSignatureLink()" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></select>
+    </label>
+    <img id="signature-link-qr" alt="QR code du lien personnel de signature" class="mx-auto h-48 w-48" />
+    <label class="block text-sm text-slate-700">Lien personnel à usage unique
+      <input id="signature-link-url" readonly class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    </label>
+    <p id="signature-link-expiry" class="text-xs text-slate-500"></p>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" id="signature-link-copy" onclick="copyText(document.getElementById('signature-link-url').value)" class="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm">Copier le lien</button>
+      <button id="signature-link-email" type="button" onclick="emailMobileSignatureLink(this)" class="rounded-lg border border-blue-300 text-blue-700 px-4 py-2 text-sm">Envoyer par email</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/loans.js"></script>
+</body>
+</html>

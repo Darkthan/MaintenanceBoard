@@ -1889,6 +1889,7 @@ function renderNav(activePage) {
     { href: '/rooms.html', label: 'Salles', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', id: 'rooms' },
     { href: '/room-visits.html', label: 'Carnet de passages', icon: 'M9 5h10v16H5V5h4m0 0V3h6v4H9zM9 12h6m-6 4h6', id: 'room-visits' },
     { href: '/equipment.html', label: 'Équipements', icon: EQUIPMENT_ICON_PATH, id: 'equipment' },
+    { href: '/pc-review.html', label: 'PC à vérifier', icon: EQUIPMENT_ICON_PATH, id: 'pc-review' },
     { href: '/interventions.html', label: 'Interventions', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', id: 'interventions' },
     { href: '/request.html', label: 'Demande', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a3 3 0 006 0M9 12h6m-6 4h4', id: 'requests' },
     { href: '/supervision.html', label: 'Supervision', icon: 'M3 13h4l3-8 4 16 3-8h4', id: 'supervision' },
@@ -1908,7 +1909,10 @@ function renderNav(activePage) {
     ] : []),
   ];
 
-  if (['ADMIN', 'TECH'].includes(user.role)) navItems.push({ href: '/meetings.html', label: 'Réunions', icon: 'M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z', id: 'meetings' });
+  if (['ADMIN', 'TECH'].includes(user.role)) {
+    navItems.push({ href: '/meetings.html', label: 'Réunions', icon: 'M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z', id: 'meetings' });
+    navItems.push({ href: '/user-documentation.html', label: 'Guides utilisateurs', icon: 'M12 6v15m0-15C8 3 4 4 3 5v14c3-2 6-2 9 2m0-15c4-3 8-2 9-1v14c-3-2-6-2-9 2', id: 'user-documentation' });
+  }
   if (user.role === 'PRINT_MANAGER') navItems = navItems.filter(item => item.id === 'printer-logs');
   const navEl = document.getElementById('main-nav');
   if (!navEl) return;

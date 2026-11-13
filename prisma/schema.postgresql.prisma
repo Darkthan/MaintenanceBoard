@@ -249,6 +249,10 @@ model Equipment {
   agentInfo          String?
   agentAlertState    String?
   agentHostname      String?
+  hostnameChangeId   String?
+  hostnameChangeOld  String?
+  hostnameChangeNew  String?
+  hostnameChangedAt  DateTime?
   agentToken         String?   @unique
   agentRevoked       Boolean   @default(false)     // Si true, re-enrollment requis
   enrollmentTokenId  String?                       // Token de déploiement utilisé à l'enrollment
@@ -266,6 +270,8 @@ model Equipment {
   ipAddresses     IpAddress[]
   networkInterfaces EquipmentNetworkInterface[]
 
+  @@index([lastSeenAt])
+  @@index([hostnameChangeId])
   @@map("equipment")
 }
 

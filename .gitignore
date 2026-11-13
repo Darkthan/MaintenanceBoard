@@ -9,3 +9,6 @@ uploads/*
 .DS_Store
 dist/
 .claude/
+tests/.tmp/
+tests/.*-chrome/
+tests/.mobile-layout-smoke.html

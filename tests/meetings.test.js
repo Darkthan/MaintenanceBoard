@@ -91,7 +91,7 @@ test('une sauvegarde périmée ne peut pas écraser les notes d’un collègue',
 
 test.each([null, 'INACTIVE', 'PRINT_MANAGER', 'VIEWER'])('refuse les accès non autorisés : %s', async role => {
   for (const [method, suffix, body] of [['get', ''], ['post', '', draft()], ['get', `/${randomUUID()}`],
-    ['patch', `/${randomUUID()}`, { ...draft(), version: 1 }], ['post', '/link-preview', { url: `/orders.html?id=${ids.order}` }]]) {
+    ['patch', `/${randomUUID()}`, { ...draft(), version: 1 }], ['post', '/link-preview', { url: `/orders.html?id=${ids.order}` }], ['get', '/link-search?type=orders']]) {
     expect((await call(method, suffix, body, role)).status).toBe([null, 'INACTIVE'].includes(role) ? 401 : 403);
   }
 });
@@ -187,4 +187,45 @@ test('le service worker ne met jamais en cache les réunions et ne réutilise au
   handlers.fetch({ request: { url: 'https://maintenance.test/api/meetings', method: 'GET' }, respondWith: value => { response = value; } });
   await expect(response).rejects.toThrow('offline');
   expect(caches.match).not.toHaveBeenCalled();
+});
+
+test('mentions : liste paginée, recherche et aperçus limités aux champs autorisés', async () => {
+  const marker = `mention-${randomUUID()}`;
+  await prisma.order.createMany({ data: Array.from({ length: 12 }, (_, n) => ({ title: `${marker} ${n}`, requestedBy: 'ADMIN', supplier: 'Fournisseur recherche', trackingNotes: 'PRIVATE_SEARCH' })) });
+  const path = `/link-search?type=orders&q=${marker}`;
+  const first = await call('get', path, undefined, 'TECH');
+  const second = await call('get', `${path}&page=2`, undefined, 'TECH');
+  expect(first.status).toBe(200); expect(first.headers['cache-control']).toBe('no-store');
+  expect(first.body.data).toHaveLength(10); expect(first.body.hasMore).toBe(true);
+  expect(second.body.data).toHaveLength(2); expect(second.body.hasMore).toBe(false);
+  expect(new Set([...first.body.data, ...second.body.data].map(l => l.id)).size).toBe(12);
+  expect(first.text).not.toMatch(/PRIVATE_SEARCH|requestedBy|trackingNotes/);
+  const reference = (await preview('orders', ids.order)).body.preview.reference;
+  const byReference = await call('get', `/link-search?type=orders&q=${reference}`);
+  expect(byReference.body.data.map(l => l.id)).toContain(ids.order);
+  expect((await call('get', '/link-search?type=orders&q=Fournisseur%20recherche')).body.data.length).toBe(10);
+});
+
+test('mentions : les interventions privées sont filtrées avant pagination et après réaffectation', async () => {
+  const marker = `mention-${randomUUID()}`;
+  const intervention = await prisma.intervention.create({ data: { title: marker, techId: 'TECH2' } });
+  const url = `/link-search?type=interventions&q=${marker}`;
+  const denied = await call('get', url, undefined, 'TECH');
+  expect(denied.body).toEqual({ data: [], hasMore: false });
+  expect((await call('get', url, undefined, 'TECH2')).body.data[0].id).toBe(intervention.id);
+  await prisma.intervention.update({ where: { id: intervention.id }, data: { techId: 'TECH' } });
+  expect((await call('get', url, undefined, 'TECH2')).body).toEqual({ data: [], hasMore: false });
+  expect((await call('get', url, undefined, 'TECH')).body.data[0].id).toBe(intervention.id);
+  expect((await call('get', '/link-search?type=interventions&q=Vérification', undefined, 'TECH')).body.data.map(l => l.id)).toContain(ids.checkup);
+});
+
+test.each([['equipment', 'PC'], ['rooms', 'Salle'], ['projects', 'Projet']])('mentions : recherche %s', async (type, q) => {
+  const response = await call('get', `/link-search?type=${type}&q=${q}`, undefined, 'TECH');
+  expect(response.status).toBe(200); expect(response.body.data.length).toBeGreaterThan(0);
+  expect(response.text).not.toContain('PRIVATE_MACHINE_TOKEN');
+});
+
+test.each(['', '?type=users', '?type=orders&page=0', '?type=orders&page=1.5', '?type=orders&page=10001',
+  '?type=orders&q=' + 'x'.repeat(101), '?type=orders&q[x]=test', '?type=orders&url=https://example.com'])('mentions : valide la recherche %s', async query => {
+  expect((await call('get', `/link-search${query}`)).status).toBe(400);
 });

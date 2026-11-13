@@ -20,7 +20,7 @@ const equipmentFields = {
   agentRevoked: z.boolean().optional(), enrollmentTokenId: text(200)
 };
 
-const readOnlyFields = ['id', 'createdAt', 'updatedAt'];
+const readOnlyFields = ['id', 'createdAt', 'updatedAt', 'hostnameChangeId', 'hostnameChangeOld', 'hostnameChangeNew', 'hostnameChangedAt'];
 const protectedFields = ['qrToken', 'agentToken', 'agentAlertState'];
 
 module.exports = { equipmentFields, readOnlyFields, protectedFields };

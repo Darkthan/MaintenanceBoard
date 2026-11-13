@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>PC à vérifier - MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    main { min-width: 0; }
+    .review-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); }
+    .review-card { min-width: 0; overflow-wrap: anywhere; padding: 1rem; border: 1px solid #e2e8f0; border-radius: .75rem; background: white; }
+    .review-card label { display: block; margin-top: .75rem; }
+    .review-card input, .review-card select { display: block; width: 100%; min-width: 0; padding: .6rem; border: 1px solid #cbd5e1; border-radius: .5rem; margin-top: .25rem; font-size: 16px; }
+    .review-card button { padding: .6rem .8rem; border-radius: .5rem; border: 1px solid #cbd5e1; }
+    .review-card button:disabled { opacity: .5; }
+    .review-card dt { color: #64748b; font-size: .8rem; margin-top: .5rem; }
+    .review-card dd { margin: 0; }
+    .review-card a { color: #2563eb; text-decoration: underline; }
+    .review-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+  </style>
+</head>
+<body class="bg-slate-50">
+  <div id="app"></div>
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script src="/js/pc-review.js"></script>
+</body>
+</html>

@@ -61,7 +61,7 @@ async function scenario(width, role) {
     if (fs.existsSync(tailwind)) html = html.replace('https://cdn.tailwindcss.com', pathToFileURL(tailwind).href);
     html = html.replace(/src="(\/js\/[^" ]+)"/g, (_, url) => `src="${pathToFileURL(path.resolve('public' + url)).href}"`);
     const setup = `<script>
-      window.testSaves = []; window.testConflict = false; window.testConfirm = true;
+      window.testSaves = []; window.testConflict = false; window.testConfirm = true; window.testSearchFail = false; window.testPreviewDenied = false;
       window.confirm = () => testConfirm;
       let saved = null;
       const meetingId = '11111111-1111-4111-8111-111111111111';
@@ -71,6 +71,15 @@ async function scenario(width, role) {
       window.fetch = async (url, options = {}) => {
         const u = String(url); let body = {}; let status = 200;
         if (u.includes('/auth/me')) body = { id: 'user', name: 'Test', role: ${JSON.stringify(role)} };
+        else if (u.includes('/meetings/link-search')) {
+          if (testSearchFail) { status = 500; body = { error: 'Recherche momentanément indisponible' }; }
+          else {
+            const q = new URL(u, 'https://test.local').searchParams.get('q');
+            if (q === 'lent') await new Promise(resolve => setTimeout(resolve, 700));
+            body = { data: q === 'absente' ? [] : [{ type: 'orders', id: orderId, preview: { title: q === 'lent' ? 'OLD_SEARCH' : '<img src=x onerror=alert(1)>', status: 'ORDERED', reference: 'BC-2026-222222', totalAmount: 270, currency: 'EUR', url: '/orders.html?id=' + orderId } }], hasMore: false };
+          }
+        }
+        else if (u.includes('/meetings/link-preview') && testPreviewDenied) { status = 404; body = { error: 'Objet indisponible' }; }
         else if (u.includes('/meetings/link-preview')) body = { type: 'orders', id: orderId, preview: { title: '<img src=x onerror=alert(1)>', status: 'ORDERED', reference: 'BC-2026-222222', totalAmount: 270, currency: 'EUR', url: '/orders.html?id=' + orderId } };
         else if (u.includes('/meetings') && options.method) {
           const payload = JSON.parse(options.body); testSaves.push(payload);
@@ -100,9 +109,38 @@ async function scenario(width, role) {
           input('[name="title"]', 'Comité technique');
           input('[name="status"]', 'IN_PROGRESS');
           document.getElementById('add-topic').click();
+          document.getElementById('collapse-topics').click();
+          check(!document.getElementById('meeting-form').reportValidity(), 'Sujet vide accepté');
+          check(document.querySelector('[data-topic="0"]').open, 'Sujet invalide masqué à la validation');
           input('[data-topic="0"] [data-field="title"]', 'Premier sujet');
           input('[data-topic="0"] [data-field="notes"]', 'Décision <script> dangereuse</' + 'script>');
           input('[data-topic="0"] [data-field="checked"]', true);
+          input('[data-topic="0"] [data-link-url]', '@'); await pause();
+          check(document.querySelector('.meeting-mentions').textContent.includes('@commandes'), 'Liste de pages absente');
+          input('[data-topic="0"] [data-link-url]', '@commandes absente'); await pause(); await pause(); await pause(); await pause();
+          check(document.querySelector('.meeting-mentions').textContent.includes('Aucun résultat'), 'État vide absent');
+          testSearchFail = true;
+          input('[data-topic="0"] [data-link-url]', '@commandes panne'); await pause(); await pause(); await pause(); await pause();
+          check(document.querySelector('.meeting-mentions').textContent.includes('momentanément'), 'Erreur de recherche absente');
+          testSearchFail = false; document.querySelector('.meeting-mentions button').click(); await pause(); await pause(); await pause(); await pause();
+          check(document.querySelector('.meeting-mention-result'), 'Réessai de recherche');
+          input('[data-topic="0"] [data-link-url]', '@commandes lent'); await pause(); await pause(); await pause();
+          input('[data-topic="0"] [data-link-url]', '@commandes nouvelle');
+          for (let i=0;i<12;i++) await pause();
+          check(!document.querySelector('.meeting-mentions').textContent.includes('OLD_SEARCH'), 'Ancienne recherche réaffichée');
+          testPreviewDenied = true; document.querySelector('.meeting-mention-result').click(); await pause(); await pause();
+          check(document.querySelector('.meeting-mentions').textContent.includes('Objet indisponible'), 'Accès non revérifié à la sélection');
+          check(!document.querySelector('.meeting-preview'), 'Objet révoqué inséré'); testPreviewDenied = false;
+          const notes = document.querySelector('[data-topic="0"] textarea');
+          input('[data-topic="0"] textarea', notes.value + ' @commandes');
+          await pause(); await pause(); await pause(); await pause();
+          check(document.querySelector('.meeting-mention-result').textContent.includes('270'), 'Mention sans total');
+          check(!document.querySelector('.meeting-mentions img'), 'Titre de mention non échappé');
+          notes.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',bubbles:true,cancelable:true}));
+          await pause(); await pause();
+          check(!document.querySelector('[data-topic="0"] textarea').value.includes('@commandes'), 'Déclencheur mention non remplacé');
+          check(document.querySelectorAll('.meeting-preview').length === 1, 'Lien de mention non inséré');
+          check(document.querySelector('[data-topic="0"] textarea').value.includes('Décision'), 'Notes perdues à la mention');
           input('[data-topic="0"] [data-link-url]', '/orders.html?id=22222222-2222-4222-8222-222222222222');
           document.querySelector('[data-action="link"]').click(); await pause(); await pause();
           check(document.querySelector('.meeting-preview').textContent.includes('270'), 'Total absent');
@@ -119,6 +157,14 @@ async function scenario(width, role) {
           check(testSaves[0].topics[1].notes.includes('Décision'), 'Notes perdues');
           check(document.getElementById('meeting-history').textContent.includes('Comité technique'), 'Historique absent');
           document.getElementById('reload-meeting').click(); await pause(); await pause();
+          if (innerWidth < 768) check(!document.querySelector('.meeting-history-panel').open, 'Historique mobile non compact');
+          check([...document.querySelectorAll('details[data-topic]')].every(el => !el.open), 'Les sujets ne sont pas compacts par défaut');
+          document.getElementById('expand-topics').click();
+          check([...document.querySelectorAll('details[data-topic]')].every(el => el.open), 'Tout agrandir');
+          document.getElementById('collapse-topics').click();
+          check([...document.querySelectorAll('details[data-topic]')].every(el => !el.open), 'Tout réduire');
+          document.querySelector('[data-topic="1"] summary').click(); await pause();
+          check(document.querySelector('[data-topic="1"]').open, 'Agrandissement individuel');
           check(document.querySelector('[data-topic="1"] [data-field="checked"]').checked, 'Persistance case');
           input('[data-topic="1"] [data-field="notes"]', 'Mes notes en conflit');
           testConflict = true; document.getElementById('meeting-form').requestSubmit(); await pause(); await pause();
@@ -129,7 +175,8 @@ async function scenario(width, role) {
           testConflict = false; document.getElementById('meeting-form').requestSubmit(); await pause(); await pause();
           check(document.documentElement.scrollWidth <= innerWidth + 1, 'Débordement horizontal');
           check([...document.querySelectorAll('#meeting-editor input, #meeting-editor textarea, #meeting-editor button')].every(el => el.getBoundingClientRect().right <= innerWidth + 1), 'Contrôle hors écran');
-          result.textContent = JSON.stringify({ok:true,width:innerWidth,role:${JSON.stringify(role)},checks:['create','notes','checkbox','reorder','preview','XSS','save','reload','conflict','unsaved-guard','responsive']});
+          document.getElementById('collapse-topics').click();
+          result.textContent = JSON.stringify({ok:true,width:innerWidth,role:${JSON.stringify(role)},checks:['create','notes','checkbox','reorder','preview','XSS','mentions','mention-error-retry','mention-keyboard','mention-stale-search','mention-access-recheck','compact-default','expand-collapse','save','reload','conflict','unsaved-guard','responsive']});
         } catch(err) { result.textContent = JSON.stringify({ok:false,error:err.message,width:innerWidth}); }
         document.body.appendChild(result);
       }, 1500);

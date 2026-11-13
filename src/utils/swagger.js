@@ -239,6 +239,7 @@ const swaggerDocument = {
   }
 };
 
+require('./publicApiSwagger')(swaggerDocument);
 require('./meetingsSwagger')(swaggerDocument);
 
 module.exports = { swaggerUi, swaggerDocument };

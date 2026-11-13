@@ -29,4 +29,13 @@ module.exports = document => {
   document.paths['/meetings/link-preview'] = {
     post: operation('Résoudre un lien interne sans requête réseau externe', { 200: { description: 'type, id, preview (titre, statut, référence, URL canonique ; montant TTC et devise pour les commandes)' }, 400: { description: 'URL non admise' }, 404: { description: 'Objet absent ou accès refusé, même réponse' } }, body({ type: 'object', required: ['url'], properties: { url: { type: 'string', maxLength: 2048, example: '/orders.html?id=00000000-0000-4000-8000-000000000000' } } }))
   };
+  document.paths['/meetings/link-search'] = {
+    get: operation('Rechercher une fiche à mentionner dans une réunion', { 200: { description: 'data (10 références avec aperçu autorisé au maximum) et hasMore ; aucune donnée de fiche non autorisée' }, 400: { description: 'Type, recherche ou page invalide' } }, {
+      parameters: [
+        { name: 'type', in: 'query', required: true, schema: topic.properties.links.items.properties.type },
+        { name: 'q', in: 'query', schema: { type: 'string', maxLength: 100 }, description: 'Nom, fournisseur, identifiant ou référence de commande' },
+        { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 10000, default: 1 } }
+      ]
+    })
+  };
 };

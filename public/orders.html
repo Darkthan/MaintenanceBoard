@@ -1556,8 +1556,8 @@ async function openAttachSigModal(btn) {
       const resp = await fetch(`/api/orders/${detailOrderId}/attachments/${attachSigAttachId}`, { credentials: 'include' });
       if (!resp.ok) throw new Error('Fichier inaccessible');
       const blob = await resp.blob();
-      attachSigBlobUrl = URL.createObjectURL(blob);
-      await loadAttachPreview(container, mime, attachSigBlobUrl, onReady);
+      attachSigBlobUrl = mime.startsWith('image/') ? URL.createObjectURL(blob) : null;
+      await loadAttachPreview(container, mime, mime === 'application/pdf' ? blob : attachSigBlobUrl, onReady);
     } catch {
       container.innerHTML = `<div style="height:180px;background:#f8fafc;display:flex;align-items:center;justify-content:center;">
         <p class="text-xs text-slate-400">Aperçu non disponible</p></div>`;
@@ -1590,7 +1590,7 @@ async function loadAttachPreview(container, mime, blobUrl, onReady) {
     try {
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         '/js/pdf.worker.min.js';
-      const pdf = await pdfjsLib.getDocument({ url: blobUrl }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await blobUrl.arrayBuffer()) }).promise;
       const page = await pdf.getPage(pdf.numPages);
       const baseVp = page.getViewport({ scale: 1 });
       const containerW = container.clientWidth || 500;
@@ -1648,12 +1648,12 @@ async function openSigEditorWindow() {
       const resp = await fetch(`/api/orders/${detailOrderId}/attachments/${attachSigAttachId}`, { credentials: 'include' });
       if (!resp.ok) throw new Error('Fichier inaccessible');
       const blob = await resp.blob();
-      const editorBlobUrl = URL.createObjectURL(blob);
+      const editorBlobUrl = attachSigMime.startsWith('image/') ? URL.createObjectURL(blob) : null;
 
-      await loadAttachPreviewForEditor(container, attachSigMime, editorBlobUrl, onReady);
+      await loadAttachPreviewForEditor(container, attachSigMime, attachSigMime === 'application/pdf' ? blob : editorBlobUrl, onReady);
 
       // Nettoyer l'URL après chargement
-      setTimeout(() => URL.revokeObjectURL(editorBlobUrl), 1000);
+      if (editorBlobUrl) setTimeout(() => URL.revokeObjectURL(editorBlobUrl), 1000);
     } catch {
       container.innerHTML = `<div style="width:100%;height:400px;background:#f8fafc;display:flex;align-items:center;justify-content:center;">
         <p class="text-sm text-slate-400">Aperçu non disponible</p></div>`;
@@ -1685,7 +1685,7 @@ async function loadAttachPreviewForEditor(container, mime, blobUrl, onReady) {
   if (mime === 'application/pdf' && typeof pdfjsLib !== 'undefined') {
     try {
       pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.min.js';
-      const pdf = await pdfjsLib.getDocument({ url: blobUrl }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await blobUrl.arrayBuffer()) }).promise;
       const page = await pdf.getPage(pdf.numPages);
       const baseVp = page.getViewport({ scale: 1 });
       const containerW = Math.min(container.parentElement.clientWidth || 600, 800);
