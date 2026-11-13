@@ -1908,6 +1908,7 @@ function renderNav(activePage) {
     ] : []),
   ];
 
+  if (['ADMIN', 'TECH'].includes(user.role)) navItems.push({ href: '/meetings.html', label: 'Réunions', icon: 'M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z', id: 'meetings' });
   if (user.role === 'PRINT_MANAGER') navItems = navItems.filter(item => item.id === 'printer-logs');
   const navEl = document.getElementById('main-nav');
   if (!navEl) return;

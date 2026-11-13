@@ -33,6 +33,7 @@ L'audit relève des défauts de sécurité et de fiabilité non corrigés ; cons
 - **Gestion des équipements** : inventaire, statuts, assignation aux salles, QR codes
 - **Interventions** : suivi complet avec photos, historique par salle/équipement
 - **Commandes** : workflow PENDING → ORDERED → RECEIVED avec lignes de détail
+- **Réunions** : historique, ordre du jour cochable, notes, réorganisation et aperçus de liens internes soumis aux droits. [Utilisation et déploiement](docs/REUNIONS.md).
 - **Scanner QR mobile** : page dédiée pour signaler un problème depuis le terrain
 - **API documentée** : Swagger UI intégré
 

@@ -239,4 +239,6 @@ const swaggerDocument = {
   }
 };
 
+require('./meetingsSwagger')(swaggerDocument);
+
 module.exports = { swaggerUi, swaggerDocument };

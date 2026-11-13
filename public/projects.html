@@ -299,6 +299,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   buildColorSwatches();
   await loadUsers();
   await loadProjects();
+  const linkedProject = new URLSearchParams(window.location.search).get('id');
+  if (linkedProject && projects.some(project => project.id === linkedProject)) await selectProject(linkedProject);
   document.addEventListener('click', e => {
     if (!document.getElementById('project-selector-wrap').contains(e.target)) {
       document.getElementById('project-dropdown').classList.add('hidden');

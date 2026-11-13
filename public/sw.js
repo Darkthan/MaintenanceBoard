@@ -81,6 +81,12 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   if (url.origin !== self.location.origin) return;
 
+  // Meeting notes and per-reader previews must never fall back to another session's cache.
+  if (/^\/api\/meetings(?:\/|$)/.test(url.pathname)) {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
+
   // API : network first, fallback cache
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) {
     event.respondWith(

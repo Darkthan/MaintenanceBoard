@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Réunions - MaintenanceBoard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    main, #page-content, .meeting-grid > * { min-width: 0; }
+    .meeting-grid { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 1.5rem; }
+    .meeting-card { background: white; border: 1px solid #e2e8f0; border-radius: .75rem; padding: 1rem; overflow-wrap: anywhere; }
+    .meeting-editor label { display: block; margin: .75rem 0; }
+    .meeting-editor input:not([type=checkbox]), .meeting-editor textarea, .meeting-editor select { display: block; width: 100%; min-width: 0; border: 1px solid #cbd5e1; border-radius: .4rem; padding: .6rem; font-size: 16px; margin-top: .25rem; }
+    .meeting-editor textarea { min-height: 7rem; resize: vertical; }
+    .meeting-editor button, .meeting-controls button { border: 1px solid #cbd5e1; border-radius: .4rem; padding: .5rem .75rem; }
+    button:disabled { opacity: .5; }
+    .meeting-preview { display: block; background: #f1f5f9; border-radius: .4rem; padding: .75rem; color: #1d4ed8; margin: .5rem 0; }
+    @media (max-width: 900px) { .meeting-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body class="bg-slate-50">
+  <div id="app"></div>
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script src="/js/meetings.js"></script>
+</body>
+</html>

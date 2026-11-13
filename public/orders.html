@@ -1764,6 +1764,7 @@ async function submitAttachSig() {
 requireLogin().then(() => {
   loadOrders();
   loadTagSuggestions();
+  if (pageParams.get('id')) openDetail(pageParams.get('id'));
   if (pageParams.get('action') === 'create') {
     setTimeout(() => openCreateOrderModal(pageParams.get('interventionId') || ''), 50);
   }
