@@ -276,8 +276,12 @@ function getTodoDayKey(value) {
 }
 
 function getTodosForDay(dayKey) {
-  return allTodos.filter(todo => (todo.dueAt && getTodoDayKey(todo.dueAt) === dayKey)
-    || (todo.startAt && getTodoDayKey(todo.startAt) === dayKey));
+  return allTodos.filter(todo => {
+    const startKey = todo.startAt ? getTodoDayKey(todo.startAt) : null;
+    const endKey = todo.dueAt ? getTodoDayKey(todo.dueAt) : null;
+    if (startKey && endKey) return startKey <= dayKey && dayKey <= endKey;
+    return (startKey || endKey) === dayKey;
+  });
 }
 
 function changeTodoCalendarMonth(delta) {
