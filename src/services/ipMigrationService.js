@@ -1,9 +1,14 @@
 const prisma = require('../lib/prisma');
+const { createNetworkRevision } = require('./ipAddressingUtils');
 
 async function applyMigration(migration, appliedById) {
   const { id, networkId, ipAddressId, newIp, newHostname, newType, todoId } = migration;
 
   await prisma.$transaction(async (tx) => {
+    const actor = appliedById && tx.ipNetworkRevision?.create
+      ? await tx.user.findUnique({ where: { id: appliedById }, select: { name: true, email: true } })
+      : null;
+    await createNetworkRevision(networkId, 'Application d’une migration IP', actor, tx);
     if (ipAddressId) {
       const conflict = await tx.ipAddress.findUnique({
         where: { networkId_ip: { networkId, ip: newIp } }
@@ -41,7 +46,7 @@ async function applyMigration(migration, appliedById) {
         await tx.todo.update({ where: { id: todoId }, data: { done: true, doneAt: new Date() } });
       }
     }
-  });
+  }, { isolationLevel: 'Serializable' });
 }
 
 module.exports = { applyMigration };

@@ -570,6 +570,16 @@
   </div>
 </div>
 
+<div id="ip-modal-address-history" role="dialog" aria-modal="true" aria-labelledby="ip-address-history-title" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 id="ip-address-history-title" class="text-sm font-bold text-slate-900"></h2>
+      <button type="button" class="ip-modal-close text-slate-500" aria-label="Fermer">✕</button>
+    </div>
+    <div id="ip-address-history-list" aria-live="polite" class="overflow-y-auto px-6 py-4 space-y-3 text-sm text-slate-700"></div>
+  </div>
+</div>
+
 <!-- ── FAB speed-dial ────────────────────────────────────────────────────── -->
 <div id="kb-fab-wrap" class="hidden fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3" style="width:fit-content">
   <!-- Actions -->
@@ -3142,6 +3152,7 @@ function ipRenderAddresses(filter = '') {
             <button class="ip-edit-addr text-slate-300 hover:text-blue-500 text-xs" data-id="${a.id}">✎</button>
             <button class="ip-del-addr text-slate-300 hover:text-red-500 text-xs" data-id="${a.id}">✕</button>
           ` : ''}
+          ${ipBulkEditing ? '' : `<button type="button" class="ip-btn-address-history text-xs text-slate-500 hover:text-blue-600" data-ip="${escapeHtml(a.ip)}">Historique</button>`}
         </div>
       </td></tr>`;
   }).join('');
@@ -3158,6 +3169,9 @@ function ipRenderAddresses(filter = '') {
   tbody.querySelectorAll('.ip-edit-addr').forEach(b => b.addEventListener('click', () => ipOpenAddrForm(ipCurrentAddresses.find(a=>a.id===b.dataset.id))));
   tbody.querySelectorAll('.ip-del-addr').forEach(b => b.addEventListener('click', () => ipDelAddr(b.dataset.id)));
   tbody.querySelectorAll('.ip-btn-migrate').forEach(b => b.addEventListener('click', () => ipOpenMigrationForm(b.dataset.ip)));
+  tbody.querySelectorAll('.ip-btn-address-history').forEach(button =>
+    button.addEventListener('click', () => ipOpenAddressHistory(button.dataset.ip))
+  );
 }
 
 function ipBuildDisplayAddresses() {
@@ -3199,6 +3213,38 @@ function ipSetBulkEditing(enabled) {
   document.getElementById('ip-bulk-actions').classList.toggle('hidden', !enabled);
   document.getElementById('ip-bulk-error').classList.add('hidden');
   ipRenderAddresses(document.getElementById('ip-search-addresses').value.toLowerCase().trim());
+}
+
+async function ipOpenAddressHistory(ip) {
+  const title = document.getElementById('ip-address-history-title');
+  const list = document.getElementById('ip-address-history-list');
+  const requestId = String(Number(list.dataset.requestId || 0) + 1);
+  list.dataset.requestId = requestId;
+  title.textContent = `Historique de ${ip}`;
+  list.textContent = 'Chargement…';
+  ipOpenModal('ip-modal-address-history');
+
+  const types = { added: 'Ajout', removed: 'Suppression', reassigned: 'Réattribution', edited: 'Modification' };
+  const fields = { hostname: 'Nom d’hôte', equipmentType: 'Type', description: 'Description', equipmentId: 'Équipement associé (ID)' };
+  try {
+    const res = await fetch(`/api/ip-networks/${encodeURIComponent(ipCurrentNetwork.id)}/addresses/history?ip=${encodeURIComponent(ip)}`, { credentials: 'include' });
+    const history = await res.json();
+    if (!res.ok) throw new Error(history.error || 'Impossible de charger l’historique.');
+    if (list.dataset.requestId !== requestId) return;
+    if (!history.length) {
+      list.textContent = 'Aucune modification enregistrée pour cette adresse.';
+      return;
+    }
+    list.innerHTML = history.map(entry => `
+      <article class="rounded-xl border border-slate-200 p-4">
+        <p class="font-semibold">${escapeHtml(types[entry.type])} · ${escapeHtml(entry.action)}</p>
+        <p class="mt-1 text-xs text-slate-500">${escapeHtml(new Date(entry.createdAt).toLocaleString('fr-FR'))} · ${escapeHtml(entry.actorName || 'Auteur inconnu')}</p>
+        <ul class="mt-2 space-y-1 text-xs break-words">${entry.changes.map(change => `
+          <li><strong>${escapeHtml(fields[change.field])}</strong> · ${escapeHtml(change.before ?? '—')} → ${escapeHtml(change.after ?? '—')}</li>`).join('')}</ul>
+      </article>`).join('');
+  } catch (error) {
+    if (list.dataset.requestId === requestId) list.textContent = error.message;
+  }
 }
 
 function ipRenderHistory(revisions) {
