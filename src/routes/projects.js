@@ -45,6 +45,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 router.post('/',
   requireAuth,
   body('title').trim().notEmpty().withMessage('Le titre est requis').isLength({ max: 200 }),
+  body('isActive').optional().isBoolean({ strict: true }).withMessage('Le statut doit être un booléen'),
   body('description').optional({ nullable: true }).trim().isLength({ max: 1000 }),
   body('color').optional({ nullable: true }).isString(),
   async (req, res, next) => {
@@ -56,6 +57,7 @@ router.post('/',
           title: req.body.title.trim(),
           description: req.body.description?.trim() || null,
           color: req.body.color || '#3b82f6',
+          isActive: req.body.isActive ?? true,
           createdBy: req.user.id
         },
         include: PROJECT_FULL_INCLUDE
@@ -81,6 +83,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
 router.patch('/:id',
   requireAuth,
   body('title').optional().trim().notEmpty().isLength({ max: 200 }),
+  body('isActive').optional().isBoolean({ strict: true }).withMessage('Le statut doit être un booléen'),
   body('description').optional({ nullable: true }).trim().isLength({ max: 1000 }),
   body('color').optional({ nullable: true }).isString(),
   async (req, res, next) => {
@@ -91,6 +94,7 @@ router.patch('/:id',
       if (!project) return res.status(404).json({ error: 'Projet introuvable' });
 
       const data = {};
+      if (req.body.isActive !== undefined) data.isActive = req.body.isActive;
       if (req.body.title) data.title = req.body.title.trim();
       if (req.body.description !== undefined) data.description = req.body.description?.trim() || null;
       if (req.body.color) data.color = req.body.color;
@@ -193,16 +197,25 @@ router.delete('/:id/columns/:colId', requireAuth, async (req, res, next) => {
 router.post('/:id/columns/reorder', requireAuth, async (req, res, next) => {
   try {
     const { columnIds } = req.body;
-    if (!Array.isArray(columnIds)) return res.status(400).json({ error: 'columnIds requis' });
+    if (!Array.isArray(columnIds) || columnIds.some(id => typeof id !== 'string' || !id) ||
+        new Set(columnIds).size !== columnIds.length) {
+      return res.status(400).json({ error: 'columnIds doit contenir des identifiants uniques' });
+    }
 
-    await prisma.$transaction(
-      columnIds.map((colId, idx) =>
-        prisma.kanbanColumn.updateMany({
-          where: { id: colId, projectId: req.params.id },
-          data: { position: idx }
-        })
-      )
-    );
+    const result = await prisma.$transaction(async tx => {
+      const project = await tx.project.findUnique({ where: { id: req.params.id }, select: { id: true } });
+      if (!project) return { status: 404, error: 'Projet introuvable' };
+      const columns = await tx.kanbanColumn.findMany({ where: { projectId: req.params.id }, select: { id: true } });
+      const ids = new Set(columns.map(col => col.id));
+      if (columns.length !== columnIds.length || columnIds.some(id => !ids.has(id))) {
+        return { status: 400, error: 'Toutes les colonnes du projet doivent être présentes, sans colonne étrangère' };
+      }
+      for (const [position, id] of columnIds.entries()) {
+        await tx.kanbanColumn.update({ where: { id }, data: { position } });
+      }
+      return null;
+    });
+    if (result) return res.status(result.status).json({ error: result.error });
     res.json({ message: 'Colonnes réordonnées' });
   } catch (err) { next(err); }
 });

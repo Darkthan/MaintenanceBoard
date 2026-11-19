@@ -773,6 +773,7 @@ model Project {
   id          String   @id @default(uuid())
   title       String
   description String?
+  isActive    Boolean  @default(true)
   color       String   @default("#3b82f6")
   createdBy   String
   createdAt   DateTime @default(now())

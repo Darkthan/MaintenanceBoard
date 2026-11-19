@@ -9,6 +9,10 @@
     .kanban-card { cursor: grab; }
     .kanban-card:active { cursor: grabbing; }
     .kanban-card.dragging { opacity: 0.4; }
+    .kanban-column.column-dragging { opacity: 0.4; }
+    .kanban-column.column-drop-before { box-shadow: -4px 0 #3b82f6; }
+    .kanban-column.column-drop-after { box-shadow: 4px 0 #3b82f6; }
+    .column-handle { cursor: grab; }
     .drop-indicator {
       height: 3px;
       background: #3b82f6;
@@ -80,6 +84,7 @@
             class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-slate-700 transition max-w-xs">
             <span id="project-dot" class="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-blue-500"></span>
             <span id="project-selector-label" class="truncate">Chargement…</span>
+            <span id="project-status"></span>
             <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
@@ -156,6 +161,13 @@
       <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
         <textarea id="project-desc" rows="2" maxlength="1000" placeholder="Décrivez l'objectif du projet…" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+      <div>
+        <label for="project-active" class="block text-sm font-medium text-slate-700 mb-1">Statut</label>
+        <select id="project-active" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <option value="true">Actif</option>
+          <option value="false">Inactif</option>
+        </select>
       </div>
       <div>
         <label class="block text-sm font-medium text-slate-700 mb-2">Couleur</label>
@@ -278,6 +290,7 @@ const PRIORITY_BORDER = {
 };
 
 let currentProject = null;
+let projectLoadSequence = 0;
 let projects = [];
 let allUsers = [];
 let selectedColor = '#3b82f6';
@@ -290,6 +303,8 @@ let editingColId = null;
 let draggedCardId = null;
 let draggedCardEl = null;
 let dragOverIndicator = null;
+let draggedColumnId = null;
+let savingColumnOrder = false;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -324,6 +339,7 @@ async function loadProjects() {
     document.getElementById('empty-state').classList.add('flex');
     document.getElementById('board-wrap').classList.add('hidden');
     document.getElementById('project-selector-label').textContent = 'Aucun projet';
+    document.getElementById('project-status').innerHTML = '';
     document.getElementById('project-actions').classList.add('hidden');
     return;
   }
@@ -340,14 +356,19 @@ async function loadProjects() {
 }
 
 async function selectProject(id) {
+  const sequence = ++projectLoadSequence;
   try {
-    currentProject = await api.get(`/projects/${id}`);
+    const project = await api.get(`/projects/${id}`);
+    if (sequence !== projectLoadSequence) return;
+    currentProject = project;
     const dot = document.getElementById('project-dot');
     dot.style.background = currentProject.color;
     document.getElementById('project-selector-label').textContent = currentProject.title;
+    document.getElementById('project-status').innerHTML = projectStatusBadge(currentProject);
     document.getElementById('project-actions').classList.remove('hidden');
     renderBoard();
   } catch (err) {
+    if (sequence !== projectLoadSequence) return;
     showToast('Erreur lors du chargement du projet', 'error');
   }
 }
@@ -363,9 +384,14 @@ function renderBoard() {
 function renderColumn(col) {
   const cards = [...col.cards].sort((a, b) => a.position - b.position);
   return `
-    <div class="kanban-column flex-shrink-0 w-72 flex flex-col" data-col-id="${col.id}">
+    <div class="kanban-column flex-shrink-0 w-72 flex flex-col" data-col-id="${col.id}"
+      ondragover="onColumnDragOver(event,this)" ondragleave="onColumnDragLeave(event,this)" ondrop="onColumnDrop(event,this)">
       <!-- Column header -->
       <div class="flex items-center gap-2 mb-2 px-1">
+        <button type="button" class="column-handle p-1 rounded text-slate-500 hover:bg-slate-200" draggable="true"
+          aria-label="Déplacer la colonne ${escHtml(col.title)}" title="Glisser pour déplacer · Flèches gauche/droite au clavier"
+          ondragstart="onColumnDragStart(event,'${col.id}')" ondragend="onColumnDragEnd()"
+          onkeydown="onColumnKeyDown(event,'${col.id}')">⠿</button>
         <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${col.color}"></span>
         <span class="text-sm font-semibold text-slate-700 flex-1 truncate">${escHtml(col.title)}</span>
         <span class="text-xs text-slate-400 font-medium">${cards.length}</span>
@@ -460,6 +486,7 @@ function renderProjectDropdown() {
       class="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-slate-50 text-left ${currentProject?.id === p.id ? 'font-semibold text-blue-600' : 'text-slate-700'}">
       <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${p.color}"></span>
       <span class="flex-1 truncate">${escHtml(p.title)}</span>
+      ${projectStatusBadge(p)}
     </button>
   `).join('') + `
     <div class="border-t border-slate-100 mt-1 pt-1">
@@ -470,6 +497,11 @@ function renderProjectDropdown() {
       </button>
     </div>
   `;
+}
+
+function projectStatusBadge(project) {
+  const active = project.isActive !== false;
+  return `<span class="text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">${active ? 'Actif' : 'Inactif'}</span>`;
 }
 
 // ── Color swatches ────────────────────────────────────────────────────────────
@@ -497,6 +529,7 @@ function openProjectModal() {
   document.getElementById('project-modal-save').textContent = 'Créer';
   document.getElementById('project-title').value = '';
   document.getElementById('project-desc').value = '';
+  document.getElementById('project-active').value = 'true';
   selectColor('#3b82f6');
   document.getElementById('project-modal').classList.remove('hidden');
   setTimeout(() => document.getElementById('project-title').focus(), 50);
@@ -509,6 +542,7 @@ function openEditProjectModal() {
   document.getElementById('project-modal-save').textContent = 'Enregistrer';
   document.getElementById('project-title').value = currentProject.title;
   document.getElementById('project-desc').value = currentProject.description || '';
+  document.getElementById('project-active').value = String(currentProject.isActive !== false);
   selectColor(currentProject.color);
   document.getElementById('project-modal').classList.remove('hidden');
   setTimeout(() => document.getElementById('project-title').focus(), 50);
@@ -522,7 +556,8 @@ async function saveProject() {
   const title = document.getElementById('project-title').value.trim();
   if (!title) { showToast('Le titre est requis', 'error'); return; }
   try {
-    const payload = { title, description: document.getElementById('project-desc').value.trim() || null, color: selectedColor };
+    const payload = { title, description: document.getElementById('project-desc').value.trim() || null, color: selectedColor,
+      isActive: document.getElementById('project-active').value === 'true' };
     if (editingProjectId) {
       await api.patch(`/projects/${editingProjectId}`, payload);
     } else {
@@ -574,6 +609,8 @@ function openColMenu(e, colId) {
   menu.style.top = (rect.bottom + 4) + 'px';
   menu.style.left = Math.min(rect.left, window.innerWidth - 176) + 'px';
   menu.innerHTML = `
+    <button class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onclick="moveColumn('${colId}',-1)">Déplacer à gauche</button>
+    <button class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onclick="moveColumn('${colId}',1)">Déplacer à droite</button>
     <button class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onclick="openRenameColModal('${colId}')">
       Renommer
     </button>
@@ -714,7 +751,94 @@ async function deleteCard() {
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────────────────────
+function onColumnDragStart(e, colId) {
+  if (savingColumnOrder || draggedCardId) { e.preventDefault(); return; }
+  e.stopPropagation();
+  draggedColumnId = colId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', colId);
+  e.currentTarget.closest('.kanban-column').classList.add('column-dragging');
+}
+
+function onColumnDragEnd() {
+  draggedColumnId = null;
+  document.querySelectorAll('.kanban-column').forEach(el =>
+    el.classList.remove('column-dragging', 'column-drop-before', 'column-drop-after'));
+}
+
+function onColumnDragOver(e, column) {
+  if (!draggedColumnId || draggedColumnId === column.dataset.colId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.kanban-column').forEach(el => el.classList.remove('column-drop-before', 'column-drop-after'));
+  const rect = column.getBoundingClientRect();
+  column.classList.add(e.clientX < rect.left + rect.width / 2 ? 'column-drop-before' : 'column-drop-after');
+  const board = document.getElementById('board');
+  const bounds = board.getBoundingClientRect();
+  if (e.clientX < bounds.left + 50) board.scrollLeft -= 20;
+  if (e.clientX > bounds.right - 50) board.scrollLeft += 20;
+}
+
+function onColumnDragLeave(e, column) {
+  if (!column.contains(e.relatedTarget)) column.classList.remove('column-drop-before', 'column-drop-after');
+}
+
+async function onColumnDrop(e, column) {
+  if (!draggedColumnId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const sourceId = draggedColumnId;
+  onColumnDragEnd();
+  if (sourceId === column.dataset.colId) return;
+  const ids = orderedColumnIds().filter(id => id !== sourceId);
+  const rect = column.getBoundingClientRect();
+  const index = ids.indexOf(column.dataset.colId) + (e.clientX >= rect.left + rect.width / 2 ? 1 : 0);
+  ids.splice(index, 0, sourceId);
+  await saveColumnOrder(ids);
+}
+
+function orderedColumnIds() {
+  return [...currentProject.columns].sort((a, b) => a.position - b.position).map(col => col.id);
+}
+
+function onColumnKeyDown(e, id) {
+  if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+  e.preventDefault();
+  moveColumn(id, e.key === 'ArrowLeft' ? -1 : 1);
+}
+
+async function moveColumn(id, direction) {
+  document.querySelectorAll('.col-context-menu').forEach(menu => menu.remove());
+  const ids = orderedColumnIds();
+  const index = ids.indexOf(id);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= ids.length) return;
+  [ids[index], ids[target]] = [ids[target], ids[index]];
+  await saveColumnOrder(ids, id);
+}
+
+async function saveColumnOrder(ids, focusId) {
+  const previousIds = orderedColumnIds();
+  if (savingColumnOrder || ids.every((id, index) => previousIds[index] === id)) return;
+  const projectId = currentProject.id;
+  savingColumnOrder = true;
+  try {
+    await api.post(`/projects/${projectId}/columns/reorder`, { columnIds: ids });
+    if (currentProject?.id === projectId) {
+      await selectProject(projectId);
+      if (focusId) document.querySelector(`.kanban-column[data-col-id="${focusId}"] .column-handle`)?.focus();
+    }
+    showToast('Ordre des colonnes enregistré');
+  } catch (err) {
+    showToast(err.message || 'Erreur lors du déplacement de la colonne', 'error');
+  } finally {
+    savingColumnOrder = false;
+  }
+}
+
 function onCardDragStart(e, el) {
+  e.stopPropagation();
+  onColumnDragEnd();
   draggedCardId = el.dataset.cardId;
   draggedCardEl = el;
   e.dataTransfer.effectAllowed = 'move';
