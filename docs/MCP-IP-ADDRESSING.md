@@ -35,6 +35,8 @@ Pour réserver une adresse, passer `reserve: true` à la création ou à la modi
 
 Une interface déjà liée doit être détachée avant de convertir l'attribution en réservation. Utiliser `manualOnly: true` avec `get_ip_network` ou `list_ip_addresses` pour vérifier les valeurs persistées sans enrichissement par les agents et retrouver les entrées historiques hors CIDR avant de les libérer.
 
+La recherche d'adresses s'effectue dans le réseau sélectionné. Une IPv4 complète filtre par égalité. Les recherches textuelles acceptent les mots dans n'importe quel ordre, sans distinction de casse ou d'accent, dans les libellés IPAM et les noms remontés par les agents ou leurs fiches équipement.
+
 Les écritures directes d’adresses/plages et les modifications de réseau sont réalisées dans une transaction Serializable avec un instantané préalable, attribué à l’utilisateur et consultable dans l’historique web. Une erreur annule aussi cet instantané. Une entrée d’un autre réseau est refusée. Les erreurs métier reviennent en résultat MCP `isError`.
 
 Validation : `node node_modules/jest/bin/jest.js --runInBand tests/mcp-ip-addressing.test.js tests/mcp-ip-addressing.integration.test.js tests/ip-addressing.test.js tests/mcp-work-service.test.js tests/mcp-permissions.test.js`.

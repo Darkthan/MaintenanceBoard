@@ -99,6 +99,18 @@ describe('plan IP MCP : validation, droits et historique', () => {
     expect(await service.listAddresses({ networkId: 'net', manualOnly: true }, admin)).toEqual([address]);
     expect(db.equipment.findMany).not.toHaveBeenCalled();
   });
+  it('recherche le libellé manuel, le nom équipement et le hostname agent malgré les accents et séparateurs', async () => {
+    db.ipNetwork.findUnique.mockResolvedValue({ ...network, addresses: [
+      { id: 'a', ip: '10.0.0.9', hostname: 'Serveur IDCAPT – Sophid' },
+      { id: 'b', ip: '10.0.0.99', hostname: 'Bureau' }
+    ] });
+    db.equipment.findMany.mockResolvedValue([
+      { id: 'pc', name: 'Serveur d’été', agentHostname: 'srv-admin', agentInfo: JSON.stringify({ ips: ['10.0.0.9'] }) }
+    ]);
+    for (const search of ['  SOPHID-idcapt  ', 'serveur ete', 'srv admin', '10.0.0.9']) {
+      expect((await service.listAddresses({ networkId: 'net', search }, admin)).map(a => a.ip)).toEqual(['10.0.0.9']);
+    }
+  });
 });
 describe('outils via le protocole MCP', () => {
   let server, client;

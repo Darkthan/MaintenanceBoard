@@ -139,9 +139,28 @@ async function listNetworks(args, user) {
     .map(n => ({ ...present(n), addressCount: n._count.addresses, rangeCount: n._count.ranges, pendingMigrations: n._count.migrations }));
 }
 async function listAddresses(args, user) {
-  const network = await getNetwork(args, user);
-  const query = args.search?.toLowerCase();
-  return network.addresses.filter(a => !query || [a.ip, a.hostname, a.description, a.equipmentType].some(v => String(v ?? '').toLowerCase().includes(query)));
+  requireUser(user);
+  const network = await require('./workService').getIpNetwork(args);
+  const addresses = args.manualOnly
+    ? utils.sortIpAddresses(network.addresses)
+    : await utils.loadEquipmentAddresses(network.addresses, network.cidr);
+  const search = args.search?.trim();
+  if (!search) return addresses;
+  if (ipv4.safeParse(search).success) return addresses.filter(address => address.ip === search);
+
+  const normalize = value => String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '')
+    .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const terms = normalize(search).split(' ').filter(Boolean);
+  if (!terms.length) return [];
+  const manualById = new Map(network.addresses.map(address => [address.id, address]));
+  return addresses.filter(address => {
+    const manual = manualById.get(address.id);
+    const searchable = normalize([
+      address.ip, address.hostname, address.description, address.equipmentType, address.equipment?.name,
+      manual?.hostname, manual?.description, manual?.equipmentType
+    ].join(' '));
+    return terms.every(term => searchable.includes(term));
+  });
 }
 async function getAddressHistory(input, user) {
   requireUser(user);
