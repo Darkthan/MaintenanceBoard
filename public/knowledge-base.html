@@ -3145,11 +3145,13 @@ function ipRenderAddresses(filter = '') {
       <td class="px-3 py-2">
         <div class="flex gap-1 justify-end">
           ${editable ? `<button class="ip-bulk-toggle-delete text-xs ${deleted?'text-emerald-600':'text-red-500'}" data-id="${a.id}">${deleted?'↶':'✕'}</button>` : ''}
+          ${!ipBulkEditing && !a.autoDiscovered && isAdmin() ? `
+            <button type="button" class="ip-edit-addr text-slate-300 hover:text-blue-500 text-xs" data-ip="${escapeHtml(a.ip)}" title="${a.unassigned ? 'Attribuer cette IP' : 'Modifier cette IP'}" aria-label="${a.unassigned ? 'Attribuer cette IP' : 'Modifier cette IP'}">✎</button>
+          ` : ''}
           ${!editable && !a.autoDiscovered && !a.unassigned && isAdmin() ? `
             <button class="ip-btn-migrate text-xs text-orange-400 hover:text-orange-600 transition" title="Planifier migration" data-ip="${escapeHtml(a.ip)}">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
             </button>
-            <button class="ip-edit-addr text-slate-300 hover:text-blue-500 text-xs" data-id="${a.id}">✎</button>
             <button class="ip-del-addr text-slate-300 hover:text-red-500 text-xs" data-id="${a.id}">✕</button>
           ` : ''}
           ${ipBulkEditing ? '' : `<button type="button" class="ip-btn-address-history text-xs text-slate-500 hover:text-blue-600" data-ip="${escapeHtml(a.ip)}">Historique</button>`}
@@ -3166,7 +3168,10 @@ function ipRenderAddresses(filter = '') {
     else ipBulkDeletedIds.add(b.dataset.id);
     ipRenderAddresses(document.getElementById('ip-search-addresses').value.toLowerCase().trim());
   }));
-  tbody.querySelectorAll('.ip-edit-addr').forEach(b => b.addEventListener('click', () => ipOpenAddrForm(ipCurrentAddresses.find(a=>a.id===b.dataset.id))));
+  tbody.querySelectorAll('.ip-edit-addr').forEach(button => button.addEventListener('click', () => {
+    const address = ipCurrentAddresses.find(a => a.ip === button.dataset.ip);
+    ipOpenAddrForm(address, button.dataset.ip);
+  }));
   tbody.querySelectorAll('.ip-del-addr').forEach(b => b.addEventListener('click', () => ipDelAddr(b.dataset.id)));
   tbody.querySelectorAll('.ip-btn-migrate').forEach(b => b.addEventListener('click', () => ipOpenMigrationForm(b.dataset.ip)));
   tbody.querySelectorAll('.ip-btn-address-history').forEach(button =>
@@ -3402,10 +3407,10 @@ document.getElementById('ip-form-network').addEventListener('submit', async e =>
 });
 
 // Formulaires adresse
-function ipOpenAddrForm(addr = null) {
-  document.getElementById('ip-modal-address-title').textContent = addr ? 'Modifier l\'IP' : 'Ajouter une IP';
+function ipOpenAddrForm(addr = null, ip = addr?.ip || '') {
+  document.getElementById('ip-modal-address-title').textContent = addr ? 'Modifier l\'IP' : ip ? 'Attribuer une IP' : 'Ajouter une IP';
   document.getElementById('ip-fa-id').value = addr?.id||'';
-  document.getElementById('ip-fa-ip').value = addr?.ip||'';
+  document.getElementById('ip-fa-ip').value = ip;
   document.getElementById('ip-fa-hostname').value = addr?.hostname||'';
   document.getElementById('ip-fa-type').value = addr?.equipmentType||'';
   document.getElementById('ip-fa-desc').value = addr?.description||'';
