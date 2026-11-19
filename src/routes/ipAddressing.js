@@ -5,7 +5,7 @@ const prisma = require('../lib/prisma');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/roles');
-const { buildIpAddressHistory } = require('../services/ipAddressHistory');
+const { getIpAddressHistory } = require('../services/ipAddressHistory');
 
 const validate = (req, res) => {
   const errors = validationResult(req);
@@ -103,17 +103,7 @@ router.get('/:id/addresses/history', requireAuth, async (req, res, next) => {
     if (typeof ip !== 'string' || !isIPv4(ip)) {
       return res.status(400).json({ error: 'Adresse IPv4 invalide' });
     }
-    const history = await prisma.$transaction(async tx => {
-      const networkId = req.params.id;
-      const network = await tx.ipNetwork.findUnique({ where: { id: networkId }, select: { id: true } });
-      if (!network) return null;
-      const current = await tx.ipAddress.findUnique({ where: { networkId_ip: { networkId, ip } } });
-      const revisions = await tx.ipNetworkRevision.findMany({
-        where: { networkId },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
-      });
-      return buildIpAddressHistory(ip, revisions, current);
-    }, { isolationLevel: 'Serializable' });
+    const history = await getIpAddressHistory(req.params.id, ip);
     if (!history) return res.status(404).json({ error: 'Réseau introuvable' });
     res.json(history);
   } catch (err) { next(err); }

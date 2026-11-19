@@ -22,6 +22,7 @@ jest.mock('../src/lib/prisma', () => ({
   },
   ipNetworkRevision: {
     create: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     findUnique: jest.fn()
   },

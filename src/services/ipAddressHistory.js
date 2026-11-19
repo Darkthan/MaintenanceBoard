@@ -1,4 +1,5 @@
 const { parseNetworkSnapshot } = require('./ipAddressingUtils');
+const prisma = require('../lib/prisma');
 
 const fields = ['hostname', 'equipmentType', 'description', 'equipmentId'];
 
@@ -32,4 +33,17 @@ function buildIpAddressHistory(ip, revisions, current) {
   return history.reverse();
 }
 
-module.exports = { buildIpAddressHistory };
+async function getIpAddressHistory(networkId, ip) {
+  return prisma.$transaction(async tx => {
+    const network = await tx.ipNetwork.findUnique({ where: { id: networkId }, select: { id: true } });
+    if (!network) return null;
+    const current = await tx.ipAddress.findUnique({ where: { networkId_ip: { networkId, ip } } });
+    const revisions = await tx.ipNetworkRevision.findMany({
+      where: { networkId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
+    });
+    return buildIpAddressHistory(ip, revisions, current);
+  }, { isolationLevel: 'Serializable' });
+}
+
+module.exports = { buildIpAddressHistory, getIpAddressHistory };

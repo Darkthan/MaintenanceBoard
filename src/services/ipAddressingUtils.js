@@ -279,12 +279,19 @@ async function createNetworkRevision(networkId, action, user, db = prisma) {
     include: { ranges: true, addresses: true }
   });
   if (!network) return null;
+  const latest = await db.ipNetworkRevision.findFirst({
+    where: { networkId },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  const createdAt = new Date(Math.max(Date.now(), (latest?.createdAt.getTime() ?? 0) + 1));
   return db.ipNetworkRevision.create({
     data: {
       networkId,
       action,
       actorName: user?.name || user?.email || null,
       snapshot: serializeNetworkSnapshot(network),
+      createdAt,
     }
   });
 }

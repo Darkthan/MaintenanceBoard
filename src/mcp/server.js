@@ -6,6 +6,7 @@ const { z } = require('zod');
 const { MCP_SCOPES, hasScope } = require('../utils/mcpTokens');
 const reservations = require('./reservationsService');
 const work = require('./workService');
+const ipAddressing = require('./ipAddressingService');
 const equipment = require('./equipmentService');
 const { equipmentFields, readOnlyFields, protectedFields } = require('./equipmentFields');
 const support = require('./supportService');
@@ -13,7 +14,7 @@ const visits = require('../services/roomVisitService');
 const rooms = require('../services/roomService');
 const { roomFields } = require('../services/roomFields');
 
-const SERVER_INFO = { name: 'maintenanceboard', version: '1.2.0' };
+const SERVER_INFO = { name: 'maintenanceboard', version: '1.3.0' };
 
 const READ_ONLY_TOOL = {
   readOnlyHint: true,
@@ -696,23 +697,24 @@ function buildMcpServer(ctx) {
   }, tool(ctx, MCP_SCOPES.PROJECTS_WRITE, (a) => work.updateProjectCard(a)));
 
   // ── Plan d'adressage IP ──────────────────────────────────────────────────────
+  require('./ipAddressingTools')(server, ctx, tool);
   server.registerTool('list_ip_networks', {
     description: 'Liste les réseaux IP du plan d\'adressage.',
     inputSchema: { search: z.string().optional() },
     annotations: READ_ONLY_TOOL
-  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => work.listIpNetworks(a)));
+  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => ipAddressing.listNetworks(a, user)));
 
   server.registerTool('get_ip_network', {
     description: 'Récupère un réseau IP avec ses adresses, plages et migrations planifiées.',
-    inputSchema: { networkId: z.string() },
+    inputSchema: { networkId: z.string(), manualOnly: z.boolean().optional().describe('Attributions enregistrées seules, y compris les entrées historiques hors CIDR.') },
     annotations: READ_ONLY_TOOL
-  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => work.getIpNetwork(a)));
+  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => ipAddressing.getNetwork(a, user)));
 
   server.registerTool('list_ip_addresses', {
     description: 'Liste les adresses IP d\'un réseau.',
-    inputSchema: { networkId: z.string(), search: z.string().optional() },
+    inputSchema: { networkId: z.string(), search: z.string().optional(), manualOnly: z.boolean().optional().describe('Attributions enregistrées seules, y compris les entrées historiques hors CIDR.') },
     annotations: READ_ONLY_TOOL
-  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => work.listIpAddresses(a)));
+  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => ipAddressing.listAddresses(a, user)));
 
   server.registerTool('list_ip_migrations', {
     description: 'Liste les migrations IP planifiées ou appliquées.',
@@ -721,7 +723,7 @@ function buildMcpServer(ctx) {
       status: z.enum(['PLANNED', 'APPLIED', 'CANCELLED']).optional()
     },
     annotations: READ_ONLY_TOOL
-  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => work.listIpMigrations(a)));
+  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_READ, (a) => { ipAddressing.requireUser(user); return work.listIpMigrations(a); }));
 
   server.registerTool('create_ip_migration', {
     description: 'Planifie une migration d\'IP. Crée automatiquement une tâche liée qui, une fois validée, applique le changement dans le plan d\'adressage.',
@@ -736,13 +738,13 @@ function buildMcpServer(ctx) {
       scheduledAt: z.string().optional()
     },
     annotations: ADDITIVE_WRITE_TOOL
-  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_WRITE, (a) => work.createIpMigration(a, { userId })));
+  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_WRITE, (a) => { ipAddressing.requireUser(user, true); return work.createIpMigration(a, { userId }); }));
 
   server.registerTool('apply_ip_migration', {
     description: 'Applique manuellement une migration IP planifiée (met à jour le plan d\'adressage et valide la tâche liée).',
     inputSchema: { migrationId: z.string() },
     annotations: ADDITIVE_WRITE_TOOL
-  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_WRITE, (a) => work.applyIpMigration(a, { userId })));
+  }, tool(ctx, MCP_SCOPES.IP_ADDRESSING_WRITE, (a) => { ipAddressing.requireUser(user, true); return work.applyIpMigration(a, { userId }); }));
 
   return server;
 }
