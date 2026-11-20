@@ -1889,7 +1889,6 @@ function renderNav(activePage) {
     { href: '/rooms.html', label: 'Salles', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', id: 'rooms' },
     { href: '/room-visits.html', label: 'Carnet de passages', icon: 'M9 5h10v16H5V5h4m0 0V3h6v4H9zM9 12h6m-6 4h6', id: 'room-visits' },
     { href: '/equipment.html', label: 'Équipements', icon: EQUIPMENT_ICON_PATH, id: 'equipment' },
-    { href: '/pc-review.html', label: 'PC à vérifier', icon: EQUIPMENT_ICON_PATH, id: 'pc-review' },
     { href: '/interventions.html', label: 'Interventions', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', id: 'interventions' },
     { href: '/request.html', label: 'Demande', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a3 3 0 006 0M9 12h6m-6 4h4', id: 'requests' },
     { href: '/supervision.html', label: 'Supervision', icon: 'M3 13h4l3-8 4 16 3-8h4', id: 'supervision' },
