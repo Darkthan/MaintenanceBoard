@@ -1386,6 +1386,10 @@ function updateUrl(articleId) {
   const url = new URL(window.location.href);
   if (articleId) url.searchParams.set('article', articleId);
   else url.searchParams.delete('article');
+  if (articleId !== 'system-ip-addressing') {
+    url.searchParams.delete('network');
+    url.searchParams.delete('address');
+  }
   if (currentSearch) url.searchParams.set('q', currentSearch);
   else url.searchParams.delete('q');
   window.history.replaceState({}, '', url);
@@ -3005,7 +3009,7 @@ function ipRenderList(filter = '') {
 }
 
 // Détail réseau
-async function ipOpenDetail(id) {
+async function ipOpenDetail(id, { addressId = null } = {}) {
   try {
     const [netRes, migRes] = await Promise.all([
       fetch(`/api/ip-networks/${id}`, { credentials: 'include' }),
@@ -3019,6 +3023,11 @@ async function ipOpenDetail(id) {
     document.getElementById('ip-view-list').classList.add('hidden');
     document.getElementById('ip-view-detail').classList.remove('hidden');
     updateFabForArticle('ip-addressing');
+    if (addressId) {
+      const address = ipCurrentAddresses.find(item => item.id === addressId);
+      if (address) ipOpenAddrForm(address);
+      else showToast('Cette fiche IP est introuvable dans ce réseau.', 'error');
+    }
   } catch { showToast('Erreur chargement réseau', 'error'); }
 }
 
@@ -3408,7 +3417,12 @@ document.getElementById('ip-form-network').addEventListener('submit', async e =>
 
 // Formulaires adresse
 function ipOpenAddrForm(addr = null, ip = addr?.ip || '') {
-  document.getElementById('ip-modal-address-title').textContent = addr ? 'Modifier l\'IP' : ip ? 'Attribuer une IP' : 'Ajouter une IP';
+  const form = document.getElementById('ip-form-address');
+  const readOnly = !isAdmin();
+  form.querySelectorAll('input[type="text"]').forEach(input => { input.readOnly = readOnly; });
+  form.querySelector('button[type="submit"]').classList.toggle('hidden', readOnly);
+  form.querySelector('button.ip-modal-close').textContent = readOnly ? 'Fermer' : 'Annuler';
+  document.getElementById('ip-modal-address-title').textContent = readOnly ? 'Fiche IP' : addr ? 'Modifier l\'IP' : ip ? 'Attribuer une IP' : 'Ajouter une IP';
   document.getElementById('ip-fa-id').value = addr?.id||'';
   document.getElementById('ip-fa-ip').value = ip;
   document.getElementById('ip-fa-hostname').value = addr?.hostname||'';
@@ -3419,6 +3433,7 @@ function ipOpenAddrForm(addr = null, ip = addr?.ip || '') {
 }
 document.getElementById('ip-form-address').addEventListener('submit', async e => {
   e.preventDefault();
+  if (!isAdmin()) return;
   const id = document.getElementById('ip-fa-id').value;
   const body = { ip: document.getElementById('ip-fa-ip').value, hostname: document.getElementById('ip-fa-hostname').value||null,
     equipmentType: document.getElementById('ip-fa-type').value||null, description: document.getElementById('ip-fa-desc').value||null };
@@ -3525,9 +3540,10 @@ async function ipLoadNetworks() {
   const res = await fetch('/api/ip-networks', { credentials:'include' });
   ipNetworks = await res.json();
   ipRenderList(document.getElementById('ip-search').value.toLowerCase().trim());
-  const requestedNetworkId = new URLSearchParams(window.location.search).get('network');
+  const params = new URLSearchParams(window.location.search);
+  const requestedNetworkId = params.get('network');
   if (!ipCurrentNetwork && requestedNetworkId && ipNetworks.some(network => network.id === requestedNetworkId)) {
-    await ipOpenDetail(requestedNetworkId);
+    await ipOpenDetail(requestedNetworkId, { addressId: params.get('address') });
   }
 }
 async function ipRefreshDetail() {
@@ -3546,6 +3562,10 @@ async function ipRefreshDetail() {
 document.getElementById('ip-search').addEventListener('input', e => ipRenderList(e.target.value.toLowerCase().trim()));
 document.getElementById('ip-search-addresses').addEventListener('input', e => ipRenderAddresses(e.target.value.toLowerCase().trim()));
 document.getElementById('ip-btn-back').addEventListener('click', () => {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('network');
+  url.searchParams.delete('address');
+  window.history.replaceState(window.history.state, '', url);
   ipSetBulkEditing(false);
   document.getElementById('ip-view-detail').classList.add('hidden');
   document.getElementById('ip-view-list').classList.remove('hidden');

@@ -241,7 +241,7 @@ describe('GET /api/search', () => {
     expect(res.body.results.some(r => r.type === 'equipment' && r.id === 'equipment:eq-42')).toBe(true);
   });
 
-  it('retrouve une adresse IP du plan d adressage et ouvre son reseau', async () => {
+  it('retrouve une adresse IP du plan d adressage et pointe vers sa fiche', async () => {
     prisma.ipAddress.findMany.mockResolvedValue([
       {
         id: 'ip-42',
@@ -260,7 +260,7 @@ describe('GET /api/search', () => {
     expect(res.body.results).toContainEqual(expect.objectContaining({
       type: 'ip-address',
       id: 'ip-address:ip-42',
-      href: '/knowledge-base.html?article=system-ip-addressing&network=network-42'
+      href: '/knowledge-base.html?article=system-ip-addressing&network=network-42&address=ip-42'
     }));
   });
 

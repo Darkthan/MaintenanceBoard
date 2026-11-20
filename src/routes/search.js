@@ -1129,7 +1129,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       group: 'Plan d adressage',
       title: address.ip,
       subtitle: [address.hostname, address.equipment?.name, address.network?.name].filter(Boolean).join(' · ') || 'Adresse IP',
-      href: `/knowledge-base.html?article=system-ip-addressing&network=${encodeURIComponent(address.networkId)}`,
+      href: `/knowledge-base.html?article=system-ip-addressing&network=${encodeURIComponent(address.networkId)}&address=${encodeURIComponent(address.id)}`,
       openMode: 'direct',
       preview: {
         title: address.ip,
